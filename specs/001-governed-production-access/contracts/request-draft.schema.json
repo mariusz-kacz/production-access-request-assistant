@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/schemas/request-draft.schema.json",
+  "title": "AccessRequestDraft",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clientId",
+    "environmentId",
+    "requestedRole",
+    "durationMinutes",
+    "justification",
+    "incidentId",
+    "missingFields"
+  ],
+  "properties": {
+    "clientId": { "type": ["string", "null"], "minLength": 1 },
+    "environmentId": { "type": ["string", "null"], "minLength": 1 },
+    "requestedRole": {
+      "type": ["string", "null"],
+      "enum": ["ProductionReadOnly", "ProductionSupport", null]
+    },
+    "durationMinutes": { "type": ["integer", "null"], "minimum": 1 },
+    "justification": { "type": ["string", "null"], "maxLength": 2000 },
+    "incidentId": { "type": ["string", "null"], "minLength": 1 },
+    "missingFields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "clientId",
+          "environmentId",
+          "requestedRole",
+          "durationMinutes",
+          "justification"
+        ]
+      }
+    }
+  }
+}

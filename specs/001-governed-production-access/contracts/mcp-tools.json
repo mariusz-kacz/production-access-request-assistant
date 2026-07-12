@@ -1,0 +1,70 @@
+{
+  "endpoint": "/mcp",
+  "transport": "streamable-http",
+  "tools": [
+    {
+      "name": "get_production_environment",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["environmentId"],
+        "properties": {
+          "environmentId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "successResult": {
+        "environmentId": "string",
+        "clientId": "string",
+        "displayName": "string",
+        "isActive": "boolean",
+        "maximumDurationMinutes": "integer",
+        "businessApproverResponsibilityId": "string"
+      }
+    },
+    {
+      "name": "get_incident",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["incidentId"],
+        "properties": {
+          "incidentId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "successResult": {
+        "incidentId": "string",
+        "title": "string",
+        "status": "Active|Inactive",
+        "clientId": "string",
+        "environmentId": "string|null"
+      }
+    },
+    {
+      "name": "get_available_roles",
+      "readOnly": true,
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["environmentId"],
+        "properties": {
+          "environmentId": { "type": "string", "minLength": 1 }
+        }
+      },
+      "successResult": {
+        "environmentId": "string",
+        "roles": [
+          { "roleId": "string", "displayName": "string", "isAvailable": "boolean" }
+        ]
+      }
+    }
+  ],
+  "failureEnvelope": {
+    "outcome": "InvalidInput|NotFound|Timeout|Cancelled|Unavailable",
+    "code": "stable-machine-readable-code",
+    "message": "safe-human-readable-message",
+    "correlationId": "string"
+  },
+  "allowlistInvariant": "The initialized server advertises exactly the three tools listed in this document and no resources, prompts, approval, provisioning, revocation, transition, database, or generic-query tools."
+}

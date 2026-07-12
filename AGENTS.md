@@ -12,16 +12,8 @@ authorize and execute.
 
 Product baseline:
 
-`docs/governed-production-access-planning-input.md`
+`docs/governed-production-access-product-baseline.md`
 
-The product baseline is the source of truth for intended MVP scope,
-constraints, and non-goals.
-
-Accepted specifications under `openspec/specs/` describe currently
-implemented and accepted behavior.
-
-The active OpenSpec change defines the only new behavior that should be
-implemented during the current change.
 
 ## Scope
 
@@ -29,7 +21,7 @@ implemented during the current change.
 - One developer.
 - One executable modular ASP.NET Core host.
 - Local synthetic data and identity.
-- Thin Blazor user interface.
+- Thin React user interface built and served by the ASP.NET Core host.
 - No real production access.
 - No real identity provider.
 - No generic workflow engine.
@@ -109,17 +101,3 @@ Additional MCP tools are outside the current baseline.
 - Record model and MCP duration and outcome without requiring complete payload
   capture.
 - OpenTelemetry is optional polish and must not block MVP completion.
-
-## OpenSpec Workflow Rules
-
-- Read `AGENTS.md`, the product baseline, relevant accepted specifications,
-  and the active change before implementation.
-- Do not implement the complete product baseline in one change.
-- Implement only behavior included in the active OpenSpec change.
-- Features described in the product baseline but absent from the active
-  change remain deferred.
-- Existing accepted specifications must not be changed accidentally.
-- If the active change conflicts with the product baseline or an accepted
-  specification, report the conflict rather than silently choosing one.
-- Update OpenSpec artifacts when implementation exposes an incorrect
-  requirement or design assumption.

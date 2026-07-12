@@ -75,5 +75,7 @@ Thumbs.db
 Desktop.ini
 
 
-# Codex skills
+# AI assisted engineering workflow related folders
 .codex/
+.agents/
+.specify/

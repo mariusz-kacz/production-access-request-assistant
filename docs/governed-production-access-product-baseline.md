@@ -163,7 +163,7 @@ Browser
 +--------------------------------------------------+
 | Governed Access Host                             |
 |                                                  |
-| Blazor UI and synthetic authentication           |
+| React UI, same-origin endpoints, and auth         |
 | LLM orchestration and MCP client                 |
 |                                                  |
 | /mcp - real read-only MCP endpoint               |
@@ -187,7 +187,8 @@ The MVP does not introduce a second process, service-to-service authentication, 
 
 The single host is responsible for:
 
-- thin Blazor UI,
+- thin React UI built and served by the host,
+- same-origin typed UI query and action endpoints,
 - authenticated synthetic user context,
 - natural-language request intake,
 - LLM orchestration,
@@ -223,7 +224,7 @@ Domain workflow and authorization rules
 Provisioning handler ---- persistence and synthetic provider
 ```
 
-The precise project structure is a design decision, but the domain and application rules must not depend directly on Blazor, AI-provider, or MCP SDK contracts.
+The precise project structure is a design decision, but the domain and application rules must not depend directly on React, browser-framework, AI-provider, or MCP SDK contracts.
 
 ### 4.3 Capability Boundary
 
@@ -527,11 +528,17 @@ action exists only for recovery from `ProvisioningFailed`.
 
 ## 8. User Interface
 
-The Blazor UI contains only:
+The React UI contains only:
 
 - request list,
 - new-request page,
 - request detail page.
+
+The React application is built into static assets served by the Governed Access Host.
+It uses same-origin typed query and action endpoints from that host and is not deployed
+as a separate frontend service. Protected actions use server-established authentication
+and antiforgery protection as appropriate. Browser-submitted identities, roles,
+approver assignments, and authorization claims are never treated as authority.
 
 The request list may use simple filtering or identity-specific sections to surface actionable requests. There are no separate business or DevOps inbox pages.
 
@@ -730,7 +737,7 @@ The following remain automated negative-path tests rather than primary presentat
 The MVP includes:
 
 - one executable modular ASP.NET Core host,
-- one thin Blazor UI with three pages,
+- one thin React UI with three pages, built and served by the ASP.NET Core host,
 - authenticated synthetic user context with four principals,
 - one typed LLM extraction flow,
 - one real read-only MCP endpoint,
