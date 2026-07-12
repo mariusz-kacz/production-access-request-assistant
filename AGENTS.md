@@ -1,0 +1,125 @@
+# Project Context
+
+## Product
+
+This application governs temporary access to client-specific production
+environments.
+
+Core rule:
+
+AI interprets and gathers context. Humans approve. Deterministic services
+authorize and execute.
+
+Product baseline:
+
+`docs/governed-production-access-planning-input.md`
+
+The product baseline is the source of truth for intended MVP scope,
+constraints, and non-goals.
+
+Accepted specifications under `openspec/specs/` describe currently
+implemented and accepted behavior.
+
+The active OpenSpec change defines the only new behavior that should be
+implemented during the current change.
+
+## Scope
+
+- Portfolio-grade reference implementation.
+- One developer.
+- One executable modular ASP.NET Core host.
+- Local synthetic data and identity.
+- Thin Blazor user interface.
+- No real production access.
+- No real identity provider.
+- No generic workflow engine.
+- No multi-agent design.
+- No large RAG subsystem.
+- No unnecessary distributed-system infrastructure.
+
+## Architecture Rules
+
+- Domain logic must not depend on AI-provider or MCP SDK contracts.
+- AI-provider and MCP contracts must be translated at infrastructure boundaries.
+- The LLM is never an authorization boundary.
+- Model output is untrusted and must be schema-validated.
+- All model-proposed identifiers must be checked against authoritative data.
+- Business and DevOps approvals are authenticated structured actions.
+- Acting identity comes from authenticated server context.
+- Browser-submitted identities, roles, and authorization claims are not trusted.
+- The requester cannot choose the business approver.
+- State-changing actions require deterministic validation and authorization.
+- Approval applies to a specific request ID and request version.
+- A material request edit increments the version and invalidates prior approvals.
+- Access to one client environment never authorizes another.
+- DevOps must not change the business-approved role.
+- DevOps may reduce duration but must not increase it.
+- Current authoritative state must be revalidated before provisioning.
+- Provisioning must be idempotent.
+- The provisioning handler must reload authoritative request and approval state.
+- The provisioning handler must not trust caller-supplied approval assertions.
+- Project and module boundaries must remain proportionate to the single-host scope.
+
+## MCP Rules
+
+The application exposes one real read-only MCP endpoint with exactly these tools:
+
+- `get_production_environment`
+- `get_incident`
+- `get_available_roles`
+
+Additional MCP tools are outside the current baseline.
+
+- MCP inputs and outputs use explicit typed schemas.
+- Authoritative results use stable identifiers.
+- The model receives tools through an explicit allowlist.
+- The MCP server must not expose approval, provisioning, revocation, workflow
+  transition, arbitrary database, or generic query tools.
+- MCP tool visibility and annotations never replace authorization.
+- Provisioning must remain unavailable to the model.
+
+## .NET Rules
+
+- Nullable reference types enabled.
+- Warnings treated as errors.
+- `CancellationToken` propagated through asynchronous boundaries.
+- LLM and MCP calls use explicit timeouts.
+- Expected failures represented with explicit typed outcomes.
+- No abstraction without a concrete need.
+- Project structure must remain proportionate to scope.
+
+## Testing Rules
+
+- Tests run without a live LLM.
+- Use a deterministic fake chat client.
+- Domain rules require unit tests.
+- MCP contracts and interactions require integration tests.
+- Authorization, request-version, stale-state, and idempotency rules require tests.
+- Malformed model output and MCP failure or timeout require tests.
+- Negative scenarios are first-class tests.
+- Exhaustive UI and enterprise-scale load testing are not required.
+
+## Security and Logging
+
+- Do not log secrets.
+- Do not log raw prompts or complete MCP payloads by default.
+- Do not expose provisioning operations or credentials to the model.
+- Record correlation IDs, authenticated actors, decisions, statuses, workflow
+  transitions, and operation metadata.
+- Record model and MCP duration and outcome without requiring complete payload
+  capture.
+- OpenTelemetry is optional polish and must not block MVP completion.
+
+## OpenSpec Workflow Rules
+
+- Read `AGENTS.md`, the product baseline, relevant accepted specifications,
+  and the active change before implementation.
+- Do not implement the complete product baseline in one change.
+- Implement only behavior included in the active OpenSpec change.
+- Features described in the product baseline but absent from the active
+  change remain deferred.
+- Existing accepted specifications must not be changed accidentally.
+- If the active change conflicts with the product baseline or an accepted
+  specification, report the conflict rather than silently choosing one.
+- Update OpenSpec artifacts when implementation exposes an incorrect
+  requirement or design assumption.
