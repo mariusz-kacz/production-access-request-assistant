@@ -42,8 +42,8 @@
 - [X] T013 Configure EF Core entity mappings, concurrency token, approval uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
 - [X] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
 - [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
-- [ ] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
-- [ ] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Endpoints/SessionEndpoints.cs`
+- [X] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
+- [X] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Endpoints/SessionEndpoints.cs`
 - [ ] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Endpoints/ProblemDetailsMapping.cs`
 - [ ] T019 Create the SQLite in-memory `WebApplicationFactory`, deterministic clock, identity helpers, and database reset fixtures in `tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs`
 - [ ] T020 Wire configuration, persistence, authentication, antiforgery, correlation, API route groups, `/mcp`, static assets, and non-API SPA fallback in `src/GovernedAccess.Web/Program.cs`
