@@ -18,13 +18,13 @@
 
 **Purpose**: Create the two-project .NET solution and nested React build input for the single executable host.
 
-- [ ] T001 Create `ProductionAccessRequestAssistant.sln` with `src/GovernedAccess.Core/GovernedAccess.Core.csproj`, `src/GovernedAccess.Web/GovernedAccess.Web.csproj`, `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj`, and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
-- [ ] T002 Configure .NET 10, nullable reference types, warnings-as-errors, and shared analyzer settings in `Directory.Build.props`
-- [ ] T003 [P] Add ASP.NET Core, EF Core SQLite, Microsoft.Extensions.AI, and ModelContextProtocol package references and the Core project reference in `src/GovernedAccess.Web/GovernedAccess.Web.csproj`
-- [ ] T004 [P] Add xUnit, ASP.NET Core `WebApplicationFactory`, and SQLite test dependencies in `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj` and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
-- [ ] T005 [P] Initialize React 19.2, TypeScript, React Router, Vite, Vitest, and React Testing Library scripts and dependencies in `src/GovernedAccess.Web/ClientApp/package.json`
-- [ ] T006 Configure Vite hashed production output to `wwwroot`, development `/api` proxying, and Vitest in `src/GovernedAccess.Web/ClientApp/vite.config.ts`
-- [ ] T007 Add frontend build and publish integration while preserving one deployable host in `src/GovernedAccess.Web/GovernedAccess.Web.csproj`
+- [X] T001 Create `ProductionAccessRequestAssistant.sln` with `src/GovernedAccess.Core/GovernedAccess.Core.csproj`, `src/GovernedAccess.Web/GovernedAccess.Web.csproj`, `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj`, and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
+- [X] T002 Configure .NET 10, nullable reference types, warnings-as-errors, and shared analyzer settings in `Directory.Build.props`
+- [X] T003 [P] Add ASP.NET Core, EF Core SQLite, Microsoft.Extensions.AI, and ModelContextProtocol package references and the Core project reference in `src/GovernedAccess.Web/GovernedAccess.Web.csproj`
+- [X] T004 [P] Add xUnit, ASP.NET Core `WebApplicationFactory`, and SQLite test dependencies in `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj` and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
+- [X] T005 [P] Initialize React 19.2, TypeScript, React Router, Vite, Vitest, and React Testing Library scripts and dependencies in `src/GovernedAccess.Web/ClientApp/package.json`
+- [X] T006 Configure Vite hashed production output to `wwwroot`, development `/api` proxying, and Vitest in `src/GovernedAccess.Web/ClientApp/vite.config.ts`
+- [X] T007 Add frontend build and publish integration while preserving one deployable host in `src/GovernedAccess.Web/GovernedAccess.Web.csproj`
 
 ---
 

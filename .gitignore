@@ -41,6 +41,12 @@ packages/
 *.nuget.props
 *.nuget.targets
 
+# Node.js build outputs
+node_modules/
+dist/
+build/
+/src/GovernedAccess.Web/wwwroot/
+
 # Local configuration and secrets
 .env
 .env.*
