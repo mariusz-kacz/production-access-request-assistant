@@ -34,14 +34,14 @@
 
 **Critical**: Complete this phase before starting any user-story implementation.
 
-- [ ] T008 [P] Define typed success/failure outcomes and cancellation-safe application result types in `src/GovernedAccess.Core/Application/Outcomes.cs`
-- [ ] T009 [P] Define authoritative `Client`, `ProductionEnvironment`, `EnvironmentRole`, `Incident`, and `AuthenticatedPrincipal` models in `src/GovernedAccess.Core/Domain/AuthoritativeContext.cs`
-- [ ] T010 [P] Define `AccessRequest`, statuses, normalization, version, and optimistic persistence version fields in `src/GovernedAccess.Core/Domain/AccessRequest.cs`
-- [ ] T011 [P] Define `ApprovalDecision`, `ProvisioningOperation`, `AccessGrant`, and `AuditEvent` evidence models in `src/GovernedAccess.Core/Domain/WorkflowEvidence.cs`
-- [ ] T012 Define provider-neutral authoritative context, clock, audit, and workflow persistence ports with `CancellationToken` parameters in `src/GovernedAccess.Core/Ports/CorePorts.cs`
-- [ ] T013 Configure EF Core entity mappings, concurrency token, approval uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
-- [ ] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
-- [ ] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
+- [X] T008 [P] Define typed success/failure outcomes and cancellation-safe application result types in `src/GovernedAccess.Core/Application/Outcomes.cs`
+- [X] T009 [P] Define authoritative `Client`, `ProductionEnvironment`, `EnvironmentRole`, `Incident`, and `AuthenticatedPrincipal` models in `src/GovernedAccess.Core/Domain/AuthoritativeContext.cs`
+- [X] T010 [P] Define `AccessRequest`, statuses, normalization, version, and optimistic persistence version fields in `src/GovernedAccess.Core/Domain/AccessRequest.cs`
+- [X] T011 [P] Define `ApprovalDecision`, `ProvisioningOperation`, `AccessGrant`, and `AuditEvent` evidence models in `src/GovernedAccess.Core/Domain/WorkflowEvidence.cs`
+- [X] T012 Define provider-neutral authoritative context, clock, audit, and workflow persistence ports with `CancellationToken` parameters in `src/GovernedAccess.Core/Ports/CorePorts.cs`
+- [X] T013 Configure EF Core entity mappings, concurrency token, approval uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
+- [X] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
+- [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
 - [ ] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
 - [ ] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Endpoints/SessionEndpoints.cs`
 - [ ] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Endpoints/ProblemDetailsMapping.cs`
