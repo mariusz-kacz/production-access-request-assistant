@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Web.Authentication;
 using Microsoft.AspNetCore.Antiforgery;
@@ -34,14 +35,22 @@ public static class SessionEndpoints
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        endpoints.MapGet("/api/security/antiforgery", IssueAntiforgeryToken);
-        endpoints.MapGet("/api/session", GetSession);
+        endpoints.MapGroup("/api").MapSessionEndpoints();
+        return endpoints;
+    }
+
+    public static RouteGroupBuilder MapSessionEndpoints(this RouteGroupBuilder endpoints)
+    {
+        ArgumentNullException.ThrowIfNull(endpoints);
+
+        endpoints.MapGet("/security/antiforgery", IssueAntiforgeryToken);
+        endpoints.MapGet("/session", GetSession);
         endpoints
-            .MapPost("/api/demo/session", SignInAsync)
+            .MapPost("/demo/session", SignInAsync)
             .AddEndpointFilter(ValidateAntiforgeryAsync);
         endpoints
             .MapDelete(
-                "/api/demo/session",
+                "/demo/session",
                 (Func<HttpContext, Task<IResult>>)SignOutAsync)
             .AddEndpointFilter(ValidateAntiforgeryAsync);
 
@@ -70,13 +79,16 @@ public static class SessionEndpoints
 
         if (!DemoAuthentication.TryResolvePrincipal(request.PrincipalKey, out var principal))
         {
-            return Results.ValidationProblem(
-                new Dictionary<string, string[]>
-                {
-                    ["principalKey"] = ["Select one of the configured demo identities."],
-                },
-                statusCode: StatusCodes.Status422UnprocessableEntity,
-                title: "Demo identity validation failed.");
+            return new ApplicationFailure(
+                ApplicationFailureKind.Validation,
+                "invalid_principal_key",
+                "Select one of the configured demo identities.",
+                [
+                    new ApplicationFieldError(
+                        "principalKey",
+                        "invalid_principal_key",
+                        "The principal key is not recognized."),
+                ]).ToProblemDetails(context);
         }
 
         await context.SignInAsync(
@@ -120,9 +132,11 @@ public static class SessionEndpoints
         }
         catch (AntiforgeryValidationException)
         {
-            return Results.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "A valid antiforgery token is required.");
+            return new ApplicationFailure(
+                ApplicationFailureKind.InvalidInput,
+                "antiforgery_validation_failed",
+                "A valid antiforgery token is required.")
+                .ToProblemDetails(context);
         }
 
         return await next(invocationContext);

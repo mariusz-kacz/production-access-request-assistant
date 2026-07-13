@@ -50,8 +50,15 @@ public sealed class SessionEndpointsTests
             new { principalKey = DemoPrincipalKeys.Requester });
 
         using var response = await host.Client.SendAsync(request, cancellationToken);
+        using var problem = await ReadJsonAsync(response, cancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            "application/problem+json",
+            response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            "antiforgery_validation_failed",
+            problem.RootElement.GetProperty("code").GetString());
         Assert.DoesNotContain(
             ReadSetCookies(response).Keys,
             name => string.Equals(name, DemoAuthentication.CookieName, StringComparison.Ordinal));
@@ -128,8 +135,13 @@ public sealed class SessionEndpointsTests
             antiforgeryCookies);
 
         using var response = await host.Client.SendAsync(request, cancellationToken);
+        using var problem = await ReadJsonAsync(response, cancellationToken);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(
+            "invalid_principal_key",
+            problem.RootElement.GetProperty("code").GetString());
+        Assert.True(problem.RootElement.TryGetProperty("fieldErrors", out _));
         Assert.DoesNotContain(
             ReadSetCookies(response).Keys,
             name => string.Equals(name, DemoAuthentication.CookieName, StringComparison.Ordinal));

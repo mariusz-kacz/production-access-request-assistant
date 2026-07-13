@@ -44,9 +44,9 @@
 - [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
 - [X] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
 - [X] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Endpoints/SessionEndpoints.cs`
-- [ ] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Endpoints/ProblemDetailsMapping.cs`
-- [ ] T019 Create the SQLite in-memory `WebApplicationFactory`, deterministic clock, identity helpers, and database reset fixtures in `tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs`
-- [ ] T020 Wire configuration, persistence, authentication, antiforgery, correlation, API route groups, `/mcp`, static assets, and non-API SPA fallback in `src/GovernedAccess.Web/Program.cs`
+- [X] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Endpoints/ProblemDetailsMapping.cs`
+- [X] T019 Create the SQLite in-memory `WebApplicationFactory`, deterministic clock, identity helpers, and database reset fixtures in `tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs`
+- [X] T020 Wire configuration, persistence, authentication, antiforgery, correlation, API route groups, `/mcp`, static assets, and non-API SPA fallback in `src/GovernedAccess.Web/Program.cs`
 
 **Checkpoint**: The shared host starts with deterministic data, trusted cookie identity, antiforgery, persistence constraints, and reusable test fixtures.
 
