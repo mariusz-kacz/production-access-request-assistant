@@ -1,26 +1,12 @@
 using GovernedAccess.Core.Domain;
+using static GovernedAccess.Web.Demo.DemoDataIds;
 using Microsoft.EntityFrameworkCore;
 
 namespace GovernedAccess.Web.Persistence;
 
-public static class SyntheticDataSeeder
+internal static class SyntheticDataSeeder
 {
-    public const string ClientAlphaId = "client-alpha";
-    public const string ClientBetaId = "client-beta";
-
-    public const string ClientAlphaEnvironmentId = "PROD-ALPHA-EU";
-    public const string ClientBetaEnvironmentId = "PROD-BETA-UK";
-
-    public const string RequesterPrincipalId = "requester";
-    public const string ClientAlphaApproverPrincipalId = "client-alpha-business-approver";
-    public const string ClientBetaApproverPrincipalId = "client-beta-business-approver";
-    public const string DevOpsApproverPrincipalId = "devops-approver";
-
-    public const string PrimaryIncidentId = "INC-1042";
-    public const string InactiveIncidentId = "INC-1041";
-    public const string ClientBetaIncidentId = "INC-2042";
-
-    public static async Task SeedAsync(
+    internal static async Task SeedAsync(
         GovernedAccessDbContext dbContext,
         CancellationToken cancellationToken)
     {

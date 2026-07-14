@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Web.Authentication;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Demo;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
@@ -15,22 +15,22 @@ public sealed class DemoAuthenticationTests
     [Theory]
     [InlineData(
         DemoPrincipalKeys.Requester,
-        SyntheticDataSeeder.RequesterPrincipalId,
+        DemoDataIds.RequesterPrincipalId,
         PrincipalKind.Requester,
         null)]
     [InlineData(
         DemoPrincipalKeys.ClientAlphaApprover,
-        SyntheticDataSeeder.ClientAlphaApproverPrincipalId,
+        DemoDataIds.ClientAlphaApproverPrincipalId,
         PrincipalKind.BusinessApprover,
-        SyntheticDataSeeder.ClientAlphaId)]
+        DemoDataIds.ClientAlphaId)]
     [InlineData(
         DemoPrincipalKeys.ClientBetaApprover,
-        SyntheticDataSeeder.ClientBetaApproverPrincipalId,
+        DemoDataIds.ClientBetaApproverPrincipalId,
         PrincipalKind.BusinessApprover,
-        SyntheticDataSeeder.ClientBetaId)]
+        DemoDataIds.ClientBetaId)]
     [InlineData(
         DemoPrincipalKeys.DevOpsApprover,
-        SyntheticDataSeeder.DevOpsApproverPrincipalId,
+        DemoDataIds.DevOpsApproverPrincipalId,
         PrincipalKind.DevOpsApprover,
         null)]
     public void TryResolvePrincipalCreatesTrustedClaims(

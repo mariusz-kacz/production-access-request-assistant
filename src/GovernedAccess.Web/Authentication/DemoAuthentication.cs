@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using GovernedAccess.Core.Domain;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Demo;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
@@ -10,12 +10,10 @@ namespace GovernedAccess.Web.Authentication;
 
 public static class DemoPrincipalKeys
 {
-    public const string Requester = SyntheticDataSeeder.RequesterPrincipalId;
-    public const string ClientAlphaApprover =
-        SyntheticDataSeeder.ClientAlphaApproverPrincipalId;
-    public const string ClientBetaApprover =
-        SyntheticDataSeeder.ClientBetaApproverPrincipalId;
-    public const string DevOpsApprover = SyntheticDataSeeder.DevOpsApproverPrincipalId;
+    public const string Requester = DemoDataIds.RequesterPrincipalId;
+    public const string ClientAlphaApprover = DemoDataIds.ClientAlphaApproverPrincipalId;
+    public const string ClientBetaApprover = DemoDataIds.ClientBetaApproverPrincipalId;
+    public const string DevOpsApprover = DemoDataIds.DevOpsApproverPrincipalId;
 }
 
 public static class DemoClaimTypes
@@ -33,21 +31,21 @@ public static class DemoAuthentication
         new Dictionary<string, AuthenticatedPrincipal>(StringComparer.Ordinal)
         {
             [DemoPrincipalKeys.Requester] = new(
-                SyntheticDataSeeder.RequesterPrincipalId,
+                DemoDataIds.RequesterPrincipalId,
                 "Demo Requester",
                 PrincipalKind.Requester),
             [DemoPrincipalKeys.ClientAlphaApprover] = new(
-                SyntheticDataSeeder.ClientAlphaApproverPrincipalId,
+                DemoDataIds.ClientAlphaApproverPrincipalId,
                 "Client Alpha Business Approver",
                 PrincipalKind.BusinessApprover,
-                SyntheticDataSeeder.ClientAlphaId),
+                DemoDataIds.ClientAlphaId),
             [DemoPrincipalKeys.ClientBetaApprover] = new(
-                SyntheticDataSeeder.ClientBetaApproverPrincipalId,
+                DemoDataIds.ClientBetaApproverPrincipalId,
                 "Client Beta Business Approver",
                 PrincipalKind.BusinessApprover,
-                SyntheticDataSeeder.ClientBetaId),
+                DemoDataIds.ClientBetaId),
             [DemoPrincipalKeys.DevOpsApprover] = new(
-                SyntheticDataSeeder.DevOpsApproverPrincipalId,
+                DemoDataIds.DevOpsApproverPrincipalId,
                 "DevOps Approver",
                 PrincipalKind.DevOpsApprover),
         }.ToFrozenDictionary(StringComparer.Ordinal);

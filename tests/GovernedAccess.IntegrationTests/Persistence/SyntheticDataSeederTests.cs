@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -30,12 +31,12 @@ public sealed class SyntheticDataSeederTests
             clients,
             client =>
             {
-                Assert.Equal(SyntheticDataSeeder.ClientAlphaId, client.Id);
+                Assert.Equal(DemoDataIds.ClientAlphaId, client.Id);
                 Assert.Equal("Client Alpha", client.DisplayName);
             },
             client =>
             {
-                Assert.Equal(SyntheticDataSeeder.ClientBetaId, client.Id);
+                Assert.Equal(DemoDataIds.ClientBetaId, client.Id);
                 Assert.Equal("Client Beta", client.DisplayName);
             });
 
@@ -47,22 +48,22 @@ public sealed class SyntheticDataSeederTests
             environments,
             environment =>
             {
-                Assert.Equal(SyntheticDataSeeder.ClientAlphaEnvironmentId, environment.Id);
-                Assert.Equal(SyntheticDataSeeder.ClientAlphaId, environment.ClientId);
+                Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, environment.Id);
+                Assert.Equal(DemoDataIds.ClientAlphaId, environment.ClientId);
                 Assert.True(environment.IsActive);
                 Assert.Equal(480, environment.MaximumDurationMinutes);
                 Assert.Equal(
-                    SyntheticDataSeeder.ClientAlphaApproverPrincipalId,
+                    DemoDataIds.ClientAlphaApproverPrincipalId,
                     environment.BusinessApproverPrincipalId);
             },
             environment =>
             {
-                Assert.Equal(SyntheticDataSeeder.ClientBetaEnvironmentId, environment.Id);
-                Assert.Equal(SyntheticDataSeeder.ClientBetaId, environment.ClientId);
+                Assert.Equal(DemoDataIds.ClientBetaEnvironmentId, environment.Id);
+                Assert.Equal(DemoDataIds.ClientBetaId, environment.ClientId);
                 Assert.True(environment.IsActive);
                 Assert.Equal(240, environment.MaximumDurationMinutes);
                 Assert.Equal(
-                    SyntheticDataSeeder.ClientBetaApproverPrincipalId,
+                    DemoDataIds.ClientBetaApproverPrincipalId,
                     environment.BusinessApproverPrincipalId);
             });
 
@@ -75,15 +76,15 @@ public sealed class SyntheticDataSeederTests
             roles,
             role => AssertRole(
                 role,
-                SyntheticDataSeeder.ClientAlphaEnvironmentId,
+                DemoDataIds.ClientAlphaEnvironmentId,
                 ProductionRoleIds.ReadOnly),
             role => AssertRole(
                 role,
-                SyntheticDataSeeder.ClientAlphaEnvironmentId,
+                DemoDataIds.ClientAlphaEnvironmentId,
                 ProductionRoleIds.Support),
             role => AssertRole(
                 role,
-                SyntheticDataSeeder.ClientBetaEnvironmentId,
+                DemoDataIds.ClientBetaEnvironmentId,
                 ProductionRoleIds.ReadOnly));
 
         var principals = await context.AuthenticatedPrincipals
@@ -92,19 +93,19 @@ public sealed class SyntheticDataSeederTests
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(4, principals.Count);
         Assert.Contains(principals, principal =>
-            principal.Id == SyntheticDataSeeder.RequesterPrincipalId
+            principal.Id == DemoDataIds.RequesterPrincipalId
             && principal.Kind == PrincipalKind.Requester
             && principal.ClientId == null);
         Assert.Contains(principals, principal =>
-            principal.Id == SyntheticDataSeeder.ClientAlphaApproverPrincipalId
+            principal.Id == DemoDataIds.ClientAlphaApproverPrincipalId
             && principal.Kind == PrincipalKind.BusinessApprover
-            && principal.ClientId == SyntheticDataSeeder.ClientAlphaId);
+            && principal.ClientId == DemoDataIds.ClientAlphaId);
         Assert.Contains(principals, principal =>
-            principal.Id == SyntheticDataSeeder.ClientBetaApproverPrincipalId
+            principal.Id == DemoDataIds.ClientBetaApproverPrincipalId
             && principal.Kind == PrincipalKind.BusinessApprover
-            && principal.ClientId == SyntheticDataSeeder.ClientBetaId);
+            && principal.ClientId == DemoDataIds.ClientBetaId);
         Assert.Contains(principals, principal =>
-            principal.Id == SyntheticDataSeeder.DevOpsApproverPrincipalId
+            principal.Id == DemoDataIds.DevOpsApproverPrincipalId
             && principal.Kind == PrincipalKind.DevOpsApprover
             && principal.ClientId == null);
 
@@ -114,13 +115,13 @@ public sealed class SyntheticDataSeederTests
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(3, incidents.Count);
         Assert.Contains(incidents, incident =>
-            incident.Id == SyntheticDataSeeder.PrimaryIncidentId
-            && incident.ClientId == SyntheticDataSeeder.ClientAlphaId
-            && incident.EnvironmentId == SyntheticDataSeeder.ClientAlphaEnvironmentId
+            incident.Id == DemoDataIds.PrimaryIncidentId
+            && incident.ClientId == DemoDataIds.ClientAlphaId
+            && incident.EnvironmentId == DemoDataIds.ClientAlphaEnvironmentId
             && incident.Status == IncidentStatus.Active);
         Assert.Contains(incidents, incident =>
-            incident.ClientId == SyntheticDataSeeder.ClientBetaId
-            && incident.EnvironmentId == SyntheticDataSeeder.ClientBetaEnvironmentId
+            incident.ClientId == DemoDataIds.ClientBetaId
+            && incident.EnvironmentId == DemoDataIds.ClientBetaEnvironmentId
             && incident.Status == IncidentStatus.Active);
         Assert.Contains(incidents, incident => incident.Status == IncidentStatus.Inactive);
 

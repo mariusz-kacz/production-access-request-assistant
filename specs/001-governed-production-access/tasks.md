@@ -60,12 +60,12 @@
 
 ### Tests for User Story 1
 
-- [ ] T021 [P] [US1] Add unit tests for client/environment, activation, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
-- [ ] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
-- [ ] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
-- [ ] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftPreparationTests.cs`
-- [ ] T025 [P] [US1] Add request creation integration tests for authoritative revalidation, browser identity over-posting resistance, antiforgery, and absence of approval/grant side effects in `tests/GovernedAccess.IntegrationTests/Requests/CreateRequestTests.cs`
-- [ ] T026 [P] [US1] Add React tests for draft preparation, correction guidance, typed failure display, cancellation, and successful submission in `src/GovernedAccess.Web/ClientApp/src/test/NewRequestPage.test.tsx`
+- [X] T021 [P] [US1] Add unit tests for client/environment, activation, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
+- [X] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
+- [X] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
+- [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftPreparationTests.cs`
+- [X] T025 [P] [US1] Add request creation integration tests for authoritative revalidation, browser identity over-posting resistance, antiforgery, and absence of approval/grant side effects in `tests/GovernedAccess.IntegrationTests/Requests/CreateRequestTests.cs`
+- [X] T026 [P] [US1] Add React tests for draft preparation, correction guidance, typed failure display, cancellation, and successful submission in `src/GovernedAccess.Web/ClientApp/src/test/NewRequestPage.test.tsx`
 
 ### Implementation for User Story 1
 
