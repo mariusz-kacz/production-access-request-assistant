@@ -79,16 +79,16 @@ public static class SessionEndpoints
 
         if (!DemoAuthentication.TryResolvePrincipal(request.PrincipalKey, out var principal))
         {
-            return new ApplicationFailure(
-                ApplicationFailureKind.Validation,
+            return ProblemDetailsMapping.ToValidationProblemDetails(
                 "invalid_principal_key",
                 "Select one of the configured demo identities.",
                 [
-                    new ApplicationFieldError(
+                    new FieldValidationError(
                         "principalKey",
                         "invalid_principal_key",
                         "The principal key is not recognized."),
-                ]).ToProblemDetails(context);
+                ],
+                context);
         }
 
         await context.SignInAsync(

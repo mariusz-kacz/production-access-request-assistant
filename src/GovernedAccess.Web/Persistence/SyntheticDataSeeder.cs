@@ -42,23 +42,21 @@ internal static class SyntheticDataSeeder
                 ClientAlphaEnvironmentId,
                 ClientAlphaId,
                 "Client Alpha Production EU",
-                isActive: true,
                 maximumDurationMinutes: 480,
                 ClientAlphaApproverPrincipalId),
             new(
                 ClientBetaEnvironmentId,
                 ClientBetaId,
                 "Client Beta Production UK",
-                isActive: true,
                 maximumDurationMinutes: 240,
                 ClientBetaApproverPrincipalId),
         ];
 
         EnvironmentRole[] roles =
         [
-            new(ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly, isAvailable: true),
-            new(ClientAlphaEnvironmentId, ProductionRoleIds.Support, isAvailable: true),
-            new(ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly, isAvailable: true),
+            new(ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientAlphaEnvironmentId, ProductionRoleIds.Support),
+            new(ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly),
         ];
 
         Incident[] incidents =
@@ -105,7 +103,7 @@ internal static class SyntheticDataSeeder
             dbContext.EnvironmentRoles,
             roles,
             role => new EnvironmentRoleKey(role.EnvironmentId, role.RoleId),
-            ValidateRole,
+            static (_, _) => { },
             cancellationToken);
         await SeedExactAsync(
             dbContext.Incidents,
@@ -177,19 +175,10 @@ internal static class SyntheticDataSeeder
         EnsureMatches(
             actual.ClientId == expected.ClientId
             && actual.DisplayName == expected.DisplayName
-            && actual.IsActive == expected.IsActive
             && actual.MaximumDurationMinutes == expected.MaximumDurationMinutes
             && actual.BusinessApproverPrincipalId == expected.BusinessApproverPrincipalId,
             nameof(ProductionEnvironment),
             actual.Id);
-    }
-
-    private static void ValidateRole(EnvironmentRole actual, EnvironmentRole expected)
-    {
-        EnsureMatches(
-            actual.IsAvailable == expected.IsAvailable,
-            nameof(EnvironmentRole),
-            $"{actual.EnvironmentId}/{actual.RoleId}");
     }
 
     private static void ValidateIncident(Incident actual, Incident expected)

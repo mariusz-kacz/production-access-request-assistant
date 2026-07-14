@@ -60,7 +60,7 @@
 
 ### Tests for User Story 1
 
-- [X] T021 [P] [US1] Add unit tests for client/environment, activation, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
+- [X] T021 [P] [US1] Add unit tests for client/environment, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
 - [X] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
 - [X] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 - [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftInterpretationTests.cs`
@@ -69,7 +69,7 @@
 ### Implementation for User Story 1
 
 - [X] T027 [P] [US1] Define draft interpretation records, completeness rules, and the provider-neutral interpretation port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
-- [ ] T028 [P] [US1] Implement authoritative request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
+- [X] T028 [P] [US1] Implement authoritative request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
 - [ ] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
 - [ ] T030 [P] [US1] Implement typed read-only authoritative context handlers for the three MCP operations in `src/GovernedAccess.Web/Mcp/AuthoritativeContextTools.cs`
 - [ ] T031 [US1] Register a stateless Streamable HTTP `/mcp` server with an explicit allowlist containing only the three contract tools in `src/GovernedAccess.Web/Mcp/McpRegistration.cs`
@@ -118,7 +118,7 @@
 ### Tests for User Story 3
 
 - [ ] T047 [P] [US3] Add unit tests for exact role, positive duration ceiling, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [ ] T048 [P] [US3] Add protected handler tests for authoritative reload, current-state revalidation, stale environment/role/incident, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [ ] T048 [P] [US3] Add protected handler tests for authoritative reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
 - [ ] T049 [P] [US3] Add API tests for DevOps authentication, crafted scope over-posting, duration increase, rejection, antiforgery, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 - [ ] T050 [P] [US3] Add React tests for allowed-duration approval, rejection, protected failure, and grant summary rendering in `src/GovernedAccess.Web/ClientApp/src/test/DevOpsDecisionPanel.test.tsx`
 

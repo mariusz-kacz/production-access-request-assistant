@@ -30,7 +30,6 @@ to incidents. Seed exactly Client Alpha and Client Beta.
 | `Id` | string | Primary stable ID (`PROD-ALPHA-EU`, `PROD-BETA-UK`). |
 | `ClientId` | string | Required FK to `Client`; immutable seed association. |
 | `DisplayName` | string | Required. |
-| `IsActive` | bool | Must be true at submission and provisioning. |
 | `MaximumDurationMinutes` | int | Positive; Alpha 480, Beta 240. |
 | `BusinessApproverPrincipalId` | string | Required FK to the authoritative principal. |
 
@@ -42,7 +41,6 @@ Relationships: many allowed environment roles; zero or more incidents and reques
 |---|---|---|
 | `EnvironmentId` | string | Composite PK/FK. |
 | `RoleId` | string | Composite PK; `ProductionReadOnly` or `ProductionSupport`. |
-| `IsAvailable` | bool | Must be true at submission and provisioning. |
 
 There is deliberately no ordering or privilege comparison between roles.
 
@@ -92,8 +90,8 @@ DevOps approver. It is never updated by protected browser actions.
 Relationships: many approval decisions and audit events; at most one provisioning
 operation and access grant per request version/approved scope.
 
-Validation never relies solely on foreign keys: current environment activation, role
-availability, duration maximum, and incident status/association are checked by the
+Validation never relies solely on foreign keys: the environment-role assignment,
+duration maximum, and incident status/association are checked by the
 application at submission and again during provisioning.
 
 ### ApprovalDecision

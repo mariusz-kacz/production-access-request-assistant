@@ -48,7 +48,6 @@ public sealed class ProductionEnvironment
         string id,
         string clientId,
         string displayName,
-        bool isActive,
         int maximumDurationMinutes,
         string businessApproverPrincipalId)
     {
@@ -61,7 +60,6 @@ public sealed class ProductionEnvironment
         Id = id;
         ClientId = clientId;
         DisplayName = displayName;
-        IsActive = isActive;
         MaximumDurationMinutes = maximumDurationMinutes;
         BusinessApproverPrincipalId = businessApproverPrincipalId;
     }
@@ -72,17 +70,14 @@ public sealed class ProductionEnvironment
 
     public string DisplayName { get; private set; }
 
-    public bool IsActive { get; private set; }
-
     public int MaximumDurationMinutes { get; private set; }
 
     public string BusinessApproverPrincipalId { get; private set; }
 
-    public void UpdateOperationalState(bool isActive, int maximumDurationMinutes)
+    public void UpdateMaximumDuration(int maximumDurationMinutes)
     {
         EnsurePositiveDuration(maximumDurationMinutes);
 
-        IsActive = isActive;
         MaximumDurationMinutes = maximumDurationMinutes;
     }
 
@@ -100,7 +95,7 @@ public sealed class ProductionEnvironment
 
 public sealed class EnvironmentRole
 {
-    public EnvironmentRole(string environmentId, string roleId, bool isAvailable)
+    public EnvironmentRole(string environmentId, string roleId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(roleId);
@@ -115,19 +110,12 @@ public sealed class EnvironmentRole
 
         EnvironmentId = environmentId;
         RoleId = roleId;
-        IsAvailable = isAvailable;
     }
 
     public string EnvironmentId { get; private set; }
 
     public string RoleId { get; private set; }
 
-    public bool IsAvailable { get; private set; }
-
-    public void SetAvailability(bool isAvailable)
-    {
-        IsAvailable = isAvailable;
-    }
 }
 
 public sealed class Incident

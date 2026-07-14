@@ -17,7 +17,6 @@
         "environmentId": "string",
         "clientId": "string",
         "displayName": "string",
-        "isActive": "boolean",
         "maximumDurationMinutes": "integer",
         "businessApproverResponsibilityId": "string"
       }
@@ -55,7 +54,7 @@
       "successResult": {
         "environmentId": "string",
         "roles": [
-          { "roleId": "string", "displayName": "string", "isAvailable": "boolean" }
+          { "roleId": "string", "displayName": "string" }
         ]
       }
     }

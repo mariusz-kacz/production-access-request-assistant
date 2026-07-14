@@ -25,11 +25,6 @@ public static class ProblemDetailsMapping
         problem.Extensions["code"] = failure.Code;
         problem.Extensions["correlationId"] = GetCorrelationId(context);
 
-        if (failure.FieldErrors.Count > 0)
-        {
-            problem.Extensions["fieldErrors"] = failure.FieldErrors;
-        }
-
         if (failure.CurrentVersion is int currentVersion)
         {
             problem.Extensions["currentVersion"] = currentVersion;
@@ -38,13 +33,43 @@ public static class ProblemDetailsMapping
         return TypedResults.Problem(problem);
     }
 
+    public static ProblemHttpResult ToValidationProblemDetails(
+        string code,
+        string detail,
+        IEnumerable<FieldValidationError> fieldErrors,
+        HttpContext context)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        ArgumentNullException.ThrowIfNull(fieldErrors);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var errors = fieldErrors.ToArray();
+        if (errors.Length == 0)
+        {
+            throw new ArgumentException(
+                "At least one field validation error is required.",
+                nameof(fieldErrors));
+        }
+
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status422UnprocessableEntity,
+            Title = "Validation failed.",
+            Detail = detail,
+        };
+
+        problem.Extensions["code"] = code;
+        problem.Extensions["correlationId"] = GetCorrelationId(context);
+        problem.Extensions["fieldErrors"] = errors;
+        return TypedResults.Problem(problem);
+    }
+
     private static (int Status, string Title) GetStatusAndTitle(
         ApplicationFailureKind kind)
     {
         return kind switch
         {
-            ApplicationFailureKind.Validation =>
-                (StatusCodes.Status422UnprocessableEntity, "Validation failed."),
             ApplicationFailureKind.InvalidInput =>
                 (StatusCodes.Status400BadRequest, "Invalid request."),
             ApplicationFailureKind.NotFound =>

@@ -22,13 +22,13 @@ public sealed class RequestValidationTests
                 " INC-1042 "),
             TestContext.Current.CancellationToken);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal("client-alpha", result.Value.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", result.Value.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, result.Value.RequestedRoleId);
-        Assert.Equal(240, result.Value.RequestedDurationMinutes);
-        Assert.Equal("Investigate the active production incident.", result.Value.Justification);
-        Assert.Equal("INC-1042", result.Value.IncidentId);
+        var fields = AssertValid(result);
+        Assert.Equal("client-alpha", fields.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", fields.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, fields.RequestedRoleId);
+        Assert.Equal(240, fields.RequestedDurationMinutes);
+        Assert.Equal("Investigate the active production incident.", fields.Justification);
+        Assert.Equal("INC-1042", fields.IncidentId);
     }
 
     [Fact]
@@ -40,9 +40,9 @@ public sealed class RequestValidationTests
             ValidInput(durationMinutes: 480, incidentId: "   "),
             TestContext.Current.CancellationToken);
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(480, result.Value.RequestedDurationMinutes);
-        Assert.Null(result.Value.IncidentId);
+        var fields = AssertValid(result);
+        Assert.Equal(480, fields.RequestedDurationMinutes);
+        Assert.Null(fields.IncidentId);
     }
 
     [Fact]
@@ -82,34 +82,6 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnInactiveEnvironment()
-    {
-        var context = new StubAuthoritativeContextReader();
-        context.AlphaEnvironment.UpdateOperationalState(false, 480);
-        var validator = new RequestValidator(context);
-
-        var result = await validator.ValidateAsync(
-            ValidInput(),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "environmentId", "environment_inactive");
-    }
-
-    [Fact]
-    public async Task ValidateAsyncRejectsAnUnavailableRole()
-    {
-        var context = new StubAuthoritativeContextReader();
-        context.AlphaReadOnlyRole.SetAvailability(false);
-        var validator = new RequestValidator(context);
-
-        var result = await validator.ValidateAsync(
-            ValidInput(),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "requestedRoleId", "role_unavailable");
-    }
-
-    [Fact]
     public async Task ValidateAsyncRejectsARoleThatIsNotAllowedForTheEnvironment()
     {
         var validator = new RequestValidator(new StubAuthoritativeContextReader());
@@ -119,6 +91,18 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "requestedRoleId", "role_unavailable");
+    }
+
+    [Fact]
+    public async Task ValidateAsyncRejectsAGloballyUnsupportedRole()
+    {
+        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+
+        var result = await validator.ValidateAsync(
+            ValidInput(requestedRoleId: "ProductionAdministrator"),
+            TestContext.Current.CancellationToken);
+
+        AssertFieldError(result, "requestedRoleId", "role_unsupported");
     }
 
     [Theory]
@@ -216,6 +200,26 @@ public sealed class RequestValidationTests
         AssertFieldError(result, "incidentId", "incident_environment_mismatch");
     }
 
+    [Fact]
+    public async Task ValidateAsyncPreservesAnOperationLevelContextFailure()
+    {
+        var context = new StubAuthoritativeContextReader
+        {
+            ClientFailure = new ApplicationFailure(
+                ApplicationFailureKind.DependencyUnavailable,
+                "authoritative_context_unavailable",
+                "Authoritative context is unavailable."),
+        };
+        var validator = new RequestValidator(context);
+
+        var result = await validator.ValidateAsync(
+            ValidInput(),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsFailure);
+        Assert.Same(context.ClientFailure, result.Failure);
+    }
+
     private static RequestValidationInput ValidInput(
         string? clientId = "client-alpha",
         string? environmentId = "PROD-ALPHA-EU",
@@ -234,16 +238,24 @@ public sealed class RequestValidationTests
     }
 
     private static void AssertFieldError(
-        ApplicationResult<ValidatedRequestFields> result,
+        ApplicationResult<RequestValidationResult> result,
         string expectedField,
         string expectedCode)
     {
-        Assert.True(result.IsFailure);
-        var failure = Assert.IsType<ApplicationFailure>(result.Failure);
-        Assert.Equal(ApplicationFailureKind.Validation, failure.Kind);
+        Assert.True(result.IsSuccess);
+        Assert.False(result.Value.IsValid);
         Assert.Contains(
-            failure.FieldErrors,
+            result.Value.Errors,
             error => error.Field == expectedField && error.Code == expectedCode);
+    }
+
+    private static ValidatedRequestFields AssertValid(
+        ApplicationResult<RequestValidationResult> result)
+    {
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.IsValid);
+        Assert.Empty(result.Value.Errors);
+        return result.Value.ValidatedFields;
     }
 
     private sealed class StubAuthoritativeContextReader : IAuthoritativeContextReader
@@ -261,24 +273,20 @@ public sealed class RequestValidationTests
                 "PROD-ALPHA-EU",
                 alphaClient.Id,
                 "Client Alpha Production EU",
-                true,
                 480,
                 "alpha-approver");
             var betaEnvironment = new ProductionEnvironment(
                 "PROD-BETA-UK",
                 betaClient.Id,
                 "Client Beta Production UK",
-                true,
                 240,
                 "beta-approver");
-            AlphaReadOnlyRole = new EnvironmentRole(
+            var alphaReadOnlyRole = new EnvironmentRole(
                 AlphaEnvironment.Id,
-                ProductionRoleIds.ReadOnly,
-                true);
+                ProductionRoleIds.ReadOnly);
             var betaReadOnlyRole = new EnvironmentRole(
                 betaEnvironment.Id,
-                ProductionRoleIds.ReadOnly,
-                true);
+                ProductionRoleIds.ReadOnly);
             AlphaIncident = new Incident(
                 "INC-1042",
                 alphaClient.Id,
@@ -310,7 +318,7 @@ public sealed class RequestValidationTests
             };
             roles = new Dictionary<(string EnvironmentId, string RoleId), EnvironmentRole>
             {
-                [(AlphaReadOnlyRole.EnvironmentId, AlphaReadOnlyRole.RoleId)] = AlphaReadOnlyRole,
+                [(alphaReadOnlyRole.EnvironmentId, alphaReadOnlyRole.RoleId)] = alphaReadOnlyRole,
                 [(betaReadOnlyRole.EnvironmentId, betaReadOnlyRole.RoleId)] = betaReadOnlyRole,
             };
             incidents = new Dictionary<string, Incident>(StringComparer.Ordinal)
@@ -323,14 +331,19 @@ public sealed class RequestValidationTests
 
         public ProductionEnvironment AlphaEnvironment { get; }
 
-        public EnvironmentRole AlphaReadOnlyRole { get; }
-
         public Incident AlphaIncident { get; }
+
+        public ApplicationFailure? ClientFailure { get; init; }
 
         public Task<ApplicationResult<Client>> GetClientAsync(
             string clientId,
             CancellationToken cancellationToken)
         {
+            if (ClientFailure is not null)
+            {
+                return Task.FromResult(ApplicationResult.Failed<Client>(ClientFailure));
+            }
+
             return GetAsync(clients, clientId, "client_not_found", cancellationToken);
         }
 

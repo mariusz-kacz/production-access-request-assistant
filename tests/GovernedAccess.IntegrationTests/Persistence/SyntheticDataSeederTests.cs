@@ -50,7 +50,6 @@ public sealed class SyntheticDataSeederTests
             {
                 Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, environment.Id);
                 Assert.Equal(DemoDataIds.ClientAlphaId, environment.ClientId);
-                Assert.True(environment.IsActive);
                 Assert.Equal(480, environment.MaximumDurationMinutes);
                 Assert.Equal(
                     DemoDataIds.ClientAlphaApproverPrincipalId,
@@ -60,7 +59,6 @@ public sealed class SyntheticDataSeederTests
             {
                 Assert.Equal(DemoDataIds.ClientBetaEnvironmentId, environment.Id);
                 Assert.Equal(DemoDataIds.ClientBetaId, environment.ClientId);
-                Assert.True(environment.IsActive);
                 Assert.Equal(240, environment.MaximumDurationMinutes);
                 Assert.Equal(
                     DemoDataIds.ClientBetaApproverPrincipalId,
@@ -136,6 +134,5 @@ public sealed class SyntheticDataSeederTests
     {
         Assert.Equal(environmentId, role.EnvironmentId);
         Assert.Equal(roleId, role.RoleId);
-        Assert.True(role.IsAvailable);
     }
 }

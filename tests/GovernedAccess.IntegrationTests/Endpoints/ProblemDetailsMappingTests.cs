@@ -8,7 +8,6 @@ namespace GovernedAccess.IntegrationTests.Endpoints;
 public sealed class ProblemDetailsMappingTests
 {
     [Theory]
-    [InlineData(ApplicationFailureKind.Validation, 422, "Validation failed.")]
     [InlineData(ApplicationFailureKind.InvalidInput, 400, "Invalid request.")]
     [InlineData(ApplicationFailureKind.NotFound, 404, "Resource not found.")]
     [InlineData(ApplicationFailureKind.Unauthenticated, 401, "Authentication required.")]
@@ -39,26 +38,41 @@ public sealed class ProblemDetailsMappingTests
     }
 
     [Fact]
-    public void ToProblemDetailsIncludesOptionalFieldErrorsAndCurrentVersion()
+    public void ToValidationProblemDetailsIncludesFieldErrors()
     {
         var context = CreateContext("correlation-456");
-        ApplicationFieldError[] fieldErrors =
+        FieldValidationError[] fieldErrors =
         [
             new("durationMinutes", "duration_too_long", "Duration exceeds the maximum."),
             new("incidentId", "incident_inactive", "Incident is not active."),
         ];
-        var failure = new ApplicationFailure(
-            ApplicationFailureKind.Validation,
+        var result = ProblemDetailsMapping.ToValidationProblemDetails(
             "request_validation_failed",
             "Correct the highlighted fields.",
             fieldErrors,
+            context);
+
+        var mappedErrors = Assert.IsAssignableFrom<IReadOnlyList<FieldValidationError>>(
+            result.ProblemDetails.Extensions["fieldErrors"]);
+        Assert.Equal(fieldErrors, mappedErrors);
+        Assert.Equal(422, result.StatusCode);
+        Assert.Equal("Validation failed.", result.ProblemDetails.Title);
+        Assert.Equal("request_validation_failed", result.ProblemDetails.Extensions["code"]);
+        Assert.Equal("correlation-456", result.ProblemDetails.Extensions["correlationId"]);
+    }
+
+    [Fact]
+    public void ToProblemDetailsIncludesCurrentVersionForAnOperationFailure()
+    {
+        var context = CreateContext("correlation-456");
+        var failure = new ApplicationFailure(
+            ApplicationFailureKind.StaleVersion,
+            "stale_request_version",
+            "The request version is stale.",
             currentVersion: 3);
 
         var result = failure.ToProblemDetails(context);
 
-        var mappedErrors = Assert.IsAssignableFrom<IReadOnlyList<ApplicationFieldError>>(
-            result.ProblemDetails.Extensions["fieldErrors"]);
-        Assert.Equal(fieldErrors, mappedErrors);
         Assert.Equal(3, result.ProblemDetails.Extensions["currentVersion"]);
     }
 
@@ -73,7 +87,6 @@ public sealed class ProblemDetailsMappingTests
 
         var result = failure.ToProblemDetails(context);
 
-        Assert.DoesNotContain("fieldErrors", result.ProblemDetails.Extensions.Keys);
         Assert.DoesNotContain("currentVersion", result.ProblemDetails.Extensions.Keys);
     }
 

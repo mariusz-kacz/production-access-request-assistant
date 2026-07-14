@@ -20,9 +20,9 @@ As an authenticated requester, I describe why I need temporary access to a clien
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated requester and an active Client Alpha environment, **When** the requester describes four hours of read-only access for active incident `INC-1042`, **Then** the system presents a typed draft containing authoritative client, environment, role, duration, justification, and incident identifiers for review.
+1. **Given** an authenticated requester and the Client Alpha environment, **When** the requester describes four hours of read-only access for active incident `INC-1042`, **Then** the system presents a typed draft containing authoritative client, environment, role, duration, justification, and incident identifiers for review.
 2. **Given** a complete draft whose environment belongs to the selected client and whose role, duration, and incident are currently valid, **When** the requester submits it, **Then** the request is created in `AwaitingBusinessApproval` for version 1 and no access is granted.
-3. **Given** malformed model output, an unknown identifier, an inactive incident, a client-environment mismatch, an unavailable role, or an excessive duration, **When** draft preparation or submission is attempted, **Then** the system returns a structured failure or identifies fields requiring correction and does not submit or authorize the request.
+3. **Given** malformed model output, an unknown identifier, an inactive incident, a client-environment mismatch, a role not assigned to the environment, or an excessive duration, **When** draft preparation or submission is attempted, **Then** the system returns a structured failure or identifies fields requiring correction and does not submit or authorize the request.
 4. **Given** information proposed by the model, **When** the request is submitted, **Then** every identifier and business value is checked against current authoritative information rather than accepted from the model.
 
 ---
@@ -58,7 +58,7 @@ As the authenticated DevOps approver, I can approve the business-approved role f
 2. **Given** a DevOps decision that changes the role, increases duration, changes client or environment, references another version, or lacks a valid business approval, **When** approval is attempted, **Then** the decision is rejected and audited without provisioning access.
 3. **Given** a user who is not the authenticated DevOps approver, **When** that user attempts the DevOps action, **Then** the attempt is rejected and audited without changing protected state.
 4. **Given** a valid request awaiting DevOps approval, **When** DevOps rejects it, **Then** the request moves to `Rejected` and no grant is created.
-5. **Given** authoritative environment, role, or incident state changed after business approval, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than using stale approval assertions or creating a grant.
+5. **Given** the authoritative duration limit or incident state changed after business approval, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than using stale approval assertions or creating a grant.
 
 ---
 
@@ -97,8 +97,8 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 - Model output is syntactically malformed, omits required fields, uses display names instead of stable identifiers, or proposes unsupported values.
 - An authoritative context lookup is unavailable, times out, is cancelled, or returns a typed not-found result.
-- The selected environment does not belong to the selected client, is inactive, or changes state between submission and provisioning.
-- The requested role is unavailable for the environment or becomes unavailable after approval.
+- The selected environment does not belong to the selected client.
+- The requested role is not assigned to the selected environment.
 - Duration is zero, negative, over the environment limit, increased by DevOps, or reduced to a valid positive value.
 - An incident is omitted when optional, unknown, inactive, or associated with a different client or environment.
 - A wrong-client approver, requester, or other unauthorized principal attempts a protected decision or retry.
@@ -118,7 +118,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - **FR-004**: Model-assisted preparation MUST have access only to the three approved read-only context operations: `get_production_environment`, `get_incident`, and `get_available_roles`.
 - **FR-005**: Each approved context operation MUST use explicit typed inputs and results, stable authoritative identifiers, and explicit not-found, invalid-input, timeout, cancellation, and unavailable outcomes.
 - **FR-006**: No approval, provisioning, revocation, workflow-transition, arbitrary-data, or generic-query capability MUST be available to model-assisted preparation.
-- **FR-007**: Before submission, the system MUST validate the authenticated requester, client and environment existence and relationship, environment state, role availability, positive duration within the environment limit, and any supplied incident's existence, active state, and relevant association.
+- **FR-007**: Before submission, the system MUST validate the authenticated requester, client and environment existence and relationship, environment-role assignment, positive duration within the environment limit, and any supplied incident's existence, active state, and relevant association.
 - **FR-008**: Invalid, incomplete, malformed, cancelled, or timed-out draft preparation MUST produce a safe, understandable outcome that allows structured correction and MUST NOT create authorization evidence or a grant.
 - **FR-009**: The system MUST derive the acting identity and authority for every protected action from authenticated server context and MUST ignore browser-supplied identity, role, or authorization claims as authority.
 - **FR-010**: A submitted request MUST receive a stable request ID, version, status, requester identity, timestamps, and correlation identifier.
@@ -156,7 +156,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 ### Key Entities *(include if feature involves data)*
 
 - **Client**: A client boundary identified by a stable ID and associated with one or more production environments; authorization for one client never applies to another.
-- **Production Environment**: A client-owned target identified by a stable ID, with active state, allowed roles, maximum access duration, and authoritative business approver responsibility.
+- **Production Environment**: A client-owned target identified by a stable ID, with allowed roles, maximum access duration, and authoritative business approver responsibility.
 - **Access Role**: A stable allowed access scope for a particular environment; roles have no generalized privilege ordering in this feature.
 - **Incident**: Optional authoritative context identified by a stable ID, with status and client or environment association used during validation.
 - **Access Request**: The requester's desired client, environment, role, duration, justification, optional incident, version, workflow status, timestamps, and correlation identifier.

@@ -260,7 +260,6 @@ Returns typed authoritative environment data using a stable environment identifi
 - environment ID,
 - client ID,
 - display name,
-- active state,
 - maximum access duration,
 - business approver group identifier.
 
@@ -277,7 +276,7 @@ Returns typed authoritative incident data using a stable incident identifier. Th
 
 Returns the typed role identifiers currently allowed for a stable environment identifier.
 
-The tool returns role availability only. It does not define or compare a generalized privilege hierarchy.
+The tool returns the roles assigned to the environment. It does not define or compare a generalized privilege hierarchy.
 
 ### 5.4 MCP Constraints
 

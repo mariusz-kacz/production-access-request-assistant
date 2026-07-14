@@ -7,7 +7,6 @@ namespace GovernedAccess.Core.Application;
 /// </summary>
 public enum ApplicationFailureKind
 {
-    Validation,
     InvalidInput,
     NotFound,
     Unauthenticated,
@@ -22,30 +21,7 @@ public enum ApplicationFailureKind
 }
 
 /// <summary>
-/// Describes one safe, field-specific validation failure.
-/// </summary>
-public sealed class ApplicationFieldError
-{
-    public ApplicationFieldError(string field, string code, string message)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(field);
-        ArgumentException.ThrowIfNullOrWhiteSpace(code);
-        ArgumentException.ThrowIfNullOrWhiteSpace(message);
-
-        Field = field;
-        Code = code;
-        Message = message;
-    }
-
-    public string Field { get; }
-
-    public string Code { get; }
-
-    public string Message { get; }
-}
-
-/// <summary>
-/// Represents an expected, safe-to-report application failure.
+/// Represents an expected, safe-to-report operation failure.
 /// </summary>
 public sealed class ApplicationFailure
 {
@@ -53,7 +29,6 @@ public sealed class ApplicationFailure
         ApplicationFailureKind kind,
         string code,
         string message,
-        IEnumerable<ApplicationFieldError>? fieldErrors = null,
         int? currentVersion = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
@@ -70,7 +45,6 @@ public sealed class ApplicationFailure
         Kind = kind;
         Code = code;
         Message = message;
-        FieldErrors = Array.AsReadOnly(fieldErrors?.ToArray() ?? []);
         CurrentVersion = currentVersion;
     }
 
@@ -79,8 +53,6 @@ public sealed class ApplicationFailure
     public string Code { get; }
 
     public string Message { get; }
-
-    public IReadOnlyList<ApplicationFieldError> FieldErrors { get; }
 
     public int? CurrentVersion { get; }
 

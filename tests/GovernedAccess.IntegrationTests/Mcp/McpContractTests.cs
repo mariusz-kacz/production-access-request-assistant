@@ -78,13 +78,11 @@ public sealed class McpContractTests
             "environmentId",
             "clientId",
             "displayName",
-            "isActive",
             "maximumDurationMinutes",
             "businessApproverResponsibilityId");
         Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
         Assert.Equal("client-alpha", content.GetProperty("clientId").GetString());
         Assert.Equal("Client Alpha Production EU", content.GetProperty("displayName").GetString());
-        Assert.True(content.GetProperty("isActive").GetBoolean());
         Assert.Equal(480, content.GetProperty("maximumDurationMinutes").GetInt32());
         Assert.Equal(
             "client-alpha-business-approver",
@@ -146,11 +144,10 @@ public sealed class McpContractTests
         Assert.Equal(2, roles.Length);
         Assert.All(
             roles,
-            role => AssertExactProperties(role, "roleId", "displayName", "isAvailable"));
+            role => AssertExactProperties(role, "roleId", "displayName"));
         Assert.Equal(
             ["ProductionReadOnly", "ProductionSupport"],
             roles.Select(role => role.GetProperty("roleId").GetString()).Order());
-        Assert.All(roles, role => Assert.True(role.GetProperty("isAvailable").GetBoolean()));
         Assert.All(roles, role => Assert.Equal(JsonValueKind.String, role.GetProperty("displayName").ValueKind));
         Assert.All(
             roles,

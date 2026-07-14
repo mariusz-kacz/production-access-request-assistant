@@ -80,9 +80,7 @@ public sealed class CreateRequestTests
             var environment = await dbContext.ProductionEnvironments.SingleAsync(
                 item => item.Id == DemoDataIds.ClientAlphaEnvironmentId,
                 cancellationToken);
-            environment.UpdateOperationalState(
-                isActive: false,
-                maximumDurationMinutes: environment.MaximumDurationMinutes);
+            environment.UpdateMaximumDuration(120);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
@@ -99,7 +97,8 @@ public sealed class CreateRequestTests
             problem.RootElement.GetProperty("code").GetString());
         Assert.Contains(
             problem.RootElement.GetProperty("fieldErrors").EnumerateArray(),
-            error => error.GetProperty("code").GetString() == "environment_inactive");
+            error => error.GetProperty("code").GetString()
+                == "duration_exceeds_environment_maximum");
         await AssertNoProtectedWorkflowArtifactsAsync(factory, cancellationToken);
     }
 
