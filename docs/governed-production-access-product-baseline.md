@@ -460,7 +460,7 @@ The model produces a typed draft such as:
 The model may call the three read-only MCP tools to obtain authoritative context. The result is either:
 
 - a schema-valid draft,
-- an incomplete draft with explicit missing fields,
+- an incomplete draft with nullable required values and correction guidance,
 - an unsupported or malformed result.
 
 Missing or invalid fields are corrected through the structured new-request page. A multi-turn clarification engine is not required.

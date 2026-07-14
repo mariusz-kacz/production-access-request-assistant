@@ -42,10 +42,12 @@ Requires antiforgery, clears the authentication cookie, and returns `204`.
 
 ### `POST /api/request-drafts/prepare`
 
-Requester only. Body: `{ intent }`. Returns `{ outcome, draft?,
-validationMessages[] }`, where draft matches `request-draft.schema.json`. Outcomes:
+Requester only. Body: `{ intent }`. Returns `{ outcome, draft? }`, where draft
+matches `request-draft.schema.json`. Outcomes:
 `Prepared`, `Incomplete`, `MalformedModelOutput`, `Timeout`, `Cancelled`, or
-`Unavailable`. It creates no request, approval, operation, or grant.
+`Unavailable`. The UI derives missing-field guidance from nullable draft fields and
+standard failure text from the outcome. It creates no request, approval, operation,
+or grant.
 
 ### `POST /api/requests`
 

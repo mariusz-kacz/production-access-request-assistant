@@ -131,7 +131,7 @@ failures, and provisioning; Vitest covers the thin React presentation.
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
 - `IChatClient` and MCP client/server types are adapted in `GovernedAccess.Web`; the
-  core sees only `DraftPreparationRequest`, `DraftPreparationOutcome`, and the three
+  core sees only `DraftInterpretationRequest`, `DraftInterpretationOutcome`, and the three
   authoritative context ports.
 - The AI adapter uses a strict JSON-schema response and an explicit MCP-tool allowlist.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP

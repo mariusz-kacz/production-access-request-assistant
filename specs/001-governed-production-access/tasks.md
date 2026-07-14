@@ -63,19 +63,18 @@
 - [X] T021 [P] [US1] Add unit tests for client/environment, activation, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
 - [X] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
 - [X] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
-- [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftPreparationTests.cs`
+- [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftInterpretationTests.cs`
 - [X] T025 [P] [US1] Add request creation integration tests for authoritative revalidation, browser identity over-posting resistance, antiforgery, and absence of approval/grant side effects in `tests/GovernedAccess.IntegrationTests/Requests/CreateRequestTests.cs`
-- [X] T026 [P] [US1] Add React tests for draft preparation, correction guidance, typed failure display, cancellation, and successful submission in `src/GovernedAccess.Web/ClientApp/src/test/NewRequestPage.test.tsx`
 
 ### Implementation for User Story 1
 
-- [ ] T027 [P] [US1] Define draft preparation records, missing-field rules, and the provider-neutral drafting port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
+- [X] T027 [P] [US1] Define draft interpretation records, completeness rules, and the provider-neutral interpretation port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
 - [ ] T028 [P] [US1] Implement authoritative request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
 - [ ] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
 - [ ] T030 [P] [US1] Implement typed read-only authoritative context handlers for the three MCP operations in `src/GovernedAccess.Web/Mcp/AuthoritativeContextTools.cs`
 - [ ] T031 [US1] Register a stateless Streamable HTTP `/mcp` server with an explicit allowlist containing only the three contract tools in `src/GovernedAccess.Web/Mcp/McpRegistration.cs`
 - [ ] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
-- [ ] T033 [US1] Implement the `IChatClient` drafting adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftingAdapter.cs`
+- [ ] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
 - [ ] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
 - [ ] T035 [P] [US1] Implement the credentialed typed fetch wrapper with antiforgery headers, Problem Details mapping, and `AbortSignal` support in `src/GovernedAccess.Web/ClientApp/src/api/client.ts`
 - [ ] T036 [P] [US1] Define TypeScript draft, request creation, session, and typed error contracts in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`
@@ -241,7 +240,7 @@ Setup -> Foundational -> US1 -> US2 -> US3 -> US5
 ## Parallel Example: User Story 1
 
 ```text
-T021 RequestValidationTests.cs | T022 McpContractTests.cs | T023 McpFailureTests.cs | T024 DraftPreparationTests.cs | T025 CreateRequestTests.cs | T026 NewRequestPage.test.tsx
+T021 RequestValidationTests.cs | T022 McpContractTests.cs | T023 McpFailureTests.cs | T024 DraftInterpretationTests.cs | T025 CreateRequestTests.cs
 T027 RequestDrafting.cs | T028 RequestValidator.cs | T030 AuthoritativeContextTools.cs | T032 DeterministicChatClient.cs
 T035 client.ts | T036 contracts.ts
 ```

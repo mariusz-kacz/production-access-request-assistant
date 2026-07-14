@@ -10,8 +10,7 @@
     "requestedRole",
     "durationMinutes",
     "justification",
-    "incidentId",
-    "missingFields"
+    "incidentId"
   ],
   "properties": {
     "clientId": { "type": ["string", "null"], "minLength": 1 },
@@ -22,20 +21,6 @@
     },
     "durationMinutes": { "type": ["integer", "null"], "minimum": 1 },
     "justification": { "type": ["string", "null"], "maxLength": 2000 },
-    "incidentId": { "type": ["string", "null"], "minLength": 1 },
-    "missingFields": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "enum": [
-          "clientId",
-          "environmentId",
-          "requestedRole",
-          "durationMinutes",
-          "justification"
-        ]
-      }
-    }
+    "incidentId": { "type": ["string", "null"], "minLength": 1 }
   }
 }

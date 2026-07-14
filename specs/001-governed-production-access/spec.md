@@ -113,7 +113,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 ### Functional Requirements
 
 - **FR-001**: The system MUST allow an authenticated requester to enter natural-language intent and receive a typed, reviewable access-request draft.
-- **FR-002**: The draft MUST represent client, environment, requested role, requested duration, justification, optional incident, and explicit missing or invalid fields.
+- **FR-002**: The draft MUST represent client, environment, requested role, requested duration, justification, and optional incident; nullable required values MUST support structured correction.
 - **FR-003**: Model-produced content MUST be treated as untrusted and MUST NOT approve, reject, select an approver, change workflow state, provision, revoke, or override an authoritative validation result.
 - **FR-004**: Model-assisted preparation MUST have access only to the three approved read-only context operations: `get_production_environment`, `get_incident`, and `get_available_roles`.
 - **FR-005**: Each approved context operation MUST use explicit typed inputs and results, stable authoritative identifiers, and explicit not-found, invalid-input, timeout, cancellation, and unavailable outcomes.

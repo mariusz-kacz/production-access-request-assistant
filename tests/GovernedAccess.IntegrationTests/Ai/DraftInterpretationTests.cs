@@ -11,12 +11,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GovernedAccess.IntegrationTests.Ai;
 
-public sealed class DraftPreparationTests
+public sealed class DraftInterpretationTests
 {
     private const string PrimaryIntent =
         "I need four hours of read-only access to Client Alpha production for "
         + "INC-1042 to investigate the incident.";
-    private const string CorrelationId = "draft-preparation-test";
+    private const string CorrelationId = "draft-interpretation-test";
 
     [Fact]
     public async Task ValidDeterministicOutputProducesTheTypedAuthoritativeDraft()
@@ -24,11 +24,11 @@ public sealed class DraftPreparationTests
         await using var rootFactory = new GovernedAccessWebFactory();
         await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Valid);
 
-        var outcome = await PrepareAsync(
+        var outcome = await InterpretAsync(
             factory,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftPreparationOutcomeKind.Prepared, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.Prepared, outcome.Kind);
         var draft = Assert.IsType<AccessRequestDraft>(outcome.Draft);
         Assert.Equal("client-alpha", draft.ClientId);
         Assert.Equal("PROD-ALPHA-EU", draft.EnvironmentId);
@@ -36,29 +36,27 @@ public sealed class DraftPreparationTests
         Assert.Equal(240, draft.DurationMinutes);
         Assert.Equal("Investigate the active production incident.", draft.Justification);
         Assert.Equal("INC-1042", draft.IncidentId);
-        Assert.Empty(draft.MissingFields);
-        Assert.Empty(outcome.ValidationMessages);
+        Assert.True(draft.IsComplete);
     }
 
     [Fact]
-    public async Task IncompleteDeterministicOutputPreservesKnownValuesAndNamesMissingFields()
+    public async Task IncompleteDeterministicOutputPreservesKnownValuesAndRemainsIncomplete()
     {
         await using var rootFactory = new GovernedAccessWebFactory();
         await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Incomplete);
 
-        var outcome = await PrepareAsync(
+        var outcome = await InterpretAsync(
             factory,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftPreparationOutcomeKind.Incomplete, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.Incomplete, outcome.Kind);
         var draft = Assert.IsType<AccessRequestDraft>(outcome.Draft);
         Assert.Equal("client-alpha", draft.ClientId);
         Assert.Equal("PROD-ALPHA-EU", draft.EnvironmentId);
         Assert.Equal("ProductionReadOnly", draft.RequestedRole);
         Assert.Null(draft.DurationMinutes);
         Assert.Null(draft.Justification);
-        Assert.Equal(["durationMinutes", "justification"], draft.MissingFields.Order());
-        Assert.NotEmpty(outcome.ValidationMessages);
+        Assert.False(draft.IsComplete);
     }
 
     [Fact]
@@ -67,13 +65,12 @@ public sealed class DraftPreparationTests
         await using var rootFactory = new GovernedAccessWebFactory();
         await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Malformed);
 
-        var outcome = await PrepareAsync(
+        var outcome = await InterpretAsync(
             factory,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftPreparationOutcomeKind.MalformedModelOutput, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.MalformedModelOutput, outcome.Kind);
         Assert.Null(outcome.Draft);
-        AssertSafeCorrectionMessages(outcome.ValidationMessages);
     }
 
     [Fact]
@@ -82,13 +79,12 @@ public sealed class DraftPreparationTests
         await using var rootFactory = new GovernedAccessWebFactory();
         await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Unsupported);
 
-        var outcome = await PrepareAsync(
+        var outcome = await InterpretAsync(
             factory,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftPreparationOutcomeKind.MalformedModelOutput, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.MalformedModelOutput, outcome.Kind);
         Assert.Null(outcome.Draft);
-        AssertSafeCorrectionMessages(outcome.ValidationMessages);
     }
 
     [Fact]
@@ -100,13 +96,12 @@ public sealed class DraftPreparationTests
             DeterministicChatMode.Timeout,
             TimeSpan.FromMilliseconds(50));
 
-        var outcome = await PrepareAsync(
+        var outcome = await InterpretAsync(
             factory,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftPreparationOutcomeKind.Timeout, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.Timeout, outcome.Kind);
         Assert.Null(outcome.Draft);
-        AssertSafeCorrectionMessages(outcome.ValidationMessages);
     }
 
     [Fact]
@@ -119,13 +114,12 @@ public sealed class DraftPreparationTests
         using var callerCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
 
-        var preparation = PrepareAsync(factory, callerCancellation.Token);
+        var interpretation = InterpretAsync(factory, callerCancellation.Token);
         await callerCancellation.CancelAsync();
-        var outcome = await preparation;
+        var outcome = await interpretation;
 
-        Assert.Equal(DraftPreparationOutcomeKind.Cancelled, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.Cancelled, outcome.Kind);
         Assert.Null(outcome.Draft);
-        AssertSafeCorrectionMessages(outcome.ValidationMessages);
     }
 
     [Fact]
@@ -138,15 +132,14 @@ public sealed class DraftPreparationTests
         await using var scope = factory.Services.CreateAsyncScope();
 
         var configuredChatClient = scope.ServiceProvider.GetRequiredService<IChatClient>();
-        var preparer = scope.ServiceProvider.GetRequiredService<IRequestDraftPreparer>();
-        var outcome = await preparer.PrepareAsync(
-            new DraftPreparationRequest(PrimaryIntent, CorrelationId),
+        var interpreter = scope.ServiceProvider.GetRequiredService<IRequestDraftInterpreter>();
+        var outcome = await interpreter.InterpretAsync(
+            new DraftInterpretationRequest(PrimaryIntent, CorrelationId),
             TestContext.Current.CancellationToken);
 
         Assert.IsType<DeterministicChatClient>(configuredChatClient);
-        Assert.Equal(DraftPreparationOutcomeKind.Unavailable, outcome.Kind);
+        Assert.Equal(DraftInterpretationOutcomeKind.Unavailable, outcome.Kind);
         Assert.Null(outcome.Draft);
-        AssertSafeCorrectionMessages(outcome.ValidationMessages);
     }
 
     private static WebApplicationFactory<Program> CreateFactory(
@@ -162,7 +155,7 @@ public sealed class DraftPreparationTests
                     configuration.AddInMemoryCollection(
                         new Dictionary<string, string?>
                         {
-                            ["DraftPreparation:ModelTimeout"] = modelTimeout.Value.ToString("c"),
+                            ["DraftInterpretation:ModelTimeout"] = modelTimeout.Value.ToString("c"),
                         }));
             }
 
@@ -174,21 +167,15 @@ public sealed class DraftPreparationTests
         });
     }
 
-    private static async Task<DraftPreparationOutcome> PrepareAsync(
+    private static async Task<DraftInterpretationOutcome> InterpretAsync(
         WebApplicationFactory<Program> factory,
         CancellationToken cancellationToken)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        var preparer = scope.ServiceProvider.GetRequiredService<IRequestDraftPreparer>();
-        return await preparer.PrepareAsync(
-            new DraftPreparationRequest(PrimaryIntent, CorrelationId),
+        var interpreter = scope.ServiceProvider.GetRequiredService<IRequestDraftInterpreter>();
+        return await interpreter.InterpretAsync(
+            new DraftInterpretationRequest(PrimaryIntent, CorrelationId),
             cancellationToken);
     }
 
-    private static void AssertSafeCorrectionMessages(IReadOnlyList<string> messages)
-    {
-        Assert.NotEmpty(messages);
-        Assert.All(messages, message => Assert.False(string.IsNullOrWhiteSpace(message)));
-        Assert.DoesNotContain(messages, message => message.Contains(PrimaryIntent, StringComparison.Ordinal));
-    }
 }
