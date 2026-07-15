@@ -39,19 +39,14 @@ public sealed class FieldValidationError
     public string Message { get; }
 }
 
-public sealed class RequestValidationResult
+public abstract record RequestValidationOutcome;
+
+public sealed record RequestValidationSucceeded(ValidatedRequestFields Fields)
+    : RequestValidationOutcome;
+
+public sealed record RequestValidationRejected : RequestValidationOutcome
 {
-    private readonly ValidatedRequestFields? validatedFields;
-
-    public RequestValidationResult(ValidatedRequestFields validatedFields)
-    {
-        ArgumentNullException.ThrowIfNull(validatedFields);
-
-        this.validatedFields = validatedFields;
-        Errors = Array.Empty<FieldValidationError>();
-    }
-
-    public RequestValidationResult(IEnumerable<FieldValidationError> errors)
+    public RequestValidationRejected(IEnumerable<FieldValidationError> errors)
     {
         ArgumentNullException.ThrowIfNull(errors);
 
@@ -66,29 +61,27 @@ public sealed class RequestValidationResult
         Errors = Array.AsReadOnly(errorList);
     }
 
-    public bool IsValid => validatedFields is not null;
-
-    public ValidatedRequestFields ValidatedFields => validatedFields
-        ?? throw new InvalidOperationException("Invalid request fields have no validated value.");
-
     public IReadOnlyList<FieldValidationError> Errors { get; }
 }
 
+public sealed record RequestValidationFailed(ApplicationFailure Failure)
+    : RequestValidationOutcome;
+
 /// <summary>
-/// Validates proposed request fields against current authoritative context and
+/// Validates proposed request fields against current request context and
 /// returns canonical values suitable for request creation or revalidation.
 /// </summary>
 public sealed class RequestValidator
 {
-    private readonly IAuthoritativeContextReader context;
+    private readonly IRequestContextReader requestContext;
 
-    public RequestValidator(IAuthoritativeContextReader context)
+    public RequestValidator(IRequestContextReader requestContext)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        this.context = context;
+        ArgumentNullException.ThrowIfNull(requestContext);
+        this.requestContext = requestContext;
     }
 
-    public async Task<ApplicationResult<RequestValidationResult>> ValidateAsync(
+    public async Task<RequestValidationOutcome> ValidateAsync(
         RequestValidationInput input,
         CancellationToken cancellationToken)
     {
@@ -112,7 +105,7 @@ public sealed class RequestValidator
             return Invalid(fieldErrors);
         }
 
-        var clientResult = await context.GetClientAsync(clientId!, cancellationToken);
+        var clientResult = await requestContext.GetClientAsync(clientId!, cancellationToken);
         if (clientResult.IsFailure)
         {
             return MapLookupFailure(
@@ -123,7 +116,7 @@ public sealed class RequestValidator
         }
 
         var client = clientResult.Value;
-        var environmentResult = await context.GetProductionEnvironmentAsync(
+        var environmentResult = await requestContext.GetProductionEnvironmentAsync(
             environmentId!,
             cancellationToken);
         if (environmentResult.IsFailure)
@@ -145,7 +138,7 @@ public sealed class RequestValidator
                     "The selected production environment does not belong to the client."));
         }
 
-        var roleResult = await context.GetEnvironmentRoleAsync(
+        var roleResult = await requestContext.GetEnvironmentRoleAsync(
             environment.Id,
             requestedRoleId!,
             cancellationToken);
@@ -153,7 +146,7 @@ public sealed class RequestValidator
         {
             return roleResult.Failure!.Kind == ApplicationFailureKind.NotFound
                 ? Invalid(RoleUnavailableError())
-                : ApplicationResult.Failed<RequestValidationResult>(roleResult.Failure);
+                : new RequestValidationFailed(roleResult.Failure);
         }
 
         var role = roleResult.Value;
@@ -170,7 +163,7 @@ public sealed class RequestValidator
         string? canonicalIncidentId = null;
         if (incidentId is not null)
         {
-            var incidentResult = await context.GetIncidentAsync(incidentId, cancellationToken);
+            var incidentResult = await requestContext.GetIncidentAsync(incidentId, cancellationToken);
             if (incidentResult.IsFailure)
             {
                 return MapLookupFailure(
@@ -215,15 +208,14 @@ public sealed class RequestValidator
             canonicalIncidentId = incident.Id;
         }
 
-        return ApplicationResult.Succeeded(
-            new RequestValidationResult(
-                new ValidatedRequestFields(
-                    client.Id,
-                    environment.Id,
-                    role.RoleId,
-                    input.RequestedDurationMinutes,
-                    justification!,
-                    canonicalIncidentId)));
+        return new RequestValidationSucceeded(
+            new ValidatedRequestFields(
+                client.Id,
+                environment.Id,
+                role.RoleId,
+                input.RequestedDurationMinutes,
+                justification!,
+                canonicalIncidentId));
     }
 
     private static List<FieldValidationError> ValidateRequiredFields(
@@ -307,7 +299,7 @@ public sealed class RequestValidator
             "The requested role is not supported.");
     }
 
-    private static ApplicationResult<RequestValidationResult> MapLookupFailure(
+    private static RequestValidationOutcome MapLookupFailure(
         ApplicationFailure failure,
         string field,
         string notFoundCode,
@@ -315,19 +307,19 @@ public sealed class RequestValidator
     {
         return failure.Kind == ApplicationFailureKind.NotFound
             ? Invalid(new FieldValidationError(field, notFoundCode, notFoundMessage))
-            : ApplicationResult.Failed<RequestValidationResult>(failure);
+            : new RequestValidationFailed(failure);
     }
 
-    private static ApplicationResult<RequestValidationResult> Invalid(
+    private static RequestValidationRejected Invalid(
         params FieldValidationError[] errors)
     {
         return Invalid((IEnumerable<FieldValidationError>)errors);
     }
 
-    private static ApplicationResult<RequestValidationResult> Invalid(
+    private static RequestValidationRejected Invalid(
         IEnumerable<FieldValidationError> errors)
     {
-        return ApplicationResult.Succeeded(new RequestValidationResult(errors));
+        return new RequestValidationRejected(errors);
     }
 
     private static string? NormalizeRequired(string? value)

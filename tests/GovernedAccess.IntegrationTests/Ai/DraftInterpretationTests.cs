@@ -19,7 +19,7 @@ public sealed class DraftInterpretationTests
     private const string CorrelationId = "draft-interpretation-test";
 
     [Fact]
-    public async Task ValidDeterministicOutputProducesTheTypedAuthoritativeDraft()
+    public async Task ValidDeterministicOutputProducesTheTypedDraft()
     {
         await using var rootFactory = new GovernedAccessWebFactory();
         await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Valid);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GovernedAccess.Core.Domain;
 
@@ -39,6 +40,34 @@ public enum AuditEventType
     ProvisioningSucceeded,
     ProvisioningFailed,
     DuplicateRetryReturned,
+}
+
+public sealed record RequestCreatedAuditDetails
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public const string SuccessfulValidationOutcomeCode = "request_validation_succeeded";
+
+    public RequestCreatedAuditDetails(RequestStatus status)
+    {
+        if (status != RequestStatus.AwaitingBusinessApproval)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "A newly submitted request must await business approval.");
+        }
+
+        SchemaVersion = CurrentSchemaVersion;
+        ValidationOutcomeCode = SuccessfulValidationOutcomeCode;
+        Status = status;
+    }
+
+    public int SchemaVersion { get; }
+
+    public string ValidationOutcomeCode { get; }
+
+    public RequestStatus Status { get; }
 }
 
 public sealed class ApprovalDecision
@@ -273,7 +302,13 @@ public sealed class AccessGrant
 
 public sealed class AuditEvent
 {
-    public AuditEvent(
+    private static readonly JsonSerializerOptions DetailsSerializerOptions = new(
+        JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter<RequestStatus>() },
+    };
+
+    private AuditEvent(
         Guid id,
         Guid requestId,
         int requestVersion,
@@ -302,6 +337,33 @@ public sealed class AuditEvent
         CorrelationId = correlationId;
         OutcomeCode = outcomeCode;
         DetailsJson = detailsJson;
+    }
+
+    public static AuditEvent CreateRequestCreated(
+        Guid id,
+        AccessRequest request,
+        RequestCreatedAuditDetails details)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(details);
+
+        if (request.Status != details.Status)
+        {
+            throw new ArgumentException(
+                "The audit details status must match the submitted request status.",
+                nameof(details));
+        }
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            request.Version,
+            AuditEventType.RequestCreated,
+            request.RequesterId,
+            request.CreatedAt,
+            request.CorrelationId,
+            "request_created",
+            JsonSerializer.Serialize(details, DetailsSerializerOptions));
     }
 
     public Guid Id { get; private set; }

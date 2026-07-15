@@ -23,7 +23,7 @@ public sealed record DraftInterpretationRequest
 
 /// <summary>
 /// An untrusted structured draft proposed during model-assisted preparation.
-/// Structural completeness does not replace authoritative validation before request
+/// Structural completeness does not replace server-side validation before request
 /// submission.
 /// </summary>
 public sealed record AccessRequestDraft

@@ -35,10 +35,10 @@
 **Critical**: Complete this phase before starting any user-story implementation.
 
 - [X] T008 [P] Define typed success/failure outcomes and cancellation-safe application result types in `src/GovernedAccess.Core/Application/Outcomes.cs`
-- [X] T009 [P] Define authoritative `Client`, `ProductionEnvironment`, `EnvironmentRole`, `Incident`, and `AuthenticatedPrincipal` models in `src/GovernedAccess.Core/Domain/AuthoritativeContext.cs`
+- [X] T009 [P] Define `Client`, `ProductionEnvironment`, `EnvironmentRole`, `Incident`, and `AuthenticatedPrincipal` in concept-named files under `src/GovernedAccess.Core/Domain/`
 - [X] T010 [P] Define `AccessRequest`, statuses, normalization, version, and optimistic persistence version fields in `src/GovernedAccess.Core/Domain/AccessRequest.cs`
 - [X] T011 [P] Define `ApprovalDecision`, `ProvisioningOperation`, `AccessGrant`, and `AuditEvent` evidence models in `src/GovernedAccess.Core/Domain/WorkflowEvidence.cs`
-- [X] T012 Define provider-neutral authoritative context, clock, audit, and workflow persistence ports with `CancellationToken` parameters in `src/GovernedAccess.Core/Ports/CorePorts.cs`
+- [X] T012 Define provider-neutral request-context, clock, audit, and workflow persistence ports with `CancellationToken` parameters in `src/GovernedAccess.Core/Ports/CorePorts.cs`
 - [X] T013 Configure EF Core entity mappings, concurrency token, approval uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
 - [X] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
 - [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
@@ -54,7 +54,7 @@
 
 ## Phase 3: User Story 1 - Prepare and Submit a Safe Access Request (Priority: P1) MVP
 
-**Goal**: Let an authenticated requester turn natural-language intent into a schema-validated draft, authoritatively correct it, and submit version 1 without granting access.
+**Goal**: Let an authenticated requester turn natural-language intent into a schema-validated draft, validate it against current stored data, and submit version 1 without granting access.
 
 **Independent Test**: Sign in as the requester, prepare the Client Alpha/`INC-1042` four-hour read-only example, review stable identifiers, submit it, and verify version 1 is `AwaitingBusinessApproval` with no approval, operation, or grant.
 
@@ -64,14 +64,14 @@
 - [X] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
 - [X] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 - [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftInterpretationTests.cs`
-- [X] T025 [P] [US1] Add request creation integration tests for authoritative revalidation, browser identity over-posting resistance, antiforgery, and absence of approval/grant side effects in `tests/GovernedAccess.IntegrationTests/Requests/CreateRequestTests.cs`
+- [X] T025 [P] [US1] Add request creation integration tests for current-data revalidation, browser identity over-posting resistance, antiforgery, and absence of approval/grant side effects in `tests/GovernedAccess.IntegrationTests/Requests/CreateRequestTests.cs`
 
 ### Implementation for User Story 1
 
 - [X] T027 [P] [US1] Define draft interpretation records, completeness rules, and the provider-neutral interpretation port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
-- [X] T028 [P] [US1] Implement authoritative request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
-- [ ] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
-- [ ] T030 [P] [US1] Implement typed read-only authoritative context handlers for the three MCP operations in `src/GovernedAccess.Web/Mcp/AuthoritativeContextTools.cs`
+- [X] T028 [P] [US1] Implement stored-data request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
+- [X] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
+- [ ] T030 [P] [US1] Implement typed read-only request-context handlers for the three MCP operations in `src/GovernedAccess.Web/Mcp/RequestContextTools.cs`
 - [ ] T031 [US1] Register a stateless Streamable HTTP `/mcp` server with an explicit allowlist containing only the three contract tools in `src/GovernedAccess.Web/Mcp/McpRegistration.cs`
 - [ ] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [ ] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
@@ -87,14 +87,14 @@
 
 ## Phase 4: User Story 2 - Make the Correct Business Decision (Priority: P2)
 
-**Goal**: Resolve the authoritative client-specific business approver and bind an authenticated approve/reject decision to the exact request version and scope.
+**Goal**: Resolve the configured client-specific business approver and bind an authenticated approve/reject decision to the exact request version and scope.
 
 **Independent Test**: Attempt a Client Alpha decision as the Beta approver, verify rejection and audit with no state change, then decide as the Alpha approver and verify the exact current request/version/role/duration evidence.
 
 ### Tests for User Story 2
 
 - [ ] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs`
-- [ ] T040 [P] [US2] Add integration tests for authoritative approver resolution, wrong-client rejection, stale version, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
+- [ ] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, stale version, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
 - [ ] T041 [P] [US2] Add React tests for business decision visibility, approve/reject submission, and server rejection display in `src/GovernedAccess.Web/ClientApp/src/test/BusinessDecisionPanel.test.tsx`
 
 ### Implementation for User Story 2
@@ -111,14 +111,14 @@
 
 ## Phase 5: User Story 3 - Approve and Provision the Authorized Scope (Priority: P3)
 
-**Goal**: Let authenticated DevOps reject or approve the exact business-approved role for the same or shorter duration, with full authoritative reload and immediate synthetic provisioning.
+**Goal**: Let authenticated DevOps reject or approve the exact business-approved role for the same or shorter duration, with a full current-state reload and immediate synthetic provisioning.
 
 **Independent Test**: From a current business-approved request, approve a permitted duration as DevOps and verify one matching grant and `Active`; verify role changes, duration increases, stale context, missing approval, and non-DevOps attempts create no grant.
 
 ### Tests for User Story 3
 
 - [ ] T047 [P] [US3] Add unit tests for exact role, positive duration ceiling, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [ ] T048 [P] [US3] Add protected handler tests for authoritative reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [ ] T048 [P] [US3] Add protected handler tests for current-state reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
 - [ ] T049 [P] [US3] Add API tests for DevOps authentication, crafted scope over-posting, duration increase, rejection, antiforgery, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 - [ ] T050 [P] [US3] Add React tests for allowed-duration approval, rejection, protected failure, and grant summary rendering in `src/GovernedAccess.Web/ClientApp/src/test/DevOpsDecisionPanel.test.tsx`
 
@@ -152,7 +152,7 @@
 ### Implementation for User Story 4
 
 - [ ] T062 [P] [US4] Implement normalized material-change detection, editable-state rules, version increment, and `Draft` transition in `src/GovernedAccess.Core/Domain/MaterialEditPolicy.cs`
-- [ ] T063 [US4] Implement requester ownership, authoritative edit validation, optimistic concurrency, resubmission, and version-aware audit events in `src/GovernedAccess.Core/Application/RequestEditingService.cs`
+- [ ] T063 [US4] Implement requester ownership, stored-data edit validation, optimistic concurrency, resubmission, and version-aware audit events in `src/GovernedAccess.Core/Application/RequestEditingService.cs`
 - [ ] T064 [US4] Implement `PUT /api/requests/{requestId}` and `POST /api/requests/{requestId}/submit` with expected-version enforcement in `src/GovernedAccess.Web/Endpoints/RequestEditingEndpoints.cs`
 - [ ] T065 [US4] Implement material edit, no-change, stale-version recovery, and resubmission controls in `src/GovernedAccess.Web/ClientApp/src/components/EditRequestPanel.tsx`
 
@@ -241,7 +241,7 @@ Setup -> Foundational -> US1 -> US2 -> US3 -> US5
 
 ```text
 T021 RequestValidationTests.cs | T022 McpContractTests.cs | T023 McpFailureTests.cs | T024 DraftInterpretationTests.cs | T025 CreateRequestTests.cs
-T027 RequestDrafting.cs | T028 RequestValidator.cs | T030 AuthoritativeContextTools.cs | T032 DeterministicChatClient.cs
+T027 RequestDrafting.cs | T028 RequestValidator.cs | T030 RequestContextTools.cs | T032 DeterministicChatClient.cs
 T035 client.ts | T036 contracts.ts
 ```
 
@@ -279,7 +279,7 @@ T073 RequestListPage.tsx can proceed while T070 ProvisioningRetryService.cs is i
 1. Complete Setup and Foundational.
 2. Complete US1, including all US1 automated tests.
 3. Stop and validate the primary Client Alpha/`INC-1042` request flow independently.
-4. Demonstrate that malformed/incomplete model output and invalid authoritative values create no approval or grant.
+4. Demonstrate that malformed/incomplete model output and invalid stored values create no approval or grant.
 
 ### Incremental Delivery
 

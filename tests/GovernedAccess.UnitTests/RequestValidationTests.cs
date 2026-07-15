@@ -7,10 +7,10 @@ namespace GovernedAccess.UnitTests;
 public sealed class RequestValidationTests
 {
     [Fact]
-    public async Task ValidateAsyncReturnsNormalizedAuthoritativeFieldsForAValidRequest()
+    public async Task ValidateAsyncReturnsNormalizedFieldsForAValidRequest()
     {
-        var context = new StubAuthoritativeContextReader();
-        var validator = new RequestValidator(context);
+        var requestContext = new StubRequestContextReader();
+        var validator = new RequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
             new RequestValidationInput(
@@ -34,7 +34,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncAllowsAnOmittedIncidentAndTheMaximumDuration()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(durationMinutes: 480, incidentId: "   "),
@@ -48,7 +48,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownClient()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(clientId: "client-unknown"),
@@ -60,7 +60,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownEnvironment()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(environmentId: "PROD-UNKNOWN"),
@@ -72,7 +72,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnEnvironmentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(environmentId: "PROD-BETA-UK"),
@@ -84,7 +84,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsARoleThatIsNotAllowedForTheEnvironment()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(requestedRoleId: ProductionRoleIds.Support),
@@ -96,7 +96,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAGloballyUnsupportedRole()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(requestedRoleId: "ProductionAdministrator"),
@@ -111,7 +111,7 @@ public sealed class RequestValidationTests
     [InlineData(481, "duration_exceeds_environment_maximum")]
     public async Task ValidateAsyncRejectsAnInvalidDuration(int durationMinutes, string expectedCode)
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(durationMinutes: durationMinutes),
@@ -129,7 +129,7 @@ public sealed class RequestValidationTests
         string? justification,
         string expectedCode)
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(justification: justification),
@@ -141,7 +141,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAJustificationLongerThanTheDomainMaximum()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(justification: new string('a', AccessRequest.MaximumJustificationLength + 1)),
@@ -153,7 +153,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownIncident()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-UNKNOWN"),
@@ -165,9 +165,9 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnInactiveIncident()
     {
-        var context = new StubAuthoritativeContextReader();
-        context.AlphaIncident.SetStatus(IncidentStatus.Inactive);
-        var validator = new RequestValidator(context);
+        var requestContext = new StubRequestContextReader();
+        requestContext.AlphaIncident.SetStatus(IncidentStatus.Inactive);
+        var validator = new RequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
             ValidInput(),
@@ -179,7 +179,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnIncidentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-BETA"),
@@ -191,7 +191,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnIncidentAssociatedWithAnotherEnvironment()
     {
-        var validator = new RequestValidator(new StubAuthoritativeContextReader());
+        var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-ALPHA-OTHER"),
@@ -203,21 +203,21 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncPreservesAnOperationLevelContextFailure()
     {
-        var context = new StubAuthoritativeContextReader
+        var requestContext = new StubRequestContextReader
         {
             ClientFailure = new ApplicationFailure(
                 ApplicationFailureKind.DependencyUnavailable,
-                "authoritative_context_unavailable",
-                "Authoritative context is unavailable."),
+                "request_context_unavailable",
+                "Request context is unavailable."),
         };
-        var validator = new RequestValidator(context);
+        var validator = new RequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
             ValidInput(),
             TestContext.Current.CancellationToken);
 
-        Assert.True(result.IsFailure);
-        Assert.Same(context.ClientFailure, result.Failure);
+        var failure = Assert.IsType<RequestValidationFailed>(result);
+        Assert.Same(requestContext.ClientFailure, failure.Failure);
     }
 
     private static RequestValidationInput ValidInput(
@@ -238,34 +238,29 @@ public sealed class RequestValidationTests
     }
 
     private static void AssertFieldError(
-        ApplicationResult<RequestValidationResult> result,
+        RequestValidationOutcome result,
         string expectedField,
         string expectedCode)
     {
-        Assert.True(result.IsSuccess);
-        Assert.False(result.Value.IsValid);
+        var rejection = Assert.IsType<RequestValidationRejected>(result);
         Assert.Contains(
-            result.Value.Errors,
+            rejection.Errors,
             error => error.Field == expectedField && error.Code == expectedCode);
     }
 
-    private static ValidatedRequestFields AssertValid(
-        ApplicationResult<RequestValidationResult> result)
+    private static ValidatedRequestFields AssertValid(RequestValidationOutcome result)
     {
-        Assert.True(result.IsSuccess);
-        Assert.True(result.Value.IsValid);
-        Assert.Empty(result.Value.Errors);
-        return result.Value.ValidatedFields;
+        return Assert.IsType<RequestValidationSucceeded>(result).Fields;
     }
 
-    private sealed class StubAuthoritativeContextReader : IAuthoritativeContextReader
+    private sealed class StubRequestContextReader : IRequestContextReader
     {
         private readonly Dictionary<string, Client> clients;
         private readonly Dictionary<string, ProductionEnvironment> environments;
         private readonly Dictionary<(string EnvironmentId, string RoleId), EnvironmentRole> roles;
         private readonly Dictionary<string, Incident> incidents;
 
-        public StubAuthoritativeContextReader()
+        public StubRequestContextReader()
         {
             var alphaClient = new Client("client-alpha", "Client Alpha");
             var betaClient = new Client("client-beta", "Client Beta");
@@ -418,7 +413,7 @@ public sealed class RequestValidationTests
                 new ApplicationFailure(
                     ApplicationFailureKind.NotFound,
                     code,
-                    "The authoritative record was not found."));
+                    "The stored record was not found."));
         }
     }
 }

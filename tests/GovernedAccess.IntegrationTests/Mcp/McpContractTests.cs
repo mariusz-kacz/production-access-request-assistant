@@ -57,7 +57,7 @@ public sealed class McpContractTests
     }
 
     [Fact]
-    public async Task ProductionEnvironmentReturnsTypedAuthoritativeStableIdentifiers()
+    public async Task ProductionEnvironmentReturnsTypedStableIdentifiers()
     {
         await using var factory = new GovernedAccessWebFactory();
         await using var client = await CreateMcpClientAsync(
@@ -90,7 +90,7 @@ public sealed class McpContractTests
     }
 
     [Fact]
-    public async Task IncidentReturnsTypedAuthoritativeStableIdentifiers()
+    public async Task IncidentReturnsTypedStableIdentifiers()
     {
         await using var factory = new GovernedAccessWebFactory();
         await using var client = await CreateMcpClientAsync(
@@ -157,7 +157,7 @@ public sealed class McpContractTests
     }
 
     [Fact]
-    public async Task InvalidAndMissingAuthoritativeValuesReturnTypedFailureEnvelopes()
+    public async Task InvalidAndMissingStoredValuesReturnTypedFailureEnvelopes()
     {
         await using var factory = new GovernedAccessWebFactory();
         await using var client = await CreateMcpClientAsync(

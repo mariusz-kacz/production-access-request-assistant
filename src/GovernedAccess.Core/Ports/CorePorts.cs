@@ -4,10 +4,10 @@ using GovernedAccess.Core.Domain;
 namespace GovernedAccess.Core.Ports;
 
 /// <summary>
-/// Reads current authoritative enterprise and identity context.
+/// Reads the current context needed to prepare and validate a request.
 /// Implementations must not substitute caller-supplied assertions for stored state.
 /// </summary>
-public interface IAuthoritativeContextReader
+public interface IRequestContextReader
 {
     Task<ApplicationResult<Client>> GetClientAsync(
         string clientId,

@@ -135,7 +135,7 @@ internal static class SyntheticDataSeeder
             if (!expectedByKey.TryGetValue(key, out var expectedEntity))
             {
                 throw new InvalidOperationException(
-                    $"Unexpected authoritative {typeof(TEntity).Name} record '{key}'.");
+                    $"Unexpected {typeof(TEntity).Name} record '{key}' in the synthetic dataset.");
             }
 
             validate(existingEntity, expectedEntity);
@@ -197,7 +197,7 @@ internal static class SyntheticDataSeeder
         if (!matches)
         {
             throw new InvalidOperationException(
-                $"Authoritative {entityName} record '{identifier}' conflicts with the synthetic dataset.");
+                $"{entityName} record '{identifier}' conflicts with the synthetic dataset.");
         }
     }
 

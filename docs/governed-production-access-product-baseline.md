@@ -4,7 +4,7 @@
 
 This document defines the product baseline for a portfolio-grade .NET application that governs temporary access to client-specific production environments.
 
-The project demonstrates practical enterprise AI engineering: an LLM helps turn natural-language intent into a typed request draft and gathers authoritative context through MCP, while authenticated humans and deterministic .NET services retain control over approval and provisioning.
+The project demonstrates practical enterprise AI engineering: an LLM helps turn natural-language intent into a typed request draft and gathers request context through MCP, while authenticated humans and deterministic .NET services retain control over approval and provisioning.
 
 The application is a focused vertical slice for one developer, not a complete identity-governance product.
 
@@ -25,14 +25,14 @@ A requester enters:
 The system:
 
 1. asks the model to produce a typed but untrusted request draft,
-2. permits the model to call three approved read-only MCP tools for authoritative environment, role, and incident context,
+2. permits the model to call three approved read-only MCP tools for environment, role, and incident data,
 3. schema-validates the model output,
 4. deterministically validates every identifier and business rule,
-5. resolves the required business approver from authoritative configuration,
+5. resolves the required business approver from stored configuration,
 6. records an explicit authenticated business decision,
 7. records an explicit authenticated DevOps decision,
 8. immediately invokes a protected internal provisioning handler after DevOps approval,
-9. reloads and revalidates authoritative request and approval state,
+9. reloads and revalidates current stored request and approval state,
 10. creates or returns an idempotent synthetic access grant that the model cannot request,
 11. records a straightforward audit history.
 
@@ -48,7 +48,7 @@ The model may interpret natural-language intent, call approved read-only MCP too
 - change workflow state,
 - provision or revoke access,
 - receive a provisioning operation definition or callable provisioning capability,
-- claim that an authoritative check passed without evidence.
+- claim that a server-side check passed without evidence.
 
 Model output is schema-validated. All client, environment, role, incident, duration, and identity-related values are checked deterministically against authoritative data.
 
@@ -82,9 +82,9 @@ The model is registered only with the three approved read-only MCP tools defined
 * `get_incident`
 * `get_available_roles`
 
-The MCP endpoint exposes authoritative enterprise context for request preparation. It does not expose workflow commands or state-changing capabilities.
+The MCP endpoint exposes stored production data for request preparation. It does not expose workflow commands or state-changing capabilities.
 
-MCP tool visibility, tool annotations, and possession of a tool schema must not be treated as authorization. Each tool validates its input, resolves records through authoritative application services, and returns typed results or typed failures using stable identifiers.
+MCP tool visibility, tool annotations, and possession of a tool schema must not be treated as authorization. Each tool validates its input, resolves stored records through application services, and returns typed results or typed failures using stable identifiers.
 
 The MCP endpoint must not expose capabilities that:
 
@@ -111,7 +111,7 @@ Provisioning is a protected internal application capability. It is never exposed
 
 The initial provisioning attempt is triggered automatically after a valid authenticated DevOps approval.
 
-The provisioning handler receives only authoritative references required to identify the operation, such as:
+The provisioning handler receives only stable references required to identify the operation, such as:
 
 * request ID,
 * request version,
@@ -125,7 +125,7 @@ devOpsApproved = true
 roleIsAllowed = true
 ```
 
-Before creating an access grant, the handler reloads authoritative state and independently verifies:
+Before creating an access grant, the handler reloads current stored state and independently verifies:
 
 * the request exists and is in the expected workflow state,
 * the request version matches both approvals,
@@ -147,7 +147,7 @@ The retry action:
 * cannot modify the client, environment, role, duration, or request version,
 * reuses the idempotency key for the same approved operation,
 * invokes the same provisioning handler,
-* repeats the complete authoritative revalidation,
+* repeats the complete current-state revalidation,
 * records the retry and its outcome in the audit history.
 
 This recovery action does not constitute a separate approval stage, provisioning role, or general browser-accessible provisioning capability.
@@ -194,7 +194,7 @@ The single host is responsible for:
 - LLM orchestration,
 - MCP client configuration and tool allowlisting,
 - hosting the real read-only MCP endpoint,
-- authoritative synthetic environment, role, and incident context,
+- synthetic environment, role, and incident data,
 - structured request draft handling,
 - deterministic request validation,
 - request workflow and versioning,
@@ -237,7 +237,7 @@ Read incident context              Enforce workflow and version rules
 Prepare a typed draft              Invoke internal provisioning handler
 
 Cannot approve                     Derives identity from server context
-Cannot change workflow state       Reloads authoritative state
+Cannot change workflow state       Reloads current stored state
 Cannot access provisioning         Applies deterministic rules
 ```
 
@@ -255,7 +255,7 @@ The Governed Access Host exposes exactly three read-only MCP tools for the MVP.
 
 ### 5.1 `get_production_environment`
 
-Returns typed authoritative environment data using a stable environment identifier. The result includes:
+Returns typed environment data using a stable environment identifier. The result includes:
 
 - environment ID,
 - client ID,
@@ -265,7 +265,7 @@ Returns typed authoritative environment data using a stable environment identifi
 
 ### 5.2 `get_incident`
 
-Returns typed authoritative incident data using a stable incident identifier. The result includes:
+Returns typed incident data using a stable incident identifier. The result includes:
 
 - incident ID,
 - status,
@@ -329,7 +329,7 @@ The MVP contains exactly four fixed principals:
 - Client Beta business approver,
 - DevOps approver.
 
-A local identity switcher may authenticate one of these principals for demonstration. The server maps the selected principal to immutable server-side claims; the browser does not submit authoritative roles.
+A local identity switcher may authenticate one of these principals for demonstration. The server maps the selected principal to immutable server-side claims; browser-submitted roles are not trusted.
 
 ### 6.4 Access Request
 
@@ -456,7 +456,7 @@ The model produces a typed draft such as:
 }
 ```
 
-The model may call the three read-only MCP tools to obtain authoritative context. The result is either:
+The model may call the three read-only MCP tools to obtain request context. The result is either:
 
 - a schema-valid draft,
 - an incomplete draft with nullable required values and correction guidance,
@@ -477,7 +477,7 @@ Before submission, the Governed Access Host validates:
 
 ### 7.4 Business Decision
 
-The Governed Access Host resolves the required approver from authoritative environment configuration. The requester cannot supply or select the approver.
+The Governed Access Host resolves the required approver from stored environment configuration. The requester cannot supply or select the approver.
 
 Only the correct authenticated client approver may approve or reject. Approval binds the role and maximum duration for the current request version.
 
@@ -519,7 +519,7 @@ the request-detail page. The retry:
 - cannot modify the approved environment, role, or duration,
 - reuses the idempotency key for the same request version and approved scope,
 - invokes the same internal provisioning handler,
-- reloads and revalidates authoritative state,
+- reloads and revalidates current stored state,
 - is recorded in the audit history.
 
 Initial provisioning is not exposed as a separate browser action. The retry
@@ -563,9 +563,9 @@ The Governed Access Host shall transform natural-language input into a typed req
 
 ### FR-02 Restricted MCP Context
 
-The model shall receive only the three approved read-only MCP tools. Each tool shall return typed authoritative data with stable identifiers.
+The model shall receive only the three approved read-only MCP tools. Each tool shall return typed stored data with stable identifiers.
 
-### FR-03 Authoritative Validation
+### FR-03 Trusted Server Validation
 
 The Governed Access Host shall deterministically validate every model-proposed identifier and business value before submission.
 
@@ -599,7 +599,7 @@ A successful DevOps approval shall immediately initiate deterministic revalidati
 
 ### FR-11 Independent Provisioning Validation
 
-The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify authoritative request, approval, version, scope, environment, role, and incident state before creating a grant.
+The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify current stored request, approval, version, scope, environment, role, and incident state before creating a grant.
 
 ### FR-12 Idempotent Provisioning
 
@@ -626,7 +626,7 @@ The system shall store activation and expiry timestamps and may display a grant 
 - MCP tool visibility must not be treated as authorization.
 - Browser-submitted identity or roles must not be trusted.
 - Approval actions must authenticate and authorize the acting human.
-- The provisioning handler must reload authoritative evidence rather than trust upstream approval assertions.
+- The provisioning handler must reload stored evidence rather than trust upstream approval assertions.
 - Provisioning operation definitions must remain unavailable to the model.
 - Secrets, raw prompts, and complete sensitive tool responses must not be logged by default.
 - Synthetic authentication assumptions must be documented separately from production identity requirements.
@@ -746,7 +746,7 @@ The MVP includes:
 - two explicit authenticated approval stages,
 - request-version binding and stale-approval protection,
 - immediate internal provisioning after DevOps approval,
-- independent authoritative reload and validation within the provisioning handler,
+- independent current-state reload and validation within the provisioning handler,
 - idempotent synthetic grant creation,
 - activation and expiry timestamps,
 - straightforward insert-only audit events,
@@ -817,7 +817,7 @@ The later proposal and design phases should resolve:
 The project is successful when it proves that:
 
 - natural-language input becomes a schema-valid but untrusted typed draft,
-- the model obtains authoritative context through one real MCP server,
+- the model obtains request context through one real MCP server,
 - the model can access only the three approved read-only tools,
 - every model-proposed identifier is deterministically validated,
 - authenticated server context determines the acting identity,
@@ -827,7 +827,7 @@ The project is successful when it proves that:
 - a material edit invalidates prior approvals,
 - DevOps cannot change the approved role or increase duration,
 - successful DevOps approval immediately triggers deterministic revalidation and provisioning,
-- the provisioning handler reloads and independently verifies authoritative evidence,
+- the provisioning handler reloads and independently verifies current stored evidence,
 - provisioning remains unavailable to the model,
 - retrying the same provisioning operation does not create a duplicate grant,
 - the request detail page presents the essential workflow and audit evidence,

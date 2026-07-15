@@ -9,7 +9,7 @@ namespace GovernedAccess.IntegrationTests.Persistence;
 public sealed class SyntheticDataSeederTests
 {
     [Fact]
-    public async Task SeedAsyncCreatesTheExactAuthoritativeDatasetAndIsIdempotent()
+    public async Task SeedAsyncCreatesTheExactSyntheticDatasetAndIsIdempotent()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(TestContext.Current.CancellationToken);

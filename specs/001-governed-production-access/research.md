@@ -89,7 +89,7 @@ multiple hosts (explicitly out of scope).
 **Decision**: Define a core drafting port and implement it with
 `Microsoft.Extensions.AI.IChatClient`. Request a strict JSON-schema response generated
 from the draft DTO, then deserialize with `System.Text.Json` and validate shape,
-required fields, enum-like values, and authoritative identifiers before use.
+required fields, enum-like values, and identifiers against trusted server data before use.
 
 **Rationale**: `Microsoft.Extensions.AI` provides a provider-neutral chat abstraction
 and schema response formats while keeping provider SDK contracts at the adapter edge.

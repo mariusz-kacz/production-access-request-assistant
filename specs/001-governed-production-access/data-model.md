@@ -11,7 +11,7 @@
 - Approvals and audit events are retained as evidence; invalidation means they no
   longer authorize a newer request version, not that rows are deleted.
 
-## Authoritative context
+## Request context
 
 ### Client
 
@@ -31,7 +31,7 @@ to incidents. Seed exactly Client Alpha and Client Beta.
 | `ClientId` | string | Required FK to `Client`; immutable seed association. |
 | `DisplayName` | string | Required. |
 | `MaximumDurationMinutes` | int | Positive; Alpha 480, Beta 240. |
-| `BusinessApproverPrincipalId` | string | Required FK to the authoritative principal. |
+| `BusinessApproverPrincipalId` | string | Required FK to the configured principal. |
 
 Relationships: many allowed environment roles; zero or more incidents and requests.
 
@@ -48,7 +48,7 @@ There is deliberately no ordering or privilege comparison between roles.
 
 | Field | Type | Rules |
 |---|---|---|
-| `Id` | string | Stable authoritative ID such as `INC-1042`. |
+| `Id` | string | Stable ID such as `INC-1042`. |
 | `ClientId` | string | Required FK to client. |
 | `EnvironmentId` | string? | Optional narrower association; when set, must match request environment. |
 | `Title` | string | Required display context. |
@@ -177,7 +177,7 @@ provisioning failed, and duplicate retry returned.
 
 | Current | Command/outcome | Next | Preconditions |
 |---|---|---|---|
-| `Draft` | Submit | `AwaitingBusinessApproval` | Requester owns request; current authoritative validation succeeds. |
+| `Draft` | Submit | `AwaitingBusinessApproval` | Requester owns request; current stored-data validation succeeds. |
 | `AwaitingBusinessApproval` | Business approve | `AwaitingDevOpsApproval` | Correct environment-resolved approver; exact current version. |
 | `AwaitingBusinessApproval` | Business reject | `Rejected` | Correct approver; exact current version. |
 | `AwaitingDevOpsApproval` | DevOps reject | `Rejected` | Authenticated DevOps; valid current business approval. |

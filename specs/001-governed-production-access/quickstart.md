@@ -50,7 +50,7 @@ rejected without protected state change.
 3. Prepare the draft, review the stable IDs, then submit.
 
 Expected: `PROD-ALPHA-EU`, `ProductionReadOnly`, 240 minutes, and `INC-1042` are
-shown; authoritative validation succeeds; request version 1 enters
+shown; stored-data validation succeeds; request version 1 enters
 `AwaitingBusinessApproval`; no approval or grant exists.
 
 Repeat with deterministic fake modes for incomplete output, malformed JSON, MCP
@@ -109,9 +109,9 @@ retry from any other state are rejected.
 | AI adapter | Valid/incomplete/malformed schema, deterministic fake, timeout, cancellation, no live model. |
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |
 | Persistence | Insert-only audit behavior, optimistic conflict, approval uniqueness, operation/grant uniqueness. |
-| Provisioning | Authoritative reload, stale context, missing approval, idempotent success, lost response, 100 concurrent duplicates. |
+| Provisioning | Current-state reload, stale data, missing approval, idempotent success, lost response, 100 concurrent duplicates. |
 | React/UI host | Three routes, typed errors, abort handling, relevant list, action visibility plus server enforcement, no MCP/provisioning browser calls. |
 | API security | Cookie actor, antiforgery on unsafe methods, over-posting resistance, participant visibility. |
 
-The authoritative entity rules are in [data-model.md](data-model.md); browser/server
+The request-context entity rules are in [data-model.md](data-model.md); browser/server
 action shapes are in [contracts/ui-api.md](contracts/ui-api.md).

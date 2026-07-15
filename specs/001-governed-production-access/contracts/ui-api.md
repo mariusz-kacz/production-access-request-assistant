@@ -52,7 +52,7 @@ or grant.
 ### `POST /api/requests`
 
 Requester only. Body: `{ clientId, environmentId, requestedRole, durationMinutes,
-justification, incidentId? }`. On authoritative validation success returns `201` with
+justification, incidentId? }`. On stored-data validation success returns `201` with
 `{ requestId, version: 1, status: "AwaitingBusinessApproval", correlationId }`.
 
 ### `GET /api/requests`

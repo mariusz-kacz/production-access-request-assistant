@@ -19,22 +19,22 @@ public sealed class McpFailureTests
     [InlineData(
         ApplicationFailureKind.DependencyUnavailable,
         "Unavailable",
-        "authoritative-context-unavailable")]
-    [InlineData(ApplicationFailureKind.Timeout, "Timeout", "authoritative-context-timeout")]
-    [InlineData(ApplicationFailureKind.Cancelled, "Cancelled", "authoritative-context-cancelled")]
+        "request-context-unavailable")]
+    [InlineData(ApplicationFailureKind.Timeout, "Timeout", "request-context-timeout")]
+    [InlineData(ApplicationFailureKind.Cancelled, "Cancelled", "request-context-cancelled")]
     public async Task ExpectedReaderFailuresReturnTypedMcpFailureEnvelopes(
         ApplicationFailureKind failureKind,
         string expectedOutcome,
         string expectedCode)
     {
-        var reader = new StubAuthoritativeContextReader
+        var reader = new StubRequestContextReader
         {
             GetProductionEnvironment = (_, _) => Task.FromResult(
                 ApplicationResult.Failed<ProductionEnvironment>(
                     new ApplicationFailure(
                         failureKind,
                         expectedCode,
-                        "The authoritative environment lookup did not complete successfully."))),
+                        "The environment lookup did not complete successfully."))),
         };
 
         await using var rootFactory = new GovernedAccessWebFactory();
@@ -55,13 +55,13 @@ public sealed class McpFailureTests
     }
 
     [Fact]
-    public async Task CallerCancellationPropagatesToTheAuthoritativeReader()
+    public async Task CallerCancellationPropagatesToTheRequestContextReader()
     {
         var callStarted = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var cancellationObserved = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        var reader = new StubAuthoritativeContextReader
+        var reader = new StubRequestContextReader
         {
             GetProductionEnvironment = async (_, cancellationToken) =>
             {
@@ -111,12 +111,12 @@ public sealed class McpFailureTests
 
     private static WebApplicationFactory<Program> CreateFactory(
         GovernedAccessWebFactory rootFactory,
-        IAuthoritativeContextReader reader)
+        IRequestContextReader reader)
     {
         return rootFactory.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<IAuthoritativeContextReader>();
+                services.RemoveAll<IRequestContextReader>();
                 services.AddSingleton(reader);
             }));
     }
@@ -178,7 +178,7 @@ public sealed class McpFailureTests
         Assert.False(string.IsNullOrWhiteSpace(content.GetProperty("correlationId").GetString()));
     }
 
-    private sealed class StubAuthoritativeContextReader : IAuthoritativeContextReader
+    private sealed class StubRequestContextReader : IRequestContextReader
     {
         public Func<string, CancellationToken, Task<ApplicationResult<ProductionEnvironment>>>
             GetProductionEnvironment { get; init; } = (_, _) =>
@@ -233,8 +233,8 @@ public sealed class McpFailureTests
             return ApplicationResult.Failed<T>(
                 new ApplicationFailure(
                     ApplicationFailureKind.NotFound,
-                    "authoritative-record-not-found",
-                    "The authoritative record was not found."));
+                    "request-context-record-not-found",
+                    "The stored record was not found."));
         }
     }
 }

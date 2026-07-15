@@ -1,6 +1,6 @@
 # Implementation Plan: Governed Production Access
 
-**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-15 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/001-governed-production-access/spec.md`
 
@@ -11,7 +11,39 @@ TypeScript client. Vite produces static assets served by the ASP.NET Core host i
 production; that host also exposes same-origin typed `/api` endpoints and the real
 `/mcp` Streamable HTTP endpoint. A provider-neutral core owns validation, workflow,
 authorization, version binding, and provisioning policy. React never supplies
-authoritative identity or calls MCP or provisioning directly.
+trusted server identity or calls MCP or provisioning directly.
+
+## Request Context Naming Change
+
+**Status**: Implemented on 2026-07-15.
+
+This is a terminology-only refactor. The current domain model, production-only scope,
+workflow behavior, persistence shape, API fields, and MCP tool names remain unchanged.
+
+| Current umbrella name | Replacement |
+|---|---|
+| `IAccessDataReader` | `IRequestContextReader` |
+| `accessData` | `requestContext` |
+| `StubAccessDataReader` | `StubRequestContextReader` |
+| `AccessDataTools.cs` | `RequestContextTools.cs` |
+| `access-data-*` failure codes | `request-context-*` |
+| “access data” in ordinary prose | “request context”, “stored records”, or “current data” |
+
+`AccessRequest` and `AccessGrant` retain `Access` because they directly represent the
+governed workflow. `ProductionEnvironment` and production-specific MCP names also
+remain unchanged. The mixed `AccessData.cs` file is split into files named after its
+concrete domain concepts rather than renamed to another umbrella file.
+
+Implementation order:
+
+1. Update planning/task paths and terminology.
+2. Split the domain types into concept-named files without changing their public API.
+3. Rename the reader interface, variables, test doubles, planned MCP handler file,
+   and umbrella failure codes.
+4. Build and run focused unit and integration verification.
+
+Completion requires no remaining `AccessData`, `IAccessDataReader`, `accessData`, or
+`access-data-*` umbrella names outside this migration record.
 
 ## Technical Context
 
@@ -19,7 +51,7 @@ authoritative identity or calls MCP or provisioning directly.
 
 **Primary Dependencies**: ASP.NET Core 10 Minimal APIs and static files, React 19.2, React Router, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`
 
-**Storage**: One local SQLite database through EF Core; deterministic seed data for authoritative context and principals; insert-only audit rows; unique provisioning operation identity
+**Storage**: One local SQLite database through EF Core; deterministic seed data for request context and principals; insert-only audit rows; unique provisioning operation identity
 
 **Testing**: xUnit, ASP.NET Core `WebApplicationFactory`, SQLite in-memory databases, deterministic fake `IChatClient`, controllable synthetic provisioner, Vitest, and React Testing Library
 
@@ -45,7 +77,7 @@ baseline are applied as the operative gates:
 |---|---|---|
 | AI interprets only; humans approve; deterministic code authorizes and executes | PASS | Drafting adapter is isolated from decision and provisioning services; protected actions use authenticated server context. |
 | Domain/application code has no AI-provider or MCP SDK contracts | PASS | `GovernedAccess.Core` exposes provider-neutral ports and typed outcomes; SDK types remain in `GovernedAccess.Web` adapters. |
-| Model output is schema-validated and identifiers are authoritatively revalidated | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates current authoritative state. |
+| Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates current stored state. |
 | Model receives exactly the three allowed read-only MCP tools | PASS | MCP contract declares only the required tools; tool registration uses an explicit allowlist. |
 | Approval is authenticated and bound to exact request/version/scope | PASS | Approval entity and action contracts bind request ID, version, role, and duration; actor comes only from server claims. |
 | Material edits invalidate prior authority | PASS | Domain transition increments business version and returns to `Draft`; old decisions remain evidence only. |
@@ -132,7 +164,7 @@ failures, and provisioning; Vitest covers the thin React presentation.
   responsibility are loaded by the server.
 - `IChatClient` and MCP client/server types are adapted in `GovernedAccess.Web`; the
   core sees only `DraftInterpretationRequest`, `DraftInterpretationOutcome`, and the three
-  authoritative context ports.
+  request-context ports.
 - The AI adapter uses a strict JSON-schema response and an explicit MCP-tool allowlist.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP
   endpoint, preserving a real protocol boundary without another process.

@@ -65,7 +65,7 @@ public sealed class CreateRequestTests
     }
 
     [Fact]
-    public async Task CreationRevalidatesCurrentAuthoritativeStateBeforePersistingTheRequest()
+    public async Task CreationRevalidatesCurrentStoredDataBeforePersistingTheRequest()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory();

@@ -12,7 +12,7 @@ The governed production access application needs to provide:
 - a thin React user interface;
 - deterministic request validation and workflow rules;
 - authenticated business and DevOps decisions;
-- local authoritative context and persistence;
+- local request context and persistence;
 - model-assisted request drafting;
 - one real MCP endpoint containing exactly three read-only context tools; and
 - idempotent synthetic provisioning.
@@ -58,7 +58,7 @@ will retain these boundaries:
 - AI-provider and MCP SDK contracts are translated at the Web/Core boundary.
 - Protected actions derive the actor from authenticated server context and are
   authorized by deterministic application services.
-- The provisioning handler reloads authoritative request and approval state rather
+- The provisioning handler reloads current stored request and approval state rather
   than trusting its caller.
 
 The model-visible MCP surface is an explicit allowlist containing exactly:
@@ -97,7 +97,7 @@ This deployment shape is proportionate to the current requirements:
 - No service discovery, message broker, service-to-service authentication, distributed
   transaction, or cross-service approval-evidence protocol is required.
 - Immediate DevOps approval and provisioning can use straightforward durable state,
-  authoritative reloads, and idempotent operation identity.
+  current-state reloads, and idempotent operation identity.
 - End-to-end tests can cover UI, authentication, MCP, persistence, and provisioning
   through one test host without a live model.
 - Correlation and audit evidence remain simple while retaining explicit boundaries.
@@ -123,7 +123,7 @@ the provider-neutral application layer.
 Under this alternative, a second ASP.NET Core executable would own the MCP endpoint
 and its three tools. The main application would connect to it over Streamable HTTP,
 and the MCP service would obtain production-environment, incident, and role data from
-its own store or from another authoritative application interface.
+its own store or from another trusted application interface.
 
 This shape could be justified if MCP had a different owner or deployment cadence, if
 several applications consumed the same MCP server, or if MCP traffic needed independent
@@ -137,7 +137,7 @@ Those benefits do not apply to the current MVP. A separate MCP service would req
 - authenticated service-to-service calls and rules for propagating correlation and
   caller context;
 - timeout, retry, availability, and partial-failure behavior at another network hop;
-- a decision about ownership of authoritative context data;
+- a decision about ownership of request-context records;
 - coordinated integration tests and startup for two processes; and
 - contract compatibility when either service changes.
 
@@ -162,7 +162,7 @@ ownership, scaling, or isolation later becomes a concrete requirement.
 Under this alternative, DevOps approval would remain in the web application, but a
 separate service would create access grants. The web application would send a command
 containing only request and operation references. The provisioning service would need
-to authenticate the caller, reload or obtain authoritative request and approval
+to authenticate the caller, reload or obtain current stored request and approval
 evidence, revalidate the approved scope, invoke the provider, and return or publish a
 durable result.
 
@@ -177,7 +177,7 @@ independent owner. Separating it would create several design obligations without
 reducing a current risk:
 
 - an authenticated and versioned service contract for provisioning requests;
-- a way for the provisioning service to reload authoritative approvals without
+- a way for the provisioning service to reload stored approvals without
   trusting caller-supplied approval assertions;
 - durable handling for the interval between committing DevOps approval and delivering
   the provisioning command;
@@ -187,7 +187,7 @@ reducing a current risk:
 - reconciliation when approval state and provisioning outcome disagree temporarily.
 
 Passing the full approval evidence in the command would violate the rule that the
-provisioning handler must reload authoritative state. Sharing the application database
+provisioning handler must reload current stored state. Sharing the application database
 would weaken service ownership and couple both deployments to the same schema. Adding
 an evidence API, outbox, message broker, or callback protocol would solve problems
 created solely by the split.
@@ -217,7 +217,7 @@ endpoint in the actual drafting flow would fail to prove:
 - that the model-visible server advertises exactly the three allowed tools;
 - that not-found, invalid-input, unavailable, timeout, and cancellation outcomes are
   translated correctly across the protocol boundary;
-- that stable authoritative identifiers survive serialization and tool invocation;
+- that stable data identifiers survive serialization and tool invocation;
   and
 - that approval, provisioning, workflow, database, and generic-query capabilities are
   absent from the real model-facing MCP surface.
@@ -229,7 +229,7 @@ timeouts, cancellation, logging, and typed outcomes are required behavior and ca
 covered by integration tests.
 
 Therefore, the direct-function alternative is rejected. The MCP tool handlers may
-delegate internally to the same focused authoritative query services used elsewhere,
+delegate internally to the same focused data-query services used elsewhere,
 but the model-assisted drafting adapter must reach those handlers through the real MCP
 client and `/mcp` transport.
 
