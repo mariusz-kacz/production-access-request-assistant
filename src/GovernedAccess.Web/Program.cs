@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Ports;
+using GovernedAccess.Mcp;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Endpoints;
 using GovernedAccess.Web.Observability;
@@ -27,14 +28,13 @@ builder.Services.AddProblemDetails(options =>
 });
 builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
     options.UseSqlite(databaseConnectionString));
+builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();
 builder.Services.AddAuthorization();
 builder.Services.AddSessionEndpoints();
-builder.Services
-    .AddMcpServer()
-    .WithHttpTransport(options => options.Stateless = true);
+builder.Services.AddGovernedAccessMcp();
 
 var app = builder.Build();
 
@@ -49,7 +49,7 @@ app.UseAntiforgery();
 var api = app.MapGroup("/api");
 api.MapSessionEndpoints();
 
-app.MapMcp("/mcp");
+app.MapGovernedAccessMcp();
 
 app.MapFallback("/api/{**path}", () => Results.NotFound());
 app.MapFallback("/mcp/{**path}", () => Results.NotFound());

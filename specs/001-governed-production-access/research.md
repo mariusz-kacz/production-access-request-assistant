@@ -72,17 +72,20 @@ Source: [ASP.NET Core antiforgery for JavaScript/SPAs](https://learn.microsoft.c
 
 ## Solution boundaries
 
-**Decision**: Use two production projects: provider-neutral `GovernedAccess.Core`
-and executable `GovernedAccess.Web`; React source is nested build input in Web.
+**Decision**: Use three production projects: provider-neutral `GovernedAccess.Core`,
+SDK-boundary class library `GovernedAccess.Mcp`, and executable
+`GovernedAccess.Web`; React source is nested build input in Web.
 
-**Rationale**: One class-library boundary prevents domain/application logic from
-depending on AI, MCP, EF, or web contracts while avoiding project-per-layer ceremony.
-Logical folders inside each project are sufficient for the single-developer scope,
-and the Vite toolchain does not become a production service.
+**Rationale**: Core prevents domain/application logic from depending on AI, MCP, EF,
+or web contracts. A focused MCP class library keeps protocol packages and handlers
+out of the executable project, depends only on Core ports, and remains independently
+testable. Web supplies the EF-backed request-context reader and hosts the registered
+endpoint, so the Vite toolchain and MCP boundary do not become separate services.
 
-**Alternatives considered**: One project (makes dependency enforcement weaker);
-domain/application/infrastructure/UI projects (more structure than this MVP needs);
-multiple hosts (explicitly out of scope).
+**Alternatives considered**: Keep MCP code in Web (weaker SDK isolation); one project
+(weaker dependency enforcement); separate MCP executable sharing SQLite (unnecessary
+runtime, deployment, database-locking, and endpoint-isolation concerns); broader
+project-per-layer structure (more ceremony than this MVP needs).
 
 ## Model abstraction and structured output
 
@@ -104,10 +107,12 @@ Source: [`ChatResponseFormat.ForJsonSchema`](https://learn.microsoft.com/dotnet/
 ## MCP SDK, transport, and tool boundary
 
 **Decision**: Use the official C# SDK packages `ModelContextProtocol` and
-`ModelContextProtocol.AspNetCore`. Map one stateless Streamable HTTP endpoint at
-`/mcp`; register exactly `get_production_environment`, `get_incident`, and
-`get_available_roles` from an explicit allowlist. The drafting adapter connects to
-that endpoint over HTTP with a bounded `HttpClient`.
+`ModelContextProtocol.AspNetCore` only from `GovernedAccess.Mcp`. Map one stateless
+Streamable HTTP endpoint at `/mcp`; register exactly `get_production_environment`,
+`get_incident`, and `get_available_roles` from an explicit programmatic allowlist.
+The MCP project resolves stored data only through `IRequestContextReader`; Web supplies
+its EF implementation and hosts the endpoint. The drafting adapter connects to that
+endpoint over HTTP with a bounded `HttpClient`.
 
 **Rationale**: Streamable HTTP is the SDK's current ASP.NET Core transport and provides
 a real MCP contract inside the single host. Stateless requests align handler scopes

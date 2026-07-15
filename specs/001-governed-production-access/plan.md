@@ -7,11 +7,13 @@
 ## Summary
 
 Build one deployable .NET 10 ASP.NET Core modular monolith with a thin React 19.2 and
-TypeScript client. Vite produces static assets served by the ASP.NET Core host in
-production; that host also exposes same-origin typed `/api` endpoints and the real
-`/mcp` Streamable HTTP endpoint. A provider-neutral core owns validation, workflow,
-authorization, version binding, and provisioning policy. React never supplies
-trusted server identity or calls MCP or provisioning directly.
+TypeScript client. Three production projects establish explicit provider-neutral Core,
+MCP adapter, and executable Web boundaries while still producing one host process.
+Vite produces static assets served by the ASP.NET Core host in production; that host
+also exposes same-origin typed `/api` endpoints and the real `/mcp` Streamable HTTP
+endpoint. A provider-neutral core owns validation, workflow, authorization, version
+binding, and provisioning policy. React never supplies trusted server identity or
+calls MCP or provisioning directly.
 
 ## Request Context Naming Change
 
@@ -119,6 +121,9 @@ src/
 │   ├── Domain/
 │   ├── Application/
 │   └── Ports/
+├── GovernedAccess.Mcp/
+│   ├── RequestContextTools.cs
+│   └── McpRegistration.cs
 └── GovernedAccess.Web/
     ├── ClientApp/
     │   ├── src/
@@ -133,7 +138,6 @@ src/
     ├── Authentication/
     ├── Persistence/
     ├── Ai/
-    ├── Mcp/
     ├── Provisioning/
     ├── wwwroot/             # Generated Vite production output
     └── Program.cs
@@ -142,13 +146,16 @@ tests/
 └── GovernedAccess.IntegrationTests/
 ```
 
-**Structure Decision**: `GovernedAccess.Web` is the sole executable and contains
-all SDK/infrastructure adapters, `/api`, `/mcp`, and generated React assets.
-`ClientApp` is build input inside Web, not another deployed service. `GovernedAccess.Core` combines
-domain and application code in one library so authorization rules remain independently
-testable without creating a project per logical module. Unit tests target deterministic
-rules; xUnit integration tests exercise persistence, authentication, API/MCP, AI
-failures, and provisioning; Vitest covers the thin React presentation.
+**Structure Decision**: `GovernedAccess.Web` is the sole executable and contains the
+AI, EF, authentication, and UI adapters plus generated React assets.
+`GovernedAccess.Mcp` contains all MCP SDK-facing tool and endpoint registration code;
+Web references it to host `/mcp` in the same process and supplies the EF-backed
+`IRequestContextReader`. `ClientApp` is build input inside Web, not another deployed
+service. `GovernedAccess.Core` combines domain and application code in one library so
+authorization rules remain independently testable without creating a project per
+logical module. Unit tests target deterministic rules; xUnit integration tests exercise
+persistence, authentication, API/MCP, AI failures, and provisioning; Vitest covers the
+thin React presentation.
 
 ## Implementation Boundaries
 
@@ -162,9 +169,10 @@ failures, and provisioning; Vitest covers the thin React presentation.
 - Protected API inputs contain resource/version/decision data only. The actor is
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
-- `IChatClient` and MCP client/server types are adapted in `GovernedAccess.Web`; the
-  core sees only `DraftInterpretationRequest`, `DraftInterpretationOutcome`, and the three
-  request-context ports.
+- `IChatClient` and MCP client types are adapted in `GovernedAccess.Web`; MCP server
+  types are isolated in `GovernedAccess.Mcp`. Core sees only
+  `DraftInterpretationRequest`, `DraftInterpretationOutcome`, and the request-context
+  port.
 - The AI adapter uses a strict JSON-schema response and an explicit MCP-tool allowlist.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP
   endpoint, preserving a real protocol boundary without another process.

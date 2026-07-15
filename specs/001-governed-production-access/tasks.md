@@ -16,11 +16,11 @@
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Create the two-project .NET solution and nested React build input for the single executable host.
+**Purpose**: Create the three-production-project .NET solution and nested React build input for the single executable host.
 
-- [X] T001 Create `ProductionAccessRequestAssistant.sln` with `src/GovernedAccess.Core/GovernedAccess.Core.csproj`, `src/GovernedAccess.Web/GovernedAccess.Web.csproj`, `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj`, and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
+- [X] T001 Create `ProductionAccessRequestAssistant.sln` with `src/GovernedAccess.Core/GovernedAccess.Core.csproj`, `src/GovernedAccess.Mcp/GovernedAccess.Mcp.csproj`, `src/GovernedAccess.Web/GovernedAccess.Web.csproj`, `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj`, and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
 - [X] T002 Configure .NET 10, nullable reference types, warnings-as-errors, and shared analyzer settings in `Directory.Build.props`
-- [X] T003 [P] Add ASP.NET Core, EF Core SQLite, Microsoft.Extensions.AI, and ModelContextProtocol package references and the Core project reference in `src/GovernedAccess.Web/GovernedAccess.Web.csproj`
+- [X] T003 [P] Add ASP.NET Core, EF Core SQLite, and Microsoft.Extensions.AI references to `src/GovernedAccess.Web/GovernedAccess.Web.csproj`; isolate ModelContextProtocol packages and the Core reference in `src/GovernedAccess.Mcp/GovernedAccess.Mcp.csproj`; reference MCP from Web
 - [X] T004 [P] Add xUnit, ASP.NET Core `WebApplicationFactory`, and SQLite test dependencies in `tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj` and `tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj`
 - [X] T005 [P] Initialize React 19.2, TypeScript, React Router, Vite, Vitest, and React Testing Library scripts and dependencies in `src/GovernedAccess.Web/ClientApp/package.json`
 - [X] T006 Configure Vite hashed production output to `wwwroot`, development `/api` proxying, and Vitest in `src/GovernedAccess.Web/ClientApp/vite.config.ts`
@@ -71,8 +71,8 @@
 - [X] T027 [P] [US1] Define draft interpretation records, completeness rules, and the provider-neutral interpretation port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
 - [X] T028 [P] [US1] Implement stored-data request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
 - [X] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
-- [ ] T030 [P] [US1] Implement typed read-only request-context handlers for the three MCP operations in `src/GovernedAccess.Web/Mcp/RequestContextTools.cs`
-- [ ] T031 [US1] Register a stateless Streamable HTTP `/mcp` server with an explicit allowlist containing only the three contract tools in `src/GovernedAccess.Web/Mcp/McpRegistration.cs`
+- [X] T030 [P] [US1] Implement the EF-backed `IRequestContextReader` in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs` and typed read-only handlers for the three MCP operations in `src/GovernedAccess.Mcp/RequestContextTools.cs`
+- [X] T031 [US1] Register a stateless Streamable HTTP `/mcp` server from `src/GovernedAccess.Mcp/McpRegistration.cs` with an explicit allowlist containing only the three contract tools, then compose it from `src/GovernedAccess.Web/Program.cs`
 - [ ] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [ ] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
 - [ ] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
@@ -241,7 +241,7 @@ Setup -> Foundational -> US1 -> US2 -> US3 -> US5
 
 ```text
 T021 RequestValidationTests.cs | T022 McpContractTests.cs | T023 McpFailureTests.cs | T024 DraftInterpretationTests.cs | T025 CreateRequestTests.cs
-T027 RequestDrafting.cs | T028 RequestValidator.cs | T030 RequestContextTools.cs | T032 DeterministicChatClient.cs
+T027 RequestDrafting.cs | T028 RequestValidator.cs | T030 GovernedAccess.Mcp/RequestContextTools.cs | T032 DeterministicChatClient.cs
 T035 client.ts | T036 contracts.ts
 ```
 
