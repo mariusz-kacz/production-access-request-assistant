@@ -1,10 +1,12 @@
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
+using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Endpoints;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 
 const string databaseConnectionStringName = "GovernedAccess";
 const string defaultDatabaseConnectionString = "Data Source=governed-access.db";
@@ -29,6 +31,17 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
     options.UseSqlite(databaseConnectionString));
 builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
+builder.Services.AddHttpClient();
+builder.Services
+    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Valid))
+    .UseFunctionInvocation(configure: static client =>
+    {
+        client.AllowConcurrentInvocation = false;
+        client.IncludeDetailedErrors = false;
+        client.MaximumIterationsPerRequest = 6;
+        client.TerminateOnUnknownCalls = true;
+    });
+builder.Services.AddScoped<IRequestDraftInterpreter, ChatRequestDraftInterpreter>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();

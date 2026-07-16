@@ -226,15 +226,12 @@ public sealed partial class RequestContextTools(
 
     private void LogCompletion(string toolName, long startedAt, string outcome)
     {
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            var durationMilliseconds = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-            LogToolCompleted(
-                logger,
-                toolName,
-                durationMilliseconds,
-                outcome);
-        }
+        var durationMilliseconds = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+        LogToolCompleted(
+            logger,
+            toolName,
+            durationMilliseconds,
+            outcome);
     }
 
     private static string GetRoleDisplayName(string roleId)
