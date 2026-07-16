@@ -1,3 +1,4 @@
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
 using GovernedAccess.Web.Ai;
@@ -31,6 +32,9 @@ builder.Services.AddProblemDetails(options =>
 builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
     options.UseSqlite(databaseConnectionString));
 builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
+builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
+builder.Services.AddScoped<RequestValidator>();
+builder.Services.AddScoped<RequestSubmissionService>();
 builder.Services.AddHttpClient();
 builder.Services
     .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Valid))
@@ -61,6 +65,7 @@ app.UseAntiforgery();
 
 var api = app.MapGroup("/api");
 api.MapSessionEndpoints();
+api.MapRequestPreparationEndpoints();
 
 app.MapGovernedAccessMcp();
 

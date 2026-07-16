@@ -118,7 +118,7 @@ public static class SessionEndpoints
         return Results.NoContent();
     }
 
-    private static async ValueTask<object?> ValidateAntiforgeryAsync(
+    internal static async ValueTask<object?> ValidateAntiforgeryAsync(
         EndpointFilterInvocationContext invocationContext,
         EndpointFilterDelegate next)
     {

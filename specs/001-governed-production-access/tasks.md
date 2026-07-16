@@ -75,7 +75,7 @@
 - [X] T031 [US1] Register a stateless Streamable HTTP `/mcp` server from `src/GovernedAccess.Mcp/McpRegistration.cs` with an explicit allowlist containing only the three contract tools, then compose it from `src/GovernedAccess.Web/Program.cs`
 - [X] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [X] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
-- [ ] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
+- [X] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
 - [ ] T035 [P] [US1] Implement the credentialed typed fetch wrapper with antiforgery headers, Problem Details mapping, and `AbortSignal` support in `src/GovernedAccess.Web/ClientApp/src/api/client.ts`
 - [ ] T036 [P] [US1] Define TypeScript draft, request creation, session, and typed error contracts in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`
 - [ ] T037 [US1] Implement the intent, draft review/correction, validation, and submission flow in `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx`
