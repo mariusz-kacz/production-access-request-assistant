@@ -76,10 +76,10 @@
 - [X] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [X] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
 - [X] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
-- [ ] T035 [P] [US1] Implement the credentialed typed fetch wrapper with antiforgery headers, Problem Details mapping, and `AbortSignal` support in `src/GovernedAccess.Web/ClientApp/src/api/client.ts`
-- [ ] T036 [P] [US1] Define TypeScript draft, request creation, session, and typed error contracts in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`
-- [ ] T037 [US1] Implement the intent, draft review/correction, validation, and submission flow in `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx`
-- [ ] T038 [US1] Add React Router navigation for `/requests/new` and a minimal application shell in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
+- [X] T035 [P] [US1] Implement the credentialed typed fetch wrapper with antiforgery headers, Problem Details mapping, and `AbortSignal` support in `src/GovernedAccess.Web/ClientApp/src/api/client.ts`
+- [X] T036 [P] [US1] Define TypeScript draft, request creation, session, and typed error contracts in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`
+- [X] T037 [US1] Implement the intent, draft review/correction, validation, and submission flow in `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx`
+- [X] T038 [US1] Add React Router navigation for `/requests/new` and a minimal application shell in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
 
 **Checkpoint**: User Story 1 works end to end and is independently demonstrable without a live model.
 
