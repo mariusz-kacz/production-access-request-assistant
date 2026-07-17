@@ -59,7 +59,7 @@ Model output is schema-validated. All client, environment, role, incident, durat
 - Acting identity comes from authenticated server context.
 - Browser-submitted identity, claims, and roles are not trusted.
 - The requester cannot choose the business approver.
-- Approval records bind to a request ID and exact request version.
+- Approval records bind to an immutable request ID and exact approved scope.
 
 ### 3.3 Enforcement Is Deterministic
 
@@ -70,7 +70,7 @@ Deterministic services enforce:
 - approver authority,
 - approval order,
 - exact role consistency,
-- request-version consistency,
+- immutable request-scope consistency,
 - pre-provisioning revalidation,
 - idempotent grant creation.
 
@@ -114,7 +114,6 @@ The initial provisioning attempt is triggered automatically after a valid authen
 The provisioning handler receives only stable references required to identify the operation, such as:
 
 * request ID,
-* request version,
 * idempotency key.
 
 It must not accept caller assertions such as:
@@ -128,14 +127,14 @@ roleIsAllowed = true
 Before creating an access grant, the handler reloads current stored state and independently verifies:
 
 * the request exists and is in the expected workflow state,
-* the request version matches both approvals,
+* both approvals reference the same immutable request,
 * valid business and DevOps approvals exist in the correct order,
 * the approved role matches the request,
 * the approved duration does not exceed the business-approved duration,
 * the environment and role remain valid,
 * the associated incident remains valid when required,
 * the acting workflow transition was authorized,
-* the idempotency key is consistent with the request version and approved scope.
+* the idempotency key is consistent with the request ID and approved scope.
 
 If provisioning succeeds, repeating the same logical operation with the same idempotency key returns the existing access grant and does not create a duplicate.
 
@@ -144,7 +143,7 @@ If provisioning fails, the request enters `ProvisioningFailed`. An authenticated
 The retry action:
 
 * is available only for a request in `ProvisioningFailed`,
-* cannot modify the client, environment, role, duration, or request version,
+* cannot modify the client, environment, role, or duration,
 * reuses the idempotency key for the same approved operation,
 * invokes the same provisioning handler,
 * repeats the complete current-state revalidation,
@@ -316,7 +315,7 @@ The MVP supports only:
 
 There is no generalized role ordering or entitlement comparison.
 
-Business approval binds the requested role. DevOps may approve that exact role or reject the request. A role change requires a material request edit, which increments the request version and invalidates previous approvals.
+Business approval binds the requested role. DevOps may approve that exact role or reject the request. A role change requires a new validated request with a new request ID and new approvals.
 
 DevOps may reduce the approved duration. DevOps may not increase duration.
 
@@ -343,7 +342,6 @@ An access request contains:
 - requested duration,
 - justification,
 - optional incident ID,
-- request version,
 - workflow status,
 - creation and last-modified timestamps,
 - correlation ID.
@@ -353,7 +351,6 @@ An access request contains:
 An approval contains:
 
 - request ID,
-- request version,
 - stage: business or DevOps,
 - decision: approved or rejected,
 - authenticated approver ID,
@@ -362,14 +359,14 @@ An approval contains:
 - optional comment,
 - decision timestamp.
 
-An approval is evidence for one exact request version only.
+An approval is evidence for one exact immutable request and approved scope only.
 
 ### 6.6 Access Grant
 
 An access grant contains:
 
 - grant ID,
-- request ID and version,
+- request ID,
 - requester ID,
 - environment ID,
 - role,
@@ -387,7 +384,6 @@ An audit event contains:
 
 - event ID,
 - request ID,
-- request version,
 - event type,
 - authenticated actor ID when applicable,
 - timestamp,
@@ -399,12 +395,11 @@ Audit events use a straightforward insert-only application model. The MVP does n
 At minimum, the system records:
 
 - request creation,
-- material request edit,
 - validation failure,
 - business decision,
 - DevOps decision,
 - rejected authorization attempt,
-- stale-version rejection,
+- invalid-transition rejection,
 - provisioning attempt,
 - provisioning success,
 - provisioning failure,
@@ -415,9 +410,6 @@ At minimum, the system records:
 ### 7.1 State Model
 
 ```text
-Draft
-  |
-  v
 AwaitingBusinessApproval
   |
   v
@@ -433,11 +425,9 @@ Active
 
 Business rejection also leads to `Rejected`.
 
-A material edit:
-
-- increments the request version,
-- invalidates approvals for the previous version,
-- returns the request to `Draft`.
+Submitted requests are immutable. A requester corrects an error by preparing and
+submitting a new request, which receives a new request ID and requires new approvals.
+The original request and its evidence remain unchanged.
 
 No specialized status is added unless deterministic behavior or UI clarity requires it.
 
@@ -479,7 +469,7 @@ Before submission, the Governed Access Host validates:
 
 The Governed Access Host resolves the required approver from stored environment configuration. The requester cannot supply or select the approver.
 
-Only the correct authenticated client approver may approve or reject. Approval binds the role and maximum duration for the current request version.
+Only the correct authenticated client approver may approve or reject. Approval binds the immutable request ID, role, and maximum duration.
 
 ### 7.5 DevOps Decision and Immediate Provisioning
 
@@ -496,18 +486,16 @@ DevOps may not:
 - change the role,
 - increase duration,
 - change the client or environment,
-- approve a different request version.
 
 A successful DevOps approval immediately triggers:
 
 1. request-state validation,
-2. request-version validation,
-3. business approval validation,
-4. DevOps approval validation,
-5. approved-scope validation,
-6. current environment and role validation,
-7. incident-state validation when an incident is present,
-8. idempotent synthetic provisioning.
+2. business approval validation,
+3. DevOps approval validation,
+4. approved-scope validation,
+5. current environment and role validation,
+6. incident-state validation when an incident is present,
+7. idempotent synthetic provisioning.
 
 There is no separate human provisioning action or provisioning role.
 
@@ -517,7 +505,7 @@ An authenticated DevOps approver may invoke a structured retry action from
 the request-detail page. The retry:
 
 - cannot modify the approved environment, role, or duration,
-- reuses the idempotency key for the same request version and approved scope,
+- reuses the idempotency key for the same request ID and approved scope,
 - invokes the same internal provisioning handler,
 - reloads and revalidates current stored state,
 - is recorded in the audit history.
@@ -551,7 +539,7 @@ The request detail page shows:
 - access-grant outcome and logical expiry,
 - audit timeline.
 
-Available structured actions depend on authenticated synthetic identity, authorization, workflow state, and request version.
+Available structured actions depend on authenticated synthetic identity, authorization, and workflow state.
 
 The MVP does not include audit administration or provisioning administration pages.
 
@@ -577,21 +565,21 @@ The system shall derive the acting principal and authority from authenticated se
 
 The system shall resolve the required business approver from the target environment and reject a wrong-client approver.
 
-### FR-06 Version-Bound Two-Stage Approval
+### FR-06 Request-Bound Two-Stage Approval
 
-Business and DevOps approval shall be explicit authenticated decisions bound to the same request ID and request version.
+Business and DevOps approval shall be explicit authenticated decisions bound to the same immutable request ID and approved scope.
 
 ### FR-07 Exact Role Enforcement
 
-DevOps shall approve the exact business-approved role or reject. A role change shall require a material edit and new approvals.
+DevOps shall approve the exact business-approved role or reject. A role change shall require a new validated request and new approvals.
 
 ### FR-08 Duration Enforcement
 
 DevOps may preserve or reduce the business-approved duration but shall not increase it.
 
-### FR-09 Material Edit Protection
+### FR-09 Immutable Submitted Requests
 
-A material edit shall increment the request version, invalidate prior approvals, and return the request to `Draft`.
+A submitted request shall be immutable. Any correction shall create a new request ID and require new approvals while preserving the original evidence.
 
 ### FR-10 Immediate Provisioning
 
@@ -599,7 +587,7 @@ A successful DevOps approval shall immediately initiate deterministic revalidati
 
 ### FR-11 Independent Provisioning Validation
 
-The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify current stored request, approval, version, scope, environment, role, and incident state before creating a grant.
+The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify current stored request, approval, scope, environment, role, and incident state before creating a grant.
 
 ### FR-12 Idempotent Provisioning
 
@@ -642,7 +630,7 @@ The system shall store activation and expiry timestamps and may display a grant 
 ### 10.3 Auditability
 
 - Audit events use an insert-only application model.
-- Events identify the request version, actor when applicable, timestamp, and correlation ID.
+- Events identify the request ID, actor when applicable, timestamp, and correlation ID.
 - Rejected actions are evidence and must not mutate the protected workflow state.
 - Audit storage is intentionally simple and is not an event-sourced system.
 
@@ -684,8 +672,8 @@ Required tests cover:
 - inactive incident,
 - correct business approver,
 - wrong-client business approver,
-- approval bound to request version,
-- stale approval rejection,
+- approval bound to the immutable request ID and scope,
+- duplicate-stage and invalid-transition rejection,
 - DevOps role-change rejection,
 - DevOps duration-increase rejection,
 - missing business approval,
@@ -703,7 +691,7 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 1. The requester asks for four hours of `ProductionReadOnly` access to Client Alpha for `INC-1042`.
 2. The model uses the three read-only MCP tools as needed and produces a typed draft.
 3. Deterministic validation succeeds.
-4. The Client Alpha business approver approves the current version.
+4. The Client Alpha business approver approves the immutable request scope.
 5. DevOps approves the exact role and duration.
 6. Approval immediately triggers independent revalidation and idempotent provisioning.
 7. The request becomes `Active` and the detail page shows the grant and audit history.
@@ -712,9 +700,11 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 
 The Client Beta business approver attempts to approve the Client Alpha request. The Governed Access Host rejects and audits the attempt without changing workflow state.
 
-### 12.3 Stale Approval After Material Edit
+### 12.3 Correction Creates a New Request
 
-A material request edit increments the version, invalidates the earlier business approval, and returns the request to `Draft`. An attempt to act using the earlier version is rejected and audited.
+A requester discovers an error after submission. The original request remains unchanged,
+and the requester submits a corrected request with a new request ID. The corrected
+request requires both approvals and the original request retains its evidence.
 
 ### 12.4 Duplicate Provisioning Retry
 
@@ -729,7 +719,7 @@ The following remain automated negative-path tests rather than primary presentat
 - invalid environment,
 - inactive incident,
 - unauthorized user attempting to trigger DevOps approval and provisioning,
-- mismatched request version.
+- duplicate decision after the request has left the required workflow state.
 
 ## 13. MVP Deliverables
 
@@ -744,7 +734,7 @@ The MVP includes:
 - two clients and two environments,
 - two access roles without role hierarchy,
 - two explicit authenticated approval stages,
-- request-version binding and stale-approval protection,
+- immutable request binding and correction through a new request,
 - immediate internal provisioning after DevOps approval,
 - independent current-state reload and validation within the provisioning handler,
 - idempotent synthetic grant creation,
@@ -808,9 +798,8 @@ The later proposal and design phases should resolve:
 5. Whether the MCP client uses the host's HTTP endpoint or another supported transport while preserving real MCP contracts and integration tests.
 6. How DevOps approval persistence and the immediate provisioning attempt are separated so failure produces a recoverable `ProvisioningFailed` state.
 7. How the provisioning handler reloads evidence and prevents upstream code from bypassing required checks.
-8. How idempotency keys are derived and bound to request version and approved scope.
-9. Which request fields count as material edits.
-10. Whether OpenTelemetry can be added as final polish without introducing an external collector.
+8. How idempotency keys are derived and bound to request ID and approved scope.
+9. Whether OpenTelemetry can be added as final polish without introducing an external collector.
 
 ## 17. Success Criteria
 
@@ -823,8 +812,8 @@ The project is successful when it proves that:
 - authenticated server context determines the acting identity,
 - the requester cannot choose the approver,
 - a wrong-client approver is rejected and audited,
-- approvals bind to an exact request ID and version,
-- a material edit invalidates prior approvals,
+- approvals bind to an exact immutable request ID and scope,
+- correcting a submitted request creates a new request and requires new approvals,
 - DevOps cannot change the approved role or increase duration,
 - successful DevOps approval immediately triggers deterministic revalidation and provisioning,
 - the provisioning handler reloads and independently verifies current stored evidence,

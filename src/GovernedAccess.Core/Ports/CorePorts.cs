@@ -76,7 +76,6 @@ public interface IWorkflowStore : IAuditStore
 
     Task<ApplicationResult<ApprovalDecision>> GetApprovalDecisionAsync(
         Guid requestId,
-        int requestVersion,
         ApprovalStage stage,
         CancellationToken cancellationToken);
 
@@ -96,7 +95,6 @@ public interface IWorkflowStore : IAuditStore
 
     Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
         Guid requestId,
-        int requestVersion,
         CancellationToken cancellationToken);
 
     void AddAccessGrant(AccessGrant grant);
@@ -107,7 +105,6 @@ public interface IWorkflowStore : IAuditStore
 
     Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
         Guid requestId,
-        int requestVersion,
         CancellationToken cancellationToken);
 
     Task<ApplicationResult> SaveChangesAsync(CancellationToken cancellationToken);

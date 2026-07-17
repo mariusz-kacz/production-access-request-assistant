@@ -12,7 +12,6 @@ public sealed class ProblemDetailsMappingTests
     [InlineData(ApplicationFailureKind.NotFound, 404, "Resource not found.")]
     [InlineData(ApplicationFailureKind.Unauthenticated, 401, "Authentication required.")]
     [InlineData(ApplicationFailureKind.Unauthorized, 403, "Access denied.")]
-    [InlineData(ApplicationFailureKind.StaleVersion, 409, "Request version is stale.")]
     [InlineData(ApplicationFailureKind.InvalidTransition, 409, "Workflow transition is invalid.")]
     [InlineData(ApplicationFailureKind.ConcurrencyConflict, 409, "Concurrent update conflict.")]
     [InlineData(ApplicationFailureKind.Timeout, 503, "A dependency timed out.")]
@@ -59,35 +58,6 @@ public sealed class ProblemDetailsMappingTests
         Assert.Equal("Validation failed.", result.ProblemDetails.Title);
         Assert.Equal("request_validation_failed", result.ProblemDetails.Extensions["code"]);
         Assert.Equal("correlation-456", result.ProblemDetails.Extensions["correlationId"]);
-    }
-
-    [Fact]
-    public void ToProblemDetailsIncludesCurrentVersionForAnOperationFailure()
-    {
-        var context = CreateContext("correlation-456");
-        var failure = new ApplicationFailure(
-            ApplicationFailureKind.StaleVersion,
-            "stale_request_version",
-            "The request version is stale.",
-            currentVersion: 3);
-
-        var result = failure.ToProblemDetails(context);
-
-        Assert.Equal(3, result.ProblemDetails.Extensions["currentVersion"]);
-    }
-
-    [Fact]
-    public void ToProblemDetailsOmitsOptionalExtensionsWhenTheyDoNotApply()
-    {
-        var context = CreateContext("correlation-789");
-        var failure = new ApplicationFailure(
-            ApplicationFailureKind.NotFound,
-            "request_not_found",
-            "The request was not found.");
-
-        var result = failure.ToProblemDetails(context);
-
-        Assert.DoesNotContain("currentVersion", result.ProblemDetails.Extensions.Keys);
     }
 
     private static DefaultHttpContext CreateContext(string correlationId)

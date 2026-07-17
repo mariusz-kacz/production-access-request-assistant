@@ -2,7 +2,6 @@ namespace GovernedAccess.Core.Domain;
 
 public enum RequestStatus
 {
-    Draft,
     AwaitingBusinessApproval,
     AwaitingDevOpsApproval,
     Rejected,
@@ -93,8 +92,7 @@ public sealed class AccessRequest
         RequestedDurationMinutes = requestedDurationMinutes;
         Justification = justification;
         IncidentId = incidentId;
-        Version = 1;
-        Status = RequestStatus.Draft;
+        Status = RequestStatus.AwaitingBusinessApproval;
         CreatedAt = createdAt.ToUniversalTime();
         LastModifiedAt = CreatedAt;
         CorrelationId = correlationId;
@@ -105,19 +103,17 @@ public sealed class AccessRequest
 
     public string RequesterId { get; private set; }
 
-    public string ClientId { get; internal set; }
+    public string ClientId { get; private set; }
 
-    public string EnvironmentId { get; internal set; }
+    public string EnvironmentId { get; private set; }
 
-    public string RequestedRoleId { get; internal set; }
+    public string RequestedRoleId { get; private set; }
 
-    public int RequestedDurationMinutes { get; internal set; }
+    public int RequestedDurationMinutes { get; private set; }
 
-    public string Justification { get; internal set; }
+    public string Justification { get; private set; }
 
-    public string? IncidentId { get; internal set; }
-
-    public int Version { get; internal set; }
+    public string? IncidentId { get; private set; }
 
     public RequestStatus Status { get; internal set; }
 

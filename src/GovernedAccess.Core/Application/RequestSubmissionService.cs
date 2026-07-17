@@ -145,10 +145,7 @@ public sealed class RequestSubmissionService
             fields.Justification,
             fields.IncidentId,
             occurredAt,
-            normalizedCorrelationId)
-        {
-            Status = RequestStatus.AwaitingBusinessApproval,
-        };
+            normalizedCorrelationId);
 
         var auditEvent = AuditEvent.CreateRequestCreated(
             Guid.NewGuid(),

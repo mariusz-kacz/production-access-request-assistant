@@ -27,17 +27,14 @@ public sealed class GovernedAccessDbContextModelTests
         AssertUniqueIndex<ApprovalDecision>(
             context,
             nameof(ApprovalDecision.RequestId),
-            nameof(ApprovalDecision.RequestVersion),
             nameof(ApprovalDecision.Stage));
         AssertUniqueIndex<ProvisioningOperation>(
             context,
-            nameof(ProvisioningOperation.RequestId),
-            nameof(ProvisioningOperation.RequestVersion));
+            nameof(ProvisioningOperation.RequestId));
         AssertUniqueIndex<AccessGrant>(context, nameof(AccessGrant.OperationId));
         AssertUniqueIndex<AccessGrant>(
             context,
-            nameof(AccessGrant.RequestId),
-            nameof(AccessGrant.RequestVersion));
+            nameof(AccessGrant.RequestId));
 
         AssertUtcTimestamp<AccessRequest>(context, nameof(AccessRequest.CreatedAt));
         AssertUtcTimestamp<AccessRequest>(context, nameof(AccessRequest.LastModifiedAt));

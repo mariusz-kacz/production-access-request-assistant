@@ -11,7 +11,7 @@ public sealed class RequestSubmissionServiceTests
         new(2026, 7, 15, 8, 30, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task SubmitAsyncBindsTheAuthoritativeRequesterAndPersistsVersionOneWithAuditEvidence()
+    public async Task SubmitAsyncBindsTheAuthoritativeRequesterAndPersistsImmutableScopeWithAuditEvidence()
     {
         var requestContext = new StubRequestContextReader();
         var workflowStore = new RecordingWorkflowStore();
@@ -35,7 +35,6 @@ public sealed class RequestSubmissionServiceTests
         Assert.Equal(240, request.RequestedDurationMinutes);
         Assert.Equal("Investigate the active production incident.", request.Justification);
         Assert.Equal("INC-1042", request.IncidentId);
-        Assert.Equal(1, request.Version);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
         Assert.Equal(CurrentTime, request.CreatedAt);
         Assert.Equal(CurrentTime, request.LastModifiedAt);
@@ -44,7 +43,6 @@ public sealed class RequestSubmissionServiceTests
 
         var auditEvent = Assert.Single(workflowStore.AddedAuditEvents);
         Assert.Equal(request.Id, auditEvent.RequestId);
-        Assert.Equal(1, auditEvent.RequestVersion);
         Assert.Equal(AuditEventType.RequestCreated, auditEvent.EventType);
         Assert.Equal("requester", auditEvent.ActorId);
         Assert.Equal(CurrentTime, auditEvent.OccurredAt);
@@ -62,6 +60,23 @@ public sealed class RequestSubmissionServiceTests
             details.RootElement.GetProperty("status").GetString());
         Assert.False(details.RootElement.TryGetProperty("justification", out _));
         Assert.Equal(1, workflowStore.SaveChangesCallCount);
+    }
+
+    [Theory]
+    [InlineData(nameof(AccessRequest.RequesterId))]
+    [InlineData(nameof(AccessRequest.ClientId))]
+    [InlineData(nameof(AccessRequest.EnvironmentId))]
+    [InlineData(nameof(AccessRequest.RequestedRoleId))]
+    [InlineData(nameof(AccessRequest.RequestedDurationMinutes))]
+    [InlineData(nameof(AccessRequest.Justification))]
+    [InlineData(nameof(AccessRequest.IncidentId))]
+    public void SubmittedRequestScopeCannotBeChangedOutsideTheEntity(string propertyName)
+    {
+        var property = typeof(AccessRequest).GetProperty(propertyName)
+            ?? throw new InvalidOperationException($"AccessRequest.{propertyName} is missing.");
+
+        Assert.NotNull(property.SetMethod);
+        Assert.True(property.SetMethod.IsPrivate);
     }
 
     [Fact]
@@ -310,7 +325,6 @@ public sealed class RequestSubmissionServiceTests
 
         public Task<ApplicationResult<ApprovalDecision>> GetApprovalDecisionAsync(
             Guid requestId,
-            int requestVersion,
             ApprovalStage stage,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
@@ -331,7 +345,6 @@ public sealed class RequestSubmissionServiceTests
 
         public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
             Guid requestId,
-            int requestVersion,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public void AddAccessGrant(AccessGrant grant) => throw new NotSupportedException();
@@ -342,7 +355,6 @@ public sealed class RequestSubmissionServiceTests
 
         public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
             Guid requestId,
-            int requestVersion,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<ApplicationResult<IReadOnlyList<AuditEvent>>> ListAuditEventsAsync(

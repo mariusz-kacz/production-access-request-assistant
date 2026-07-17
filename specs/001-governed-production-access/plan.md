@@ -11,8 +11,8 @@ TypeScript client. Three production projects establish explicit provider-neutral
 MCP adapter, and executable Web boundaries while still producing one host process.
 Vite produces static assets served by the ASP.NET Core host in production; that host
 also exposes same-origin typed `/api` endpoints and the real `/mcp` Streamable HTTP
-endpoint. A provider-neutral core owns validation, workflow, authorization, version
-binding, and provisioning policy. React never supplies trusted server identity or
+endpoint. A provider-neutral core owns validation, workflow, authorization, immutable
+request-scope binding, and provisioning policy. React never supplies trusted server identity or
 calls MCP or provisioning directly.
 
 ## Request Context Naming Change
@@ -81,10 +81,10 @@ baseline are applied as the operative gates:
 | Domain/application code has no AI-provider or MCP SDK contracts | PASS | `GovernedAccess.Core` exposes provider-neutral ports and typed outcomes; SDK types remain in `GovernedAccess.Web` adapters. |
 | Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates current stored state. |
 | Model receives exactly the three allowed read-only MCP tools | PASS | MCP contract declares only the required tools; tool registration uses an explicit allowlist. |
-| Approval is authenticated and bound to exact request/version/scope | PASS | Approval entity and action contracts bind request ID, version, role, and duration; actor comes only from server claims. |
-| Material edits invalidate prior authority | PASS | Domain transition increments business version and returns to `Draft`; old decisions remain evidence only. |
+| Approval is authenticated and bound to an exact immutable request scope | PASS | Approval entity and action contracts bind request ID, role, and duration; actor comes only from server claims. |
+| Submitted requests cannot change after approval begins | PASS | Submitted request fields are immutable; corrections create a new request ID and require new approvals. |
 | DevOps cannot alter role or increase duration | PASS | Domain decision policy requires role equality and a positive duration at or below the business maximum. |
-| Provisioning reloads evidence and is idempotent | PASS | Handler accepts request ID/version/operation identity only, reloads all evidence, and enforces a unique operation identity. |
+| Provisioning reloads evidence and is idempotent | PASS | Handler accepts request ID and operation identity only, reloads all evidence, and enforces a unique operation identity. |
 | Browser identity and claims are untrusted | PASS | HttpOnly server cookie establishes actor; action bodies contain no actor, roles, or approver identity. |
 | Cookie-authenticated mutations resist CSRF | PASS | Same-origin antiforgery token plus `X-XSRF-TOKEN`; all unsafe application endpoints validate it. |
 | Single-host, proportionate structure | PASS | One executable serves React assets, API, and MCP; Vite is build/dev tooling, not a production service. |
@@ -166,7 +166,7 @@ thin React presentation.
   design; SPA fallback excludes `/api/*` and `/mcp`.
 - The fetch wrapper sends credentials, obtains the antiforgery cookie, adds
   `X-XSRF-TOKEN` to unsafe methods, maps safe Problem Details, and supports AbortSignal.
-- Protected API inputs contain resource/version/decision data only. The actor is
+- Protected API inputs contain resource/decision data only. The actor is
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
 - `IChatClient` and MCP client types are adapted in `GovernedAccess.Web`; MCP server
@@ -177,14 +177,14 @@ thin React presentation.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP
   endpoint, preserving a real protocol boundary without another process.
 - DevOps approval persists the authenticated decision and provisioning operation,
-  then invokes the protected handler. The handler reloads request, current-version
+  then invokes the protected handler. The handler reloads the immutable request, current
   approvals, environment, role, and incident before calling the synthetic provider.
 - Provider success and workflow activation are finalized transactionally. A timeout
   or lost response records `ProvisioningFailed`; retry reuses the same operation ID.
 - A unique database constraint on `AccessGrant.OperationId` plus provider-side
   get-or-create semantics guarantees one grant under retries/concurrency.
-- `AccessRequest.PersistenceVersion` is an EF concurrency token distinct from the
-  business-facing request `Version`; conflicts become typed stale-state outcomes.
+- `AccessRequest.PersistenceVersion` is an internal EF concurrency token. It detects
+  competing workflow transitions and is not exposed as business authorization evidence.
 
 ## Complexity Tracking
 

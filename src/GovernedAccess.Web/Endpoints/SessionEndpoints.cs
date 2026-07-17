@@ -169,7 +169,6 @@ public static class SessionEndpoints
             PrincipalKind.Requester =>
             [
                 "createRequest",
-                "editOwnRequests",
             ],
             PrincipalKind.BusinessApprover =>
             [

@@ -30,12 +30,11 @@ public enum AccessGrantOutcome
 public enum AuditEventType
 {
     RequestCreated,
-    MaterialEdited,
     ValidationFailed,
     BusinessDecision,
     DevOpsDecision,
     AuthorizationRejected,
-    StaleVersionRejected,
+    InvalidTransitionRejected,
     ProvisioningAttempted,
     ProvisioningSucceeded,
     ProvisioningFailed,
@@ -77,7 +76,6 @@ public sealed class ApprovalDecision
     public ApprovalDecision(
         Guid id,
         Guid requestId,
-        int requestVersion,
         ApprovalStage stage,
         ApprovalOutcome decision,
         string approverId,
@@ -89,7 +87,6 @@ public sealed class ApprovalDecision
     {
         WorkflowEvidenceValidation.EnsureNotEmpty(id, nameof(id));
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        WorkflowEvidenceValidation.EnsurePositive(requestVersion, nameof(requestVersion));
         WorkflowEvidenceValidation.EnsureDefined(stage, nameof(stage));
         WorkflowEvidenceValidation.EnsureDefined(decision, nameof(decision));
 
@@ -127,7 +124,6 @@ public sealed class ApprovalDecision
 
         Id = id;
         RequestId = requestId;
-        RequestVersion = requestVersion;
         Stage = stage;
         Decision = decision;
         ApproverId = approverId;
@@ -141,8 +137,6 @@ public sealed class ApprovalDecision
     public Guid Id { get; private set; }
 
     public Guid RequestId { get; private set; }
-
-    public int RequestVersion { get; private set; }
 
     public ApprovalStage Stage { get; private set; }
 
@@ -166,7 +160,6 @@ public sealed class ProvisioningOperation
     public ProvisioningOperation(
         string id,
         Guid requestId,
-        int requestVersion,
         string environmentId,
         string roleId,
         int durationMinutes,
@@ -174,7 +167,6 @@ public sealed class ProvisioningOperation
     {
         id = AccessRequestNormalization.NormalizeIdentifier(id);
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        WorkflowEvidenceValidation.EnsurePositive(requestVersion, nameof(requestVersion));
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
         roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
         WorkflowEvidenceValidation.EnsurePositive(durationMinutes, nameof(durationMinutes));
@@ -189,7 +181,6 @@ public sealed class ProvisioningOperation
 
         Id = id;
         RequestId = requestId;
-        RequestVersion = requestVersion;
         EnvironmentId = environmentId;
         RoleId = roleId;
         DurationMinutes = durationMinutes;
@@ -202,8 +193,6 @@ public sealed class ProvisioningOperation
     public string Id { get; private set; }
 
     public Guid RequestId { get; private set; }
-
-    public int RequestVersion { get; private set; }
 
     public string EnvironmentId { get; private set; }
 
@@ -228,7 +217,6 @@ public sealed class AccessGrant
         Guid id,
         string operationId,
         Guid requestId,
-        int requestVersion,
         string requesterId,
         string environmentId,
         string roleId,
@@ -239,7 +227,6 @@ public sealed class AccessGrant
         WorkflowEvidenceValidation.EnsureNotEmpty(id, nameof(id));
         operationId = AccessRequestNormalization.NormalizeIdentifier(operationId);
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        WorkflowEvidenceValidation.EnsurePositive(requestVersion, nameof(requestVersion));
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
         roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
@@ -259,7 +246,6 @@ public sealed class AccessGrant
         Id = id;
         OperationId = operationId;
         RequestId = requestId;
-        RequestVersion = requestVersion;
         RequesterId = requesterId;
         EnvironmentId = environmentId;
         RoleId = roleId;
@@ -275,8 +261,6 @@ public sealed class AccessGrant
     public string OperationId { get; private set; }
 
     public Guid RequestId { get; private set; }
-
-    public int RequestVersion { get; private set; }
 
     public string RequesterId { get; private set; }
 
@@ -311,7 +295,6 @@ public sealed class AuditEvent
     private AuditEvent(
         Guid id,
         Guid requestId,
-        int requestVersion,
         AuditEventType eventType,
         string? actorId,
         DateTimeOffset occurredAt,
@@ -321,7 +304,6 @@ public sealed class AuditEvent
     {
         WorkflowEvidenceValidation.EnsureNotEmpty(id, nameof(id));
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        WorkflowEvidenceValidation.EnsurePositive(requestVersion, nameof(requestVersion));
         WorkflowEvidenceValidation.EnsureDefined(eventType, nameof(eventType));
         actorId = AccessRequestNormalization.NormalizeOptionalIdentifier(actorId);
         correlationId = AccessRequestNormalization.NormalizeIdentifier(correlationId);
@@ -330,7 +312,6 @@ public sealed class AuditEvent
 
         Id = id;
         RequestId = requestId;
-        RequestVersion = requestVersion;
         EventType = eventType;
         ActorId = actorId;
         OccurredAt = occurredAt.ToUniversalTime();
@@ -357,7 +338,6 @@ public sealed class AuditEvent
         return new AuditEvent(
             id,
             request.Id,
-            request.Version,
             AuditEventType.RequestCreated,
             request.RequesterId,
             request.CreatedAt,
@@ -369,8 +349,6 @@ public sealed class AuditEvent
     public Guid Id { get; private set; }
 
     public Guid RequestId { get; private set; }
-
-    public int RequestVersion { get; private set; }
 
     public AuditEventType EventType { get; private set; }
 

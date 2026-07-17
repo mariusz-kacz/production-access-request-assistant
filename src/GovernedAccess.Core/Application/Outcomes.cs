@@ -11,7 +11,6 @@ public enum ApplicationFailureKind
     NotFound,
     Unauthenticated,
     Unauthorized,
-    StaleVersion,
     InvalidTransition,
     ConcurrencyConflict,
     Timeout,
@@ -28,24 +27,14 @@ public sealed class ApplicationFailure
     public ApplicationFailure(
         ApplicationFailureKind kind,
         string code,
-        string message,
-        int? currentVersion = null)
+        string message)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
-        if (currentVersion is <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(currentVersion),
-                currentVersion,
-                "A current request version must be positive.");
-        }
-
         Kind = kind;
         Code = code;
         Message = message;
-        CurrentVersion = currentVersion;
     }
 
     public ApplicationFailureKind Kind { get; }
@@ -53,8 +42,6 @@ public sealed class ApplicationFailure
     public string Code { get; }
 
     public string Message { get; }
-
-    public int? CurrentVersion { get; }
 
     /// <summary>
     /// Distinguishes caller or host cancellation from an internally enforced timeout.

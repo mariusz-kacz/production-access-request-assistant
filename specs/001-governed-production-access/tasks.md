@@ -36,10 +36,10 @@
 
 - [X] T008 [P] Define typed success/failure outcomes and cancellation-safe application result types in `src/GovernedAccess.Core/Application/Outcomes.cs`
 - [X] T009 [P] Define `Client`, `ProductionEnvironment`, `EnvironmentRole`, `Incident`, and `AuthenticatedPrincipal` in concept-named files under `src/GovernedAccess.Core/Domain/`
-- [X] T010 [P] Define `AccessRequest`, statuses, normalization, version, and optimistic persistence version fields in `src/GovernedAccess.Core/Domain/AccessRequest.cs`
+- [X] T010 [P] Define immutable submitted `AccessRequest` scope, statuses, normalization, and optimistic persistence version fields in `src/GovernedAccess.Core/Domain/AccessRequest.cs`
 - [X] T011 [P] Define `ApprovalDecision`, `ProvisioningOperation`, `AccessGrant`, and `AuditEvent` evidence models in `src/GovernedAccess.Core/Domain/WorkflowEvidence.cs`
 - [X] T012 Define provider-neutral request-context, clock, audit, and workflow persistence ports with `CancellationToken` parameters in `src/GovernedAccess.Core/Ports/CorePorts.cs`
-- [X] T013 Configure EF Core entity mappings, concurrency token, approval uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
+- [X] T013 Configure EF Core entity mappings, concurrency token, per-request approval-stage uniqueness, operation uniqueness, grant uniqueness, and UTC timestamps in `src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs`
 - [X] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
 - [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
 - [X] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
@@ -54,9 +54,9 @@
 
 ## Phase 3: User Story 1 - Prepare and Submit a Safe Access Request (Priority: P1) MVP
 
-**Goal**: Let an authenticated requester turn natural-language intent into a schema-validated draft, validate it against current stored data, and submit version 1 without granting access.
+**Goal**: Let an authenticated requester turn natural-language intent into a schema-validated draft, validate it against current stored data, and submit an immutable request without granting access.
 
-**Independent Test**: Sign in as the requester, prepare the Client Alpha/`INC-1042` four-hour read-only example, review stable identifiers, submit it, and verify version 1 is `AwaitingBusinessApproval` with no approval, operation, or grant.
+**Independent Test**: Sign in as the requester, prepare the Client Alpha/`INC-1042` four-hour read-only example, review stable identifiers, submit it, and verify the immutable request is `AwaitingBusinessApproval` with no approval, operation, or grant.
 
 ### Tests for User Story 1
 
@@ -70,7 +70,7 @@
 
 - [X] T027 [P] [US1] Define draft interpretation records, completeness rules, and the provider-neutral interpretation port in `src/GovernedAccess.Core/Ports/RequestDrafting.cs`
 - [X] T028 [P] [US1] Implement stored-data request validation and normalized field results in `src/GovernedAccess.Core/Application/RequestValidator.cs`
-- [X] T029 [US1] Implement request creation, authenticated requester binding, version-1 submission, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
+- [X] T029 [US1] Implement immutable request creation, authenticated requester binding, direct submission to business approval, and creation/validation audit events in `src/GovernedAccess.Core/Application/RequestSubmissionService.cs`
 - [X] T030 [P] [US1] Implement the EF-backed `IRequestContextReader` in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs` and typed read-only handlers for the three MCP operations in `src/GovernedAccess.Mcp/RequestContextTools.cs`
 - [X] T031 [US1] Register a stateless Streamable HTTP `/mcp` server from `src/GovernedAccess.Mcp/McpRegistration.cs` with an explicit allowlist containing only the three contract tools, then compose it from `src/GovernedAccess.Web/Program.cs`
 - [X] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
@@ -87,19 +87,19 @@
 
 ## Phase 4: User Story 2 - Make the Correct Business Decision (Priority: P2)
 
-**Goal**: Resolve the configured client-specific business approver and bind an authenticated approve/reject decision to the exact request version and scope.
+**Goal**: Resolve the configured client-specific business approver and bind an authenticated approve/reject decision to the exact immutable request scope.
 
-**Independent Test**: Attempt a Client Alpha decision as the Beta approver, verify rejection and audit with no state change, then decide as the Alpha approver and verify the exact current request/version/role/duration evidence.
+**Independent Test**: Attempt a Client Alpha decision as the Beta approver, verify rejection and audit with no state change, then decide as the Alpha approver and verify the exact request ID/role/duration evidence.
 
 ### Tests for User Story 2
 
-- [ ] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs`
-- [ ] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, stale version, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
+- [X] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs`
+- [ ] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, duplicate/invalid transition, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
 - [ ] T041 [P] [US2] Add React tests for business decision visibility, approve/reject submission, and server rejection display in `src/GovernedAccess.Web/ClientApp/src/test/BusinessDecisionPanel.test.tsx`
 
 ### Implementation for User Story 2
 
-- [ ] T042 [P] [US2] Implement exact-version business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
+- [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
 - [ ] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
 - [ ] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Endpoints/BusinessDecisionEndpoints.cs`
 - [ ] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
@@ -137,56 +137,33 @@
 
 ---
 
-## Phase 6: User Story 4 - Protect Approvals from Material Edits (Priority: P4)
-
-**Goal**: Permit requester-owned material corrections while incrementing the business version, returning to `Draft`, and making prior decisions ineligible.
-
-**Independent Test**: Business-approve version 1, materially edit it as the requester, verify version 2 in `Draft` with retained but ineligible version-1 evidence, and confirm a version-1 action is rejected and audited.
-
-### Tests for User Story 4
-
-- [ ] T059 [P] [US4] Add unit tests for normalization, no-change behavior, every material field, one-step version increment, and prior-approval ineligibility in `tests/GovernedAccess.UnitTests/MaterialEditPolicyTests.cs`
-- [ ] T060 [P] [US4] Add integration tests for owner-only edit/resubmit, stale action, optimistic conflict, retained decisions, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Requests/EditRequestTests.cs`
-- [ ] T061 [P] [US4] Add React tests for editable states, version refresh, resubmission, no-change, and stale-conflict display in `src/GovernedAccess.Web/ClientApp/src/test/EditRequestPanel.test.tsx`
-
-### Implementation for User Story 4
-
-- [ ] T062 [P] [US4] Implement normalized material-change detection, editable-state rules, version increment, and `Draft` transition in `src/GovernedAccess.Core/Domain/MaterialEditPolicy.cs`
-- [ ] T063 [US4] Implement requester ownership, stored-data edit validation, optimistic concurrency, resubmission, and version-aware audit events in `src/GovernedAccess.Core/Application/RequestEditingService.cs`
-- [ ] T064 [US4] Implement `PUT /api/requests/{requestId}` and `POST /api/requests/{requestId}/submit` with expected-version enforcement in `src/GovernedAccess.Web/Endpoints/RequestEditingEndpoints.cs`
-- [ ] T065 [US4] Implement material edit, no-change, stale-version recovery, and resubmission controls in `src/GovernedAccess.Web/ClientApp/src/components/EditRequestPanel.tsx`
-
-**Checkpoint**: Earlier approvals remain visible as evidence but cannot authorize any materially changed version.
-
----
-
-## Phase 7: User Story 5 - Recover Safely and Review Evidence (Priority: P5)
+## Phase 6: User Story 4 - Recover Safely and Review Evidence (Priority: P4)
 
 **Goal**: Retry only failed provisioning with the same scope and operation identity, and let authorized participants review relevant requests and complete evidence.
 
 **Independent Test**: Simulate a lost provisioning response, retry as DevOps, verify the existing grant is returned with no duplicate across at least 100 concurrent attempts, and inspect complete correlated evidence as each authorized participant.
 
-### Tests for User Story 5
+### Tests for User Story 4
 
-- [ ] T066 [P] [US5] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and full revalidation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
-- [ ] T067 [P] [US5] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
-- [ ] T068 [P] [US5] Add API tests for participant-filtered lists, server-computed actions, complete detail evidence, logical expiry, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
-- [ ] T069 [P] [US5] Add React tests for request list actionability, retry, audit timeline, provisioning evidence, and logical expiry in `src/GovernedAccess.Web/ClientApp/src/test/RequestEvidencePages.test.tsx`
+- [ ] T066 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and full revalidation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
+- [ ] T067 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
+- [ ] T068 [P] [US4] Add API tests for participant-filtered lists, server-computed actions, complete immutable detail evidence, logical expiry, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
+- [ ] T069 [P] [US4] Add React tests for request list actionability, retry, audit timeline, provisioning evidence, and logical expiry in `src/GovernedAccess.Web/ClientApp/src/test/RequestEvidencePages.test.tsx`
 
-### Implementation for User Story 5
+### Implementation for User Story 4
 
-- [ ] T070 [US5] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
-- [ ] T071 [US5] Implement participant-filtered request list/detail projections, ordered versioned decisions, grant state, logical expiry, and available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
-- [ ] T072 [US5] Implement `GET /api/requests`, `GET /api/requests/{requestId}`, and `POST /api/requests/{requestId}/retry-provisioning` in `src/GovernedAccess.Web/Endpoints/RequestQueryAndRetryEndpoints.cs`
-- [ ] T073 [P] [US5] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
-- [ ] T074 [US5] Complete request detail rendering for validation, all decisions, provisioning outcome, grant expiry, retry, available actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
-- [ ] T075 [US5] Complete the three-route React application and demo identity selector in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
+- [ ] T070 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
+- [ ] T071 [US4] Implement participant-filtered request list/detail projections, ordered decisions, grant state, logical expiry, and available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
+- [ ] T072 [US4] Implement `GET /api/requests`, `GET /api/requests/{requestId}`, and `POST /api/requests/{requestId}/retry-provisioning` in `src/GovernedAccess.Web/Endpoints/RequestQueryAndRetryEndpoints.cs`
+- [ ] T073 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
+- [ ] T074 [US4] Complete immutable request detail rendering for validation, all decisions, provisioning outcome, grant expiry, retry, available actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [ ] T075 [US4] Complete the three-route React application and demo identity selector in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
 
 **Checkpoint**: Failed work is safely recoverable, concurrent duplicates converge on one grant, and authorized users can understand all material evidence.
 
 ---
 
-## Phase 8: Polish & Cross-Cutting Concerns
+## Phase 7: Polish & Cross-Cutting Concerns
 
 **Purpose**: Validate security, build shape, observability, and the complete local demonstration across all stories.
 
@@ -208,17 +185,14 @@
 - **US1 (Phase 3)** starts after Foundational and is the MVP.
 - **US2 (Phase 4)** starts after Foundational but needs a submitted request fixture supplied by US1 for its end-to-end demonstration.
 - **US3 (Phase 5)** depends on US2 because DevOps authorization requires a valid current business approval.
-- **US4 (Phase 6)** starts after US2 because its independent scenario edits a business-approved request; its edit policy can be developed after Foundational.
-- **US5 (Phase 7)** depends on US3 for a durable failed provisioning operation and grant identity; list/detail query work can begin after Foundational.
-- **Polish (Phase 8)** follows all stories selected for delivery.
+- **US4 (Phase 6)** depends on US3 for a durable failed provisioning operation and grant identity; list/detail query work can begin after Foundational.
+- **Polish (Phase 7)** follows all stories selected for delivery.
 
 ### User Story Dependency Graph
 
 ```text
-Setup -> Foundational -> US1 -> US2 -> US3 -> US5
-                         |      |
-                         |      +----> US4
-                         +-----------> query portions of US5
+Setup -> Foundational -> US1 -> US2 -> US3 -> US4
+                         +-----------> query portions of US4
 ```
 
 ### Within Each User Story
@@ -235,7 +209,7 @@ Setup -> Foundational -> US1 -> US2 -> US3 -> US5
 - In Foundational, T008-T011, T015, and T016 use separate files; persistence wiring follows the shared entities.
 - All test tasks at the start of each story are parallelizable because they occupy separate test files.
 - Core policy, adapter, and React component tasks marked `[P]` can proceed concurrently once their shared contracts exist.
-- After US2, US3 and US4 can proceed in parallel; US5 query projections can proceed while provisioning behavior is completed.
+- US4 query projections can proceed while US3 provisioning behavior is completed.
 
 ## Parallel Example: User Story 1
 
@@ -262,12 +236,6 @@ T051 DevOpsDecisionPolicy.cs | T052 Provisioning.cs | T054 SyntheticAccessProvis
 ## Parallel Example: User Story 4
 
 ```text
-T059 MaterialEditPolicyTests.cs | T060 EditRequestTests.cs | T061 EditRequestPanel.test.tsx
-```
-
-## Parallel Example: User Story 5
-
-```text
 T066 RetryProvisioningTests.cs | T067 ProvisioningIdempotencyTests.cs | T068 RequestQueriesTests.cs | T069 RequestEvidencePages.test.tsx
 T073 RequestListPage.tsx can proceed while T070 ProvisioningRetryService.cs is implemented
 ```
@@ -285,9 +253,8 @@ T073 RequestListPage.tsx can proceed while T070 ProvisioningRetryService.cs is i
 
 1. Add US2 to establish the client-isolated business authorization boundary.
 2. Add US3 to complete two-human approval and immediate protected provisioning.
-3. Add US4 to prove that material edits invalidate earlier authority.
-4. Add US5 to prove recovery, concurrency idempotency, and inspectable evidence.
-5. Complete cross-cutting security, logging, hosting, and quickstart validation.
+3. Add US4 to prove recovery, concurrency idempotency, and inspectable evidence.
+4. Complete cross-cutting security, logging, hosting, and quickstart validation.
 
 ### Scope Guardrails
 

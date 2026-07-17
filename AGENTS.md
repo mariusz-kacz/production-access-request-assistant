@@ -41,8 +41,8 @@ Product baseline:
 - Browser-submitted identities, roles, and authorization claims are not trusted.
 - The requester cannot choose the business approver.
 - State-changing actions require deterministic validation and authorization.
-- Approval applies to a specific request ID and request version.
-- A material request edit increments the version and invalidates prior approvals.
+- Approval applies to a specific immutable request ID and approved scope.
+- A submitted request is read-only; corrections require a new request and new approvals.
 - Access to one client environment never authorizes another.
 - DevOps must not change the business-approved role.
 - DevOps may reduce duration but must not increase it.
@@ -86,7 +86,7 @@ Additional MCP tools are outside the current baseline.
 - Use a deterministic fake chat client.
 - Domain rules require unit tests.
 - MCP contracts and interactions require integration tests.
-- Authorization, request-version, stale-state, and idempotency rules require tests.
+- Authorization, immutable-scope, invalid-transition, and idempotency rules require tests.
 - Malformed model output and MCP failure or timeout require tests.
 - Negative scenarios are first-class tests.
 - Exhaustive UI and enterprise-scale load testing are not required.

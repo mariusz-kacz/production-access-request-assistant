@@ -11,9 +11,9 @@ API or provisioning API.
 - React obtains an antiforgery token and sends `X-XSRF-TOKEN` on every unsafe method.
 - All asynchronous handlers propagate `HttpContext.RequestAborted`.
 - Expected errors use `application/problem+json` with `status`, `title`, safe `detail`,
-  stable `code`, `correlationId`, optional `fieldErrors`, and optional `currentVersion`.
-- `401` is unauthenticated; `403` unauthorized; `404` absent/not visible; `409` stale
-  version, transition, or concurrency conflict; `422` validation; `503` bounded
+  stable `code`, `correlationId`, and optional `fieldErrors`.
+- `401` is unauthenticated; `403` unauthorized; `404` absent/not visible; `409`
+  transition or concurrency conflict; `422` validation; `503` bounded
   dependency failure where retry is safe.
 
 ## Session and security
@@ -53,45 +53,35 @@ or grant.
 
 Requester only. Body: `{ clientId, environmentId, requestedRole, durationMinutes,
 justification, incidentId? }`. On stored-data validation success returns `201` with
-`{ requestId, version: 1, status: "AwaitingBusinessApproval", correlationId }`.
+`{ requestId, status: "AwaitingBusinessApproval", correlationId }`.
 
 ### `GET /api/requests`
 
 Authenticated. Returns `{ items: [{ requestId, clientId, environmentId, requesterId,
-version, status, lastModifiedAt, actionable }] }`. Server filtering and `actionable`
+status, lastModifiedAt, actionable }] }`. Server filtering and `actionable`
 are based on the authenticated actor. Optional status filters cannot expand visibility.
 
 ### `GET /api/requests/{requestId}`
 
-Authorized participants only. Returns request/current validation, all versioned
+Authorized participants only. Returns immutable request/current validation, all
 decisions, provisioning outcome, grant/activation/expiry/logical expiry, ordered audit
 events, and server-computed available actions.
 
-### `PUT /api/requests/{requestId}`
-
-Owning requester only. Body: `{ expectedVersion, clientId, environmentId,
-requestedRole, durationMinutes, justification, incidentId? }`. A material change
-returns the incremented version in `Draft`; normalized no-change returns `NoChange`.
-Stale actions return `409`. Prior decisions remain visible but ineligible.
-
-### `POST /api/requests/{requestId}/submit`
-
-Owning requester only. Body: `{ expectedVersion }`. Revalidates an edited `Draft` and
-returns the same version in `AwaitingBusinessApproval`. Initial creation submits via
-`POST /api/requests`.
+Submitted requests have no edit or resubmit endpoint. A correction is created through
+`POST /api/requests` and receives a new request ID.
 
 ## Human decisions
 
 ### `POST /api/requests/{requestId}/business-decisions`
 
-Body: `{ expectedVersion, decision: "Approve" | "Reject", comment? }`. The server
+Body: `{ decision: "Approve" | "Reject", comment? }`. The server
 loads approver responsibility and request scope. Approval returns
 `AwaitingDevOpsApproval`; rejection returns `Rejected`. Approver, role, and duration
 fields are not accepted.
 
 ### `POST /api/requests/{requestId}/devops-decisions`
 
-Body: `{ expectedVersion, decision: "Approve" | "Reject",
+Body: `{ decision: "Approve" | "Reject",
 approvedDurationMinutes?, comment? }`. Role, client, and environment are not accepted.
 Approval validates the exact loaded role and duration ceiling, then immediately calls
 protected provisioning. It returns `Active` with the grant or `ProvisioningFailed`
@@ -99,7 +89,7 @@ with a safe outcome. Rejection returns `Rejected`.
 
 ### `POST /api/requests/{requestId}/retry-provisioning`
 
-Body: `{ expectedVersion }` only. DevOps-only and valid only in
+No request body. DevOps-only and valid only in
 `ProvisioningFailed`. The server reloads stored scope/operation identity, repeats full
 revalidation, and returns the single grant on success. There is no initial or generic
 browser provisioning endpoint.
@@ -110,7 +100,7 @@ browser provisioning endpoint.
 |---|---|
 | `/requests` | session, request list, demo session switch |
 | `/requests/new` | prepare draft, create request |
-| `/requests/:requestId` | detail, edit/resubmit, human decisions, retry |
+| `/requests/:requestId` | immutable detail, human decisions, retry |
 
 SPA fallback handles only UI routes. `/api/*` and `/mcp` never fall back to
 `index.html`.

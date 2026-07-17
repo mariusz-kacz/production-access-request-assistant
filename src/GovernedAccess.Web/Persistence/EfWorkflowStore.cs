@@ -70,14 +70,12 @@ internal sealed class EfWorkflowStore(GovernedAccessDbContext dbContext) : IWork
 
     public Task<ApplicationResult<ApprovalDecision>> GetApprovalDecisionAsync(
         Guid requestId,
-        int requestVersion,
         ApprovalStage stage,
         CancellationToken cancellationToken)
     {
         return FindAsync(
             dbContext.ApprovalDecisions.Where(decision =>
                 decision.RequestId == requestId
-                && decision.RequestVersion == requestVersion
                 && decision.Stage == stage),
             "approval_decision_not_found",
             "The approval decision was not found.",
@@ -142,13 +140,11 @@ internal sealed class EfWorkflowStore(GovernedAccessDbContext dbContext) : IWork
 
     public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
         Guid requestId,
-        int requestVersion,
         CancellationToken cancellationToken)
     {
         return FindAsync(
             dbContext.ProvisioningOperations.Where(operation =>
-                operation.RequestId == requestId
-                && operation.RequestVersion == requestVersion),
+                operation.RequestId == requestId),
             "provisioning_operation_not_found",
             "The provisioning operation was not found.",
             cancellationToken);
@@ -173,13 +169,10 @@ internal sealed class EfWorkflowStore(GovernedAccessDbContext dbContext) : IWork
 
     public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
         Guid requestId,
-        int requestVersion,
         CancellationToken cancellationToken)
     {
         return FindAsync(
-            dbContext.AccessGrants.Where(grant =>
-                grant.RequestId == requestId
-                && grant.RequestVersion == requestVersion),
+            dbContext.AccessGrants.Where(grant => grant.RequestId == requestId),
             "access_grant_not_found",
             "The access grant was not found.",
             cancellationToken);

@@ -82,7 +82,6 @@ public static class RequestPreparationEndpoints
                 $"/api/requests/{submitted.Request.Id:D}",
                 new CreateAccessRequestResponse(
                     submitted.Request.Id,
-                    submitted.Request.Version,
                     submitted.Request.Status.ToString(),
                     submitted.Request.CorrelationId)),
             RequestSubmissionValidationRejected rejected =>
@@ -126,6 +125,5 @@ public sealed record CreateAccessRequestRequest(
 
 public sealed record CreateAccessRequestResponse(
     Guid RequestId,
-    int Version,
     string Status,
     string CorrelationId);

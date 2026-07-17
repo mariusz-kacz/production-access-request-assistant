@@ -57,7 +57,6 @@ export interface CreateAccessRequestRequest {
 
 export interface CreateAccessRequestResponse {
   requestId: string;
-  version: 1;
   status: "AwaitingBusinessApproval";
   correlationId: string;
 }
@@ -79,7 +78,6 @@ export type PrincipalKind =
 
 export type SessionCapability =
   | "createRequest"
-  | "editOwnRequests"
   | "decideBusinessRequests"
   | "decideDevOpsRequests"
   | "retryProvisioning";
@@ -121,5 +119,4 @@ export interface ApiProblemDetails {
   code: string;
   correlationId?: string;
   fieldErrors?: ApiFieldError[];
-  currentVersion?: number;
 }

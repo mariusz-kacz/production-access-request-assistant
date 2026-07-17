@@ -5,11 +5,11 @@
 - Stable identifiers are case-sensitive canonical strings except UUID identifiers,
   which use standard lowercase text at external boundaries.
 - `Instant` below is persisted as UTC `DateTimeOffset`.
-- Request `Version` is business approval scope. `PersistenceVersion` is a separate
-  application-managed optimistic-concurrency integer and is never accepted as
-  authorization evidence.
-- Approvals and audit events are retained as evidence; invalidation means they no
-  longer authorize a newer request version, not that rows are deleted.
+- Submitted request fields are immutable. `PersistenceVersion` is an
+  application-managed optimistic-concurrency integer used only to detect competing
+  workflow transitions and is never accepted as authorization evidence.
+- Approvals and audit events are retained as evidence. A corrected request is a new
+  row with a new request ID rather than a mutation of the original request.
 
 ## Request context
 
@@ -80,15 +80,14 @@ DevOps approver. It is never updated by protected browser actions.
 | `RequestedDurationMinutes` | int | Required, positive, within environment maximum; material. |
 | `Justification` | string | Required, trimmed, 10-2000 chars; material. |
 | `IncidentId` | string? | Optional; material and must be active/associated when supplied. |
-| `Version` | int | Starts at 1; increments exactly once per accepted material edit. |
-| `Status` | `RequestStatus` | Required state enum. |
+| `Status` | `RequestStatus` | Starts at `AwaitingBusinessApproval`; required state enum. |
 | `CreatedAt` | Instant | Server time. |
 | `LastModifiedAt` | Instant | Server time; not before creation. |
 | `CorrelationId` | string | Required originating correlation ID. |
 | `PersistenceVersion` | long | Starts at 1; incremented on mutation; EF concurrency token. |
 
 Relationships: many approval decisions and audit events; at most one provisioning
-operation and access grant per request version/approved scope.
+operation and access grant per immutable request.
 
 Validation never relies solely on foreign keys: the environment-role assignment,
 duration maximum, and incident status/association are checked by the
@@ -100,7 +99,6 @@ application at submission and again during provisioning.
 |---|---|---|
 | `Id` | UUID | Primary ID. |
 | `RequestId` | UUID | Required FK. |
-| `RequestVersion` | int | Exact version acted on. |
 | `Stage` | Business or DevOps | Required. |
 | `Decision` | Approved or Rejected | Required. |
 | `ApproverId` | string | From authenticated server context. |
@@ -110,7 +108,7 @@ application at submission and again during provisioning.
 | `DecidedAt` | Instant | Server time. |
 | `CorrelationId` | string | Required. |
 
-Unique constraint: `(RequestId, RequestVersion, Stage)`. A business approval duration
+Unique constraint: `(RequestId, Stage)`. A business approval duration
 equals the requested duration. DevOps approval duration is positive and no greater
 than business approval; its role must be identical. Rejections do not carry an
 approved scope.
@@ -121,7 +119,6 @@ approved scope.
 |---|---|---|
 | `Id` | string | SHA-256 operation identity; primary key. |
 | `RequestId` | UUID | Required. |
-| `RequestVersion` | int | Required. |
 | `EnvironmentId` | string | Canonical approved value. |
 | `RoleId` | string | Exact approved role. |
 | `DurationMinutes` | int | Exact DevOps-approved duration. |
@@ -131,7 +128,7 @@ approved scope.
 | `CreatedAt` | Instant | Server time. |
 | `LastAttemptAt` | Instant | Server time. |
 
-Unique constraint: `(RequestId, RequestVersion)`. Retry cannot alter canonical scope.
+Unique constraint: `RequestId`. Retry cannot alter canonical scope.
 
 ### AccessGrant
 
@@ -140,7 +137,6 @@ Unique constraint: `(RequestId, RequestVersion)`. Retry cannot alter canonical s
 | `Id` | UUID | Stable provider result. |
 | `OperationId` | string | Unique FK to provisioning operation. |
 | `RequestId` | UUID | Required. |
-| `RequestVersion` | int | Exact approved version. |
 | `RequesterId` | string | Reloaded from request. |
 | `EnvironmentId` | string | Reloaded and revalidated. |
 | `RoleId` | string | Exact approved role. |
@@ -160,7 +156,6 @@ duplicate grants.
 |---|---|---|
 | `Id` | UUID | Primary ID. |
 | `RequestId` | UUID | Required. |
-| `RequestVersion` | int | Version relevant to the event/attempt. |
 | `EventType` | enum/string | One of the required event types below. |
 | `ActorId` | string? | Authenticated actor when applicable. |
 | `OccurredAt` | Instant | Server time. |
@@ -169,24 +164,24 @@ duplicate grants.
 | `DetailsJson` | JSON object | Allowlisted metadata only; no prompt, secret, or full MCP payload. |
 
 Rows are insert-only in application services. Required event types: request created,
-material edit, validation failed, business decision, DevOps decision, authorization
-rejected, stale version rejected, provisioning attempted, provisioning succeeded,
+validation failed, business decision, DevOps decision, authorization rejected,
+invalid transition rejected, provisioning attempted, provisioning succeeded,
 provisioning failed, and duplicate retry returned.
 
 ## Request state transitions
 
 | Current | Command/outcome | Next | Preconditions |
 |---|---|---|---|
-| `Draft` | Submit | `AwaitingBusinessApproval` | Requester owns request; current stored-data validation succeeds. |
-| `AwaitingBusinessApproval` | Business approve | `AwaitingDevOpsApproval` | Correct environment-resolved approver; exact current version. |
-| `AwaitingBusinessApproval` | Business reject | `Rejected` | Correct approver; exact current version. |
+| `AwaitingBusinessApproval` | Business approve | `AwaitingDevOpsApproval` | Correct environment-resolved approver; no prior business decision. |
+| `AwaitingBusinessApproval` | Business reject | `Rejected` | Correct approver; no prior business decision. |
 | `AwaitingDevOpsApproval` | DevOps reject | `Rejected` | Authenticated DevOps; valid current business approval. |
 | `AwaitingDevOpsApproval` | DevOps approve + provision succeeds | `Active` | Exact role; permitted duration; full protected revalidation succeeds. |
 | `AwaitingDevOpsApproval` | DevOps approve + recoverable provision failure | `ProvisioningFailed` | Decision persisted; no false success. |
-| `ProvisioningFailed` | DevOps retry succeeds | `Active` | Same version/scope/operation; full revalidation. |
+| `ProvisioningFailed` | DevOps retry succeeds | `Active` | Same request/scope/operation; full revalidation. |
 | `ProvisioningFailed` | DevOps retry fails | `ProvisioningFailed` | Same constraints; attempt audited. |
-| Any editable non-`Active` state | Accepted material edit | `Draft` | Requester owns request; normalized material value changed; version increments. |
 
-`Active` and `Rejected` are terminal for this feature. Unauthorized, stale-version,
-invalid-transition, concurrency-conflict, or failed-validation attempts leave the
-protected state unchanged and append appropriate evidence when a request exists.
+Request creation enters `AwaitingBusinessApproval` only after current stored-data
+validation succeeds. Submitted request fields never change. `Active` and `Rejected`
+are terminal for this feature. Unauthorized, invalid-transition, concurrency-conflict,
+or failed-validation attempts leave protected state unchanged and append appropriate
+evidence when a request exists.

@@ -50,7 +50,7 @@ rejected without protected state change.
 3. Prepare the draft, review the stable IDs, then submit.
 
 Expected: `PROD-ALPHA-EU`, `ProductionReadOnly`, 240 minutes, and `INC-1042` are
-shown; stored-data validation succeeds; request version 1 enters
+shown; stored-data validation succeeds; an immutable request enters
 `AwaitingBusinessApproval`; no approval or grant exists.
 
 Repeat with deterministic fake modes for incomplete output, malformed JSON, MCP
@@ -60,12 +60,12 @@ advertises exactly the three tools in [contracts/mcp-tools.json](contracts/mcp-t
 
 ## Scenario 2: client-isolated business approval
 
-1. Open the version-1 Alpha request as the Client Beta business approver and attempt
+1. Open the Alpha request as the Client Beta business approver and attempt
    approval.
 2. Reopen it as the Client Alpha business approver and approve.
 
 Expected: Beta is rejected and audited without state change. Alpha approval binds the
-exact request/version/role/duration and moves the request to
+exact request ID, role, and duration and moves the request to
 `AwaitingDevOpsApproval`.
 
 ## Scenario 3: DevOps approval and independent provisioning
@@ -74,19 +74,20 @@ exact request/version/role/duration and moves the request to
 2. Approve `240` minutes.
 
 Expected: the handler reloads request and approvals, revalidates current environment,
-role, incident, version, and scope, creates one synthetic grant, and moves the request
+role, incident, and scope, creates one synthetic grant, and moves the request
 to `Active`. The detail page shows activation, expiry, operation identity, and audit
 events. A duration increase and any role-changing crafted request are rejected without
 grant creation.
 
-## Scenario 4: stale approval after material edit
+## Scenario 4: correction creates a new immutable request
 
-1. Create another request and obtain business approval for version 1.
-2. As requester, materially edit justification or duration.
-3. Attempt a decision using version 1.
+1. Create another request and obtain business approval.
+2. As requester, discover that its justification or duration is incorrect.
+3. Prepare and submit a corrected request.
 
-Expected: edit creates version 2 in `Draft`; version-1 approval remains visible but is
-ineligible; stale action is rejected/audited; new submission requires both approvals.
+Expected: the original request and its approval evidence remain unchanged. The
+corrected submission receives a new request ID, enters `AwaitingBusinessApproval`, and
+requires both approvals.
 
 ## Scenario 5: lost response and duplicate retry
 
@@ -104,7 +105,7 @@ retry from any other state are rejected.
 
 | Area | Required checks |
 |---|---|
-| Domain | State transitions, exact role, duration ceiling, material versioning, stale version, logical expiry. |
+| Domain | Immutable submitted scope, state transitions, exact role, duration ceiling, duplicate-stage prevention, logical expiry. |
 | Authorization | Server-context actor, wrong-client approver, unauthorized DevOps, requester cannot choose approver. |
 | AI adapter | Valid/incomplete/malformed schema, deterministic fake, timeout, cancellation, no live model. |
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |

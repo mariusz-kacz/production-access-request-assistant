@@ -193,7 +193,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.HasIndex(decision => new
             {
                 decision.RequestId,
-                decision.RequestVersion,
                 decision.Stage,
             })
             .IsUnique();
@@ -221,8 +220,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.Property(operation => operation.RoleId).HasMaxLength(IdentifierLength);
         entity.Property(operation => operation.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(operation => operation.LastOutcomeCode).HasMaxLength(OutcomeCodeLength);
-        entity.HasIndex(operation => new { operation.RequestId, operation.RequestVersion })
-            .IsUnique();
+        entity.HasIndex(operation => operation.RequestId).IsUnique();
 
         ConfigureUtcTimestamp(entity.Property(operation => operation.CreatedAt));
         ConfigureUtcTimestamp(entity.Property(operation => operation.LastAttemptAt));
@@ -254,7 +252,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.Property(grant => grant.Outcome).HasConversion<string>().HasMaxLength(16);
         entity.Property(grant => grant.CorrelationId).HasMaxLength(CorrelationIdLength);
         entity.HasIndex(grant => grant.OperationId).IsUnique();
-        entity.HasIndex(grant => new { grant.RequestId, grant.RequestVersion }).IsUnique();
+        entity.HasIndex(grant => grant.RequestId).IsUnique();
 
         ConfigureUtcTimestamp(entity.Property(grant => grant.ActivatedAt));
         ConfigureUtcTimestamp(entity.Property(grant => grant.ExpiresAt));

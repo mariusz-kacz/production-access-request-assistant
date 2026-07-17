@@ -41,9 +41,6 @@ export class ApiError extends Error {
     return this.problem.fieldErrors;
   }
 
-  get currentVersion(): number | undefined {
-    return this.problem.currentVersion;
-  }
 }
 
 export type ApiRequestOptions<TBody = unknown> = Omit<
@@ -172,7 +169,6 @@ async function mapProblemDetails(response: Response): Promise<ApiProblemDetails>
     response.headers.get("X-Correlation-ID") ??
     undefined;
   const fieldErrors = readFieldErrors(problem.fieldErrors);
-  const currentVersion = readInteger(problem.currentVersion);
 
   return {
     status,
@@ -181,7 +177,6 @@ async function mapProblemDetails(response: Response): Promise<ApiProblemDetails>
     code,
     ...(correlationId === undefined ? {} : { correlationId }),
     ...(fieldErrors === undefined ? {} : { fieldErrors }),
-    ...(currentVersion === undefined ? {} : { currentVersion }),
   };
 }
 
@@ -216,8 +211,4 @@ function readString(value: unknown): string | undefined {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function readInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
 }

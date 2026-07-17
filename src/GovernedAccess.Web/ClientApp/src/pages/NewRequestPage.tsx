@@ -450,9 +450,9 @@ export function NewRequestPage() {
         <section className="submission-success" aria-labelledby="request-created-title">
           <h2 id="request-created-title">Request submitted</h2>
           <p>
-            Request <strong>{createdRequest.requestId}</strong> is version {" "}
-            {createdRequest.version} and is awaiting business approval. No access
-            has been granted.
+            Request <strong>{createdRequest.requestId}</strong> is immutable and is
+            awaiting business approval. No access has been granted. Submit a new
+            request if this scope needs correction.
           </p>
           <p>Correlation ID: {createdRequest.correlationId}</p>
           <p>

@@ -33,7 +33,7 @@ public sealed class CreateRequestTests
         using var responseBody = await ReadJsonAsync(response, cancellationToken);
         var requestId = responseBody.RootElement.GetProperty("requestId").GetGuid();
         Assert.NotEqual(Guid.Empty, requestId);
-        Assert.Equal(1, responseBody.RootElement.GetProperty("version").GetInt32());
+        Assert.False(responseBody.RootElement.TryGetProperty("version", out _));
         Assert.Equal(
             "AwaitingBusinessApproval",
             responseBody.RootElement.GetProperty("status").GetString());
@@ -54,7 +54,6 @@ public sealed class CreateRequestTests
         Assert.Equal(240, storedRequest.RequestedDurationMinutes);
         Assert.Equal("Investigate the active production incident.", storedRequest.Justification);
         Assert.Equal(DemoDataIds.PrimaryIncidentId, storedRequest.IncidentId);
-        Assert.Equal(1, storedRequest.Version);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, storedRequest.Status);
         Assert.Equal(GovernedAccessWebFactory.DefaultUtcNow, storedRequest.CreatedAt);
         Assert.Equal(GovernedAccessWebFactory.DefaultUtcNow, storedRequest.LastModifiedAt);

@@ -131,12 +131,12 @@ Sources: [MCP C# transports](https://csharp.sdk.modelcontextprotocol.io/concepts
 **Decision**: Use EF Core 10 with one local SQLite database. Persist mutable workflow
 records and insert-only audit records in ordinary tables. Use an application-managed
 integer `PersistenceVersion` concurrency token on requests, unique constraints for
-approval stage/version and operation/grant identity, and short transactions around
+approval stage per request and operation/grant identity, and short transactions around
 each state transition.
 
 **Rationale**: SQLite is proportionate local persistence and can exercise relational
 constraints in integration tests. EF optimistic concurrency rejects races without
-conflating storage concurrency with the business request version. A single
+exposing storage concurrency as business authorization evidence. A single
 `SaveChanges` is atomic when sufficient; explicit short transactions cover multi-step
 state/evidence updates.
 
@@ -181,36 +181,40 @@ immediate); letting the browser provision separately (creates a forbidden author
 
 ## Idempotency identity
 
-**Decision**: Derive a canonical operation identity from request ID, request version,
-environment ID, exact approved role, and DevOps-approved duration using length-prefixed
+**Decision**: Derive a canonical operation identity from request ID, environment ID,
+exact approved role, and DevOps-approved duration using length-prefixed
 UTF-8 components and SHA-256. Store the printable digest and enforce uniqueness.
 
 **Rationale**: The identity is deterministic, stable across retries, and bound to all
 approved scope that affects the grant. Length-prefixing prevents ambiguous
-concatenation. Request version changes necessarily produce a different operation.
+concatenation. Because submitted requests are immutable, the request ID uniquely binds
+the approved request scope.
 
 **Alternatives considered**: Random key generated on every attempt (breaks retry);
-request ID alone (does not bind version/scope); browser-supplied key (untrusted).
+request ID alone without approved scope components (weaker diagnostic binding);
+browser-supplied key (untrusted).
 
-## Material edits
+## Submitted-request immutability
 
 **Decision**: Client, environment, requested role, requested duration, justification,
-and incident association are material. Any changed normalized value increments request
-`Version`, returns the request to `Draft`, and leaves older approvals stored but
-ineligible. No other editable business fields are planned.
+incident association, and requester identity are immutable after submission. Draft
+values remain correctable before submission. A post-submission correction creates a
+new request ID and requires both approvals again; the original request and evidence
+remain unchanged.
 
-**Rationale**: This exactly follows FR-028 and ensures a purpose or scope change gets
-new validation and both approvals.
+**Rationale**: Immutability removes business request versioning and its stale-approval
+paths while ensuring every changed purpose or scope receives validation and both
+approvals under a distinct request ID.
 
-**Alternatives considered**: Treat justification as non-material (contradicts the
-specified business-purpose review); delete old approvals (loses audit evidence).
+**Alternatives considered**: Editable submitted requests with version-bound approvals
+(more workflow and UI complexity); replacing the original row (destroys evidence).
 
 ## Timeouts, outcomes, and observability
 
 **Decision**: Configure 30 seconds for model extraction, 5 seconds per MCP operation,
 and 10 seconds for synthetic provisioning. Link timeout cancellation with caller and
 host-shutdown tokens. Map validation, malformed output, not-found, unavailable,
-timeout, cancellation, authorization, stale version, concurrency, and provider failure
+timeout, cancellation, authorization, invalid transition, concurrency, and provider failure
 to explicit typed outcomes. Log correlation ID, operation/tool name, actor when
 applicable, duration, and outcome only.
 

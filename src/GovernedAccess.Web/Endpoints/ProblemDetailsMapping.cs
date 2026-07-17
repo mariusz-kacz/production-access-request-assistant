@@ -25,11 +25,6 @@ public static class ProblemDetailsMapping
         problem.Extensions["code"] = failure.Code;
         problem.Extensions["correlationId"] = GetCorrelationId(context);
 
-        if (failure.CurrentVersion is int currentVersion)
-        {
-            problem.Extensions["currentVersion"] = currentVersion;
-        }
-
         return TypedResults.Problem(problem);
     }
 
@@ -78,8 +73,6 @@ public static class ProblemDetailsMapping
                 (StatusCodes.Status401Unauthorized, "Authentication required."),
             ApplicationFailureKind.Unauthorized =>
                 (StatusCodes.Status403Forbidden, "Access denied."),
-            ApplicationFailureKind.StaleVersion =>
-                (StatusCodes.Status409Conflict, "Request version is stale."),
             ApplicationFailureKind.InvalidTransition =>
                 (StatusCodes.Status409Conflict, "Workflow transition is invalid."),
             ApplicationFailureKind.ConcurrencyConflict =>
