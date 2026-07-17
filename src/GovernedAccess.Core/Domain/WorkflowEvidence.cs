@@ -69,6 +69,75 @@ public sealed record RequestCreatedAuditDetails
     public RequestStatus Status { get; }
 }
 
+public sealed record BusinessDecisionAuditDetails
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public BusinessDecisionAuditDetails(
+        ApprovalDecision decision,
+        RequestStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (decision.Stage != ApprovalStage.Business)
+        {
+            throw new ArgumentException(
+                "Business decision audit details require a business-stage decision.",
+                nameof(decision));
+        }
+
+        var expectedStatus = decision.Decision == ApprovalOutcome.Approved
+            ? RequestStatus.AwaitingDevOpsApproval
+            : RequestStatus.Rejected;
+        if (status != expectedStatus)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "The audit status must match the business decision outcome.");
+        }
+
+        SchemaVersion = CurrentSchemaVersion;
+        Decision = decision.Decision;
+        Status = status;
+        ApprovedRoleId = decision.ApprovedRoleId;
+        ApprovedDurationMinutes = decision.ApprovedDurationMinutes;
+    }
+
+    public int SchemaVersion { get; }
+
+    public ApprovalOutcome Decision { get; }
+
+    public RequestStatus Status { get; }
+
+    public string? ApprovedRoleId { get; }
+
+    public int? ApprovedDurationMinutes { get; }
+}
+
+public sealed record DecisionAttemptRejectedAuditDetails
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public DecisionAttemptRejectedAuditDetails(
+        ApprovalStage stage,
+        RequestStatus status)
+    {
+        WorkflowEvidenceValidation.EnsureDefined(stage, nameof(stage));
+        WorkflowEvidenceValidation.EnsureDefined(status, nameof(status));
+
+        SchemaVersion = CurrentSchemaVersion;
+        Stage = stage;
+        Status = status;
+    }
+
+    public int SchemaVersion { get; }
+
+    public ApprovalStage Stage { get; }
+
+    public RequestStatus Status { get; }
+}
+
 public sealed class ApprovalDecision
 {
     public const int MaximumCommentLength = 1000;
@@ -289,7 +358,12 @@ public sealed class AuditEvent
     private static readonly JsonSerializerOptions DetailsSerializerOptions = new(
         JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter<RequestStatus>() },
+        Converters =
+        {
+            new JsonStringEnumConverter<RequestStatus>(),
+            new JsonStringEnumConverter<ApprovalStage>(),
+            new JsonStringEnumConverter<ApprovalOutcome>(),
+        },
     };
 
     private AuditEvent(
@@ -343,6 +417,110 @@ public sealed class AuditEvent
             request.CreatedAt,
             request.CorrelationId,
             "request_created",
+            JsonSerializer.Serialize(details, DetailsSerializerOptions));
+    }
+
+    public static AuditEvent CreateBusinessDecision(
+        Guid id,
+        AccessRequest request,
+        ApprovalDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (decision.RequestId != request.Id)
+        {
+            throw new ArgumentException(
+                "The decision must belong to the audited request.",
+                nameof(decision));
+        }
+
+        var details = new BusinessDecisionAuditDetails(decision, request.Status);
+        var outcomeCode = decision.Decision == ApprovalOutcome.Approved
+            ? "business_decision_approved"
+            : "business_decision_rejected";
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            AuditEventType.BusinessDecision,
+            decision.ApproverId,
+            decision.DecidedAt,
+            decision.CorrelationId,
+            outcomeCode,
+            JsonSerializer.Serialize(details, DetailsSerializerOptions));
+    }
+
+    public static AuditEvent CreateAuthorizationRejected(
+        Guid id,
+        AccessRequest request,
+        ApprovalStage stage,
+        string actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
+        string outcomeCode)
+    {
+        return CreateRejectedDecisionAttempt(
+            id,
+            request,
+            AuditEventType.AuthorizationRejected,
+            stage,
+            actorId,
+            occurredAt,
+            correlationId,
+            outcomeCode);
+    }
+
+    public static AuditEvent CreateInvalidTransitionRejected(
+        Guid id,
+        AccessRequest request,
+        ApprovalStage stage,
+        string actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
+        string outcomeCode)
+    {
+        return CreateRejectedDecisionAttempt(
+            id,
+            request,
+            AuditEventType.InvalidTransitionRejected,
+            stage,
+            actorId,
+            occurredAt,
+            correlationId,
+            outcomeCode);
+    }
+
+    private static AuditEvent CreateRejectedDecisionAttempt(
+        Guid id,
+        AccessRequest request,
+        AuditEventType eventType,
+        ApprovalStage stage,
+        string actorId,
+        DateTimeOffset occurredAt,
+        string correlationId,
+        string outcomeCode)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (eventType is not AuditEventType.AuthorizationRejected
+            and not AuditEventType.InvalidTransitionRejected)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(eventType),
+                eventType,
+                "The event type is not a rejected decision attempt.");
+        }
+
+        var details = new DecisionAttemptRejectedAuditDetails(stage, request.Status);
+        return new AuditEvent(
+            id,
+            request.Id,
+            eventType,
+            actorId,
+            occurredAt,
+            correlationId,
+            outcomeCode,
             JsonSerializer.Serialize(details, DetailsSerializerOptions));
     }
 

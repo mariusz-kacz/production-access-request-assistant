@@ -94,13 +94,12 @@
 ### Tests for User Story 2
 
 - [X] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs`
-- [ ] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, duplicate/invalid transition, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
-- [ ] T041 [P] [US2] Add React tests for business decision visibility, approve/reject submission, and server rejection display in `src/GovernedAccess.Web/ClientApp/src/test/BusinessDecisionPanel.test.tsx`
+- [X] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, duplicate/invalid transition, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
 
 ### Implementation for User Story 2
 
 - [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
-- [ ] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
+- [X] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
 - [ ] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Endpoints/BusinessDecisionEndpoints.cs`
 - [ ] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
 - [ ] T046 [US2] Integrate the business decision panel and refreshed request status into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
