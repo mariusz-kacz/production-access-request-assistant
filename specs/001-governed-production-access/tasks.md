@@ -130,8 +130,8 @@
 ### Tests for User Story 3
 
 - [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [ ] T055 [P] [US3] Add protected handler tests for current-state reload, current environment/role/incident revalidation, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
-- [ ] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope/duration over-posting, rejection, antiforgery, fixed eight-hour expiry, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
+- [X] T055 [P] [US3] Add protected handler tests for current-state reload, current environment/role/incident revalidation, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [X] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope/duration over-posting, rejection, antiforgery, fixed eight-hour expiry, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 
 ### Implementation for User Story 3
 
