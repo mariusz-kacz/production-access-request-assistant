@@ -17,7 +17,6 @@ public sealed class RequestValidationTests
                 " client-alpha ",
                 " PROD-ALPHA-EU ",
                 $" {ProductionRoleIds.ReadOnly} ",
-                240,
                 "  Investigate the active production incident.  ",
                 " INC-1042 "),
             TestContext.Current.CancellationToken);
@@ -26,22 +25,20 @@ public sealed class RequestValidationTests
         Assert.Equal("client-alpha", fields.ClientId);
         Assert.Equal("PROD-ALPHA-EU", fields.EnvironmentId);
         Assert.Equal(ProductionRoleIds.ReadOnly, fields.RequestedRoleId);
-        Assert.Equal(240, fields.RequestedDurationMinutes);
         Assert.Equal("Investigate the active production incident.", fields.Justification);
         Assert.Equal("INC-1042", fields.IncidentId);
     }
 
     [Fact]
-    public async Task ValidateAsyncAllowsAnOmittedIncidentAndTheMaximumDuration()
+    public async Task ValidateAsyncAllowsAnOmittedIncident()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
-            ValidInput(durationMinutes: 480, incidentId: "   "),
+            ValidInput(incidentId: "   "),
             TestContext.Current.CancellationToken);
 
         var fields = AssertValid(result);
-        Assert.Equal(480, fields.RequestedDurationMinutes);
         Assert.Null(fields.IncidentId);
     }
 
@@ -103,21 +100,6 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "requestedRoleId", "role_unsupported");
-    }
-
-    [Theory]
-    [InlineData(0, "duration_must_be_positive")]
-    [InlineData(-1, "duration_must_be_positive")]
-    [InlineData(481, "duration_exceeds_environment_maximum")]
-    public async Task ValidateAsyncRejectsAnInvalidDuration(int durationMinutes, string expectedCode)
-    {
-        var validator = new RequestValidator(new StubRequestContextReader());
-
-        var result = await validator.ValidateAsync(
-            ValidInput(durationMinutes: durationMinutes),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "requestedDurationMinutes", expectedCode);
     }
 
     [Theory]
@@ -224,7 +206,6 @@ public sealed class RequestValidationTests
         string? clientId = "client-alpha",
         string? environmentId = "PROD-ALPHA-EU",
         string? requestedRoleId = ProductionRoleIds.ReadOnly,
-        int durationMinutes = 240,
         string? justification = "Investigate the active production incident.",
         string? incidentId = "INC-1042")
     {
@@ -232,7 +213,6 @@ public sealed class RequestValidationTests
             clientId,
             environmentId,
             requestedRoleId,
-            durationMinutes,
             justification,
             incidentId);
     }
@@ -268,13 +248,11 @@ public sealed class RequestValidationTests
                 "PROD-ALPHA-EU",
                 alphaClient.Id,
                 "Client Alpha Production EU",
-                480,
                 "alpha-approver");
             var betaEnvironment = new ProductionEnvironment(
                 "PROD-BETA-UK",
                 betaClient.Id,
                 "Client Beta Production UK",
-                240,
                 "beta-approver");
             var alphaReadOnlyRole = new EnvironmentRole(
                 AlphaEnvironment.Id,

@@ -60,7 +60,7 @@
 
 ### Tests for User Story 1
 
-- [X] T021 [P] [US1] Add unit tests for client/environment, role, duration, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
+- [X] T021 [P] [US1] Add unit tests for client/environment, role, justification, and incident validation in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`
 - [X] T022 [P] [US1] Add MCP contract tests for exact three-tool advertisement, typed schemas, stable IDs, forbidden capability absence, and typed failures in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs`
 - [X] T023 [P] [US1] Add MCP timeout, cancellation, unavailable, and not-found interaction tests in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 - [X] T024 [P] [US1] Add deterministic chat adapter tests for valid, incomplete, malformed, unsupported, timeout, cancellation, and no-live-model outcomes in `tests/GovernedAccess.IntegrationTests/Ai/DraftInterpretationTests.cs`
@@ -89,7 +89,7 @@
 
 **Goal**: Resolve the configured client-specific business approver and bind an authenticated approve/reject decision to the exact immutable request scope.
 
-**Independent Test**: Attempt a Client Alpha decision as the Beta approver, verify rejection and audit with no state change, then decide as the Alpha approver and verify the exact request ID/role/duration evidence.
+**Independent Test**: Attempt a Client Alpha decision as the Beta approver, verify rejection and audit with no state change, then decide as the Alpha approver and verify the exact request ID/role evidence.
 
 ### Tests for User Story 2
 
@@ -123,15 +123,15 @@
 
 ## Phase 5: User Story 3 - Approve and Provision the Authorized Scope (Priority: P3)
 
-**Goal**: Let authenticated DevOps reject or approve the exact business-approved role for the same or shorter duration, with a full current-state reload and immediate synthetic provisioning.
+**Goal**: Let authenticated DevOps reject or approve the exact business-approved role, with a full current-state reload and immediate synthetic provisioning for a fixed eight-hour lifetime.
 
-**Independent Test**: From a current business-approved request, approve a permitted duration as DevOps and verify one matching grant and `Active`; verify role changes, duration increases, stale context, missing approval, and non-DevOps attempts create no grant.
+**Independent Test**: From a current business-approved request, approve as DevOps and verify one matching eight-hour grant and `Active`; verify role changes, crafted duration input, stale context, missing approval, and non-DevOps attempts create no grant.
 
 ### Tests for User Story 3
 
-- [ ] T054 [P] [US3] Add unit tests for exact role, positive duration ceiling, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [ ] T055 [P] [US3] Add protected handler tests for current-state reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
-- [ ] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope over-posting, duration increase, rejection, antiforgery, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
+- [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
+- [ ] T055 [P] [US3] Add protected handler tests for current-state reload, current environment/role/incident revalidation, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [ ] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope/duration over-posting, rejection, antiforgery, fixed eight-hour expiry, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 
 ### Implementation for User Story 3
 

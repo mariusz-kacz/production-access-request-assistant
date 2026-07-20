@@ -141,7 +141,6 @@ public sealed class RequestSubmissionService
             fields.ClientId,
             fields.EnvironmentId,
             fields.RequestedRoleId,
-            fields.RequestedDurationMinutes,
             fields.Justification,
             fields.IncidentId,
             occurredAt,

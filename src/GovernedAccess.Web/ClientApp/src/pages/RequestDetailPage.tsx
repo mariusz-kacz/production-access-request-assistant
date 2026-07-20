@@ -131,8 +131,8 @@ export function RequestDetailPage() {
           <dd>{currentRequest.environmentId}</dd>
           <dt>Requested role</dt>
           <dd>{currentRequest.requestedRoleId}</dd>
-          <dt>Requested duration</dt>
-          <dd>{currentRequest.requestedDurationMinutes} minutes</dd>
+          <dt>Access lifetime</dt>
+          <dd>8 hours after activation</dd>
           <dt>Justification</dt>
           <dd>{currentRequest.justification}</dd>
           <dt>Incident</dt>

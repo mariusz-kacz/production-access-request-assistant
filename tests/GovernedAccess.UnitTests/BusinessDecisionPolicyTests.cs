@@ -40,7 +40,6 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal("business-alpha", decision.ApproverId);
         Assert.Equal(request.RequestedRoleId, decision.ApprovedRoleId);
-        Assert.Equal(request.RequestedDurationMinutes, decision.ApprovedDurationMinutes);
         Assert.Equal("Approved for incident response.", decision.Comment);
         Assert.Equal(DecisionTime, decision.DecidedAt);
         Assert.Equal("business-correlation", decision.CorrelationId);
@@ -69,7 +68,6 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(ApprovalStage.Business, applied.Decision.Stage);
         Assert.Equal(ApprovalOutcome.Rejected, applied.Decision.Decision);
         Assert.Null(applied.Decision.ApprovedRoleId);
-        Assert.Null(applied.Decision.ApprovedDurationMinutes);
         Assert.Equal("Request is not justified.", applied.Decision.Comment);
     }
 
@@ -118,7 +116,6 @@ public sealed class BusinessDecisionPolicyTests
                 "client-alpha",
                 "PROD-ALPHA-EU",
                 ProductionRoleIds.ReadOnly,
-                240,
                 "Investigate the active production incident.",
                 "INC-1042"),
             "request-correlation",
@@ -139,7 +136,6 @@ public sealed class BusinessDecisionPolicyTests
             "PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha Production EU",
-            480,
             "business-alpha");
         private readonly EnvironmentRole role = new(
             "PROD-ALPHA-EU",

@@ -50,7 +50,7 @@ The model may interpret natural-language intent, call approved read-only MCP too
 - receive a provisioning operation definition or callable provisioning capability,
 - claim that a server-side check passed without evidence.
 
-Model output is schema-validated. All client, environment, role, incident, duration, and identity-related values are checked deterministically against authoritative data.
+Model output is schema-validated. All client, environment, role, incident, and identity-related values are checked deterministically against authoritative data. Access duration is not model- or user-selectable.
 
 ### 3.2 Human Decisions Are Explicit and Authenticated
 
@@ -66,7 +66,7 @@ Model output is schema-validated. All client, environment, role, incident, durat
 Deterministic services enforce:
 
 - client-to-environment relationships,
-- allowed roles and duration limits,
+- allowed roles and the fixed eight-hour grant lifetime,
 - approver authority,
 - approval order,
 - exact role consistency,
@@ -130,7 +130,6 @@ Before creating an access grant, the handler reloads current stored state and in
 * both approvals reference the same immutable request,
 * valid business and DevOps approvals exist in the correct order,
 * the approved role matches the request,
-* the approved duration does not exceed the business-approved duration,
 * the environment and role remain valid,
 * the associated incident remains valid when required,
 * the acting workflow transition was authorized,
@@ -143,7 +142,7 @@ If provisioning fails, the request enters `ProvisioningFailed`. An authenticated
 The retry action:
 
 * is available only for a request in `ProvisioningFailed`,
-* cannot modify the client, environment, role, or duration,
+* cannot modify the client, environment, role, or fixed eight-hour lifetime,
 * reuses the idempotency key for the same approved operation,
 * invokes the same provisioning handler,
 * repeats the complete current-state revalidation,
@@ -259,7 +258,6 @@ Returns typed environment data using a stable environment identifier. The result
 - environment ID,
 - client ID,
 - display name,
-- maximum access duration,
 - business approver group identifier.
 
 ### 5.2 `get_incident`
@@ -296,7 +294,6 @@ The tool returns the roles assigned to the environment. It does not define or co
 - Environment ID: `PROD-ALPHA-EU`
 - Business approver group: `ClientAlphaBusinessOwners`
 - Allowed roles: `ProductionReadOnly`, `ProductionSupport`
-- Maximum duration: 8 hours
 
 #### Client Beta
 
@@ -304,7 +301,6 @@ The tool returns the roles assigned to the environment. It does not define or co
 - Environment ID: `PROD-BETA-UK`
 - Business approver group: `ClientBetaBusinessOwners`
 - Allowed roles: `ProductionReadOnly`
-- Maximum duration: 4 hours
 
 ### 6.2 Roles
 
@@ -317,7 +313,7 @@ There is no generalized role ordering or entitlement comparison.
 
 Business approval binds the requested role. DevOps may approve that exact role or reject the request. A role change requires a new validated request with a new request ID and new approvals.
 
-DevOps may reduce the approved duration. DevOps may not increase duration.
+Every successful access grant lasts exactly eight hours. Requesters and approvers cannot select, reduce, or increase this server-owned lifetime.
 
 ### 6.3 Synthetic Principals
 
@@ -339,7 +335,6 @@ An access request contains:
 - client ID,
 - environment ID,
 - requested role,
-- requested duration,
 - justification,
 - optional incident ID,
 - workflow status,
@@ -355,7 +350,6 @@ An approval contains:
 - decision: approved or rejected,
 - authenticated approver ID,
 - approved role,
-- approved duration,
 - optional comment,
 - decision timestamp.
 
@@ -440,7 +434,6 @@ The model produces a typed draft such as:
   "clientId": "client-alpha",
   "environmentId": "PROD-ALPHA-EU",
   "requestedRole": "ProductionReadOnly",
-  "durationHours": 4,
   "justification": "Investigate production incident",
   "incidentId": "INC-1042"
 }
@@ -462,14 +455,13 @@ Before submission, the Governed Access Host validates:
 - client and environment existence,
 - environment belongs to the selected client,
 - requested role is currently allowed for the environment,
-- duration is positive and within the environment limit,
 - supplied incident exists, is active, and is associated appropriately.
 
 ### 7.4 Business Decision
 
 The Governed Access Host resolves the required approver from stored environment configuration. The requester cannot supply or select the approver.
 
-Only the correct authenticated client approver may approve or reject. Approval binds the immutable request ID, role, and maximum duration.
+Only the correct authenticated client approver may approve or reject. Approval binds the immutable request ID and exact role.
 
 ### 7.5 DevOps Decision and Immediate Provisioning
 
@@ -477,14 +469,13 @@ Only the authenticated DevOps approver may act after valid business approval.
 
 DevOps may:
 
-- approve the exact business-approved role and duration,
-- approve the exact role with a shorter duration,
+- approve the exact business-approved role for the fixed eight-hour grant lifetime,
 - reject the request.
 
 DevOps may not:
 
 - change the role,
-- increase duration,
+- submit or alter a duration,
 - change the client or environment,
 
 A successful DevOps approval immediately triggers:
@@ -504,7 +495,7 @@ If provisioning fails, the request enters `ProvisioningFailed`.
 An authenticated DevOps approver may invoke a structured retry action from
 the request-detail page. The retry:
 
-- cannot modify the approved environment, role, or duration,
+- cannot modify the approved environment, role, or fixed eight-hour lifetime,
 - reuses the idempotency key for the same request ID and approved scope,
 - invokes the same internal provisioning handler,
 - reloads and revalidates current stored state,
@@ -573,9 +564,9 @@ Business and DevOps approval shall be explicit authenticated decisions bound to 
 
 DevOps shall approve the exact business-approved role or reject. A role change shall require a new validated request and new approvals.
 
-### FR-08 Duration Enforcement
+### FR-08 Fixed Grant Lifetime
 
-DevOps may preserve or reduce the business-approved duration but shall not increase it.
+Every successful grant shall expire exactly eight hours after activation. Requesters and approvers shall not provide or alter duration.
 
 ### FR-09 Immutable Submitted Requests
 
@@ -668,14 +659,14 @@ Required tests cover:
 - malformed model output,
 - environment and client mismatch,
 - unsupported role,
-- duration above the environment limit,
+- crafted requester or approver duration input is rejected or safely ignored,
 - inactive incident,
 - correct business approver,
 - wrong-client business approver,
 - approval bound to the immutable request ID and scope,
 - duplicate-stage and invalid-transition rejection,
 - DevOps role-change rejection,
-- DevOps duration-increase rejection,
+- DevOps duration-field rejection or safe ignoring,
 - missing business approval,
 - unauthorized user attempting to trigger DevOps approval and provisioning,
 - pre-provisioning revalidation,
@@ -692,7 +683,7 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 2. The model uses the three read-only MCP tools as needed and produces a typed draft.
 3. Deterministic validation succeeds.
 4. The Client Alpha business approver approves the immutable request scope.
-5. DevOps approves the exact role and duration.
+5. DevOps approves the exact role; the system applies the fixed eight-hour lifetime.
 6. Approval immediately triggers independent revalidation and idempotent provisioning.
 7. The request becomes `Active` and the detail page shows the grant and audit history.
 
@@ -713,7 +704,7 @@ Provisioning succeeds but its response is treated as lost. A controlled retry us
 The following remain automated negative-path tests rather than primary presentation scenarios:
 
 - DevOps role-change attempt,
-- DevOps duration-increase attempt,
+- DevOps duration-field attempt,
 - MCP timeout,
 - malformed model output,
 - invalid environment,
@@ -814,7 +805,7 @@ The project is successful when it proves that:
 - a wrong-client approver is rejected and audited,
 - approvals bind to an exact immutable request ID and scope,
 - correcting a submitted request creates a new request and requires new approvals,
-- DevOps cannot change the approved role or increase duration,
+- DevOps cannot change the approved role or the fixed eight-hour lifetime,
 - successful DevOps approval immediately triggers deterministic revalidation and provisioning,
 - the provisioning handler reloads and independently verifies current stored evidence,
 - provisioning remains unavailable to the model,

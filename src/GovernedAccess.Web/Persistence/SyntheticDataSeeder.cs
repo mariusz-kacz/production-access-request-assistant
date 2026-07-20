@@ -42,13 +42,11 @@ internal static class SyntheticDataSeeder
                 ClientAlphaEnvironmentId,
                 ClientAlphaId,
                 "Client Alpha Production EU",
-                maximumDurationMinutes: 480,
                 ClientAlphaApproverPrincipalId),
             new(
                 ClientBetaEnvironmentId,
                 ClientBetaId,
                 "Client Beta Production UK",
-                maximumDurationMinutes: 240,
                 ClientBetaApproverPrincipalId),
         ];
 
@@ -175,7 +173,6 @@ internal static class SyntheticDataSeeder
         EnsureMatches(
             actual.ClientId == expected.ClientId
             && actual.DisplayName == expected.DisplayName
-            && actual.MaximumDurationMinutes == expected.MaximumDurationMinutes
             && actual.BusinessApproverPrincipalId == expected.BusinessApproverPrincipalId,
             nameof(ProductionEnvironment),
             actual.Id);

@@ -182,7 +182,7 @@ immediate); letting the browser provision separately (creates a forbidden author
 ## Idempotency identity
 
 **Decision**: Derive a canonical operation identity from request ID, environment ID,
-exact approved role, and DevOps-approved duration using length-prefixed
+and exact approved role using length-prefixed
 UTF-8 components and SHA-256. Store the printable digest and enforce uniqueness.
 
 **Rationale**: The identity is deterministic, stable across retries, and bound to all
@@ -194,9 +194,21 @@ the approved request scope.
 request ID alone without approved scope components (weaker diagnostic binding);
 browser-supplied key (untrusted).
 
+## Fixed access lifetime
+
+**Decision**: Remove duration from request drafts, submitted requests, and both human
+decisions. Every successful grant expires exactly eight hours after activation.
+
+**Rationale**: A single server-owned lifetime removes a requester/approver negotiation,
+eliminates stale duration ceilings, and prevents caller-controlled lifetime expansion.
+
+**Alternatives considered**: Per-environment maximums (conflicts with one universal
+lifetime); requester-selected duration with DevOps reduction (unnecessary approval
+complexity); approver-selected duration (adds authority without product need).
+
 ## Submitted-request immutability
 
-**Decision**: Client, environment, requested role, requested duration, justification,
+**Decision**: Client, environment, requested role, justification,
 incident association, and requester identity are immutable after submission. Draft
 values remain correctable before submission. A post-submission correction creates a
 new request ID and requires both approvals again; the original request and evidence

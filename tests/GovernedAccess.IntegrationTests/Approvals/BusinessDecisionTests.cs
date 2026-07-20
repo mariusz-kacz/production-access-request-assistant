@@ -66,14 +66,12 @@ public sealed class BusinessDecisionTests
         Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.ClientId);
         Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, storedRequest.EnvironmentId);
         Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.RequestedRoleId);
-        Assert.Equal(240, storedRequest.RequestedDurationMinutes);
         Assert.Equal(2, storedRequest.PersistenceVersion);
         Assert.Equal(requestId, decision.RequestId);
         Assert.Equal(ApprovalStage.Business, decision.Stage);
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal(DemoDataIds.ClientAlphaApproverPrincipalId, decision.ApproverId);
         Assert.Equal(ProductionRoleIds.ReadOnly, decision.ApprovedRoleId);
-        Assert.Equal(240, decision.ApprovedDurationMinutes);
         Assert.Equal("Approved for incident response.", decision.Comment);
         Assert.Equal(GovernedAccessWebFactory.DefaultUtcNow, decision.DecidedAt);
         Assert.Equal(actionCorrelationId, decision.CorrelationId);
@@ -182,7 +180,6 @@ public sealed class BusinessDecisionTests
         Assert.Equal(ApprovalOutcome.Rejected, decision.Decision);
         Assert.Equal(DemoDataIds.ClientAlphaApproverPrincipalId, decision.ApproverId);
         Assert.Null(decision.ApprovedRoleId);
-        Assert.Null(decision.ApprovedDurationMinutes);
         Assert.Equal("Request is not justified.", decision.Comment);
         Assert.Equal(actionCorrelationId, decision.CorrelationId);
         AssertAuditEvidence(
@@ -331,7 +328,6 @@ public sealed class BusinessDecisionTests
                 clientId = DemoDataIds.ClientAlphaId,
                 environmentId = DemoDataIds.ClientAlphaEnvironmentId,
                 requestedRole = ProductionRoleIds.ReadOnly,
-                durationMinutes = 240,
                 justification = "Investigate the active production incident.",
                 incidentId = DemoDataIds.PrimaryIncidentId,
             }),

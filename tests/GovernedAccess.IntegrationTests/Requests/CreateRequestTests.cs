@@ -51,7 +51,6 @@ public sealed class CreateRequestTests
         Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.ClientId);
         Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, storedRequest.EnvironmentId);
         Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.RequestedRoleId);
-        Assert.Equal(240, storedRequest.RequestedDurationMinutes);
         Assert.Equal("Investigate the active production incident.", storedRequest.Justification);
         Assert.Equal(DemoDataIds.PrimaryIncidentId, storedRequest.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, storedRequest.Status);
@@ -76,10 +75,11 @@ public sealed class CreateRequestTests
         await using (var setupScope = factory.Services.CreateAsyncScope())
         {
             var dbContext = setupScope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-            var environment = await dbContext.ProductionEnvironments.SingleAsync(
-                item => item.Id == DemoDataIds.ClientAlphaEnvironmentId,
+            var role = await dbContext.EnvironmentRoles.SingleAsync(
+                item => item.EnvironmentId == DemoDataIds.ClientAlphaEnvironmentId
+                    && item.RoleId == ProductionRoleIds.ReadOnly,
                 cancellationToken);
-            environment.UpdateMaximumDuration(120);
+            dbContext.EnvironmentRoles.Remove(role);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
@@ -96,8 +96,7 @@ public sealed class CreateRequestTests
             problem.RootElement.GetProperty("code").GetString());
         Assert.Contains(
             problem.RootElement.GetProperty("fieldErrors").EnumerateArray(),
-            error => error.GetProperty("code").GetString()
-                == "duration_exceeds_environment_maximum");
+            error => error.GetProperty("code").GetString() == "role_unavailable");
         await AssertNoProtectedWorkflowArtifactsAsync(factory, cancellationToken);
     }
 
@@ -117,6 +116,7 @@ public sealed class CreateRequestTests
         body["kind"] = "DevOpsApprover";
         body["roles"] = new[] { "DevOpsApprover", "BusinessApprover" };
         body["businessApproverId"] = DemoDataIds.ClientBetaApproverPrincipalId;
+        body["durationMinutes"] = 1;
         body["correlationId"] = "browser-controlled-correlation";
         using var request = CreateRequestMessage(body);
 
@@ -167,7 +167,6 @@ public sealed class CreateRequestTests
             ["clientId"] = DemoDataIds.ClientAlphaId,
             ["environmentId"] = DemoDataIds.ClientAlphaEnvironmentId,
             ["requestedRole"] = ProductionRoleIds.ReadOnly,
-            ["durationMinutes"] = 240,
             ["justification"] = "Investigate the active production incident.",
             ["incidentId"] = DemoDataIds.PrimaryIncidentId,
         };

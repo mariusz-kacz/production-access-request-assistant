@@ -30,7 +30,6 @@ to incidents. Seed exactly Client Alpha and Client Beta.
 | `Id` | string | Primary stable ID (`PROD-ALPHA-EU`, `PROD-BETA-UK`). |
 | `ClientId` | string | Required FK to `Client`; immutable seed association. |
 | `DisplayName` | string | Required. |
-| `MaximumDurationMinutes` | int | Positive; Alpha 480, Beta 240. |
 | `BusinessApproverPrincipalId` | string | Required FK to the configured principal. |
 
 Relationships: many allowed environment roles; zero or more incidents and requests.
@@ -77,7 +76,6 @@ DevOps approver. It is never updated by protected browser actions.
 | `ClientId` | string | Required; material. |
 | `EnvironmentId` | string | Required; material and must belong to client. |
 | `RequestedRoleId` | string | Required; material and currently allowed. |
-| `RequestedDurationMinutes` | int | Required, positive, within environment maximum; material. |
 | `Justification` | string | Required, trimmed, 10-2000 chars; material. |
 | `IncidentId` | string? | Optional; material and must be active/associated when supplied. |
 | `Status` | `RequestStatus` | Starts at `AwaitingBusinessApproval`; required state enum. |
@@ -89,8 +87,8 @@ DevOps approver. It is never updated by protected browser actions.
 Relationships: many approval decisions and audit events; at most one provisioning
 operation and access grant per immutable request.
 
-Validation never relies solely on foreign keys: the environment-role assignment,
-duration maximum, and incident status/association are checked by the
+Validation never relies solely on foreign keys: the environment-role assignment and
+incident status/association are checked by the
 application at submission and again during provisioning.
 
 ### ApprovalDecision
@@ -103,15 +101,13 @@ application at submission and again during provisioning.
 | `Decision` | Approved or Rejected | Required. |
 | `ApproverId` | string | From authenticated server context. |
 | `ApprovedRoleId` | string? | Required for approval; exact requested/business role. |
-| `ApprovedDurationMinutes` | int? | Required and positive for approval. |
 | `Comment` | string? | Trimmed, max 1000 chars. |
 | `DecidedAt` | Instant | Server time. |
 | `CorrelationId` | string | Required. |
 
-Unique constraint: `(RequestId, Stage)`. A business approval duration
-equals the requested duration. DevOps approval duration is positive and no greater
-than business approval; its role must be identical. Rejections do not carry an
-approved scope.
+Unique constraint: `(RequestId, Stage)`. Business and DevOps approvals must carry the
+exact requested role. Rejections do not carry an approved role. Duration is not part
+of request or approval evidence; every successful grant uses the fixed eight-hour rule.
 
 ### ProvisioningOperation
 
@@ -121,7 +117,6 @@ approved scope.
 | `RequestId` | UUID | Required. |
 | `EnvironmentId` | string | Canonical approved value. |
 | `RoleId` | string | Exact approved role. |
-| `DurationMinutes` | int | Exact DevOps-approved duration. |
 | `Status` | Pending, Succeeded, Failed | Required. |
 | `AttemptCount` | int | Starts at 1, increments for accepted retries. |
 | `LastOutcomeCode` | string? | Typed metadata, no secret/provider payload. |
@@ -140,13 +135,13 @@ Unique constraint: `RequestId`. Retry cannot alter canonical scope.
 | `RequesterId` | string | Reloaded from request. |
 | `EnvironmentId` | string | Reloaded and revalidated. |
 | `RoleId` | string | Exact approved role. |
-| `ApprovedDurationMinutes` | int | Exact DevOps duration. |
 | `ActivatedAt` | Instant | Server time/provider result. |
-| `ExpiresAt` | Instant | Exactly activation plus approved duration. |
+| `ExpiresAt` | Instant | Exactly eight hours after activation. |
 | `Outcome` | Succeeded | Only successful grants are rows. |
 | `CorrelationId` | string | Required. |
 
-Logical expiry is computed as `now >= ExpiresAt`; it does not change workflow state or
+The fixed grant lifetime is eight hours. Logical expiry is computed as
+`now >= ExpiresAt`; it does not change workflow state or
 imply revocation. Unique `OperationId` and provider get-or-create semantics prevent
 duplicate grants.
 
@@ -175,7 +170,7 @@ provisioning failed, and duplicate retry returned.
 | `AwaitingBusinessApproval` | Business approve | `AwaitingDevOpsApproval` | Correct environment-resolved approver; no prior business decision. |
 | `AwaitingBusinessApproval` | Business reject | `Rejected` | Correct approver; no prior business decision. |
 | `AwaitingDevOpsApproval` | DevOps reject | `Rejected` | Authenticated DevOps; valid current business approval. |
-| `AwaitingDevOpsApproval` | DevOps approve + provision succeeds | `Active` | Exact role; permitted duration; full protected revalidation succeeds. |
+| `AwaitingDevOpsApproval` | DevOps approve + provision succeeds | `Active` | Exact role; fixed eight-hour lifetime; full protected revalidation succeeds. |
 | `AwaitingDevOpsApproval` | DevOps approve + recoverable provision failure | `ProvisioningFailed` | Decision persisted; no false success. |
 | `ProvisioningFailed` | DevOps retry succeeds | `Active` | Same request/scope/operation; full revalidation. |
 | `ProvisioningFailed` | DevOps retry fails | `ProvisioningFailed` | Same constraints; attempt audited. |

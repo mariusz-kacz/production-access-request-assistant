@@ -9,7 +9,6 @@ export interface AccessRequestDraft {
   clientId: string | null;
   environmentId: string | null;
   requestedRole: ProductionRole | null;
-  durationMinutes: number | null;
   justification: string | null;
   incidentId: string | null;
 }
@@ -18,7 +17,6 @@ export interface CompleteAccessRequestDraft extends AccessRequestDraft {
   clientId: string;
   environmentId: string;
   requestedRole: ProductionRole;
-  durationMinutes: number;
   justification: string;
 }
 
@@ -50,7 +48,6 @@ export interface CreateAccessRequestRequest {
   clientId: string;
   environmentId: string;
   requestedRole: ProductionRole;
-  durationMinutes: number;
   justification: string;
   incidentId?: string | null;
 }
@@ -74,7 +71,6 @@ export interface RequestDetailResponse {
   clientId: string;
   environmentId: string;
   requestedRoleId: ProductionRole;
-  requestedDurationMinutes: number;
   justification: string;
   incidentId: string | null;
   status: RequestStatus;

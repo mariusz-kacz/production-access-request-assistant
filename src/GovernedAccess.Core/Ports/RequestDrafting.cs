@@ -32,7 +32,6 @@ public sealed record AccessRequestDraft
         string? clientId,
         string? environmentId,
         string? requestedRole,
-        int? durationMinutes,
         string? justification,
         string? incidentId)
     {
@@ -50,14 +49,6 @@ public sealed record AccessRequestDraft
                 "The proposed role is not supported by this feature.");
         }
 
-        if (durationMinutes is <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(durationMinutes),
-                durationMinutes,
-                "A proposed duration must be positive when supplied.");
-        }
-
         if (justification?.Length > AccessRequest.MaximumJustificationLength)
         {
             throw new ArgumentOutOfRangeException(
@@ -69,7 +60,6 @@ public sealed record AccessRequestDraft
         ClientId = clientId;
         EnvironmentId = environmentId;
         RequestedRole = requestedRole;
-        DurationMinutes = durationMinutes;
         Justification = justification;
         IncidentId = incidentId;
     }
@@ -80,8 +70,6 @@ public sealed record AccessRequestDraft
 
     public string? RequestedRole { get; }
 
-    public int? DurationMinutes { get; }
-
     public string? Justification { get; }
 
     public string? IncidentId { get; }
@@ -90,7 +78,6 @@ public sealed record AccessRequestDraft
         ClientId is not null
         && EnvironmentId is not null
         && RequestedRole is not null
-        && DurationMinutes is not null
         && Justification is not null;
 
     private static string? NormalizeOptional(string? value)

@@ -8,7 +8,6 @@
     "clientId",
     "environmentId",
     "requestedRole",
-    "durationMinutes",
     "justification",
     "incidentId"
   ],
@@ -19,7 +18,6 @@
       "type": ["string", "null"],
       "enum": ["ProductionReadOnly", "ProductionSupport", null]
     },
-    "durationMinutes": { "type": ["integer", "null"], "minimum": 1 },
     "justification": { "type": ["string", "null"], "maxLength": 2000 },
     "incidentId": { "type": ["string", "null"], "minLength": 1 }
   }

@@ -78,12 +78,10 @@ public sealed class McpContractTests
             "environmentId",
             "clientId",
             "displayName",
-            "maximumDurationMinutes",
             "businessApproverResponsibilityId");
         Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
         Assert.Equal("client-alpha", content.GetProperty("clientId").GetString());
         Assert.Equal("Client Alpha Production EU", content.GetProperty("displayName").GetString());
-        Assert.Equal(480, content.GetProperty("maximumDurationMinutes").GetInt32());
         Assert.Equal(
             "client-alpha-business-approver",
             content.GetProperty("businessApproverResponsibilityId").GetString());

@@ -49,7 +49,6 @@ public sealed partial class RequestContextTools(
                 environment.Id,
                 environment.ClientId,
                 environment.DisplayName,
-                environment.MaximumDurationMinutes,
                 environment.BusinessApproverPrincipalId),
             cancellationToken);
     }
@@ -260,7 +259,6 @@ public sealed record ProductionEnvironmentToolResult(
     string EnvironmentId,
     string ClientId,
     string DisplayName,
-    int MaximumDurationMinutes,
     string BusinessApproverResponsibilityId);
 
 public sealed record IncidentToolResult(

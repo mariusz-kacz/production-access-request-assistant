@@ -50,7 +50,6 @@ public sealed class SyntheticDataSeederTests
             {
                 Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, environment.Id);
                 Assert.Equal(DemoDataIds.ClientAlphaId, environment.ClientId);
-                Assert.Equal(480, environment.MaximumDurationMinutes);
                 Assert.Equal(
                     DemoDataIds.ClientAlphaApproverPrincipalId,
                     environment.BusinessApproverPrincipalId);
@@ -59,7 +58,6 @@ public sealed class SyntheticDataSeederTests
             {
                 Assert.Equal(DemoDataIds.ClientBetaEnvironmentId, environment.Id);
                 Assert.Equal(DemoDataIds.ClientBetaId, environment.ClientId);
-                Assert.Equal(240, environment.MaximumDurationMinutes);
                 Assert.Equal(
                     DemoDataIds.ClientBetaApproverPrincipalId,
                     environment.BusinessApproverPrincipalId);

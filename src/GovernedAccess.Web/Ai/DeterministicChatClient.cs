@@ -18,12 +18,12 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
 {
     private const string ValidResponse =
         """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","durationMinutes":240,"justification":"Investigate the active production incident.","incidentId":"INC-1042"}
+        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"}
         """;
 
     private const string IncompleteResponse =
         """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","durationMinutes":null,"justification":null,"incidentId":null}
+        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","justification":null,"incidentId":null}
         """;
 
     private const string MalformedResponse =
@@ -33,7 +33,7 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
 
     private const string UnsupportedResponse =
         """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionAdministrator","durationMinutes":240,"justification":"Investigate the active production incident.","incidentId":"INC-1042"}
+        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionAdministrator","justification":"Investigate the active production incident.","incidentId":"INC-1042"}
         """;
 
     public async Task<ChatResponse> GetResponseAsync(

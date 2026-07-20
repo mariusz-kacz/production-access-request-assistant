@@ -52,7 +52,6 @@ public static class BusinessDecisionPolicy
             command.Decision,
             command.ApproverId,
             isApproval ? request.RequestedRoleId : null,
-            isApproval ? request.RequestedDurationMinutes : null,
             command.Comment,
             command.DecidedAt,
             command.CorrelationId);

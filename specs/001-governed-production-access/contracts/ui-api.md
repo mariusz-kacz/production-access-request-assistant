@@ -51,8 +51,8 @@ or grant.
 
 ### `POST /api/requests`
 
-Requester only. Body: `{ clientId, environmentId, requestedRole, durationMinutes,
-justification, incidentId? }`. On stored-data validation success returns `201` with
+Requester only. Body: `{ clientId, environmentId, requestedRole, justification,
+incidentId? }`. On stored-data validation success returns `201` with
 `{ requestId, status: "AwaitingBusinessApproval", correlationId }`.
 
 ### `GET /api/requests`
@@ -67,7 +67,7 @@ Authorized participants only. From the User Story 2 increment onward, returns th
 minimum navigable detail projection:
 
 `{ requestId, requesterId, clientId, environmentId, requestedRoleId,
-requestedDurationMinutes, justification, incidentId?, status, createdAt,
+justification, incidentId?, status, createdAt,
 lastModifiedAt, availableActions }`.
 
 `availableActions` is computed from the authenticated actor and current stored state;
@@ -93,10 +93,9 @@ fields are not accepted.
 
 ### `POST /api/requests/{requestId}/devops-decisions`
 
-Body: `{ decision: "Approve" | "Reject",
-approvedDurationMinutes?, comment? }`. Role, client, and environment are not accepted.
-Approval validates the exact loaded role and duration ceiling, then immediately calls
-protected provisioning. It returns `Active` with the grant or `ProvisioningFailed`
+Body: `{ decision: "Approve" | "Reject", comment? }`. Role, client, environment are not accepted. Approval validates the exact loaded role, then immediately
+calls protected provisioning for the fixed eight-hour grant. It returns `Active` with
+the grant or `ProvisioningFailed`
 with a safe outcome. Rejection returns `Rejected`.
 
 ### `POST /api/requests/{requestId}/retry-provisioning`

@@ -44,7 +44,7 @@ public sealed class ProblemDetailsMappingTests
         var context = CreateContext("correlation-456");
         FieldValidationError[] fieldErrors =
         [
-            new("durationMinutes", "duration_too_long", "Duration exceeds the maximum."),
+            new("justification", "justification_too_long", "Justification is too long."),
             new("incidentId", "incident_inactive", "Incident is not active."),
         ];
         var result = ProblemDetailsMapping.ToValidationProblemDetails(

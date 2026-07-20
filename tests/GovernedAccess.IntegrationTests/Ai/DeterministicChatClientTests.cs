@@ -6,8 +6,8 @@ namespace GovernedAccess.IntegrationTests.Ai;
 public sealed class DeterministicChatClientTests
 {
     [Theory]
-    [InlineData(DeterministicChatMode.Valid, "\"durationMinutes\":240")]
-    [InlineData(DeterministicChatMode.Incomplete, "\"durationMinutes\":null")]
+    [InlineData(DeterministicChatMode.Valid, "\"incidentId\":\"INC-1042\"")]
+    [InlineData(DeterministicChatMode.Incomplete, "\"justification\":null")]
     [InlineData(DeterministicChatMode.Malformed, "{\"clientId\":\"client-alpha\"")]
     [InlineData(DeterministicChatMode.Unsupported, "\"requestedRole\":\"ProductionAdministrator\"")]
     public async Task ContentModesReturnTheirDeterministicPayload(

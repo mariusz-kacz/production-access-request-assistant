@@ -29,7 +29,6 @@ public sealed class RequestPreparationEndpointTests
                     "client-alpha",
                     "PROD-ALPHA-EU",
                     "ProductionReadOnly",
-                    240,
                     "Investigate the active production incident.",
                     "INC-1042")));
         await using var rootFactory = new GovernedAccessWebFactory();
@@ -63,7 +62,6 @@ public sealed class RequestPreparationEndpointTests
         Assert.Equal("client-alpha", draft.GetProperty("clientId").GetString());
         Assert.Equal("PROD-ALPHA-EU", draft.GetProperty("environmentId").GetString());
         Assert.Equal("ProductionReadOnly", draft.GetProperty("requestedRole").GetString());
-        Assert.Equal(240, draft.GetProperty("durationMinutes").GetInt32());
         Assert.Equal("INC-1042", draft.GetProperty("incidentId").GetString());
 
         var interpretationRequest = Assert.IsType<DraftInterpretationRequest>(

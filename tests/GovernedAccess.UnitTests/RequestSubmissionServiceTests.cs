@@ -32,7 +32,6 @@ public sealed class RequestSubmissionServiceTests
         Assert.Equal("client-alpha", request.ClientId);
         Assert.Equal("PROD-ALPHA-EU", request.EnvironmentId);
         Assert.Equal(ProductionRoleIds.ReadOnly, request.RequestedRoleId);
-        Assert.Equal(240, request.RequestedDurationMinutes);
         Assert.Equal("Investigate the active production incident.", request.Justification);
         Assert.Equal("INC-1042", request.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
@@ -67,7 +66,6 @@ public sealed class RequestSubmissionServiceTests
     [InlineData(nameof(AccessRequest.ClientId))]
     [InlineData(nameof(AccessRequest.EnvironmentId))]
     [InlineData(nameof(AccessRequest.RequestedRoleId))]
-    [InlineData(nameof(AccessRequest.RequestedDurationMinutes))]
     [InlineData(nameof(AccessRequest.Justification))]
     [InlineData(nameof(AccessRequest.IncidentId))]
     public void SubmittedRequestScopeCannotBeChangedOutsideTheEntity(string propertyName)
@@ -88,15 +86,15 @@ public sealed class RequestSubmissionServiceTests
 
         var result = await service.SubmitAsync(
             "requester",
-            ValidInput(durationMinutes: 481),
+            ValidInput(justification: "short"),
             "correlation-123",
             TestContext.Current.CancellationToken);
 
         var rejection = Assert.IsType<RequestSubmissionValidationRejected>(result);
         Assert.Contains(
             rejection.ValidationErrors,
-            error => error.Field == "requestedDurationMinutes"
-                && error.Code == "duration_exceeds_environment_maximum");
+            error => error.Field == "justification"
+                && error.Code == "justification_length_invalid");
         Assert.Empty(workflowStore.AddedRequests);
         Assert.Empty(workflowStore.AddedAuditEvents);
         Assert.Equal(0, workflowStore.SaveChangesCallCount);
@@ -164,14 +162,14 @@ public sealed class RequestSubmissionServiceTests
             new StubClock(CurrentTime));
     }
 
-    private static RequestValidationInput ValidInput(int durationMinutes = 240)
+    private static RequestValidationInput ValidInput(
+        string? justification = "  Investigate the active production incident.  ")
     {
         return new RequestValidationInput(
             " client-alpha ",
             " PROD-ALPHA-EU ",
             $" {ProductionRoleIds.ReadOnly} ",
-            durationMinutes,
-            "  Investigate the active production incident.  ",
+            justification,
             " INC-1042 ");
     }
 
@@ -188,7 +186,6 @@ public sealed class RequestSubmissionServiceTests
             "PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha Production EU",
-            480,
             "business-approver");
         private readonly EnvironmentRole role = new(
             "PROD-ALPHA-EU",

@@ -47,7 +47,6 @@ public sealed class RequestDetailQueryTests
         Assert.Equal(
             ProductionRoleIds.ReadOnly,
             detail.GetProperty("requestedRoleId").GetString());
-        Assert.Equal(240, detail.GetProperty("requestedDurationMinutes").GetInt32());
         Assert.Equal(Justification, detail.GetProperty("justification").GetString());
         Assert.Equal(
             DemoDataIds.PrimaryIncidentId,
@@ -178,7 +177,6 @@ public sealed class RequestDetailQueryTests
             DemoDataIds.ClientAlphaId,
             DemoDataIds.ClientAlphaEnvironmentId,
             ProductionRoleIds.ReadOnly,
-            240,
             Justification,
             DemoDataIds.PrimaryIncidentId,
             GovernedAccessWebFactory.DefaultUtcNow,

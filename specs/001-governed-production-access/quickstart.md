@@ -46,10 +46,10 @@ rejected without protected state change.
 ## Scenario 1: safe request preparation and submission
 
 1. Sign in as requester and open `/requests/new`.
-2. Enter: `I need four hours of read-only access to Client Alpha production for INC-1042 to investigate the incident.`
+2. Enter: `I need read-only access to Client Alpha production for INC-1042 to investigate the incident.`
 3. Prepare the draft, review the stable IDs, then submit.
 
-Expected: `PROD-ALPHA-EU`, `ProductionReadOnly`, 240 minutes, and `INC-1042` are
+Expected: `PROD-ALPHA-EU`, `ProductionReadOnly`, and `INC-1042` are
 shown; stored-data validation succeeds; an immutable request enters
 `AwaitingBusinessApproval`; no approval or grant exists.
 
@@ -70,7 +70,7 @@ advertises exactly the three tools in [contracts/mcp-tools.json](contracts/mcp-t
    reloaded, the business decision panel appears, and approve.
 
 Expected: Beta is rejected and audited without state change. Alpha approval binds the
-exact request ID, role, and duration and moves the request to
+exact request ID and role and moves the request to
 `AwaitingDevOpsApproval`. This scenario is runnable when User Story 2 completes and
 does not depend on the later request list, DevOps, provisioning, retry, or full audit
 timeline work.
@@ -78,18 +78,18 @@ timeline work.
 ## Scenario 3: DevOps approval and independent provisioning
 
 1. Sign in as DevOps and open the business-approved request.
-2. Approve `240` minutes.
+2. Approve the exact business-approved role.
 
 Expected: the handler reloads request and approvals, revalidates current environment,
 role, incident, and scope, creates one synthetic grant, and moves the request
-to `Active`. The detail page shows activation, expiry, operation identity, and audit
-events. A duration increase and any role-changing crafted request are rejected without
-grant creation.
+to `Active`. The detail page shows activation, expiry exactly eight hours later,
+operation identity, and audit events. Any crafted duration field is safely ignored or
+rejected, and any role-changing request is rejected without grant creation.
 
 ## Scenario 4: correction creates a new immutable request
 
 1. Create another request and obtain business approval.
-2. As requester, discover that its justification or duration is incorrect.
+2. As requester, discover that its justification is incorrect.
 3. Prepare and submit a corrected request.
 
 Expected: the original request and its approval evidence remain unchanged. The
@@ -112,7 +112,7 @@ retry from any other state are rejected.
 
 | Area | Required checks |
 |---|---|
-| Domain | Immutable submitted scope, state transitions, exact role, duration ceiling, duplicate-stage prevention, logical expiry. |
+| Domain | Immutable submitted scope, state transitions, exact role, fixed eight-hour grant lifetime, duplicate-stage prevention, logical expiry. |
 | Authorization | Server-context actor, wrong-client approver, unauthorized DevOps, requester cannot choose approver. |
 | AI adapter | Valid/incomplete/malformed schema, deterministic fake, timeout, cancellation, no live model. |
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |

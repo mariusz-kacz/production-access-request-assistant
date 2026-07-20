@@ -17,7 +17,6 @@
         "environmentId": "string",
         "clientId": "string",
         "displayName": "string",
-        "maximumDurationMinutes": "integer",
         "businessApproverResponsibilityId": "string"
       }
     },

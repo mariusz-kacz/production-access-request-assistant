@@ -7,7 +7,6 @@ public sealed record RequestValidationInput(
     string? ClientId,
     string? EnvironmentId,
     string? RequestedRoleId,
-    int RequestedDurationMinutes,
     string? Justification,
     string? IncidentId);
 
@@ -15,7 +14,6 @@ public sealed record ValidatedRequestFields(
     string ClientId,
     string EnvironmentId,
     string RequestedRoleId,
-    int RequestedDurationMinutes,
     string Justification,
     string? IncidentId);
 
@@ -97,7 +95,6 @@ public sealed class RequestValidator
             clientId,
             environmentId,
             requestedRoleId,
-            input.RequestedDurationMinutes,
             justification);
 
         if (fieldErrors.Count > 0)
@@ -150,15 +147,6 @@ public sealed class RequestValidator
         }
 
         var role = roleResult.Value;
-
-        if (input.RequestedDurationMinutes > environment.MaximumDurationMinutes)
-        {
-            return Invalid(
-                new FieldValidationError(
-                    "requestedDurationMinutes",
-                    "duration_exceeds_environment_maximum",
-                    "The requested duration exceeds the environment maximum."));
-        }
 
         string? canonicalIncidentId = null;
         if (incidentId is not null)
@@ -213,7 +201,6 @@ public sealed class RequestValidator
                 client.Id,
                 environment.Id,
                 role.RoleId,
-                input.RequestedDurationMinutes,
                 justification!,
                 canonicalIncidentId));
     }
@@ -222,7 +209,6 @@ public sealed class RequestValidator
         string? clientId,
         string? environmentId,
         string? requestedRoleId,
-        int requestedDurationMinutes,
         string? justification)
     {
         var errors = new List<FieldValidationError>();
@@ -253,14 +239,6 @@ public sealed class RequestValidator
         else if (!ProductionRoleIds.IsSupported(requestedRoleId))
         {
             errors.Add(UnsupportedRoleError());
-        }
-
-        if (requestedDurationMinutes <= 0)
-        {
-            errors.Add(new FieldValidationError(
-                "requestedDurationMinutes",
-                "duration_must_be_positive",
-                "The requested duration must be positive."));
         }
 
         if (justification is null)

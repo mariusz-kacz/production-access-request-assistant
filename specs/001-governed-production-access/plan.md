@@ -82,6 +82,8 @@ complete evidence scope into an earlier phase.
 
 **Constraints**: No live model in tests; one executable and one production origin; exactly three read-only model-visible MCP tools; no public provisioning endpoint; authenticated actor comes from server cookie context; every unsafe `/api` request requires antiforgery validation; model/MCP/provisioning timeouts are 30/5/10 seconds; cancellation crosses async boundaries; raw prompts, secrets, and full MCP payloads are not logged
 
+**Access Lifetime**: Requesters and approvers provide no duration; every successful grant expires exactly eight hours after activation.
+
 **Scale/Scope**: Portfolio-grade local MVP for exactly 2 clients, 2 environments, 2 roles, 4 principals, 3 React routes, and synthetic records; no distributed infrastructure or background processing
 
 ## Constitution Check
@@ -98,9 +100,9 @@ baseline are applied as the operative gates:
 | Domain/application code has no AI-provider or MCP SDK contracts | PASS | `GovernedAccess.Core` exposes provider-neutral ports and typed outcomes; SDK types remain in `GovernedAccess.Web` adapters. |
 | Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates current stored state. |
 | Model receives exactly the three allowed read-only MCP tools | PASS | MCP contract declares only the required tools; tool registration uses an explicit allowlist. |
-| Approval is authenticated and bound to an exact immutable request scope | PASS | Approval entity and action contracts bind request ID, role, and duration; actor comes only from server claims. |
+| Approval is authenticated and bound to an exact immutable request scope | PASS | Approval entity and action contracts bind request ID and exact role; actor comes only from server claims. |
 | Submitted requests cannot change after approval begins | PASS | Submitted request fields are immutable; corrections create a new request ID and require new approvals. |
-| DevOps cannot alter role or increase duration | PASS | Domain decision policy requires role equality and a positive duration at or below the business maximum. |
+| DevOps cannot alter role or duration | PASS | Domain decision policy requires role equality; successful grants receive the server-owned fixed eight-hour lifetime. |
 | Provisioning reloads evidence and is idempotent | PASS | Handler accepts request ID and operation identity only, reloads all evidence, and enforces a unique operation identity. |
 | Browser identity and claims are untrusted | PASS | HttpOnly server cookie establishes actor; action bodies contain no actor, roles, or approver identity. |
 | Cookie-authenticated mutations resist CSRF | PASS | Same-origin antiforgery token plus `X-XSRF-TOKEN`; all unsafe application endpoints validate it. |

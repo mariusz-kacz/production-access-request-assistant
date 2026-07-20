@@ -101,7 +101,6 @@ public sealed record BusinessDecisionAuditDetails
         Decision = decision.Decision;
         Status = status;
         ApprovedRoleId = decision.ApprovedRoleId;
-        ApprovedDurationMinutes = decision.ApprovedDurationMinutes;
     }
 
     public int SchemaVersion { get; }
@@ -112,7 +111,6 @@ public sealed record BusinessDecisionAuditDetails
 
     public string? ApprovedRoleId { get; }
 
-    public int? ApprovedDurationMinutes { get; }
 }
 
 public sealed record DecisionAttemptRejectedAuditDetails
@@ -149,7 +147,6 @@ public sealed class ApprovalDecision
         ApprovalOutcome decision,
         string approverId,
         string? approvedRoleId,
-        int? approvedDurationMinutes,
         string? comment,
         DateTimeOffset decidedAt,
         string correlationId)
@@ -178,17 +175,10 @@ public sealed class ApprovalDecision
                     "The approved role is not supported by this feature.");
             }
 
-            if (approvedDurationMinutes is null or <= 0)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(approvedDurationMinutes),
-                    approvedDurationMinutes,
-                    "An approval must carry a positive duration.");
-            }
         }
-        else if (approvedRoleId is not null || approvedDurationMinutes is not null)
+        else if (approvedRoleId is not null)
         {
-            throw new ArgumentException("A rejection must not carry an approved scope.");
+            throw new ArgumentException("A rejection must not carry an approved role.");
         }
 
         Id = id;
@@ -197,7 +187,6 @@ public sealed class ApprovalDecision
         Decision = decision;
         ApproverId = approverId;
         ApprovedRoleId = approvedRoleId;
-        ApprovedDurationMinutes = approvedDurationMinutes;
         Comment = comment;
         DecidedAt = decidedAt.ToUniversalTime();
         CorrelationId = correlationId;
@@ -215,8 +204,6 @@ public sealed class ApprovalDecision
 
     public string? ApprovedRoleId { get; private set; }
 
-    public int? ApprovedDurationMinutes { get; private set; }
-
     public string? Comment { get; private set; }
 
     public DateTimeOffset DecidedAt { get; private set; }
@@ -231,15 +218,12 @@ public sealed class ProvisioningOperation
         Guid requestId,
         string environmentId,
         string roleId,
-        int durationMinutes,
         DateTimeOffset createdAt)
     {
         id = AccessRequestNormalization.NormalizeIdentifier(id);
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
         roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
-        WorkflowEvidenceValidation.EnsurePositive(durationMinutes, nameof(durationMinutes));
-
         if (!ProductionRoleIds.IsSupported(roleId))
         {
             throw new ArgumentOutOfRangeException(
@@ -252,7 +236,6 @@ public sealed class ProvisioningOperation
         RequestId = requestId;
         EnvironmentId = environmentId;
         RoleId = roleId;
-        DurationMinutes = durationMinutes;
         Status = ProvisioningOperationStatus.Pending;
         AttemptCount = 1;
         CreatedAt = createdAt.ToUniversalTime();
@@ -267,8 +250,6 @@ public sealed class ProvisioningOperation
 
     public string RoleId { get; private set; }
 
-    public int DurationMinutes { get; private set; }
-
     public ProvisioningOperationStatus Status { get; internal set; }
 
     public int AttemptCount { get; internal set; }
@@ -282,6 +263,8 @@ public sealed class ProvisioningOperation
 
 public sealed class AccessGrant
 {
+    public static readonly TimeSpan FixedLifetime = TimeSpan.FromHours(8);
+
     public AccessGrant(
         Guid id,
         string operationId,
@@ -289,7 +272,6 @@ public sealed class AccessGrant
         string requesterId,
         string environmentId,
         string roleId,
-        int approvedDurationMinutes,
         DateTimeOffset activatedAt,
         string correlationId)
     {
@@ -299,9 +281,6 @@ public sealed class AccessGrant
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
         roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
-        WorkflowEvidenceValidation.EnsurePositive(
-            approvedDurationMinutes,
-            nameof(approvedDurationMinutes));
         correlationId = AccessRequestNormalization.NormalizeIdentifier(correlationId);
 
         if (!ProductionRoleIds.IsSupported(roleId))
@@ -318,9 +297,8 @@ public sealed class AccessGrant
         RequesterId = requesterId;
         EnvironmentId = environmentId;
         RoleId = roleId;
-        ApprovedDurationMinutes = approvedDurationMinutes;
         ActivatedAt = activatedAt.ToUniversalTime();
-        ExpiresAt = ActivatedAt.AddMinutes(approvedDurationMinutes);
+        ExpiresAt = ActivatedAt.Add(FixedLifetime);
         Outcome = AccessGrantOutcome.Succeeded;
         CorrelationId = correlationId;
     }
@@ -336,8 +314,6 @@ public sealed class AccessGrant
     public string EnvironmentId { get; private set; }
 
     public string RoleId { get; private set; }
-
-    public int ApprovedDurationMinutes { get; private set; }
 
     public DateTimeOffset ActivatedAt { get; private set; }
 
@@ -548,17 +524,6 @@ internal static class WorkflowEvidenceValidation
         if (value == Guid.Empty)
         {
             throw new ArgumentException("The identifier must not be empty.", parameterName);
-        }
-    }
-
-    public static void EnsurePositive(int value, string parameterName)
-    {
-        if (value <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                parameterName,
-                value,
-                "The value must be positive.");
         }
     }
 

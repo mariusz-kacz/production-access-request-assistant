@@ -22,7 +22,7 @@ public sealed class DraftInterpretationTests
     private const string CorrelationId = "draft-interpretation-test";
     private const string ValidResponse =
         """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","durationMinutes":240,"justification":"Investigate the active production incident.","incidentId":"INC-1042"}
+        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"}
         """;
 
     [Fact]
@@ -40,7 +40,6 @@ public sealed class DraftInterpretationTests
         Assert.Equal("client-alpha", draft.ClientId);
         Assert.Equal("PROD-ALPHA-EU", draft.EnvironmentId);
         Assert.Equal("ProductionReadOnly", draft.RequestedRole);
-        Assert.Equal(240, draft.DurationMinutes);
         Assert.Equal("Investigate the active production incident.", draft.Justification);
         Assert.Equal("INC-1042", draft.IncidentId);
         Assert.True(draft.IsComplete);
@@ -61,7 +60,6 @@ public sealed class DraftInterpretationTests
         Assert.Equal("client-alpha", draft.ClientId);
         Assert.Equal("PROD-ALPHA-EU", draft.EnvironmentId);
         Assert.Equal("ProductionReadOnly", draft.RequestedRole);
-        Assert.Null(draft.DurationMinutes);
         Assert.Null(draft.Justification);
         Assert.False(draft.IsComplete);
     }
@@ -175,7 +173,6 @@ public sealed class DraftInterpretationTests
                 "clientId",
                 "environmentId",
                 "requestedRole",
-                "durationMinutes",
                 "justification",
                 "incidentId",
             ],
@@ -229,9 +226,9 @@ public sealed class DraftInterpretationTests
 
     [Theory]
     [InlineData(
-        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-UNKNOWN\",\"requestedRole\":\"ProductionReadOnly\",\"durationMinutes\":240,\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\"}")]
+        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-UNKNOWN\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\"}")]
     [InlineData(
-        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-ALPHA-EU\",\"requestedRole\":\"ProductionReadOnly\",\"durationMinutes\":240,\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\",\"actorId\":\"browser-controlled\"}")]
+        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-ALPHA-EU\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\",\"actorId\":\"browser-controlled\"}")]
     public async Task UnknownIdentifiersAndAdditionalPropertiesAreRejected(string response)
     {
         await using var rootFactory = new GovernedAccessWebFactory();

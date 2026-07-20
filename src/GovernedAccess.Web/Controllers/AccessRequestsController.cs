@@ -36,7 +36,6 @@ public sealed class AccessRequestsController : ControllerBase
             detail.ClientId,
             detail.EnvironmentId,
             detail.RequestedRoleId,
-            detail.RequestedDurationMinutes,
             detail.Justification,
             detail.IncidentId,
             detail.Status.ToString(),
@@ -57,7 +56,6 @@ public sealed class AccessRequestsController : ControllerBase
             request.ClientId,
             request.EnvironmentId,
             request.RequestedRole,
-            request.DurationMinutes,
             request.Justification,
             request.IncidentId);
         var outcome = await submissionService.SubmitAsync(
@@ -91,7 +89,6 @@ public sealed class AccessRequestsController : ControllerBase
         var field = error.Field switch
         {
             "requestedRoleId" => "requestedRole",
-            "requestedDurationMinutes" => "durationMinutes",
             _ => error.Field,
         };
 
@@ -103,7 +100,6 @@ public sealed record CreateAccessRequestRequest(
     string? ClientId,
     string? EnvironmentId,
     string? RequestedRole,
-    int DurationMinutes,
     string? Justification,
     string? IncidentId);
 
@@ -118,7 +114,6 @@ public sealed record RequestDetailResponse(
     string ClientId,
     string EnvironmentId,
     string RequestedRoleId,
-    int RequestedDurationMinutes,
     string Justification,
     string? IncidentId,
     string Status,

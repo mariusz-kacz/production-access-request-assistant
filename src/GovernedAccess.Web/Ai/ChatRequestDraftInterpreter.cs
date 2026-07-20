@@ -57,7 +57,6 @@ public sealed partial class ChatRequestDraftInterpreter(
             "clientId",
             "environmentId",
             "requestedRole",
-            "durationMinutes",
             "justification",
             "incidentId"
           ],
@@ -68,7 +67,6 @@ public sealed partial class ChatRequestDraftInterpreter(
               "type": ["string", "null"],
               "enum": ["ProductionReadOnly", "ProductionSupport", null]
             },
-            "durationMinutes": { "type": ["integer", "null"], "minimum": 1 },
             "justification": { "type": ["string", "null"], "maxLength": 2000 },
             "incidentId": { "type": ["string", "null"], "minLength": 1 }
           }
@@ -443,9 +441,6 @@ public sealed partial class ChatRequestDraftInterpreter(
         public string? RequestedRole { get; init; }
 
         [JsonRequired]
-        public int? DurationMinutes { get; init; }
-
-        [JsonRequired]
         public string? Justification { get; init; }
 
         [JsonRequired]
@@ -455,7 +450,6 @@ public sealed partial class ChatRequestDraftInterpreter(
             ClientId,
             EnvironmentId,
             RequestedRole,
-            DurationMinutes,
             Justification,
             IncidentId);
     }

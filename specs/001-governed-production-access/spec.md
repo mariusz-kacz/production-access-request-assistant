@@ -16,13 +16,13 @@ As an authenticated requester, I describe why I need temporary access to a clien
 
 **Why this priority**: A trustworthy, valid request is the entry point for every later approval and access decision and demonstrates the intended value of model-assisted request preparation.
 
-**Independent Test**: Authenticate as the requester, enter a request for Client Alpha read-only production access for four hours for incident `INC-1042`, and verify that a reviewable draft can be validated and submitted without granting access.
+**Independent Test**: Authenticate as the requester, enter a request for Client Alpha read-only production access for incident `INC-1042`, and verify that a reviewable draft can be validated and submitted without granting access.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated requester and the Client Alpha environment, **When** the requester describes four hours of read-only access for active incident `INC-1042`, **Then** the system presents a typed draft containing verified client, environment, role, duration, justification, and incident identifiers for review.
-2. **Given** a complete draft whose environment belongs to the selected client and whose role, duration, and incident are currently valid, **When** the requester submits it, **Then** an immutable request is created in `AwaitingBusinessApproval` and no access is granted.
-3. **Given** malformed model output, an unknown identifier, an inactive incident, a client-environment mismatch, a role not assigned to the environment, or an excessive duration, **When** draft preparation or submission is attempted, **Then** the system returns a structured failure or identifies fields requiring correction and does not submit or authorize the request.
+1. **Given** an authenticated requester and the Client Alpha environment, **When** the requester describes read-only access for active incident `INC-1042`, **Then** the system presents a typed draft containing verified client, environment, role, justification, and incident identifiers for review.
+2. **Given** a complete draft whose environment belongs to the selected client and whose role and incident are currently valid, **When** the requester submits it, **Then** an immutable request is created in `AwaitingBusinessApproval` and no access is granted.
+3. **Given** malformed model output, an unknown identifier, an inactive incident, a client-environment mismatch, or a role not assigned to the environment, **When** draft preparation or submission is attempted, **Then** the system returns a structured failure or identifies fields requiring correction and does not submit or authorize the request.
 4. **Given** information proposed by the model, **When** the request is submitted, **Then** every identifier and business value is checked against current trusted server data rather than accepted from the model.
 
 ---
@@ -37,7 +37,7 @@ As the business approver responsible for the target client environment, I can re
 
 **Acceptance Scenarios**:
 
-1. **Given** a Client Alpha request in `AwaitingBusinessApproval`, **When** the authenticated Client Alpha business approver approves it, **Then** the decision binds the request ID, role, and maximum duration and the request moves to `AwaitingDevOpsApproval`.
+1. **Given** a Client Alpha request in `AwaitingBusinessApproval`, **When** the authenticated Client Alpha business approver approves it, **Then** the decision binds the request ID and exact role and the request moves to `AwaitingDevOpsApproval`.
 2. **Given** the same request, **When** the Client Beta business approver attempts to approve it, **Then** the attempt is rejected and audited without changing the workflow state.
 3. **Given** a current request awaiting business approval, **When** the configured business approver rejects it, **Then** the request moves to `Rejected` and the authenticated decision is recorded.
 4. **Given** a requester preparing or viewing a request, **When** approver responsibility is determined, **Then** it is resolved from current environment configuration and cannot be selected or supplied by the requester.
@@ -46,7 +46,7 @@ As the business approver responsible for the target client environment, I can re
 
 ### User Story 3 - Approve and Provision the Authorized Scope (Priority: P3)
 
-As the authenticated DevOps approver, I can approve the business-approved role for the same or a shorter duration, causing immediate protected provisioning, or reject the request.
+As the authenticated DevOps approver, I can approve the exact business-approved role, causing immediate protected provisioning for the fixed eight-hour access period, or reject the request.
 
 **Why this priority**: The second human decision and independent deterministic revalidation prove that neither the model nor an upstream assertion can authorize production access.
 
@@ -54,11 +54,11 @@ As the authenticated DevOps approver, I can approve the business-approved role f
 
 **Acceptance Scenarios**:
 
-1. **Given** a current business-approved request in `AwaitingDevOpsApproval`, **When** the authenticated DevOps approver approves the exact role and a duration no greater than the business-approved duration, **Then** the system immediately revalidates current request, approval, scope, environment, role, and incident state before creating one grant and moving the request to `Active`.
-2. **Given** a DevOps decision that changes the role, increases duration, changes client or environment, or lacks a valid business approval, **When** approval is attempted, **Then** the decision is rejected and audited without provisioning access.
+1. **Given** a current business-approved request in `AwaitingDevOpsApproval`, **When** the authenticated DevOps approver approves the exact role, **Then** the system immediately revalidates current request, approval, scope, environment, role, and incident state before creating one grant that expires exactly eight hours after activation and moving the request to `Active`.
+2. **Given** a DevOps decision that changes the role, changes client or environment, or lacks a valid business approval, **When** approval is attempted, **Then** the decision is rejected and audited without provisioning access.
 3. **Given** a user who is not the authenticated DevOps approver, **When** that user attempts the DevOps action, **Then** the attempt is rejected and audited without changing protected state.
 4. **Given** a valid request awaiting DevOps approval, **When** DevOps rejects it, **Then** the request moves to `Rejected` and no grant is created.
-5. **Given** the current duration limit or incident state changed after business approval, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than using stale approval assertions or creating a grant.
+5. **Given** the current environment, role, or incident state changed after business approval, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than using stale approval assertions or creating a grant.
 
 ---
 
@@ -84,7 +84,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - A data lookup is unavailable, times out, is cancelled, or returns a typed not-found result.
 - The selected environment does not belong to the selected client.
 - The requested role is not assigned to the selected environment.
-- Duration is zero, negative, over the environment limit, increased by DevOps, or reduced to a valid positive value.
+- A requester or approver crafts a duration field; it is rejected or ignored and cannot alter the server-owned fixed eight-hour lifetime.
 - An incident is omitted when optional, unknown, inactive, or associated with a different client or environment.
 - A wrong-client approver, requester, or other unauthorized principal attempts a protected decision or retry.
 - Concurrent or delayed decisions race after the request has already left the expected workflow state.
@@ -98,32 +98,32 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 ### Functional Requirements
 
 - **FR-001**: The system MUST allow an authenticated requester to enter natural-language intent and receive a typed, reviewable access-request draft.
-- **FR-002**: The draft MUST represent client, environment, requested role, requested duration, justification, and optional incident; nullable required values MUST support structured correction.
+- **FR-002**: The draft MUST represent client, environment, requested role, justification, and optional incident; nullable required values MUST support structured correction.
 - **FR-003**: Model-produced content MUST be treated as untrusted and MUST NOT approve, reject, select an approver, change workflow state, provision, revoke, or override an authoritative validation result.
 - **FR-004**: Model-assisted preparation MUST have access only to the three approved read-only context operations: `get_production_environment`, `get_incident`, and `get_available_roles`.
 - **FR-005**: Each approved context operation MUST use explicit typed inputs and results, stable identifiers, and explicit not-found, invalid-input, timeout, cancellation, and unavailable outcomes.
 - **FR-006**: No approval, provisioning, revocation, workflow-transition, arbitrary-data, or generic-query capability MUST be available to model-assisted preparation.
-- **FR-007**: Before submission, the system MUST validate the authenticated requester, client and environment existence and relationship, environment-role assignment, positive duration within the environment limit, and any supplied incident's existence, active state, and relevant association.
+- **FR-007**: Before submission, the system MUST validate the authenticated requester, client and environment existence and relationship, environment-role assignment, and any supplied incident's existence, active state, and relevant association.
 - **FR-008**: Invalid, incomplete, malformed, cancelled, or timed-out draft preparation MUST produce a safe, understandable outcome that allows structured correction and MUST NOT create authorization evidence or a grant.
 - **FR-009**: The system MUST derive the acting identity and authority for every protected action from authenticated server context and MUST ignore browser-supplied identity, role, or authorization claims as authority.
 - **FR-010**: A submitted request MUST receive a stable request ID, status, requester identity, timestamps, and correlation identifier.
 - **FR-011**: The system MUST resolve the required business approver from current stored configuration for the target environment; the requester MUST NOT select or supply that approver.
 - **FR-012**: Only the authenticated business approver responsible for the target client environment MUST be able to approve or reject a request awaiting business approval.
-- **FR-013**: A business decision MUST bind the exact request ID, requested role, maximum approved duration, authenticated approver, decision, timestamp, and optional comment.
+- **FR-013**: A business decision MUST bind the exact request ID, requested role, authenticated approver, decision, timestamp, and optional comment.
 - **FR-014**: Business approval MUST move the request to `AwaitingDevOpsApproval`; business rejection MUST move it to `Rejected`.
 - **FR-015**: Only the authenticated DevOps approver MUST be able to decide a request that has a valid business approval.
-- **FR-016**: A DevOps decision MUST bind the exact request ID and MUST either reject or approve the exact business-approved role for a positive duration no greater than the business-approved duration.
-- **FR-017**: The system MUST reject any DevOps attempt to change role, increase duration, change client or environment, or act without a valid business approval.
+- **FR-016**: A DevOps decision MUST bind the exact request ID and MUST either reject or approve the exact business-approved role; neither requester nor approver input may select an access duration.
+- **FR-017**: The system MUST reject or ignore any caller-supplied attempt to change role, client, environment, or the server-owned fixed duration, and MUST reject acting without a valid business approval.
 - **FR-018**: DevOps rejection MUST move the request to `Rejected` without creating an access grant.
 - **FR-019**: Successful DevOps approval MUST immediately initiate protected provisioning without a separate human provisioning action or role.
 - **FR-020**: Before creating a grant, provisioning MUST reload authoritative request and approval evidence and verify current workflow state, approval order and authority, approved scope, current environment and role validity, incident validity when present, and consistency of the operation identity.
 - **FR-021**: Provisioning MUST accept only references needed to identify the operation and MUST NOT trust caller-supplied assertions that approval, authorization, or validation has succeeded.
-- **FR-022**: Successful provisioning MUST create or return exactly one synthetic access grant bound to requester, request ID, environment, role, activation, expiry, approved duration, correlation identifier, and a stable operation identity.
+- **FR-022**: Successful provisioning MUST create or return exactly one synthetic access grant bound to requester, request ID, environment, role, activation, expiry exactly eight hours after activation, correlation identifier, and a stable operation identity.
 - **FR-023**: Repeating the same logical provisioning operation with the same operation identity MUST return the existing result and MUST NOT create a duplicate grant.
 - **FR-024**: A provisioning failure MUST NOT be reported as success and MUST move the request to `ProvisioningFailed` when recovery by retry is appropriate.
-- **FR-025**: Only the authenticated DevOps approver MUST be able to retry a request in `ProvisioningFailed`, and retry MUST preserve the approved client, environment, role, duration, and operation identity.
+- **FR-025**: Only the authenticated DevOps approver MUST be able to retry a request in `ProvisioningFailed`, and retry MUST preserve the approved client, environment, role, fixed eight-hour grant rule, and operation identity.
 - **FR-026**: Retry MUST invoke the same full current-state revalidation and idempotent provisioning behavior as the initial attempt.
-- **FR-027**: Once submitted, the client, environment, requested role, requested duration, justification, incident association, and requester identity of an access request MUST be immutable.
+- **FR-027**: Once submitted, the client, environment, requested role, justification, incident association, and requester identity of an access request MUST be immutable.
 - **FR-028**: Correcting any submitted request field MUST require a new validated request with a new request ID and new approvals; existing request evidence MUST remain unchanged.
 - **FR-029**: Protected actions made by an unauthorized actor or after the request has left the required workflow state MUST be rejected, audited, and leave protected state unchanged.
 - **FR-030**: The persisted request workflow MUST be limited to `AwaitingBusinessApproval`, `AwaitingDevOpsApproval`, `Rejected`, `ProvisioningFailed`, and `Active`, unless a later approved change demonstrates a deterministic need for another status.
@@ -141,12 +141,12 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 ### Key Entities *(include if feature involves data)*
 
 - **Client**: A client boundary identified by a stable ID and associated with one or more production environments; authorization for one client never applies to another.
-- **Production Environment**: A client-owned target identified by a stable ID, with allowed roles, maximum access duration, and a configured business approver.
+- **Production Environment**: A client-owned target identified by a stable ID, with allowed roles and a configured business approver.
 - **Access Role**: A stable allowed access scope for a particular environment; roles have no generalized privilege ordering in this feature.
 - **Incident**: An optional stored record identified by a stable ID, with status and client or environment association used during validation.
-- **Access Request**: The requester's immutable submitted client, environment, role, duration, justification, optional incident, workflow status, timestamps, and correlation identifier.
-- **Approval Decision**: Authenticated business or DevOps evidence bound to one exact immutable request ID and scope, including decision, approver, role, duration, timestamp, and optional comment.
-- **Access Grant**: The synthetic, time-limited result of successful protected provisioning, bound to the approved requester, request, environment, role, activation, expiry, correlation, and operation identity.
+- **Access Request**: The requester's immutable submitted client, environment, role, justification, optional incident, workflow status, timestamps, and correlation identifier.
+- **Approval Decision**: Authenticated business or DevOps evidence bound to one exact immutable request ID and role, including decision, approver, timestamp, and optional comment.
+- **Access Grant**: The synthetic, fixed eight-hour result of successful protected provisioning, bound to the approved requester, request, environment, role, activation, expiry, correlation, and operation identity.
 - **Audit Event**: Insert-only evidence of a request action or outcome, tied to request ID, actor when applicable, timestamp, correlation, and structured details.
 - **Authenticated Principal**: One of the fixed demonstration identities whose authority is established by trusted server context rather than browser claims.
 
@@ -156,8 +156,8 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 - **SC-001**: In usability validation, at least 90% of representative users can turn the primary example intent into a correctly submitted request on their first attempt within 3 minutes.
 - **SC-002**: For 100% of acceptance tests, malformed or incomplete model output and invalid stored values result in correction guidance or a typed failure and never create a submitted approval or access grant.
-- **SC-003**: Across all authorization tests, 100% of wrong-client, wrong-role, invalid-transition, missing-approval, duration-increase, and unauthorized-actor attempts are rejected without changing protected workflow state or creating a grant.
-- **SC-004**: In 100% of successful paths, an active grant exactly matches the immutable request, business-approved role, and a duration no greater than the business-approved duration.
+- **SC-003**: Across all authorization tests, 100% of wrong-client, wrong-role, invalid-transition, missing-approval, crafted-duration, and unauthorized-actor attempts are rejected or safely ignored without changing protected workflow state or creating an incorrectly scoped grant.
+- **SC-004**: In 100% of successful paths, an active grant exactly matches the immutable request and business-approved role and expires exactly eight hours after activation.
 - **SC-005**: Across at least 100 repeated or concurrent attempts for the same approved operation, exactly one grant exists and every successful response identifies that same grant.
 - **SC-006**: Authorized participants can determine the current request status, approval evidence, grant outcome, expiry, and sequence of material events from the request-detail view within 60 seconds in at least 90% of usability checks.
 - **SC-007**: Every required audit scenario produces one or more correlated events containing the request ID, timestamp, outcome, and actor when applicable, while review confirms that no secrets, raw prompts, or complete sensitive context payloads are captured by default.
@@ -168,8 +168,9 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 ## Assumptions
 
 - This is a portfolio-grade, locally demonstrable vertical slice; all identities, enterprise context, incidents, and access grants are synthetic and no real production access is created.
-- Client Alpha uses environment `PROD-ALPHA-EU`, allows `ProductionReadOnly` and `ProductionSupport`, has an 8-hour maximum duration, and is assigned to the Client Alpha business approver.
-- Client Beta uses environment `PROD-BETA-UK`, allows only `ProductionReadOnly`, has a 4-hour maximum duration, and is assigned to the Client Beta business approver.
+- Client Alpha uses environment `PROD-ALPHA-EU`, allows `ProductionReadOnly` and `ProductionSupport`, and is assigned to the Client Alpha business approver.
+- Client Beta uses environment `PROD-BETA-UK`, allows only `ProductionReadOnly`, and is assigned to the Client Beta business approver.
+- Every successful grant lasts exactly eight hours, regardless of client or environment; duration is not requester- or approver-selectable.
 - Incident `INC-1042` is available as active synthetic context for the primary Client Alpha demonstration scenario.
 - A local identity selection mechanism establishes one of exactly four fixed authenticated principals and maps it to immutable trusted authority; it is explicitly not a production identity design.
 - React is an explicit delivery constraint chosen to use existing developer expertise. Its built assets and same-origin UI endpoints remain part of the single deployable host; there is no separately deployed frontend.

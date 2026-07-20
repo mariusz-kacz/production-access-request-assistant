@@ -41,7 +41,6 @@ public sealed class AccessRequest
         string clientId,
         string environmentId,
         string requestedRoleId,
-        int requestedDurationMinutes,
         string justification,
         string? incidentId,
         DateTimeOffset createdAt,
@@ -50,14 +49,6 @@ public sealed class AccessRequest
         if (id == Guid.Empty)
         {
             throw new ArgumentException("The request identifier must not be empty.", nameof(id));
-        }
-
-        if (requestedDurationMinutes <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(requestedDurationMinutes),
-                requestedDurationMinutes,
-                "The requested duration must be positive.");
         }
 
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
@@ -89,7 +80,6 @@ public sealed class AccessRequest
         ClientId = clientId;
         EnvironmentId = environmentId;
         RequestedRoleId = requestedRoleId;
-        RequestedDurationMinutes = requestedDurationMinutes;
         Justification = justification;
         IncidentId = incidentId;
         Status = RequestStatus.AwaitingBusinessApproval;
@@ -108,8 +98,6 @@ public sealed class AccessRequest
     public string EnvironmentId { get; private set; }
 
     public string RequestedRoleId { get; private set; }
-
-    public int RequestedDurationMinutes { get; private set; }
 
     public string Justification { get; private set; }
 

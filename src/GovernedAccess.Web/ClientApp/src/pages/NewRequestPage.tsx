@@ -23,7 +23,6 @@ interface DraftForm {
   clientId: string;
   environmentId: string;
   requestedRole: ProductionRole | "";
-  durationMinutes: string;
   justification: string;
   incidentId: string;
 }
@@ -40,7 +39,6 @@ const emptyDraftForm: DraftForm = {
   clientId: "",
   environmentId: "",
   requestedRole: "",
-  durationMinutes: "",
   justification: "",
   incidentId: "",
 };
@@ -264,8 +262,8 @@ export function NewRequestPage() {
         <form onSubmit={prepareDraft}>
           <label htmlFor="request-intent">Access request description</label>
           <p id="request-intent-hint">
-            Include the client, production environment, role, duration,
-            justification, and incident when applicable.
+            Include the client, production environment, role, justification, and
+            incident when applicable. Successful access lasts eight hours.
           </p>
           <textarea
             id="request-intent"
@@ -369,36 +367,6 @@ export function NewRequestPage() {
               <FieldErrorList
                 id="requested-role-errors"
                 errors={fieldErrors.requestedRole}
-              />
-            </div>
-
-            <div className="form-field">
-              <label htmlFor="duration-minutes">Duration in minutes</label>
-              <p id="duration-minutes-hint">
-                DevOps may reduce this duration but cannot increase it.
-              </p>
-              <input
-                id="duration-minutes"
-                name="durationMinutes"
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                value={draft.durationMinutes}
-                aria-invalid={fieldErrors.durationMinutes !== undefined}
-                aria-describedby={descriptionIds(
-                  "duration-minutes-hint",
-                  "duration-minutes-errors",
-                  fieldErrors.durationMinutes,
-                )}
-                onChange={(event) =>
-                  updateDraft("durationMinutes", event.target.value)
-                }
-                disabled={busy}
-              />
-              <FieldErrorList
-                id="duration-minutes-errors"
-                errors={fieldErrors.durationMinutes}
               />
             </div>
 
@@ -521,8 +489,6 @@ function toDraftForm(draft: AccessRequestDraft): DraftForm {
     clientId: draft.clientId ?? "",
     environmentId: draft.environmentId ?? "",
     requestedRole: draft.requestedRole ?? "",
-    durationMinutes:
-      draft.durationMinutes === null ? "" : String(draft.durationMinutes),
     justification: draft.justification ?? "",
     incidentId: draft.incidentId ?? "",
   };
@@ -537,7 +503,6 @@ function validateDraft(form: DraftForm): {
   const environmentId = form.environmentId.trim();
   const justification = form.justification.trim();
   const incidentId = form.incidentId.trim();
-  const durationText = form.durationMinutes.trim();
 
   requireValue(fieldErrors, "clientId", clientId, "Client ID is required.");
   requireValue(
@@ -549,17 +514,6 @@ function validateDraft(form: DraftForm): {
 
   if (form.requestedRole === "") {
     fieldErrors.requestedRole = ["Select a requested role."];
-  }
-
-  const durationMinutes = Number(durationText);
-  if (
-    durationText.length === 0 ||
-    !Number.isInteger(durationMinutes) ||
-    durationMinutes <= 0
-  ) {
-    fieldErrors.durationMinutes = [
-      "Duration must be a positive whole number of minutes.",
-    ];
   }
 
   if (justification.length < 10) {
@@ -582,7 +536,6 @@ function validateDraft(form: DraftForm): {
       clientId,
       environmentId,
       requestedRole: form.requestedRole,
-      durationMinutes,
       justification,
       incidentId: incidentId.length === 0 ? undefined : incidentId,
     },

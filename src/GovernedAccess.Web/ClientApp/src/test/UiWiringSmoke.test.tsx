@@ -25,7 +25,6 @@ const requestDetail: RequestDetailResponse = {
   clientId: "client-alpha",
   environmentId: "client-alpha-production",
   requestedRoleId: "ProductionSupport",
-  requestedDurationMinutes: 60,
   justification: "Investigate the active production incident.",
   incidentId: "INC-1042",
   status: "AwaitingBusinessApproval",
