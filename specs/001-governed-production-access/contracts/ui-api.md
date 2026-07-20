@@ -63,9 +63,21 @@ are based on the authenticated actor. Optional status filters cannot expand visi
 
 ### `GET /api/requests/{requestId}`
 
-Authorized participants only. Returns immutable request/current validation, all
+Authorized participants only. From the User Story 2 increment onward, returns the
+minimum navigable detail projection:
+
+`{ requestId, requesterId, clientId, environmentId, requestedRoleId,
+requestedDurationMinutes, justification, incidentId?, status, createdAt,
+lastModifiedAt, availableActions }`.
+
+`availableActions` is computed from the authenticated actor and current stored state;
+the configured approver receives `decideBusinessRequest` only while the request is
+`AwaitingBusinessApproval`. The requester can review their submitted request without
+receiving that action, and a nonparticipant receives `404`.
+
+Later story increments extend this stable endpoint with current validation, all
 decisions, provisioning outcome, grant/activation/expiry/logical expiry, ordered audit
-events, and server-computed available actions.
+events, DevOps actions, and retry. They do not introduce a replacement detail route.
 
 Submitted requests have no edit or resubmit endpoint. A correction is created through
 `POST /api/requests` and receives a new request ID.
@@ -100,7 +112,7 @@ browser provisioning endpoint.
 |---|---|
 | `/requests` | session, request list, demo session switch |
 | `/requests/new` | prepare draft, create request |
-| `/requests/:requestId` | immutable detail, human decisions, retry |
+| `/requests/:requestId` | immutable detail and business decision from US2; later enriched with DevOps, retry, grant, and audit evidence |
 
 SPA fallback handles only UI routes. `/api/*` and `/mcp` never fall back to
 `index.html`.

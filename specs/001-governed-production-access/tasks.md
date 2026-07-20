@@ -4,14 +4,14 @@
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 
-**Tests**: Tests are required by the feature specification. Within each user story, write the listed tests first and confirm they fail before implementing the behavior.
+**Tests**: Tests are required by the feature specification. Within each user story, write the listed tests first and confirm they fail before implementing the behavior. Keep React coverage to a minimal wiring smoke suite; exercise business rules, authorization, failures, persistence, and provisioning through .NET unit and integration tests.
 
 **Organization**: Tasks are grouped by user story so each story can be implemented and validated as an independently useful increment.
 
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel because it changes a different file and has no dependency on an incomplete task in the same phase
-- **[Story]**: Maps the task to its user story (`US1` through `US5`)
+- **[Story]**: Maps the task to its user story (`US1` through `US4`)
 - Every checklist item names the exact file or directory it changes
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -101,10 +101,23 @@
 - [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
 - [X] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
 - [X] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
-- [ ] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
-- [ ] T046 [US2] Integrate the business decision panel and refreshed request status into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [X] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
+- [X] T046 [US2] Integrate the business decision panel and refreshed request status, with one restricted-payload/action-visibility wiring smoke, in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx` and `src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx`
 
-**Checkpoint**: Client isolation and exact-version business approval are independently testable; no DevOps or provisioning behavior is required yet.
+### Corrective authenticated UI prerequisite
+
+- [X] T047 [US2] Add one application-session wiring smoke proving anonymous protected content is gated, all four fixed identities are offered, requester sign-in enables draft preparation, and identity switching or sign-out refreshes shell state in `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx`
+- [X] T048 [US2] Implement the demo identity selector with `GET /api/session`, antiforgery-protected `POST /api/demo/session`, `DELETE /api/demo/session`, fixed principal keys, safe errors, and abort handling in `src/GovernedAccess.Web/ClientApp/src/components/DemoIdentitySelector.tsx`
+- [X] T049 [US2] Integrate session bootstrap and the identity selector into the application shell, gate protected page content until authentication, and refresh UI state after sign-in, sign-out, or identity switching in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
+
+### Navigable business-detail vertical slice
+
+- [X] T050 [P] [US2] Add integration tests for authenticated request-detail retrieval, requester and configured-approver visibility, wrong-client and anonymous nonvisibility, immutable scope, current status, and server-computed `decideBusinessRequest` action in `tests/GovernedAccess.IntegrationTests/Requests/RequestDetailQueryTests.cs`
+- [X] T051 [US2] Implement the minimum participant-authorized request-detail projection with immutable submitted scope, current status, and server-computed business actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
+- [X] T052 [US2] Register the request query service and add `GET /api/requests/{requestId}` with cancellation and typed nonvisibility outcomes in `src/GovernedAccess.Web/Program.cs` and `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
+- [X] T053 [US2] Add the typed minimum detail contract, load request details by route ID with safe errors and abort handling, compose `/requests/:requestId`, and extend the existing application wiring smoke in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`, `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`, `src/GovernedAccess.Web/ClientApp/src/App.tsx`, and `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx`
+
+**Checkpoint**: Sign in as requester to prepare and submit a request, switch between the Beta and Alpha business approvers, and verify that only the configured Alpha approver can decide it; no DevOps or provisioning behavior is required yet.
 
 ---
 
@@ -116,21 +129,20 @@
 
 ### Tests for User Story 3
 
-- [ ] T047 [P] [US3] Add unit tests for exact role, positive duration ceiling, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [ ] T048 [P] [US3] Add protected handler tests for current-state reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
-- [ ] T049 [P] [US3] Add API tests for DevOps authentication, crafted scope over-posting, duration increase, rejection, antiforgery, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
-- [ ] T050 [P] [US3] Add React tests for allowed-duration approval, rejection, protected failure, and grant summary rendering in `src/GovernedAccess.Web/ClientApp/src/test/DevOpsDecisionPanel.test.tsx`
+- [ ] T054 [P] [US3] Add unit tests for exact role, positive duration ceiling, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
+- [ ] T055 [P] [US3] Add protected handler tests for current-state reload, current duration/incident revalidation, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [ ] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope over-posting, duration increase, rejection, antiforgery, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T051 [P] [US3] Implement DevOps decision rules and canonical length-prefixed SHA-256 operation identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
-- [ ] T052 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
-- [ ] T053 [US3] Implement the protected provisioning handler that reloads request and approvals, revalidates current scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
-- [ ] T054 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
-- [ ] T055 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
-- [ ] T056 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
-- [ ] T057 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
-- [ ] T058 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [ ] T057 [P] [US3] Implement DevOps decision rules and canonical length-prefixed SHA-256 operation identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
+- [ ] T058 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
+- [ ] T059 [US3] Implement the protected provisioning handler that reloads request and approvals, revalidates current scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
+- [ ] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
+- [ ] T061 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
+- [ ] T062 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
+- [ ] T063 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
+- [ ] T064 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 
 **Checkpoint**: The full two-human approval path produces exactly scoped synthetic access through deterministic authorization and provisioning.
 
@@ -144,19 +156,18 @@
 
 ### Tests for User Story 4
 
-- [ ] T066 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and full revalidation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
-- [ ] T067 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
-- [ ] T068 [P] [US4] Add API tests for participant-filtered lists, server-computed actions, complete immutable detail evidence, logical expiry, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
-- [ ] T069 [P] [US4] Add React tests for request list actionability, retry, audit timeline, provisioning evidence, and logical expiry in `src/GovernedAccess.Web/ClientApp/src/test/RequestEvidencePages.test.tsx`
+- [ ] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and full revalidation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
+- [ ] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
+- [ ] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T070 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
-- [ ] T071 [US4] Implement participant-filtered request list/detail projections, ordered decisions, grant state, logical expiry, and available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
-- [ ] T072 [US4] Add `GET /api/requests`, `GET /api/requests/{requestId}`, and `POST /api/requests/{requestId}/retry-provisioning` to `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
-- [ ] T073 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
-- [ ] T074 [US4] Complete immutable request detail rendering for validation, all decisions, provisioning outcome, grant expiry, retry, available actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
-- [ ] T075 [US4] Complete the three-route React application and demo identity selector in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
+- [ ] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
+- [ ] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
+- [ ] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
+- [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
+- [ ] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [ ] T073 [US4] Complete the `/requests` list route and three-route navigation while preserving the established session state and `/requests/:requestId` detail composition in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
 
 **Checkpoint**: Failed work is safely recoverable, concurrent duplicates converge on one grant, and authorized users can understand all material evidence.
 
@@ -166,12 +177,12 @@
 
 **Purpose**: Validate security, build shape, observability, and the complete local demonstration across all stories.
 
-- [ ] T076 [P] Add end-to-end security tests covering unauthenticated access, antiforgery on every unsafe endpoint, identity/role/approver over-posting, and `/api`/`/mcp` SPA fallback exclusion in `tests/GovernedAccess.IntegrationTests/Security/ApiSecurityTests.cs`
-- [ ] T077 [P] Add audit persistence tests proving insert-only behavior, required event coverage, correlation fields, safe details allowlisting, and absence of raw prompts/full MCP payloads in `tests/GovernedAccess.IntegrationTests/Auditing/AuditEvidenceTests.cs`
-- [ ] T078 [P] Add host tests proving model and MCP duration/outcome metadata logging without sensitive payload capture in `tests/GovernedAccess.IntegrationTests/Observability/OperationalLoggingTests.cs`
-- [ ] T079 Add production static-file and hashed Vite asset host validation in `tests/GovernedAccess.IntegrationTests/Hosting/SingleHostAssetTests.cs`
-- [ ] T080 Run and reconcile every automated command and scenario in `specs/001-governed-production-access/quickstart.md`
-- [ ] T081 Record final build, test, 15-minute demonstration, and no-live-dependency evidence in `specs/001-governed-production-access/validation-report.md`
+- [ ] T074 [P] Add end-to-end security tests covering unauthenticated access, antiforgery on every unsafe endpoint, identity/role/approver over-posting, and `/api`/`/mcp` SPA fallback exclusion in `tests/GovernedAccess.IntegrationTests/Security/ApiSecurityTests.cs`
+- [ ] T075 [P] Add audit persistence tests proving insert-only behavior, required event coverage, correlation fields, safe details allowlisting, and absence of raw prompts/full MCP payloads in `tests/GovernedAccess.IntegrationTests/Auditing/AuditEvidenceTests.cs`
+- [ ] T076 [P] Add host tests proving model and MCP duration/outcome metadata logging without sensitive payload capture in `tests/GovernedAccess.IntegrationTests/Observability/OperationalLoggingTests.cs`
+- [ ] T077 Add production static-file, hashed Vite asset, and three-route SPA host smoke validation in `tests/GovernedAccess.IntegrationTests/Hosting/SingleHostAssetTests.cs`
+- [ ] T078 Run and reconcile every automated command and scenario in `specs/001-governed-production-access/quickstart.md`
+- [ ] T079 Record final build, test, 15-minute demonstration, and no-live-dependency evidence in `specs/001-governed-production-access/validation-report.md`
 
 ---
 
@@ -182,16 +193,15 @@
 - **Setup (Phase 1)** has no dependencies.
 - **Foundational (Phase 2)** depends on Setup and blocks every user story.
 - **US1 (Phase 3)** starts after Foundational and is the MVP.
-- **US2 (Phase 4)** starts after Foundational but needs a submitted request fixture supplied by US1 for its end-to-end demonstration.
-- **US3 (Phase 5)** depends on US2 because DevOps authorization requires a valid current business approval.
-- **US4 (Phase 6)** depends on US3 for a durable failed provisioning operation and grant identity; list/detail query work can begin after Foundational.
+- **US2 (Phase 4)** starts after Foundational but needs a submitted request fixture supplied by US1 for its end-to-end demonstration; T047-T049 establish the browser session and T050-T053 establish the minimum navigable request-detail vertical slice required by the phase checkpoint.
+- **US3 (Phase 5)** depends on US2 through T053 because DevOps authorization requires a valid current business approval and all authenticated UI actions reuse the established session and detail route.
+- **US4 (Phase 6)** depends on US3 for a durable failed provisioning operation and grant identity; it enriches the request-detail query and page established in US2 rather than introducing their reachability.
 - **Polish (Phase 7)** follows all stories selected for delivery.
 
 ### User Story Dependency Graph
 
 ```text
 Setup -> Foundational -> US1 -> US2 -> US3 -> US4
-                         +-----------> query portions of US4
 ```
 
 ### Within Each User Story
@@ -202,13 +212,28 @@ Setup -> Foundational -> US1 -> US2 -> US3 -> US4
 4. Implement typed frontend contracts/client behavior before page integration.
 5. Run the story-specific test set and its independent test before the checkpoint.
 
+T047 must be written and observed failing before T048 and T049 are implemented.
+T048 implements the selector and session calls; T049 composes that state into the
+application shell. Every remaining authenticated browser workflow depends on T049.
+T050 must fail for the missing authenticated detail query before T051 and T052 are
+implemented. T053 consumes that endpoint, makes the already-implemented business
+panel reachable at `/requests/:requestId`, and must complete before the US2 checkpoint.
+T069 and T072 enrich the established query/page; T073 adds the list route and does not
+reimplement sign-in, sign-out, or request-detail routing.
+
+React tests intentionally remain a minimal wiring smoke suite. Deterministic business
+rules, authorization, validation, failure branches, persistence, and provisioning are
+covered by the .NET unit and integration tasks rather than duplicated in component
+tests. UI validation is limited to session/application wiring, one restricted decision
+payload and server-action visibility smoke, and the production SPA host smoke.
+
 ## Parallel Opportunities
 
 - In Setup, T003, T004, and T005 can proceed in parallel after T001; T006 and T007 then converge on the frontend host build.
 - In Foundational, T008-T011, T015, and T016 use separate files; persistence wiring follows the shared entities.
 - All test tasks at the start of each story are parallelizable because they occupy separate test files.
 - Core policy, adapter, and React component tasks marked `[P]` can proceed concurrently once their shared contracts exist.
-- US4 query projections can proceed while US3 provisioning behavior is completed.
+- US4 list and detail-enrichment tests can be prepared while US3 provisioning behavior is completed, but their implementation consumes the completed provisioning evidence.
 
 ## Parallel Example: User Story 1
 
@@ -221,22 +246,24 @@ T035 client.ts | T036 contracts.ts
 ## Parallel Example: User Story 2
 
 ```text
-T039 BusinessDecisionPolicyTests.cs | T040 BusinessDecisionTests.cs | T041 BusinessDecisionPanel.test.tsx
+T039 BusinessDecisionPolicyTests.cs | T040 BusinessDecisionTests.cs | T050 RequestDetailQueryTests.cs
 T042 BusinessDecisionPolicy.cs | T045 BusinessDecisionPanel.tsx
+T047 AppSession.test.tsx -> T048 DemoIdentitySelector.tsx -> T049 App.tsx
+T050 RequestDetailQueryTests.cs -> T051 RequestQueryService.cs -> T052 AccessRequestsController.cs -> T053 request-detail route
 ```
 
 ## Parallel Example: User Story 3
 
 ```text
-T047 DevOpsDecisionPolicyTests.cs | T048 ProtectedProvisioningTests.cs | T049 DevOpsDecisionTests.cs | T050 DevOpsDecisionPanel.test.tsx
-T051 DevOpsDecisionPolicy.cs | T052 Provisioning.cs | T054 SyntheticAccessProvisioner.cs | T057 DevOpsDecisionPanel.tsx
+T054 DevOpsDecisionPolicyTests.cs | T055 ProtectedProvisioningTests.cs | T056 DevOpsDecisionTests.cs
+T057 DevOpsDecisionPolicy.cs | T058 Provisioning.cs | T060 SyntheticAccessProvisioner.cs | T063 DevOpsDecisionPanel.tsx
 ```
 
 ## Parallel Example: User Story 4
 
 ```text
-T066 RetryProvisioningTests.cs | T067 ProvisioningIdempotencyTests.cs | T068 RequestQueriesTests.cs | T069 RequestEvidencePages.test.tsx
-T073 RequestListPage.tsx can proceed while T070 ProvisioningRetryService.cs is implemented
+T065 RetryProvisioningTests.cs | T066 ProvisioningIdempotencyTests.cs | T067 RequestQueriesTests.cs
+T071 RequestListPage.tsx can proceed while T068 ProvisioningRetryService.cs is implemented
 ```
 
 ## Implementation Strategy
@@ -245,12 +272,13 @@ T073 RequestListPage.tsx can proceed while T070 ProvisioningRetryService.cs is i
 
 1. Complete Setup and Foundational.
 2. Complete US1, including all US1 automated tests.
-3. Stop and validate the primary Client Alpha/`INC-1042` request flow independently.
-4. Demonstrate that malformed/incomplete model output and invalid stored values create no approval or grant.
+3. Complete corrective session tasks T047-T049 so the browser can establish the authenticated requester required by US1.
+4. Stop and validate the primary Client Alpha/`INC-1042` request flow independently.
+5. Demonstrate that malformed/incomplete model output and invalid stored values create no approval or grant.
 
 ### Incremental Delivery
 
-1. Add US2 to establish the client-isolated business authorization boundary.
+1. Complete US2 through T053 so the browser session, request-detail query/route, and client-isolated business authorization boundary are usable together.
 2. Add US3 to complete two-human approval and immediate protected provisioning.
 3. Add US4 to prove recovery, concurrency idempotency, and inspectable evidence.
 4. Complete cross-cutting security, logging, hosting, and quickstart validation.

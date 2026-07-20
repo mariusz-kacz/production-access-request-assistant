@@ -60,13 +60,20 @@ advertises exactly the three tools in [contracts/mcp-tools.json](contracts/mcp-t
 
 ## Scenario 2: client-isolated business approval
 
-1. Open the Alpha request as the Client Beta business approver and attempt
-   approval.
-2. Reopen it as the Client Alpha business approver and approve.
+1. Follow the submitted request's **View request details** link, or open
+   `/requests/{requestId}` directly, and verify the immutable scope and current status
+   load from the server.
+2. Switch to the Client Beta business approver. Verify the request and action are not
+   exposed; the automated API test also attempts the crafted decision and proves it is
+   rejected without a state change.
+3. Switch to the Client Alpha business approver on the same URL. Verify the detail is
+   reloaded, the business decision panel appears, and approve.
 
 Expected: Beta is rejected and audited without state change. Alpha approval binds the
 exact request ID, role, and duration and moves the request to
-`AwaitingDevOpsApproval`.
+`AwaitingDevOpsApproval`. This scenario is runnable when User Story 2 completes and
+does not depend on the later request list, DevOps, provisioning, retry, or full audit
+timeline work.
 
 ## Scenario 3: DevOps approval and independent provisioning
 

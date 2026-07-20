@@ -185,3 +185,18 @@ validation succeeds. Submitted request fields never change. `Active` and `Reject
 are terminal for this feature. Unauthorized, invalid-transition, concurrency-conflict,
 or failed-validation attempts leave protected state unchanged and append appropriate
 evidence when a request exists.
+
+## Progressive request-detail projection
+
+The request-detail projection is read-only and is not a separately persisted entity.
+Its minimum User Story 2 shape contains the immutable `AccessRequest` fields, current
+status and timestamps, plus `AvailableActions` computed from the authenticated actor,
+current environment responsibility, and current workflow state. It never accepts an
+actor or action list from the browser.
+
+Participant visibility is evaluated before projection: the requester and currently
+responsible business approver can see the request during the business-decision stage;
+a nonparticipant receives no detail. Later stories extend this same projection with
+ordered decisions, current validation, provisioning operation, grant, logical expiry,
+retry eligibility, and ordered audit events. Those extensions do not change the
+immutable request entity or introduce a second detail endpoint.

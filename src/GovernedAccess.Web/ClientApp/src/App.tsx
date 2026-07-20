@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   BrowserRouter,
   Link,
@@ -7,7 +8,10 @@ import {
   Routes,
 } from "react-router";
 
+import type { SessionView } from "./api/contracts";
+import { DemoIdentitySelector } from "./components/DemoIdentitySelector";
 import { NewRequestPage } from "./pages/NewRequestPage";
+import { RequestDetailPage } from "./pages/RequestDetailPage";
 
 export function App() {
   return (
@@ -18,6 +22,8 @@ export function App() {
 }
 
 function ApplicationShell() {
+  const [session, setSession] = useState<SessionView | null>(null);
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -40,17 +46,52 @@ function ApplicationShell() {
         </nav>
       </header>
 
-      <Routes>
-        <Route path="/" element={<Navigate to="/requests/new" replace />} />
-        <Route path="/requests/new" element={<NewRequestPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <DemoIdentitySelector onSessionChange={setSession} />
+
+      {session === null ? (
+        <SessionLoadingPage />
+      ) : session.authenticated ? (
+        <AuthenticatedRoutes key={session.principal.id} />
+      ) : (
+        <SignInRequiredPage />
+      )}
 
       <footer className="app-footer">
         AI assists with interpretation. Humans approve. Deterministic services
         authorize and execute.
       </footer>
     </div>
+  );
+}
+
+function AuthenticatedRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/requests/new" replace />} />
+      <Route path="/requests/new" element={<NewRequestPage />} />
+      <Route path="/requests/:requestId" element={<RequestDetailPage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
+  );
+}
+
+function SessionLoadingPage() {
+  return (
+    <main className="session-page" aria-labelledby="session-loading-title">
+      <h1 id="session-loading-title">Checking your demo session</h1>
+      <p>Protected application content will appear after the session is loaded.</p>
+    </main>
+  );
+}
+
+function SignInRequiredPage() {
+  return (
+    <main className="session-page" aria-labelledby="sign-in-required-title">
+      <h1 id="sign-in-required-title">Sign in to continue</h1>
+      <p>
+        Select a fixed demo identity to use protected application capabilities.
+      </p>
+    </main>
   );
 }
 

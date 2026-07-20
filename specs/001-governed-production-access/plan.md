@@ -47,6 +47,23 @@ Implementation order:
 Completion requires no remaining `AccessData`, `IAccessDataReader`, `accessData`, or
 `access-data-*` umbrella names outside this migration record.
 
+## Independently Navigable Story Slices
+
+**Status**: Planning correction on 2026-07-20.
+
+Each user story that introduces a browser action must also deliver the minimum query
+and route needed to reach that action before the story checkpoint. User Story 2
+therefore owns an authenticated `GET /api/requests/{requestId}` projection and the
+`/requests/:requestId` React route with immutable request scope, current status, and
+server-computed available actions. The submitted-request success link must open this
+route, and switching demo identities on the route must reload the projection.
+
+User Story 4 does not create the detail route. It extends the established projection
+with ordered decisions, current validation, provisioning outcome, grant and logical
+expiry, retry, and audit evidence, and adds the request-list route. This keeps the
+business-decision story independently demonstrable without pulling provisioning or
+complete evidence scope into an earlier phase.
+
 ## Technical Context
 
 **Language/Version**: C# 14 on .NET 10 LTS; TypeScript with React 19.2; Node.js 24 LTS for frontend build tooling
@@ -166,6 +183,10 @@ thin React presentation.
   Antiforgery validation is applied to unsafe actions without affecting request GETs.
 - React invokes focused same-origin JSON commands and queries through one typed fetch
   wrapper; UI visibility is never treated as authorization.
+- Request detail is delivered progressively through one stable endpoint and route:
+  US2 establishes participant visibility, immutable scope, status, and available
+  business actions; later stories enrich the response without deferring reachability
+  of already-implemented human actions.
 - Production publish builds hashed Vite assets for ASP.NET static-file hosting. During
   development Vite proxies `/api` to ASP.NET Core for HMR without a production CORS
   design; SPA fallback excludes `/api/*` and `/mcp`.

@@ -13,6 +13,38 @@ namespace GovernedAccess.Web.Controllers;
 [Authorize]
 public sealed class AccessRequestsController : ControllerBase
 {
+    [HttpGet("{requestId:guid}")]
+    public async Task<ActionResult<RequestDetailResponse>> GetDetailAsync(
+        Guid requestId,
+        [FromServices] RequestQueryService queryService,
+        CancellationToken cancellationToken)
+    {
+        var result = await queryService.GetDetailAsync(
+            requestId,
+            User.FindFirstValue(ClaimTypes.NameIdentifier),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Failure!.ToProblemDetails(HttpContext);
+        }
+
+        var detail = result.Value;
+        return Ok(new RequestDetailResponse(
+            detail.RequestId,
+            detail.RequesterId,
+            detail.ClientId,
+            detail.EnvironmentId,
+            detail.RequestedRoleId,
+            detail.RequestedDurationMinutes,
+            detail.Justification,
+            detail.IncidentId,
+            detail.Status.ToString(),
+            detail.CreatedAt,
+            detail.LastModifiedAt,
+            detail.AvailableActions));
+    }
+
     [HttpPost]
     [Authorize(Roles = nameof(PrincipalKind.Requester))]
     [ServiceFilter(typeof(GovernedAccessAntiforgeryFilter))]
@@ -79,3 +111,17 @@ public sealed record CreateAccessRequestResponse(
     Guid RequestId,
     string Status,
     string CorrelationId);
+
+public sealed record RequestDetailResponse(
+    Guid RequestId,
+    string RequesterId,
+    string ClientId,
+    string EnvironmentId,
+    string RequestedRoleId,
+    int RequestedDurationMinutes,
+    string Justification,
+    string? IncidentId,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset LastModifiedAt,
+    IReadOnlyList<string> AvailableActions);

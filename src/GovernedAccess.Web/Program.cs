@@ -36,6 +36,7 @@ builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
 builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
 builder.Services.AddScoped<RequestValidator>();
 builder.Services.AddScoped<RequestSubmissionService>();
+builder.Services.AddScoped<RequestQueryService>();
 builder.Services.AddScoped<BusinessDecisionService>();
 builder.Services.AddHttpClient();
 builder.Services

@@ -61,6 +61,29 @@ export interface CreateAccessRequestResponse {
   correlationId: string;
 }
 
+export type RequestStatus =
+  | "AwaitingBusinessApproval"
+  | "AwaitingDevOpsApproval"
+  | "Rejected"
+  | "ProvisioningFailed"
+  | "Active";
+
+export interface RequestDetailResponse {
+  requestId: string;
+  requesterId: string;
+  clientId: string;
+  environmentId: string;
+  requestedRoleId: ProductionRole;
+  requestedDurationMinutes: number;
+  justification: string;
+  incidentId: string | null;
+  status: RequestStatus;
+  createdAt: string;
+  lastModifiedAt: string;
+  // Presentation hints only; the server authorizes every protected action.
+  availableActions: string[];
+}
+
 export const demoPrincipalKeys = {
   requester: "requester",
   clientAlphaApprover: "client-alpha-business-approver",

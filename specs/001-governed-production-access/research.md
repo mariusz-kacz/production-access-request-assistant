@@ -236,4 +236,22 @@ optional polish.
 **Alternatives considered**: Full collector/dashboard stack (blocks MVP); no tracing
 hooks (makes later correlation work harder).
 
+## Browser action reachability by story
+
+**Decision**: Deliver the minimum authenticated request-detail query and
+`/requests/:requestId` route in User Story 2, alongside the business-decision action.
+Return immutable request scope, current status, participant visibility, and
+server-computed available actions at that stage. Enrich the same endpoint and page in
+later stories with DevOps, provisioning, retry, grant, and audit evidence.
+
+**Rationale**: A browser action is not an independently usable story if its component
+exists but no route or query can supply it. The progressive projection preserves the
+single-host design and stable URL while keeping later evidence work in its owning
+story.
+
+**Alternatives considered**: Defer all list/detail work to User Story 4 (leaves the
+User Story 2 panel unreachable); move the complete User Story 4 query and evidence
+scope earlier (breaks story independence and requires unimplemented provisioning
+state); use hard-coded browser fixtures (does not demonstrate server authorization).
+
 All technical-context clarifications are resolved.
