@@ -1,7 +1,8 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Web.Endpoints;
+using GovernedAccess.Web.Controllers;
 using GovernedAccess.Web.Observability;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GovernedAccess.IntegrationTests.Endpoints;
 
@@ -27,13 +28,14 @@ public sealed class ProblemDetailsMappingTests
         var failure = new ApplicationFailure(kind, "stable_code", "Safe detail.");
 
         var result = failure.ToProblemDetails(context);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
 
         Assert.Equal(expectedStatus, result.StatusCode);
-        Assert.Equal("application/problem+json", result.ContentType);
-        Assert.Equal(expectedTitle, result.ProblemDetails.Title);
-        Assert.Equal("Safe detail.", result.ProblemDetails.Detail);
-        Assert.Equal("stable_code", result.ProblemDetails.Extensions["code"]);
-        Assert.Equal("correlation-123", result.ProblemDetails.Extensions["correlationId"]);
+        Assert.Contains("application/problem+json", result.ContentTypes);
+        Assert.Equal(expectedTitle, problem.Title);
+        Assert.Equal("Safe detail.", problem.Detail);
+        Assert.Equal("stable_code", problem.Extensions["code"]);
+        Assert.Equal("correlation-123", problem.Extensions["correlationId"]);
     }
 
     [Fact]
@@ -50,14 +52,15 @@ public sealed class ProblemDetailsMappingTests
             "Correct the highlighted fields.",
             fieldErrors,
             context);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
 
         var mappedErrors = Assert.IsAssignableFrom<IReadOnlyList<FieldValidationError>>(
-            result.ProblemDetails.Extensions["fieldErrors"]);
+            problem.Extensions["fieldErrors"]);
         Assert.Equal(fieldErrors, mappedErrors);
         Assert.Equal(422, result.StatusCode);
-        Assert.Equal("Validation failed.", result.ProblemDetails.Title);
-        Assert.Equal("request_validation_failed", result.ProblemDetails.Extensions["code"]);
-        Assert.Equal("correlation-456", result.ProblemDetails.Extensions["correlationId"]);
+        Assert.Equal("Validation failed.", problem.Title);
+        Assert.Equal("request_validation_failed", problem.Extensions["code"]);
+        Assert.Equal("correlation-456", problem.Extensions["correlationId"]);
     }
 
     private static DefaultHttpContext CreateContext(string correlationId)

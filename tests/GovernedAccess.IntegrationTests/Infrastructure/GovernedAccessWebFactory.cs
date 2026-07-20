@@ -2,8 +2,8 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Authentication;
-using GovernedAccess.Web.Endpoints;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Security;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -98,8 +98,8 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(request);
 
         var requestToken = await GetAntiforgeryTokenAsync(client, cancellationToken);
-        request.Headers.Remove(SessionEndpoints.AntiforgeryHeaderName);
-        request.Headers.Add(SessionEndpoints.AntiforgeryHeaderName, requestToken);
+        request.Headers.Remove(AntiforgerySecurity.HeaderName);
+        request.Headers.Add(AntiforgerySecurity.HeaderName, requestToken);
 
         return await client.SendAsync(request, cancellationToken);
     }
@@ -164,7 +164,7 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                 "The antiforgery endpoint did not issue a request-token cookie.");
         }
 
-        var cookiePrefix = $"{SessionEndpoints.RequestTokenCookieName}=";
+        var cookiePrefix = $"{AntiforgerySecurity.RequestTokenCookieName}=";
         foreach (var header in setCookieHeaders)
         {
             if (!header.StartsWith(cookiePrefix, StringComparison.Ordinal))

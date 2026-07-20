@@ -2,7 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GovernedAccess.Web.Authentication;
-using GovernedAccess.Web.Endpoints;
+using GovernedAccess.Web.Controllers;
+using GovernedAccess.Web.Security;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace GovernedAccess.IntegrationTests.Endpoints;
 
-public sealed class SessionEndpointsTests
+public sealed class SessionControllerTests
 {
     [Fact]
     public async Task AntiforgeryEndpointIssuesReadableTokenWithoutAuthenticating()
@@ -30,10 +31,12 @@ public sealed class SessionEndpointsTests
         using var session = await ReadJsonAsync(sessionResponse, cancellationToken);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Contains(SessionEndpoints.AntiforgeryCookieName, cookies.Keys);
-        Assert.Contains(SessionEndpoints.RequestTokenCookieName, cookies.Keys);
-        Assert.DoesNotContain("HttpOnly", cookies[SessionEndpoints.RequestTokenCookieName].Attributes);
-        Assert.True(cookies[SessionEndpoints.RequestTokenCookieName].Attributes.Contains(
+        Assert.Contains(AntiforgerySecurity.CookieName, cookies.Keys);
+        Assert.Contains(AntiforgerySecurity.RequestTokenCookieName, cookies.Keys);
+        Assert.DoesNotContain(
+            "HttpOnly",
+            cookies[AntiforgerySecurity.RequestTokenCookieName].Attributes);
+        Assert.True(cookies[AntiforgerySecurity.RequestTokenCookieName].Attributes.Contains(
             "Secure",
             StringComparison.OrdinalIgnoreCase));
         Assert.False(session.RootElement.GetProperty("authenticated").GetBoolean());
@@ -213,8 +216,9 @@ public sealed class SessionEndpointsTests
         var request = CreateJsonRequest(method, path, body);
         request.Headers.Add("Cookie", CreateCookieHeader(cookies));
         request.Headers.Add(
-            SessionEndpoints.AntiforgeryHeaderName,
-            Uri.UnescapeDataString(cookies[SessionEndpoints.RequestTokenCookieName].Value));
+            AntiforgerySecurity.HeaderName,
+            Uri.UnescapeDataString(
+                cookies[AntiforgerySecurity.RequestTokenCookieName].Value));
         return request;
     }
 
@@ -298,11 +302,16 @@ public sealed class SessionEndpointsTests
             builder.Logging.ClearProviders();
             builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
             builder.Services.AddDemoAuthentication();
-            builder.Services.AddSessionEndpoints();
+            builder.Services.AddAuthorization();
+            builder.Services
+                .AddControllers()
+                .AddApplicationPart(typeof(SessionController).Assembly);
+            builder.Services.AddGovernedAccessAntiforgery();
 
             var application = builder.Build();
             application.UseAuthentication();
-            application.MapSessionEndpoints();
+            application.UseAuthorization();
+            application.MapControllers();
             await application.StartAsync(cancellationToken);
 
             var client = application.GetTestClient();

@@ -43,10 +43,10 @@
 - [X] T014 Seed exactly two clients, two environments, their allowed roles, synthetic incidents, and four immutable principals in `src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs`
 - [X] T015 [P] Implement correlation ID middleware and metadata-only operation logging helpers in `src/GovernedAccess.Web/Observability/CorrelationMiddleware.cs`
 - [X] T016 [P] Implement cookie authentication and immutable principal-key-to-claims resolution in `src/GovernedAccess.Web/Authentication/DemoAuthentication.cs`
-- [X] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Endpoints/SessionEndpoints.cs`
-- [X] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Endpoints/ProblemDetailsMapping.cs`
+- [X] T017 Implement antiforgery-protected demo session, session query, and antiforgery endpoints in `src/GovernedAccess.Web/Controllers/SessionController.cs`
+- [X] T018 Implement stable Problem Details mapping for validation, authorization, stale-state, concurrency, timeout, cancellation, and dependency failures in `src/GovernedAccess.Web/Controllers/ProblemDetailsMapping.cs`
 - [X] T019 Create the SQLite in-memory `WebApplicationFactory`, deterministic clock, identity helpers, and database reset fixtures in `tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs`
-- [X] T020 Wire configuration, persistence, authentication, antiforgery, correlation, API route groups, `/mcp`, static assets, and non-API SPA fallback in `src/GovernedAccess.Web/Program.cs`
+- [X] T020 Wire configuration, persistence, authentication, antiforgery, correlation, controller routing, `/mcp`, static assets, and non-API SPA fallback in `src/GovernedAccess.Web/Program.cs`
 
 **Checkpoint**: The shared host starts with deterministic data, trusted cookie identity, antiforgery, persistence constraints, and reusable test fixtures.
 
@@ -75,7 +75,7 @@
 - [X] T031 [US1] Register a stateless Streamable HTTP `/mcp` server from `src/GovernedAccess.Mcp/McpRegistration.cs` with an explicit allowlist containing only the three contract tools, then compose it from `src/GovernedAccess.Web/Program.cs`
 - [X] T032 [P] [US1] Implement deterministic fake `IChatClient` modes for valid, incomplete, malformed, timeout, cancellation, and unavailable results in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [X] T033 [US1] Implement the `IChatClient` interpretation adapter with strict JSON schema parsing, a 30-second model timeout, 5-second MCP calls, identifier revalidation, safe logging, and linked cancellation in `src/GovernedAccess.Web/Ai/ChatRequestDraftInterpreter.cs`
-- [X] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Endpoints/RequestPreparationEndpoints.cs`
+- [X] T034 [US1] Implement `POST /api/request-drafts/prepare` and `POST /api/requests` without accepting actor or approver claims in `src/GovernedAccess.Web/Controllers/RequestDraftsController.cs` and `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [X] T035 [P] [US1] Implement the credentialed typed fetch wrapper with antiforgery headers, Problem Details mapping, and `AbortSignal` support in `src/GovernedAccess.Web/ClientApp/src/api/client.ts`
 - [X] T036 [P] [US1] Define TypeScript draft, request creation, session, and typed error contracts in `src/GovernedAccess.Web/ClientApp/src/api/contracts.ts`
 - [X] T037 [US1] Implement the intent, draft review/correction, validation, and submission flow in `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx`
@@ -100,7 +100,7 @@
 
 - [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
 - [X] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
-- [ ] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Endpoints/BusinessDecisionEndpoints.cs`
+- [X] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
 - [ ] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
 - [ ] T046 [US2] Integrate the business decision panel and refreshed request status into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 
@@ -128,7 +128,7 @@
 - [ ] T053 [US3] Implement the protected provisioning handler that reloads request and approvals, revalidates current scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
 - [ ] T054 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
 - [ ] T055 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
-- [ ] T056 [US3] Implement `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions in `src/GovernedAccess.Web/Endpoints/DevOpsDecisionEndpoints.cs`
+- [ ] T056 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
 - [ ] T057 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
 - [ ] T058 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 
@@ -153,7 +153,7 @@
 
 - [ ] T070 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
 - [ ] T071 [US4] Implement participant-filtered request list/detail projections, ordered decisions, grant state, logical expiry, and available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
-- [ ] T072 [US4] Implement `GET /api/requests`, `GET /api/requests/{requestId}`, and `POST /api/requests/{requestId}/retry-provisioning` in `src/GovernedAccess.Web/Endpoints/RequestQueryAndRetryEndpoints.cs`
+- [ ] T072 [US4] Add `GET /api/requests`, `GET /api/requests/{requestId}`, and `POST /api/requests/{requestId}/retry-provisioning` to `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [ ] T073 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
 - [ ] T074 [US4] Complete immutable request detail rendering for validation, all decisions, provisioning outcome, grant expiry, retry, available actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 - [ ] T075 [US4] Complete the three-route React application and demo identity selector in `src/GovernedAccess.Web/ClientApp/src/App.tsx`

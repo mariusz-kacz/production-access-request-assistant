@@ -1,6 +1,6 @@
 # Implementation Plan: Governed Production Access
 
-**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-15 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-20 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/001-governed-production-access/spec.md`
 
@@ -51,7 +51,7 @@ Completion requires no remaining `AccessData`, `IAccessDataReader`, `accessData`
 
 **Language/Version**: C# 14 on .NET 10 LTS; TypeScript with React 19.2; Node.js 24 LTS for frontend build tooling
 
-**Primary Dependencies**: ASP.NET Core 10 Minimal APIs and static files, React 19.2, React Router, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`
+**Primary Dependencies**: ASP.NET Core 10 MVC controllers and static files, React 19.2, React Router, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`
 
 **Storage**: One local SQLite database through EF Core; deterministic seed data for request context and principals; insert-only audit rows; unique provisioning operation identity
 
@@ -134,7 +134,7 @@ src/
     │   │   └── test/
     │   ├── package.json
     │   └── vite.config.ts
-    ├── Endpoints/
+    ├── Controllers/
     ├── Authentication/
     ├── Persistence/
     ├── Ai/
@@ -159,6 +159,11 @@ thin React presentation.
 
 ## Implementation Boundaries
 
+- MVC controllers follow stable HTTP resource and policy boundaries:
+  `RequestDraftsController` owns requester-only draft preparation,
+  `AccessRequestsController` owns request creation, queries, and retry, and
+  `RequestDecisionsController` owns business and DevOps decision subresources.
+  Antiforgery validation is applied to unsafe actions without affecting request GETs.
 - React invokes focused same-origin JSON commands and queries through one typed fetch
   wrapper; UI visibility is never treated as authorization.
 - Production publish builds hashed Vite assets for ASP.NET static-file hosting. During

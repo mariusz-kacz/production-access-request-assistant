@@ -1,13 +1,12 @@
 using GovernedAccess.Core.Application;
 using GovernedAccess.Web.Observability;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
-namespace GovernedAccess.Web.Endpoints;
+namespace GovernedAccess.Web.Controllers;
 
 public static class ProblemDetailsMapping
 {
-    public static ProblemHttpResult ToProblemDetails(
+    public static ObjectResult ToProblemDetails(
         this ApplicationFailure failure,
         HttpContext context)
     {
@@ -25,10 +24,10 @@ public static class ProblemDetailsMapping
         problem.Extensions["code"] = failure.Code;
         problem.Extensions["correlationId"] = GetCorrelationId(context);
 
-        return TypedResults.Problem(problem);
+        return CreateResult(problem, status);
     }
 
-    public static ProblemHttpResult ToValidationProblemDetails(
+    public static ObjectResult ToValidationProblemDetails(
         string code,
         string detail,
         IEnumerable<FieldValidationError> fieldErrors,
@@ -57,7 +56,17 @@ public static class ProblemDetailsMapping
         problem.Extensions["code"] = code;
         problem.Extensions["correlationId"] = GetCorrelationId(context);
         problem.Extensions["fieldErrors"] = errors;
-        return TypedResults.Problem(problem);
+        return CreateResult(problem, StatusCodes.Status422UnprocessableEntity);
+    }
+
+    private static ObjectResult CreateResult(ProblemDetails problem, int statusCode)
+    {
+        var result = new ObjectResult(problem)
+        {
+            StatusCode = statusCode,
+        };
+        result.ContentTypes.Add("application/problem+json");
+        return result;
     }
 
     private static (int Status, string Title) GetStatusAndTitle(

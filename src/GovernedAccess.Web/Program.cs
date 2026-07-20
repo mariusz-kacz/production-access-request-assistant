@@ -3,9 +3,9 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
-using GovernedAccess.Web.Endpoints;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
@@ -17,6 +17,7 @@ var databaseConnectionString = builder.Configuration.GetConnectionString(
         databaseConnectionStringName)
     ?? defaultDatabaseConnectionString;
 
+builder.Services.AddControllers();
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -51,7 +52,7 @@ builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();
 builder.Services.AddAuthorization();
-builder.Services.AddSessionEndpoints();
+builder.Services.AddGovernedAccessAntiforgery();
 builder.Services.AddGovernedAccessMcp();
 
 var app = builder.Build();
@@ -64,10 +65,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-var api = app.MapGroup("/api");
-api.MapSessionEndpoints();
-api.MapRequestPreparationEndpoints();
-
+app.MapControllers();
 app.MapGovernedAccessMcp();
 
 app.MapFallback("/api/{**path}", () => Results.NotFound());
