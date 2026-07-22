@@ -8,6 +8,11 @@ import {
   BusinessDecisionPanel,
   type BusinessDecisionResponse,
 } from "../components/BusinessDecisionPanel";
+import {
+  DEVOPS_DECISION_ACTION,
+  DevOpsDecisionPanel,
+  type DevOpsDecisionResponse,
+} from "../components/DevOpsDecisionPanel";
 
 interface RequestDetailError {
   message: string;
@@ -72,6 +77,22 @@ export function RequestDetailPage() {
         status: response.status,
         availableActions: current.availableActions.filter(
           (action) => action !== BUSINESS_DECISION_ACTION,
+        ),
+      };
+    });
+  }
+
+  function applyDevOpsDecision(response: DevOpsDecisionResponse) {
+    setCurrentRequest((current) => {
+      if (current === undefined || current.requestId !== response.requestId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        status: response.status,
+        availableActions: current.availableActions.filter(
+          (action) => action !== DEVOPS_DECISION_ACTION,
         ),
       };
     });
@@ -148,6 +169,11 @@ export function RequestDetailPage() {
         requestId={currentRequest.requestId}
         availableActions={currentRequest.availableActions}
         onDecisionCompleted={applyBusinessDecision}
+      />
+      <DevOpsDecisionPanel
+        requestId={currentRequest.requestId}
+        availableActions={currentRequest.availableActions}
+        onDecisionCompleted={applyDevOpsDecision}
       />
     </main>
   );

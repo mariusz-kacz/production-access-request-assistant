@@ -23,6 +23,7 @@ public sealed record RequestDetailView(
 public sealed class RequestQueryService
 {
     public const string BusinessDecisionAction = "decideBusinessRequest";
+    public const string DevOpsDecisionAction = "decideDevOpsRequest";
 
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
@@ -87,6 +88,14 @@ public sealed class RequestQueryService
         if (IsRequester(principal, request))
         {
             return ApplicationResult.Succeeded(ToDetail(request, []));
+        }
+
+        if (principal.Kind == PrincipalKind.DevOpsApprover)
+        {
+            return request.Status == RequestStatus.AwaitingDevOpsApproval
+                ? ApplicationResult.Succeeded(
+                    ToDetail(request, [DevOpsDecisionAction]))
+                : NotFound();
         }
 
         if (principal.Kind != PrincipalKind.BusinessApprover

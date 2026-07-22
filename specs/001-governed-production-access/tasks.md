@@ -141,8 +141,8 @@
 - [X] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
 - [X] T061 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
 - [X] T062 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
-- [ ] T063 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
-- [ ] T064 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [X] T063 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
+- [X] T064 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 
 **Checkpoint**: The full two-human approval path produces exactly scoped synthetic access through deterministic authorization and provisioning.
 

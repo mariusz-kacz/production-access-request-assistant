@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiRequest } from "../api/client";
 import type { RequestDetailResponse } from "../api/contracts";
 import { BUSINESS_DECISION_ACTION } from "../components/BusinessDecisionPanel";
+import { DEVOPS_DECISION_ACTION } from "../components/DevOpsDecisionPanel";
 import { RequestDetailPage } from "../pages/RequestDetailPage";
 
 vi.mock("../api/client", async (importOriginal) => {
@@ -76,5 +77,65 @@ describe("thin UI wiring", () => {
       }),
     );
     expect(await screen.findByText("AwaitingDevOpsApproval")).toBeTruthy();
+  });
+
+  it("wires the DevOps action to a safe active-grant summary", async () => {
+    const activatedAt = "2026-07-20T09:00:00Z";
+    const expiresAt = "2026-07-20T17:00:00Z";
+    mockedApiRequest.mockImplementation(async (path) => {
+      if (path === `/api/requests/${requestId}`) {
+        return {
+          ...requestDetail,
+          status: "AwaitingDevOpsApproval",
+          availableActions: [DEVOPS_DECISION_ACTION],
+        } as never;
+      }
+
+      if (path === `/api/requests/${requestId}/devops-decisions`) {
+        return {
+          requestId,
+          status: "Active",
+          correlationId: "correlation-devops-ui-smoke",
+          grant: {
+            grantId: "5b70a7a0-31f9-4f46-bab1-7f0bd8bc40ed",
+            environmentId: requestDetail.environmentId,
+            roleId: requestDetail.requestedRoleId,
+            activatedAt,
+            expiresAt,
+          },
+        } as never;
+      }
+
+      throw new Error(`Unexpected API request: ${path}`);
+    });
+    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter initialEntries={[`/requests/${requestId}`]}>
+        <Routes>
+          <Route path="/requests/:requestId" element={<RequestDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "Approve and provision" }),
+    );
+
+    expect(mockedApiRequest).toHaveBeenCalledWith(
+      `/api/requests/${requestId}/devops-decisions`,
+      expect.objectContaining({
+        method: "POST",
+        body: { decision: "Approve" },
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(await screen.findByText("Active")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Active grant" })).toBeTruthy();
+    expect(
+      container.querySelector(`time[datetime="${activatedAt}"]`),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(`time[datetime="${expiresAt}"]`),
+    ).toBeTruthy();
   });
 });

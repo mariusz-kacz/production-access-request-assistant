@@ -14,6 +14,7 @@ namespace GovernedAccess.IntegrationTests.Requests;
 public sealed class RequestDetailQueryTests
 {
     private const string BusinessDecisionAction = "decideBusinessRequest";
+    private const string DevOpsDecisionAction = "decideDevOpsRequest";
     private const string Justification = "Investigate the active production incident.";
 
     [Fact]
@@ -164,6 +165,59 @@ public sealed class RequestDetailQueryTests
             body.RootElement.GetProperty("status").GetString());
         Assert.Empty(
             body.RootElement.GetProperty("availableActions").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task DevOpsReceivesDecisionActionOnlyAfterBusinessApproval()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        var requestId = await SeedSubmittedRequestAsync(factory, cancellationToken);
+        using var devOpsClient = await factory.CreateAuthenticatedClientAsync(
+            DemoPrincipalKeys.DevOpsApprover,
+            cancellationToken);
+
+        using var beforeApproval = await devOpsClient.GetAsync(
+            $"/api/requests/{requestId:D}",
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, beforeApproval.StatusCode);
+
+        using var businessClient = await factory.CreateAuthenticatedClientAsync(
+            DemoPrincipalKeys.ClientAlphaApprover,
+            cancellationToken);
+        using var decision = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/requests/{requestId:D}/business-decisions")
+        {
+            Content = JsonContent.Create(new
+            {
+                decision = "Approve",
+                comment = "Approved for the incident investigation.",
+            }),
+        };
+        using var decisionResponse = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
+            businessClient,
+            decision,
+            cancellationToken);
+        decisionResponse.EnsureSuccessStatusCode();
+
+        using var afterApproval = await devOpsClient.GetAsync(
+            $"/api/requests/{requestId:D}",
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, afterApproval.StatusCode);
+        using var body = await ReadJsonAsync(afterApproval, cancellationToken);
+        Assert.Equal(
+            nameof(RequestStatus.AwaitingDevOpsApproval),
+            body.RootElement.GetProperty("status").GetString());
+        var actions = body.RootElement
+            .GetProperty("availableActions")
+            .EnumerateArray()
+            .Select(action => action.GetString())
+            .ToArray();
+        Assert.Equal(DevOpsDecisionAction, Assert.Single(actions));
     }
 
     private static async Task<Guid> SeedSubmittedRequestAsync(
