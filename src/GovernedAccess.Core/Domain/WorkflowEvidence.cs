@@ -113,6 +113,49 @@ public sealed record BusinessDecisionAuditDetails
 
 }
 
+public sealed record DevOpsDecisionAuditDetails
+{
+    public const int CurrentSchemaVersion = 1;
+
+    public DevOpsDecisionAuditDetails(
+        ApprovalDecision decision,
+        RequestStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (decision.Stage != ApprovalStage.DevOps)
+        {
+            throw new ArgumentException(
+                "DevOps decision audit details require a DevOps-stage decision.",
+                nameof(decision));
+        }
+
+        var expectedStatus = decision.Decision == ApprovalOutcome.Approved
+            ? RequestStatus.AwaitingDevOpsApproval
+            : RequestStatus.Rejected;
+        if (status != expectedStatus)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(status),
+                status,
+                "The audit status must match the DevOps decision outcome.");
+        }
+
+        SchemaVersion = CurrentSchemaVersion;
+        Decision = decision.Decision;
+        Status = status;
+        ApprovedRoleId = decision.ApprovedRoleId;
+    }
+
+    public int SchemaVersion { get; }
+
+    public ApprovalOutcome Decision { get; }
+
+    public RequestStatus Status { get; }
+
+    public string? ApprovedRoleId { get; }
+}
+
 public sealed record DecisionAttemptRejectedAuditDetails
 {
     public const int CurrentSchemaVersion = 1;
@@ -456,6 +499,37 @@ public sealed class AuditEvent
             JsonSerializer.Serialize(details, DetailsSerializerOptions));
     }
 
+    public static AuditEvent CreateDevOpsDecision(
+        Guid id,
+        AccessRequest request,
+        ApprovalDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(decision);
+
+        if (decision.RequestId != request.Id)
+        {
+            throw new ArgumentException(
+                "The decision must belong to the audited request.",
+                nameof(decision));
+        }
+
+        var details = new DevOpsDecisionAuditDetails(decision, request.Status);
+        var outcomeCode = decision.Decision == ApprovalOutcome.Approved
+            ? "devops_decision_approved"
+            : "devops_decision_rejected";
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            AuditEventType.DevOpsDecision,
+            decision.ApproverId,
+            decision.DecidedAt,
+            decision.CorrelationId,
+            outcomeCode,
+            JsonSerializer.Serialize(details, DetailsSerializerOptions));
+    }
+
     public static AuditEvent CreateProvisioningAttempted(
         Guid id,
         AccessRequest request,
@@ -523,6 +597,37 @@ public sealed class AuditEvent
             "provisioning_succeeded",
             JsonSerializer.Serialize(
                 new ProvisioningAuditDetails(operation, grant),
+                DetailsSerializerOptions));
+    }
+
+    public static AuditEvent CreateProvisioningFailed(
+        Guid id,
+        AccessRequest request,
+        ApprovalDecision devOpsDecision,
+        ProvisioningOperation operation,
+        DateTimeOffset occurredAt,
+        string outcomeCode)
+    {
+        ValidateProvisioningEvidence(request, devOpsDecision, operation);
+
+        if (request.Status != RequestStatus.ProvisioningFailed ||
+            operation.Status != ProvisioningOperationStatus.Failed ||
+            operation.LastOutcomeCode != outcomeCode)
+        {
+            throw new ArgumentException(
+                "Failed provisioning evidence requires matching failed request and operation state.");
+        }
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            AuditEventType.ProvisioningFailed,
+            devOpsDecision.ApproverId,
+            occurredAt,
+            devOpsDecision.CorrelationId,
+            outcomeCode,
+            JsonSerializer.Serialize(
+                new ProvisioningAuditDetails(operation),
                 DetailsSerializerOptions));
     }
 

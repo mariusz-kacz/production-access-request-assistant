@@ -5,6 +5,7 @@ using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -38,6 +39,12 @@ builder.Services.AddScoped<RequestValidator>();
 builder.Services.AddScoped<RequestSubmissionService>();
 builder.Services.AddScoped<RequestQueryService>();
 builder.Services.AddScoped<BusinessDecisionService>();
+builder.Services.AddScoped<ProtectedProvisioningService>();
+builder.Services.AddScoped<DevOpsDecisionService>();
+builder.Services.AddSingleton<SyntheticAccessProvisionerControl>();
+builder.Services.AddSingleton<SyntheticAccessProvisioner>();
+builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
+    serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
 builder.Services
     .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Valid))

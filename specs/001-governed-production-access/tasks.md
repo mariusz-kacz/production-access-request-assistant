@@ -138,9 +138,9 @@
 - [X] T057 [P] [US3] Implement DevOps decision rules using the request UUID as the provisioning operation key and provider idempotency identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
 - [X] T058 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
 - [X] T059 [US3] Implement the protected provisioning handler that reloads request, approvals, and operation evidence, validates immutable scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
-- [ ] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
-- [ ] T061 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
-- [ ] T062 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
+- [X] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
+- [X] T061 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
+- [X] T062 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
 - [ ] T063 [P] [US3] Implement DevOps approve/reject controls and safe provisioning outcome display in `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`
 - [ ] T064 [US3] Integrate DevOps actions and activation/expiry grant summary into `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 
