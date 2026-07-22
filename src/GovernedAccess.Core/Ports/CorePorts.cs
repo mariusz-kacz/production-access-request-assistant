@@ -86,22 +86,14 @@ public interface IWorkflowStore : IAuditStore
     void AddProvisioningOperation(ProvisioningOperation operation);
 
     Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-        string operationId,
+        Guid requestId,
         CancellationToken cancellationToken);
 
     Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-        string operationId,
-        CancellationToken cancellationToken);
-
-    Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
         Guid requestId,
         CancellationToken cancellationToken);
 
     void AddAccessGrant(AccessGrant grant);
-
-    Task<ApplicationResult<AccessGrant>> GetAccessGrantByOperationAsync(
-        string operationId,
-        CancellationToken cancellationToken);
 
     Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
         Guid requestId,

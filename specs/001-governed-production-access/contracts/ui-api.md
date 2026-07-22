@@ -101,8 +101,8 @@ with a safe outcome. Rejection returns `Rejected`.
 ### `POST /api/requests/{requestId}/retry-provisioning`
 
 No request body. DevOps-only and valid only in
-`ProvisioningFailed`. The server reloads stored scope/operation identity, repeats full
-revalidation, and returns the single grant on success. There is no initial or generic
+`ProvisioningFailed`. The server reloads stored request, approval, scope, and operation
+identity evidence, validates their consistency, and returns the single grant on success. There is no initial or generic
 browser provisioning endpoint.
 
 ## React routes

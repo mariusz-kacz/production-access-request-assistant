@@ -80,10 +80,10 @@ timeline work.
 1. Sign in as DevOps and open the business-approved request.
 2. Approve the exact business-approved role.
 
-Expected: the handler reloads request and approvals, revalidates current environment,
-role, incident, and scope, creates one synthetic grant, and moves the request
+Expected: the handler reloads request, approvals, and the request-bound operation,
+validates persisted workflow and immutable-scope consistency, creates one synthetic grant, and moves the request
 to `Active`. The detail page shows activation, expiry exactly eight hours later,
-operation identity, and audit events. Any crafted duration field is safely ignored or
+request-based idempotency identity, and audit events. Any crafted duration field is safely ignored or
 rejected, and any role-changing request is rejected without grant creation.
 
 ## Scenario 4: correction creates a new immutable request
@@ -102,9 +102,9 @@ requires both approvals.
    response on DevOps approval.
 2. Confirm `ProvisioningFailed`, sign in as DevOps, and retry.
 3. Exercise the automated concurrency test with at least 100 attempts for the same
-   operation identity.
+   request ID used for idempotency.
 
-Expected: retry performs full revalidation and returns the existing grant. Exactly one
+Expected: retry repeats persisted-evidence validation and returns the existing grant. Exactly one
 grant exists for the operation and duplicate retries are audited. Non-DevOps retry and
 retry from any other state are rejected.
 
@@ -117,7 +117,7 @@ retry from any other state are rejected.
 | AI adapter | Valid/incomplete/malformed schema, deterministic fake, timeout, cancellation, no live model. |
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |
 | Persistence | Insert-only audit behavior, optimistic conflict, approval uniqueness, operation/grant uniqueness. |
-| Provisioning | Current-state reload, stale data, missing approval, idempotent success, lost response, 100 concurrent duplicates. |
+| Provisioning | Persisted-evidence reload, inconsistent operation or approval data, idempotent success, lost response, 100 concurrent duplicates. |
 | React/UI host | Three routes, typed errors, abort handling, relevant list, action visibility plus server enforcement, no MCP/provisioning browser calls. |
 | API security | Cookie actor, antiforgery on unsafe methods, over-posting resistance, participant visibility. |
 

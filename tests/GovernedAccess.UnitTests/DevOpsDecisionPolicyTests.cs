@@ -128,7 +128,7 @@ public sealed class DevOpsDecisionPolicyTests
     }
 
     [Fact]
-    public void OperationIdentityUsesCanonicalLengthPrefixedUtf8AndIsDeterministic()
+    public void OperationUsesTheRequestIdAsItsIdentity()
     {
         var (firstRequest, firstBusinessApproval) = CreateBusinessApprovedRequest();
         var (secondRequest, secondBusinessApproval) = CreateBusinessApprovedRequest();
@@ -144,10 +144,8 @@ public sealed class DevOpsDecisionPolicyTests
             ValidApprovalCommand(),
             hasExistingDevOpsDecision: false));
 
-        const string expectedOperationId =
-            "9b42665daba46b06d4fc55987e7d07f00158353305d6668e102968c04bb56fbc";
-        Assert.Equal(expectedOperationId, first.Operation?.Id);
-        Assert.Equal(first.Operation?.Id, second.Operation?.Id);
+        Assert.Equal(RequestId, first.Operation?.RequestId);
+        Assert.Equal(first.Operation?.RequestId, second.Operation?.RequestId);
     }
 
     private static DevOpsDecisionCommand ValidApprovalCommand()

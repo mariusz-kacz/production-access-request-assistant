@@ -46,9 +46,11 @@ Product baseline:
 - Access to one client environment never authorizes another.
 - DevOps must not change the business-approved role.
 - DevOps may reduce duration but must not increase it.
-- Current authoritative state must be revalidated before provisioning.
+- Authoritative client, environment, role, incident, and approver context is validated
+  when requests and human decisions are recorded against the fixed synthetic dataset.
 - Provisioning must be idempotent.
-- The provisioning handler must reload authoritative request and approval state.
+- The provisioning handler must reload and validate persisted request, approval, and
+  operation evidence.
 - The provisioning handler must not trust caller-supplied approval assertions.
 - Project and module boundaries must remain proportionate to the single-host scope.
 

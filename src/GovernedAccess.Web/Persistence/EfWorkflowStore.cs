@@ -101,26 +101,27 @@ internal sealed class EfWorkflowStore(GovernedAccessDbContext dbContext) : IWork
     }
 
     public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-        string operationId,
+        Guid requestId,
         CancellationToken cancellationToken)
     {
         return FindAsync(
-            dbContext.ProvisioningOperations.Where(operation => operation.Id == operationId),
+            dbContext.ProvisioningOperations.Where(operation =>
+                operation.RequestId == requestId),
             "provisioning_operation_not_found",
             "The provisioning operation was not found.",
             cancellationToken);
     }
 
     public async Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-        string operationId,
+        Guid requestId,
         CancellationToken cancellationToken)
     {
         var trackedOperation = dbContext.ProvisioningOperations.Local
-            .SingleOrDefault(operation => operation.Id == operationId);
+            .SingleOrDefault(operation => operation.RequestId == requestId);
 
         if (trackedOperation is null)
         {
-            return await GetProvisioningOperationAsync(operationId, cancellationToken);
+            return await GetProvisioningOperationAsync(requestId, cancellationToken);
         }
 
         try
@@ -138,33 +139,10 @@ internal sealed class EfWorkflowStore(GovernedAccessDbContext dbContext) : IWork
         }
     }
 
-    public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
-        Guid requestId,
-        CancellationToken cancellationToken)
-    {
-        return FindAsync(
-            dbContext.ProvisioningOperations.Where(operation =>
-                operation.RequestId == requestId),
-            "provisioning_operation_not_found",
-            "The provisioning operation was not found.",
-            cancellationToken);
-    }
-
     public void AddAccessGrant(AccessGrant grant)
     {
         ArgumentNullException.ThrowIfNull(grant);
         dbContext.AccessGrants.Add(grant);
-    }
-
-    public Task<ApplicationResult<AccessGrant>> GetAccessGrantByOperationAsync(
-        string operationId,
-        CancellationToken cancellationToken)
-    {
-        return FindAsync(
-            dbContext.AccessGrants.Where(grant => grant.OperationId == operationId),
-            "access_grant_not_found",
-            "The access grant was not found.",
-            cancellationToken);
     }
 
     public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(

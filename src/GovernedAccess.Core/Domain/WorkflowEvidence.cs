@@ -136,6 +136,44 @@ public sealed record DecisionAttemptRejectedAuditDetails
     public RequestStatus Status { get; }
 }
 
+public sealed record ProvisioningAuditDetails
+{
+    public const int CurrentSchemaVersion = 2;
+
+    public ProvisioningAuditDetails(
+        ProvisioningOperation operation,
+        AccessGrant? grant = null)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (grant is not null && grant.RequestId != operation.RequestId)
+        {
+            throw new ArgumentException(
+                "The grant must belong to the provisioning operation.",
+                nameof(grant));
+        }
+
+        SchemaVersion = CurrentSchemaVersion;
+        Status = operation.Status;
+        AttemptCount = operation.AttemptCount;
+        EnvironmentId = operation.EnvironmentId;
+        RoleId = operation.RoleId;
+        GrantId = grant?.Id;
+    }
+
+    public int SchemaVersion { get; }
+
+    public ProvisioningOperationStatus Status { get; }
+
+    public int AttemptCount { get; }
+
+    public string EnvironmentId { get; }
+
+    public string RoleId { get; }
+
+    public Guid? GrantId { get; }
+}
+
 public sealed class ApprovalDecision
 {
     public const int MaximumCommentLength = 1000;
@@ -214,13 +252,11 @@ public sealed class ApprovalDecision
 public sealed class ProvisioningOperation
 {
     public ProvisioningOperation(
-        string id,
         Guid requestId,
         string environmentId,
         string roleId,
         DateTimeOffset createdAt)
     {
-        id = AccessRequestNormalization.NormalizeIdentifier(id);
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
         roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
@@ -232,7 +268,6 @@ public sealed class ProvisioningOperation
                 "The provisioning role is not supported by this feature.");
         }
 
-        Id = id;
         RequestId = requestId;
         EnvironmentId = environmentId;
         RoleId = roleId;
@@ -241,8 +276,6 @@ public sealed class ProvisioningOperation
         CreatedAt = createdAt.ToUniversalTime();
         LastAttemptAt = CreatedAt;
     }
-
-    public string Id { get; private set; }
 
     public Guid RequestId { get; private set; }
 
@@ -267,7 +300,6 @@ public sealed class AccessGrant
 
     public AccessGrant(
         Guid id,
-        string operationId,
         Guid requestId,
         string requesterId,
         string environmentId,
@@ -276,7 +308,6 @@ public sealed class AccessGrant
         string correlationId)
     {
         WorkflowEvidenceValidation.EnsureNotEmpty(id, nameof(id));
-        operationId = AccessRequestNormalization.NormalizeIdentifier(operationId);
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
@@ -292,7 +323,6 @@ public sealed class AccessGrant
         }
 
         Id = id;
-        OperationId = operationId;
         RequestId = requestId;
         RequesterId = requesterId;
         EnvironmentId = environmentId;
@@ -304,8 +334,6 @@ public sealed class AccessGrant
     }
 
     public Guid Id { get; private set; }
-
-    public string OperationId { get; private set; }
 
     public Guid RequestId { get; private set; }
 
@@ -339,6 +367,7 @@ public sealed class AuditEvent
             new JsonStringEnumConverter<RequestStatus>(),
             new JsonStringEnumConverter<ApprovalStage>(),
             new JsonStringEnumConverter<ApprovalOutcome>(),
+            new JsonStringEnumConverter<ProvisioningOperationStatus>(),
         },
     };
 
@@ -427,6 +456,76 @@ public sealed class AuditEvent
             JsonSerializer.Serialize(details, DetailsSerializerOptions));
     }
 
+    public static AuditEvent CreateProvisioningAttempted(
+        Guid id,
+        AccessRequest request,
+        ApprovalDecision devOpsDecision,
+        ProvisioningOperation operation,
+        DateTimeOffset occurredAt)
+    {
+        ValidateProvisioningEvidence(request, devOpsDecision, operation);
+
+        if (operation.Status == ProvisioningOperationStatus.Succeeded)
+        {
+            throw new ArgumentException(
+                "A completed operation cannot record a new provisioning attempt.",
+                nameof(operation));
+        }
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            AuditEventType.ProvisioningAttempted,
+            devOpsDecision.ApproverId,
+            occurredAt,
+            devOpsDecision.CorrelationId,
+            "provisioning_attempted",
+            JsonSerializer.Serialize(
+                new ProvisioningAuditDetails(operation),
+                DetailsSerializerOptions));
+    }
+
+    public static AuditEvent CreateProvisioningSucceeded(
+        Guid id,
+        AccessRequest request,
+        ApprovalDecision devOpsDecision,
+        ProvisioningOperation operation,
+        AccessGrant grant,
+        DateTimeOffset occurredAt)
+    {
+        ValidateProvisioningEvidence(request, devOpsDecision, operation);
+        ArgumentNullException.ThrowIfNull(grant);
+
+        if (request.Status != RequestStatus.Active ||
+            operation.Status != ProvisioningOperationStatus.Succeeded)
+        {
+            throw new ArgumentException(
+                "Successful provisioning evidence requires an active request and succeeded operation.");
+        }
+
+        if (grant.RequestId != request.Id ||
+            grant.RequesterId != request.RequesterId ||
+            grant.EnvironmentId != operation.EnvironmentId ||
+            grant.RoleId != operation.RoleId)
+        {
+            throw new ArgumentException(
+                "The grant scope must match the successful provisioning operation.",
+                nameof(grant));
+        }
+
+        return new AuditEvent(
+            id,
+            request.Id,
+            AuditEventType.ProvisioningSucceeded,
+            devOpsDecision.ApproverId,
+            occurredAt,
+            devOpsDecision.CorrelationId,
+            "provisioning_succeeded",
+            JsonSerializer.Serialize(
+                new ProvisioningAuditDetails(operation, grant),
+                DetailsSerializerOptions));
+    }
+
     public static AuditEvent CreateAuthorizationRejected(
         Guid id,
         AccessRequest request,
@@ -498,6 +597,28 @@ public sealed class AuditEvent
             correlationId,
             outcomeCode,
             JsonSerializer.Serialize(details, DetailsSerializerOptions));
+    }
+
+    private static void ValidateProvisioningEvidence(
+        AccessRequest request,
+        ApprovalDecision devOpsDecision,
+        ProvisioningOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(devOpsDecision);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (devOpsDecision.RequestId != request.Id ||
+            devOpsDecision.Stage != ApprovalStage.DevOps ||
+            devOpsDecision.Decision != ApprovalOutcome.Approved ||
+            operation.RequestId != request.Id ||
+            operation.EnvironmentId != request.EnvironmentId ||
+            operation.RoleId != request.RequestedRoleId ||
+            devOpsDecision.ApprovedRoleId != operation.RoleId)
+        {
+            throw new ArgumentException(
+                "Provisioning evidence must match the approved immutable request scope.");
+        }
     }
 
     public Guid Id { get; private set; }

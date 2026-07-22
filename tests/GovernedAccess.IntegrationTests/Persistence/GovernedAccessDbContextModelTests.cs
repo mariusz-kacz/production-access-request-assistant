@@ -28,10 +28,9 @@ public sealed class GovernedAccessDbContextModelTests
             context,
             nameof(ApprovalDecision.RequestId),
             nameof(ApprovalDecision.Stage));
-        AssertUniqueIndex<ProvisioningOperation>(
+        AssertPrimaryKey<ProvisioningOperation>(
             context,
             nameof(ProvisioningOperation.RequestId));
-        AssertUniqueIndex<AccessGrant>(context, nameof(AccessGrant.OperationId));
         AssertUniqueIndex<AccessGrant>(
             context,
             nameof(AccessGrant.RequestId));
@@ -63,6 +62,18 @@ public sealed class GovernedAccessDbContextModelTests
                 && index.Properties.Select(property => property.Name).SequenceEqual(propertyNames));
 
         Assert.True(hasIndex, $"Missing unique index on {typeof(TEntity).Name} ({string.Join(", ", propertyNames)}).");
+    }
+
+    private static void AssertPrimaryKey<TEntity>(
+        GovernedAccessDbContext context,
+        params string[] propertyNames)
+    {
+        var keyProperties = GetEntity<TEntity>(context)
+            .FindPrimaryKey()!
+            .Properties
+            .Select(property => property.Name);
+
+        Assert.Equal(propertyNames, keyProperties);
     }
 
     private static void AssertUtcTimestamp<TEntity>(

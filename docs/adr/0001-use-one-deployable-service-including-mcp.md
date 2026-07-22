@@ -58,7 +58,7 @@ will retain these boundaries:
 - AI-provider and MCP SDK contracts are translated at the Web/Core boundary.
 - Protected actions derive the actor from authenticated server context and are
   authorized by deterministic application services.
-- The provisioning handler reloads current stored request and approval state rather
+- The provisioning handler reloads persisted request, approval, and operation state rather
   than trusting its caller.
 
 The model-visible MCP surface is an explicit allowlist containing exactly:
@@ -97,7 +97,7 @@ This deployment shape is proportionate to the current requirements:
 - No service discovery, message broker, service-to-service authentication, distributed
   transaction, or cross-service approval-evidence protocol is required.
 - Immediate DevOps approval and provisioning can use straightforward durable state,
-  current-state reloads, and idempotent operation identity.
+  persisted-evidence reloads, and request-based idempotency.
 - End-to-end tests can cover UI, authentication, MCP, persistence, and provisioning
   through one test host without a live model.
 - Correlation and audit evidence remain simple while retaining explicit boundaries.
@@ -162,9 +162,9 @@ ownership, scaling, or isolation later becomes a concrete requirement.
 Under this alternative, DevOps approval would remain in the web application, but a
 separate service would create access grants. The web application would send a command
 containing only request and operation references. The provisioning service would need
-to authenticate the caller, reload or obtain current stored request and approval
-evidence, revalidate the approved scope, invoke the provider, and return or publish a
-durable result.
+to authenticate the caller, reload or obtain persisted request and approval evidence,
+validate the approved scope, invoke the provider, and return or publish a durable
+result.
 
 This separation can be valuable when provisioning holds real privileged credentials,
 is owned by a dedicated operations team, integrates with multiple production systems,
@@ -187,14 +187,14 @@ reducing a current risk:
 - reconciliation when approval state and provisioning outcome disagree temporarily.
 
 Passing the full approval evidence in the command would violate the rule that the
-provisioning handler must reload current stored state. Sharing the application database
+provisioning handler must reload persisted workflow evidence. Sharing the application database
 would weaken service ownership and couple both deployments to the same schema. Adding
 an evidence API, outbox, message broker, or callback protocol would solve problems
 created solely by the split.
 
 Therefore, a separate provisioning service is rejected for the MVP. The internal
 handler still behaves as a protected boundary: it accepts references rather than
-approval assertions, reloads current state, performs full deterministic validation,
+approval assertions, reloads persisted workflow evidence, validates its consistency,
 and uses a stable idempotency identity. That design preserves an extraction seam if a
 real provider, credential boundary, or independent operations owner appears later.
 

@@ -48,17 +48,17 @@ As the business approver responsible for the target client environment, I can re
 
 As the authenticated DevOps approver, I can approve the exact business-approved role, causing immediate protected provisioning for the fixed eight-hour access period, or reject the request.
 
-**Why this priority**: The second human decision and independent deterministic revalidation prove that neither the model nor an upstream assertion can authorize production access.
+**Why this priority**: The second human decision and independent persisted-evidence validation prove that neither the model nor an upstream assertion can authorize production access.
 
-**Independent Test**: Start with a current business-approved request, approve it as DevOps, and verify that current stored state is reloaded, the exact approved scope is enforced, and one synthetic time-limited grant becomes active.
+**Independent Test**: Start with a business-approved request, approve it as DevOps, and verify that stored request, approval, and operation evidence is reloaded, the exact approved scope is enforced, and one synthetic time-limited grant becomes active.
 
 **Acceptance Scenarios**:
 
-1. **Given** a current business-approved request in `AwaitingDevOpsApproval`, **When** the authenticated DevOps approver approves the exact role, **Then** the system immediately revalidates current request, approval, scope, environment, role, and incident state before creating one grant that expires exactly eight hours after activation and moving the request to `Active`.
+1. **Given** a business-approved request in `AwaitingDevOpsApproval`, **When** the authenticated DevOps approver approves the exact role, **Then** the system immediately reloads and validates persisted request, approval, operation, workflow-state, and immutable-scope evidence before creating one grant that expires exactly eight hours after activation and moving the request to `Active`.
 2. **Given** a DevOps decision that changes the role, changes client or environment, or lacks a valid business approval, **When** approval is attempted, **Then** the decision is rejected and audited without provisioning access.
 3. **Given** a user who is not the authenticated DevOps approver, **When** that user attempts the DevOps action, **Then** the attempt is rejected and audited without changing protected state.
 4. **Given** a valid request awaiting DevOps approval, **When** DevOps rejects it, **Then** the request moves to `Rejected` and no grant is created.
-5. **Given** the current environment, role, or incident state changed after business approval, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than using stale approval assertions or creating a grant.
+5. **Given** persisted request, approval, or operation evidence is missing or inconsistent, **When** DevOps approval triggers provisioning, **Then** provisioning fails safely rather than trusting an upstream assertion or creating a grant.
 
 ---
 
@@ -72,7 +72,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 **Acceptance Scenarios**:
 
-1. **Given** a request in `ProvisioningFailed`, **When** the authenticated DevOps approver invokes retry without changing approved scope, **Then** the system repeats complete current-state revalidation using the same operation identity and records the retry outcome.
+1. **Given** a request in `ProvisioningFailed`, **When** the authenticated DevOps approver invokes retry without changing approved scope, **Then** the system reloads and validates the same persisted workflow evidence using the request ID as the idempotency identity and records the retry outcome.
 2. **Given** the original provisioning operation already created a grant but its response was lost, **When** the same operation is retried, **Then** the existing grant is returned and no duplicate grant is created.
 3. **Given** a request not in `ProvisioningFailed` or an actor who is not DevOps, **When** retry is attempted, **Then** it is rejected and audited without starting a general-purpose provisioning action.
 4. **Given** an active or failed request, **When** an authorized participant opens its details, **Then** the page presents request data, current status, validation results, approvals, grant outcome and logical expiry when applicable, and the audit timeline.
@@ -116,13 +116,13 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - **FR-017**: The system MUST reject or ignore any caller-supplied attempt to change role, client, environment, or the server-owned fixed duration, and MUST reject acting without a valid business approval.
 - **FR-018**: DevOps rejection MUST move the request to `Rejected` without creating an access grant.
 - **FR-019**: Successful DevOps approval MUST immediately initiate protected provisioning without a separate human provisioning action or role.
-- **FR-020**: Before creating a grant, provisioning MUST reload authoritative request and approval evidence and verify current workflow state, approval order and authority, approved scope, current environment and role validity, incident validity when present, and consistency of the operation identity.
+- **FR-020**: Before creating a grant, provisioning MUST reload persisted request, approval, and operation evidence and verify workflow state, approval order and outcome, approved scope, and that the operation is keyed by the immutable request ID. Authoritative reference context MUST remain validated at request and decision time while the synthetic dataset remains fixed and fail-fast validated at startup.
 - **FR-021**: Provisioning MUST accept only references needed to identify the operation and MUST NOT trust caller-supplied assertions that approval, authorization, or validation has succeeded.
-- **FR-022**: Successful provisioning MUST create or return exactly one synthetic access grant bound to requester, request ID, environment, role, activation, expiry exactly eight hours after activation, correlation identifier, and a stable operation identity.
-- **FR-023**: Repeating the same logical provisioning operation with the same operation identity MUST return the existing result and MUST NOT create a duplicate grant.
+- **FR-022**: Successful provisioning MUST create or return exactly one synthetic access grant bound to requester, request ID, environment, role, activation, expiry exactly eight hours after activation, and correlation identifier.
+- **FR-023**: Repeating the same logical provisioning operation using the same request ID as the idempotency identity MUST return the existing result and MUST NOT create a duplicate grant.
 - **FR-024**: A provisioning failure MUST NOT be reported as success and MUST move the request to `ProvisioningFailed` when recovery by retry is appropriate.
-- **FR-025**: Only the authenticated DevOps approver MUST be able to retry a request in `ProvisioningFailed`, and retry MUST preserve the approved client, environment, role, fixed eight-hour grant rule, and operation identity.
-- **FR-026**: Retry MUST invoke the same full current-state revalidation and idempotent provisioning behavior as the initial attempt.
+- **FR-025**: Only the authenticated DevOps approver MUST be able to retry a request in `ProvisioningFailed`, and retry MUST preserve the approved client, environment, role, fixed eight-hour grant rule, and request ID.
+- **FR-026**: Retry MUST invoke the same persisted-evidence validation and idempotent provisioning behavior as the initial attempt.
 - **FR-027**: Once submitted, the client, environment, requested role, justification, incident association, and requester identity of an access request MUST be immutable.
 - **FR-028**: Correcting any submitted request field MUST require a new validated request with a new request ID and new approvals; existing request evidence MUST remain unchanged.
 - **FR-029**: Protected actions made by an unauthorized actor or after the request has left the required workflow state MUST be rejected, audited, and leave protected state unchanged.
@@ -146,7 +146,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - **Incident**: An optional stored record identified by a stable ID, with status and client or environment association used during validation.
 - **Access Request**: The requester's immutable submitted client, environment, role, justification, optional incident, workflow status, timestamps, and correlation identifier.
 - **Approval Decision**: Authenticated business or DevOps evidence bound to one exact immutable request ID and role, including decision, approver, timestamp, and optional comment.
-- **Access Grant**: The synthetic, fixed eight-hour result of successful protected provisioning, bound to the approved requester, request, environment, role, activation, expiry, correlation, and operation identity.
+- **Access Grant**: The synthetic, fixed eight-hour result of successful protected provisioning, bound to the approved requester, immutable request ID, environment, role, activation, expiry, and correlation.
 - **Audit Event**: Insert-only evidence of a request action or outcome, tied to request ID, actor when applicable, timestamp, correlation, and structured details.
 - **Authenticated Principal**: One of the fixed demonstration identities whose authority is established by trusted server context rather than browser claims.
 
@@ -181,7 +181,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 ### Scope Boundaries
 
-- Included: model-assisted typed drafting, exactly three read-only data lookup operations, deterministic validation, immutable submitted requests, two authenticated approval stages, request-bound decisions, immediate independently validated synthetic provisioning, safe retry, logical expiry, audit evidence, and a three-page React user experience served by the single host.
+- Included: model-assisted typed drafting, exactly three read-only data lookup operations, deterministic validation, immutable submitted requests, two authenticated approval stages, request-bound decisions, immediate synthetic provisioning independently validated against persisted workflow evidence, safe retry, logical expiry, audit evidence, and a three-page React user experience served by the single host.
 - Excluded: real identity or production integrations, permanent or emergency access, delegated or administrative roles, separation-of-duties analysis, role hierarchy, current-access conflict analysis, approval expiration, notifications, automated revocation, additional context or state-changing model tools, separate approval inboxes, administration pages, generic workflow or audit frameworks, autonomous agents, and enterprise-scale load behavior.
 - Any deferred integration, stronger audit integrity, automated revocation, richer telemetry, or separately deployed component requires a later explicitly approved feature and must not expand this MVP.
 
@@ -189,4 +189,4 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 - Stable synthetic records must exist for the two clients, environments, supported roles, incidents, approver assignments, and four demonstration principals.
 - The model-assisted drafting capability must support repeatable replacement with deterministic outcomes for validation and demonstration.
-- Current stored data and workflow state must be available at both submission and provisioning time so independent revalidation and transition rules can be verified.
+- Persisted workflow evidence must be available at provisioning time so independent validation and transition rules can be verified; authoritative reference data is validated when requests and decisions are recorded.

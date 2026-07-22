@@ -123,21 +123,21 @@
 
 ## Phase 5: User Story 3 - Approve and Provision the Authorized Scope (Priority: P3)
 
-**Goal**: Let authenticated DevOps reject or approve the exact business-approved role, with a full current-state reload and immediate synthetic provisioning for a fixed eight-hour lifetime.
+**Goal**: Let authenticated DevOps reject or approve the exact business-approved role, with a persisted-evidence reload and immediate synthetic provisioning for a fixed eight-hour lifetime.
 
-**Independent Test**: From a current business-approved request, approve as DevOps and verify one matching eight-hour grant and `Active`; verify role changes, crafted duration input, stale context, missing approval, and non-DevOps attempts create no grant.
+**Independent Test**: From a business-approved request, approve as DevOps and verify one matching eight-hour grant and `Active`; verify role changes, crafted duration input, inconsistent persisted evidence, missing approval, and non-DevOps attempts create no grant.
 
 ### Tests for User Story 3
 
-- [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and deterministic operation identity in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
-- [X] T055 [P] [US3] Add protected handler tests for current-state reload, current environment/role/incident revalidation, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
+- [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and a provisioning operation keyed by request ID in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
+- [X] T055 [P] [US3] Add protected handler tests for persisted request/approval/operation reload, immutable-scope consistency, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
 - [X] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope/duration over-posting, rejection, antiforgery, fixed eight-hour expiry, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T057 [P] [US3] Implement DevOps decision rules and canonical length-prefixed SHA-256 operation identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
-- [ ] T058 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
-- [ ] T059 [US3] Implement the protected provisioning handler that reloads request and approvals, revalidates current scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
+- [X] T057 [P] [US3] Implement DevOps decision rules using the request UUID as the provisioning operation key and provider idempotency identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
+- [X] T058 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
+- [X] T059 [US3] Implement the protected provisioning handler that reloads request, approvals, and operation evidence, validates immutable scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
 - [ ] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
 - [ ] T061 [US3] Implement DevOps decision persistence before provider invocation and failure transition handling in `src/GovernedAccess.Core/Application/DevOpsDecisionService.cs`
 - [ ] T062 [US3] Add `POST /api/requests/{requestId}/devops-decisions` without accepting role, client, environment, actor, or approval assertions to `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
@@ -150,19 +150,19 @@
 
 ## Phase 6: User Story 4 - Recover Safely and Review Evidence (Priority: P4)
 
-**Goal**: Retry only failed provisioning with the same scope and operation identity, and let authorized participants review relevant requests and complete evidence.
+**Goal**: Retry only failed provisioning with the same scope and request-based idempotency identity, and let authorized participants review relevant requests and complete evidence.
 
 **Independent Test**: Simulate a lost provisioning response, retry as DevOps, verify the existing grant is returned with no duplicate across at least 100 concurrent attempts, and inspect complete correlated evidence as each authorized participant.
 
 ### Tests for User Story 4
 
-- [ ] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and full revalidation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
+- [ ] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and persisted-evidence validation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
 - [ ] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
 - [ ] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and operation identity through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
+- [ ] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
 - [ ] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
 - [ ] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`

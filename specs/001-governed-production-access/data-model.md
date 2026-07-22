@@ -113,8 +113,7 @@ of request or approval evidence; every successful grant uses the fixed eight-hou
 
 | Field | Type | Rules |
 |---|---|---|
-| `Id` | string | SHA-256 operation identity; primary key. |
-| `RequestId` | UUID | Required. |
+| `RequestId` | UUID | Primary key, FK to immutable request, and provider idempotency identity. |
 | `EnvironmentId` | string | Canonical approved value. |
 | `RoleId` | string | Exact approved role. |
 | `Status` | Pending, Succeeded, Failed | Required. |
@@ -123,17 +122,18 @@ of request or approval evidence; every successful grant uses the fixed eight-hou
 | `CreatedAt` | Instant | Server time. |
 | `LastAttemptAt` | Instant | Server time. |
 
-Unique constraint: `RequestId`. Retry cannot alter canonical scope.
+Retry cannot alter canonical scope. Because submitted request scope is immutable and
+there is exactly one provisioning operation per request, `RequestId` is sufficient as
+both the operation key and provider idempotency identity.
 
 ### AccessGrant
 
 | Field | Type | Rules |
 |---|---|---|
 | `Id` | UUID | Stable provider result. |
-| `OperationId` | string | Unique FK to provisioning operation. |
-| `RequestId` | UUID | Required. |
+| `RequestId` | UUID | Unique FK to the provisioning operation and immutable request. |
 | `RequesterId` | string | Reloaded from request. |
-| `EnvironmentId` | string | Reloaded and revalidated. |
+| `EnvironmentId` | string | Loaded from the immutable validated request. |
 | `RoleId` | string | Exact approved role. |
 | `ActivatedAt` | Instant | Server time/provider result. |
 | `ExpiresAt` | Instant | Exactly eight hours after activation. |
@@ -142,7 +142,7 @@ Unique constraint: `RequestId`. Retry cannot alter canonical scope.
 
 The fixed grant lifetime is eight hours. Logical expiry is computed as
 `now >= ExpiresAt`; it does not change workflow state or
-imply revocation. Unique `OperationId` and provider get-or-create semantics prevent
+imply revocation. Unique `RequestId` and provider get-or-create semantics prevent
 duplicate grants.
 
 ### AuditEvent
@@ -170,9 +170,9 @@ provisioning failed, and duplicate retry returned.
 | `AwaitingBusinessApproval` | Business approve | `AwaitingDevOpsApproval` | Correct environment-resolved approver; no prior business decision. |
 | `AwaitingBusinessApproval` | Business reject | `Rejected` | Correct approver; no prior business decision. |
 | `AwaitingDevOpsApproval` | DevOps reject | `Rejected` | Authenticated DevOps; valid current business approval. |
-| `AwaitingDevOpsApproval` | DevOps approve + provision succeeds | `Active` | Exact role; fixed eight-hour lifetime; full protected revalidation succeeds. |
+| `AwaitingDevOpsApproval` | DevOps approve + provision succeeds | `Active` | Exact role; fixed eight-hour lifetime; persisted workflow evidence is consistent. |
 | `AwaitingDevOpsApproval` | DevOps approve + recoverable provision failure | `ProvisioningFailed` | Decision persisted; no false success. |
-| `ProvisioningFailed` | DevOps retry succeeds | `Active` | Same request/scope/operation; full revalidation. |
+| `ProvisioningFailed` | DevOps retry succeeds | `Active` | Same request/scope/operation; persisted evidence remains consistent. |
 | `ProvisioningFailed` | DevOps retry fails | `ProvisioningFailed` | Same constraints; attempt audited. |
 
 Request creation enters `AwaitingBusinessApproval` only after current stored-data

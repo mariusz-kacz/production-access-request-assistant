@@ -333,22 +333,14 @@ public sealed class RequestSubmissionServiceTests
             throw new NotSupportedException();
 
         public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-            string operationId,
+            Guid requestId,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-            string operationId,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
-
-        public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
             Guid requestId,
             CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public void AddAccessGrant(AccessGrant grant) => throw new NotSupportedException();
-
-        public Task<ApplicationResult<AccessGrant>> GetAccessGrantByOperationAsync(
-            string operationId,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
             Guid requestId,

@@ -166,14 +166,15 @@ real OIDC/Entra ID (explicitly out of scope).
 
 **Decision**: Persist the DevOps decision and stable provisioning operation before the
 provider call. Invoke the provider outside a long database transaction. On return,
-reload the operation and finalize `Active` plus grant/audit atomically; on a typed
-failure or timeout, persist `ProvisioningFailed`. Retry is allowed only from that state
-and calls the same handler with the same operation ID.
+finalize `Active` plus grant/audit in one local database save without a post-provider
+reload; on a typed failure or timeout, persist `ProvisioningFailed`. Retry is allowed
+only from that state and calls the same handler with the same request ID.
 
-**Rationale**: External work must not hold a database transaction. Durable operation
-identity makes a lost response recoverable. Reloading before both provider invocation
-and finalization prevents upstream assertions and concurrent changes from bypassing
-the rules.
+**Rationale**: External work must not hold a database transaction. Using the durable
+request ID as provider idempotency identity makes a lost response recoverable. Reloading persisted workflow evidence
+before provider invocation prevents upstream assertions from bypassing the rules.
+Optimistic concurrency and uniqueness constraints protect the local final save; a
+second read would narrow but not close the provider/database consistency gap.
 
 **Alternatives considered**: One transaction across provider work (long locks and
 uncertain rollback); an outbox/background worker (extra infrastructure and not
@@ -181,18 +182,21 @@ immediate); letting the browser provision separately (creates a forbidden author
 
 ## Idempotency identity
 
-**Decision**: Derive a canonical operation identity from request ID, environment ID,
-and exact approved role using length-prefixed
-UTF-8 components and SHA-256. Store the printable digest and enforce uniqueness.
+**Decision**: Key the provisioning operation by the request UUID and use that UUID as
+the provider idempotency key on every attempt and retry. Do not persist a second
+operation identifier.
 
-**Rationale**: The identity is deterministic, stable across retries, and bound to all
-approved scope that affects the grant. Length-prefixing prevents ambiguous
-concatenation. Because submitted requests are immutable, the request ID uniquely binds
-the approved request scope.
+**Rationale**: Each submitted request is immutable and permits exactly one
+provisioning operation, so its server-generated UUID already binds the requester,
+environment, role, justification, and incident scope. A second derived hash adds
+canonicalization code without adding authorization, uniqueness, or retry safety.
+The protected handler still reloads and validates the complete persisted workflow
+evidence.
 
-**Alternatives considered**: Random key generated on every attempt (breaks retry);
-request ID alone without approved scope components (weaker diagnostic binding);
-browser-supplied key (untrusted).
+**Alternatives considered**: A random key generated on every attempt (breaks retry);
+a separately persisted random operation key (valid but redundant for a one-operation-
+per-request model); a hash of request ID, environment, and role (duplicates immutable
+request binding and makes diagnostics harder); a browser-supplied key (untrusted).
 
 ## Fixed access lifetime
 

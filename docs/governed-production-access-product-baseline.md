@@ -32,7 +32,7 @@ The system:
 6. records an explicit authenticated business decision,
 7. records an explicit authenticated DevOps decision,
 8. immediately invokes a protected internal provisioning handler after DevOps approval,
-9. reloads and revalidates current stored request and approval state,
+9. reloads and validates persisted request, approval, and operation evidence,
 10. creates or returns an idempotent synthetic access grant that the model cannot request,
 11. records a straightforward audit history.
 
@@ -71,7 +71,7 @@ Deterministic services enforce:
 - approval order,
 - exact role consistency,
 - immutable request-scope consistency,
-- pre-provisioning revalidation,
+- pre-provisioning persisted-evidence validation,
 - idempotent grant creation.
 
 ### 3.4 MCP Is Read-Only and Focused
@@ -111,10 +111,10 @@ Provisioning is a protected internal application capability. It is never exposed
 
 The initial provisioning attempt is triggered automatically after a valid authenticated DevOps approval.
 
-The provisioning handler receives only stable references required to identify the operation, such as:
+The provisioning handler receives only the stable server-generated reference required
+to identify the operation:
 
-* request ID,
-* idempotency key.
+* request ID, which is also used as the provider idempotency key.
 
 It must not accept caller assertions such as:
 
@@ -124,18 +124,22 @@ devOpsApproved = true
 roleIsAllowed = true
 ```
 
-Before creating an access grant, the handler reloads current stored state and independently verifies:
+Before creating an access grant, the handler reloads persisted workflow evidence and independently verifies:
 
 * the request exists and is in the expected workflow state,
 * both approvals reference the same immutable request,
 * valid business and DevOps approvals exist in the correct order,
 * the approved role matches the request,
-* the environment and role remain valid,
-* the associated incident remains valid when required,
-* the acting workflow transition was authorized,
-* the idempotency key is consistent with the request ID and approved scope.
+* the provisioning operation matches the immutable request scope,
+* the operation is keyed by the immutable request ID.
 
-If provisioning succeeds, repeating the same logical operation with the same idempotency key returns the existing access grant and does not create a duplicate.
+Client, environment, role, incident, and approver context is validated when the
+request and human decisions are recorded. The fixed synthetic reference dataset has
+no mutation surface and startup fails when persisted reference records conflict with
+the expected dataset, so the provisioning handler does not repeat those lookups.
+
+If provisioning succeeds, repeating the same logical operation for the same request ID
+returns the existing access grant and does not create a duplicate.
 
 If provisioning fails, the request enters `ProvisioningFailed`. An authenticated DevOps approver may invoke a narrowly scoped retry action from the request-detail page.
 
@@ -143,9 +147,9 @@ The retry action:
 
 * is available only for a request in `ProvisioningFailed`,
 * cannot modify the client, environment, role, or fixed eight-hour lifetime,
-* reuses the idempotency key for the same approved operation,
+* reuses the request ID as the idempotency key for the same approved operation,
 * invokes the same provisioning handler,
-* repeats the complete current-state revalidation,
+* repeats the persisted-evidence validation,
 * records the retry and its outcome in the audit history.
 
 This recovery action does not constitute a separate approval stage, provisioning role, or general browser-accessible provisioning capability.
@@ -198,7 +202,7 @@ The single host is responsible for:
 - request workflow and versioning,
 - business and DevOps approval actions,
 - immediate internal provisioning after DevOps approval,
-- independent reload and revalidation inside the provisioning handler,
+- independent persisted-evidence reload and validation inside the provisioning handler,
 - idempotent synthetic grant creation,
 - request, grant, and audit persistence and presentation.
 
@@ -235,7 +239,7 @@ Read incident context              Enforce workflow and version rules
 Prepare a typed draft              Invoke internal provisioning handler
 
 Cannot approve                     Derives identity from server context
-Cannot change workflow state       Reloads current stored state
+Cannot change workflow state       Reloads persisted workflow evidence
 Cannot access provisioning         Applies deterministic rules
 ```
 
@@ -366,7 +370,6 @@ An access grant contains:
 - role,
 - activation timestamp,
 - expiry timestamp,
-- idempotency key,
 - provisioning outcome,
 - correlation ID.
 
@@ -484,9 +487,8 @@ A successful DevOps approval immediately triggers:
 2. business approval validation,
 3. DevOps approval validation,
 4. approved-scope validation,
-5. current environment and role validation,
-6. incident-state validation when an incident is present,
-7. idempotent synthetic provisioning.
+5. request-bound operation validation,
+6. idempotent synthetic provisioning.
 
 There is no separate human provisioning action or provisioning role.
 
@@ -496,9 +498,9 @@ An authenticated DevOps approver may invoke a structured retry action from
 the request-detail page. The retry:
 
 - cannot modify the approved environment, role, or fixed eight-hour lifetime,
-- reuses the idempotency key for the same request ID and approved scope,
+- reuses the request ID as the idempotency key for the same approved scope,
 - invokes the same internal provisioning handler,
-- reloads and revalidates current stored state,
+- reloads and validates persisted request, approval, and operation evidence,
 - is recorded in the audit history.
 
 Initial provisioning is not exposed as a separate browser action. The retry
@@ -574,15 +576,16 @@ A submitted request shall be immutable. Any correction shall create a new reques
 
 ### FR-10 Immediate Provisioning
 
-A successful DevOps approval shall immediately initiate deterministic revalidation and protected provisioning without another human action.
+A successful DevOps approval shall immediately initiate deterministic persisted-evidence validation and protected provisioning without another human action.
 
 ### FR-11 Independent Provisioning Validation
 
-The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify current stored request, approval, scope, environment, role, and incident state before creating a grant.
+The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify persisted request, approval, operation, workflow-state, and immutable-scope evidence before creating a grant. It shall not repeat authoritative reference-data lookups while the synthetic dataset remains fixed and fail-fast validated at startup.
 
 ### FR-12 Idempotent Provisioning
 
-Repeating the same logical provisioning operation with the same idempotency key shall return the existing result without creating another grant.
+Repeating the same logical provisioning operation with the same request ID as the
+provider idempotency key shall return the existing result without creating another grant.
 
 ### FR-13 Insert-Only Audit History
 
@@ -615,7 +618,7 @@ The system shall store activation and expiry timestamps and may display a grant 
 - LLM and MCP calls use explicit timeouts and propagate cancellation.
 - The provisioning handler propagates cancellation to persistence and the synthetic provider.
 - Expected validation, authorization, stale-state, timeout, and provisioning failures use typed outcomes.
-- A provisioning timeout or lost response can be retried with the same idempotency key.
+- A provisioning timeout or lost response can be retried with the same request ID.
 - Partial failure must not be reported as success.
 
 ### 10.3 Auditability
@@ -669,7 +672,7 @@ Required tests cover:
 - DevOps duration-field rejection or safe ignoring,
 - missing business approval,
 - unauthorized user attempting to trigger DevOps approval and provisioning,
-- pre-provisioning revalidation,
+- pre-provisioning persisted-evidence validation,
 - duplicate provisioning idempotency,
 - MCP failure or timeout.
 
@@ -684,7 +687,7 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 3. Deterministic validation succeeds.
 4. The Client Alpha business approver approves the immutable request scope.
 5. DevOps approves the exact role; the system applies the fixed eight-hour lifetime.
-6. Approval immediately triggers independent revalidation and idempotent provisioning.
+6. Approval immediately triggers independent persisted-evidence validation and idempotent provisioning.
 7. The request becomes `Active` and the detail page shows the grant and audit history.
 
 ### 12.2 Wrong Business Approver
@@ -699,7 +702,9 @@ request requires both approvals and the original request retains its evidence.
 
 ### 12.4 Duplicate Provisioning Retry
 
-Provisioning succeeds but its response is treated as lost. A controlled retry uses the same idempotency key and returns the existing grant without creating a duplicate.
+Provisioning succeeds but its response is treated as lost. A controlled retry uses the
+same request ID as the provider idempotency key and returns the existing grant without
+creating a duplicate.
 
 The following remain automated negative-path tests rather than primary presentation scenarios:
 
@@ -727,7 +732,7 @@ The MVP includes:
 - two explicit authenticated approval stages,
 - immutable request binding and correction through a new request,
 - immediate internal provisioning after DevOps approval,
-- independent current-state reload and validation within the provisioning handler,
+- independent persisted-evidence reload and validation within the provisioning handler,
 - idempotent synthetic grant creation,
 - activation and expiry timestamps,
 - straightforward insert-only audit events,
@@ -789,7 +794,7 @@ The later proposal and design phases should resolve:
 5. Whether the MCP client uses the host's HTTP endpoint or another supported transport while preserving real MCP contracts and integration tests.
 6. How DevOps approval persistence and the immediate provisioning attempt are separated so failure produces a recoverable `ProvisioningFailed` state.
 7. How the provisioning handler reloads evidence and prevents upstream code from bypassing required checks.
-8. How idempotency keys are derived and bound to request ID and approved scope.
+8. How the immutable request ID is translated to a provider idempotency key.
 9. Whether OpenTelemetry can be added as final polish without introducing an external collector.
 
 ## 17. Success Criteria
@@ -806,8 +811,8 @@ The project is successful when it proves that:
 - approvals bind to an exact immutable request ID and scope,
 - correcting a submitted request creates a new request and requires new approvals,
 - DevOps cannot change the approved role or the fixed eight-hour lifetime,
-- successful DevOps approval immediately triggers deterministic revalidation and provisioning,
-- the provisioning handler reloads and independently verifies current stored evidence,
+- successful DevOps approval immediately triggers deterministic persisted-evidence validation and provisioning,
+- the provisioning handler reloads and independently verifies persisted workflow evidence,
 - provisioning remains unavailable to the model,
 - retrying the same provisioning operation does not create a duplicate grant,
 - the request detail page presents the essential workflow and audit evidence,

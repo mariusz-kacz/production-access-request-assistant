@@ -70,7 +70,7 @@ complete evidence scope into an earlier phase.
 
 **Primary Dependencies**: ASP.NET Core 10 MVC controllers and static files, React 19.2, React Router, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`
 
-**Storage**: One local SQLite database through EF Core; deterministic seed data for request context and principals; insert-only audit rows; unique provisioning operation identity
+**Storage**: One local SQLite database through EF Core; deterministic seed data for request context and principals; insert-only audit rows; provisioning operations and grants uniquely keyed by immutable request ID
 
 **Testing**: xUnit, ASP.NET Core `WebApplicationFactory`, SQLite in-memory databases, deterministic fake `IChatClient`, controllable synthetic provisioner, Vitest, and React Testing Library
 
@@ -98,12 +98,12 @@ baseline are applied as the operative gates:
 |---|---|---|
 | AI interprets only; humans approve; deterministic code authorizes and executes | PASS | Drafting adapter is isolated from decision and provisioning services; protected actions use authenticated server context. |
 | Domain/application code has no AI-provider or MCP SDK contracts | PASS | `GovernedAccess.Core` exposes provider-neutral ports and typed outcomes; SDK types remain in `GovernedAccess.Web` adapters. |
-| Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates current stored state. |
+| Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates persisted workflow evidence. |
 | Model receives exactly the three allowed read-only MCP tools | PASS | MCP contract declares only the required tools; tool registration uses an explicit allowlist. |
 | Approval is authenticated and bound to an exact immutable request scope | PASS | Approval entity and action contracts bind request ID and exact role; actor comes only from server claims. |
 | Submitted requests cannot change after approval begins | PASS | Submitted request fields are immutable; corrections create a new request ID and require new approvals. |
 | DevOps cannot alter role or duration | PASS | Domain decision policy requires role equality; successful grants receive the server-owned fixed eight-hour lifetime. |
-| Provisioning reloads evidence and is idempotent | PASS | Handler accepts request ID and operation identity only, reloads all evidence, and enforces a unique operation identity. |
+| Provisioning reloads persisted evidence and is idempotent | PASS | The immutable request UUID keys the operation and serves as provider idempotency identity; the handler reloads request, approval, and operation evidence and enforces one operation per request. |
 | Browser identity and claims are untrusted | PASS | HttpOnly server cookie establishes actor; action bodies contain no actor, roles, or approver identity. |
 | Cookie-authenticated mutations resist CSRF | PASS | Same-origin antiforgery token plus `X-XSRF-TOKEN`; all unsafe application endpoints validate it. |
 | Single-host, proportionate structure | PASS | One executable serves React assets, API, and MCP; Vite is build/dev tooling, not a production service. |
@@ -205,11 +205,12 @@ thin React presentation.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP
   endpoint, preserving a real protocol boundary without another process.
 - DevOps approval persists the authenticated decision and provisioning operation,
-  then invokes the protected handler. The handler reloads the immutable request, current
-  approvals, environment, role, and incident before calling the synthetic provider.
-- Provider success and workflow activation are finalized transactionally. A timeout
-  or lost response records `ProvisioningFailed`; retry reuses the same operation ID.
-- A unique database constraint on `AccessGrant.OperationId` plus provider-side
+  then invokes the protected handler. The handler reloads the immutable request,
+  approvals, and request-bound operation before calling the synthetic provider.
+- Provider success and workflow activation are finalized in one local database save.
+  The provider call and local save are not a cross-system atomic operation. A timeout
+  or lost response records `ProvisioningFailed`; retry reuses the same request ID.
+- A unique database constraint on `AccessGrant.RequestId` plus provider-side
   get-or-create semantics guarantees one grant under retries/concurrency.
 - `AccessRequest.PersistenceVersion` is an internal EF concurrency token. It detects
   competing workflow transitions and is not exposed as business authorization evidence.

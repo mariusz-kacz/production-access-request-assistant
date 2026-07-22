@@ -191,10 +191,10 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .HasMaxLength(ApprovalDecision.MaximumCommentLength);
         entity.Property(decision => decision.CorrelationId).HasMaxLength(CorrelationIdLength);
         entity.HasIndex(decision => new
-            {
-                decision.RequestId,
-                decision.Stage,
-            })
+        {
+            decision.RequestId,
+            decision.Stage,
+        })
             .IsUnique();
 
         ConfigureUtcTimestamp(entity.Property(decision => decision.DecidedAt));
@@ -214,13 +214,11 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         EntityTypeBuilder<ProvisioningOperation> entity)
     {
         entity.ToTable("ProvisioningOperations");
-        entity.HasKey(operation => operation.Id);
-        entity.Property(operation => operation.Id).HasMaxLength(64);
+        entity.HasKey(operation => operation.RequestId);
         entity.Property(operation => operation.EnvironmentId).HasMaxLength(IdentifierLength);
         entity.Property(operation => operation.RoleId).HasMaxLength(IdentifierLength);
         entity.Property(operation => operation.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(operation => operation.LastOutcomeCode).HasMaxLength(OutcomeCodeLength);
-        entity.HasIndex(operation => operation.RequestId).IsUnique();
 
         ConfigureUtcTimestamp(entity.Property(operation => operation.CreatedAt));
         ConfigureUtcTimestamp(entity.Property(operation => operation.LastAttemptAt));
@@ -245,13 +243,11 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     {
         entity.ToTable("AccessGrants");
         entity.HasKey(grant => grant.Id);
-        entity.Property(grant => grant.OperationId).HasMaxLength(64);
         entity.Property(grant => grant.RequesterId).HasMaxLength(IdentifierLength);
         entity.Property(grant => grant.EnvironmentId).HasMaxLength(IdentifierLength);
         entity.Property(grant => grant.RoleId).HasMaxLength(IdentifierLength);
         entity.Property(grant => grant.Outcome).HasConversion<string>().HasMaxLength(16);
         entity.Property(grant => grant.CorrelationId).HasMaxLength(CorrelationIdLength);
-        entity.HasIndex(grant => grant.OperationId).IsUnique();
         entity.HasIndex(grant => grant.RequestId).IsUnique();
 
         ConfigureUtcTimestamp(entity.Property(grant => grant.ActivatedAt));
@@ -259,7 +255,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
 
         entity.HasOne<ProvisioningOperation>()
             .WithOne()
-            .HasForeignKey<AccessGrant>(grant => grant.OperationId)
+            .HasForeignKey<AccessGrant>(grant => grant.RequestId)
             .OnDelete(DeleteBehavior.Restrict);
 
         entity.HasOne<AccessRequest>()

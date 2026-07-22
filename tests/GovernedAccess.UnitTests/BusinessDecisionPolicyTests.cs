@@ -238,22 +238,12 @@ public sealed class BusinessDecisionPolicyTests
             throw new NotSupportedException();
 
         public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-            string operationId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-            string operationId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationForRequestAsync(
             Guid requestId,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public Task<ApplicationResult<AccessGrant>> GetAccessGrantByOperationAsync(
-            string operationId,
+        public Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
+            Guid requestId,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
