@@ -43,6 +43,37 @@ Use the demo identity selector to issue a server-authenticated HttpOnly cookie. 
 the client sends `X-XSRF-TOKEN` for unsafe calls and that a mutation without it is
 rejected without protected state change.
 
+## Presentation quality check
+
+Run this bounded manual check against the published ASP.NET-hosted bundle at a desktop
+viewport and again at 360px width or 200% browser zoom:
+
+1. Open each available route while signed out, as requester, as the responsible
+   business approver, and as DevOps where the workflow permits.
+2. Traverse navigation, identity selection, form fields, links, and decision controls
+   using only the keyboard.
+3. Exercise loading, field validation, safe Problem Details, pending submission,
+   business approval, DevOps approval, rejection, and active-grant states.
+4. Inspect long request, environment, grant, and correlation identifiers and the
+   activation/expiry timestamps.
+
+Expected:
+
+- The interface reads as one restrained internal operations tool: compact horizontal
+  shell, neutral canvas, typographic/rule-based grouping, and no decorative dashboard
+  tile grid, gradient, glass, glow, or ornamental chart.
+- Each page has one obvious task and heading. Current identity, synthetic-demo context,
+  request state, immutable scope, and the currently allowed action are distinguishable
+  without relying on color alone.
+- Keyboard focus is always visible; native labels and live feedback remain available;
+  primary pointer targets are practical to activate; reduced-motion preferences do
+  not remove information.
+- At narrow width and 200% zoom there is no page-level horizontal scrolling, clipped
+  action, hidden evidence, or overlapping text. Long identifiers wrap and remain
+  selectable in full.
+- Statuses and timestamps use readable presentation while retaining authoritative
+  values; the UI never invents scope, authority, approval, provisioning, or expiry.
+
 ## Scenario 1: safe request preparation and submission
 
 1. Sign in as requester and open `/requests/new`.
@@ -118,7 +149,7 @@ retry from any other state are rejected.
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |
 | Persistence | Insert-only audit behavior, optimistic conflict, approval uniqueness, operation/grant uniqueness. |
 | Provisioning | Persisted-evidence reload, inconsistent operation or approval data, idempotent success, lost response, 100 concurrent duplicates. |
-| React/UI host | Three routes, typed errors, abort handling, relevant list, action visibility plus server enforcement, no MCP/provisioning browser calls. |
+| React/UI host | Three routes, typed errors, abort handling, relevant list, action visibility plus server enforcement, no MCP/provisioning browser calls, responsive presentation check, visible keyboard focus, and non-color status meaning. |
 | API security | Cookie actor, antiforgery on unsafe methods, over-posting resistance, participant visibility. |
 
 The request-context entity rules are in [data-model.md](data-model.md); browser/server

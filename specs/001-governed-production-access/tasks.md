@@ -156,9 +156,9 @@
 
 ### Tests for User Story 4
 
-- [ ] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and persisted-evidence validation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
-- [ ] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
-- [ ] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
+- [X] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and persisted-evidence validation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
+- [X] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
+- [X] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
 
 ### Implementation for User Story 4
 
@@ -298,3 +298,12 @@ T071 RequestListPage.tsx can proceed while T068 ProvisioningRetryService.cs is i
 - Expected failures use typed outcomes; exceptions are reserved for unexpected faults.
 - Do not log secrets, raw prompts, or complete MCP payloads.
 - Commit after each task or coherent task group, and validate each story at its checkpoint.
+
+## Phase 8: Convergence
+
+- [ ] T080 Add the project-owned plain-CSS visual system with custom properties, base typography, forms, feedback states, visible focus, reduced-motion handling, identifier wrapping, and responsive primitives in `src/GovernedAccess.Web/ClientApp/src/styles.css`, then import it from `src/GovernedAccess.Web/ClientApp/src/main.tsx` per plan: UI implementation strategy (missing)
+- [ ] T081 Refine the compact horizontal application shell and visibly synthetic identity utility without changing session behavior in `src/GovernedAccess.Web/ClientApp/src/App.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DemoIdentitySelector.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: UI Presentation Correction (partial)
+- [ ] T082 Apply the linear describe-review-submit composition to `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx` and the restrained record-list/filter composition to `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`, with shared rules in `src/GovernedAccess.Web/ClientApp/src/styles.css`, per plan: UI information hierarchy and responsive behavior (partial)
+- [ ] T083 Add human-readable, non-color-only status and workflow presentation in `src/GovernedAccess.Web/ClientApp/src/components/RequestStatus.tsx`, then restructure `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx` and `src/GovernedAccess.Web/ClientApp/src/styles.css` into a wide record/action split that collapses to one source-ordered column with complete identifiers and semantic timestamps per FR-032 and SC-006 (partial)
+- [ ] T084 Give approve, reject, pending, completed, error, and safe grant outcomes deliberate and distinct hierarchy without changing restricted payloads in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: presentation acceptance (partial)
+- [ ] T085 Extend the thin semantic UI smokes for human-readable status, workflow orientation, identity switching, safe grant output, and preserved accessible action names without adding CSS snapshots in `src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx` and `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx` per plan: UI accessibility and validation (missing)

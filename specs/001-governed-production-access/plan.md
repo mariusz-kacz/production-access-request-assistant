@@ -1,6 +1,6 @@
 # Implementation Plan: Governed Production Access
 
-**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-20 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-22 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/001-governed-production-access/spec.md`
 
@@ -13,7 +13,9 @@ Vite produces static assets served by the ASP.NET Core host in production; that 
 also exposes same-origin typed `/api` endpoints and the real `/mcp` Streamable HTTP
 endpoint. A provider-neutral core owns validation, workflow, authorization, immutable
 request-scope binding, and provisioning policy. React never supplies trusted server identity or
-calls MCP or provisioning directly.
+calls MCP or provisioning directly. The three-page client uses a restrained,
+document-first operations visual system that makes workflow state and evidence easy
+to scan without introducing a generic dashboard shell or another frontend framework.
 
 ## Request Context Naming Change
 
@@ -64,15 +66,69 @@ expiry, retry, and audit evidence, and adds the request-list route. This keeps t
 business-decision story independently demonstrable without pulling provisioning or
 complete evidence scope into an earlier phase.
 
+## UI Presentation Correction
+
+**Status**: Planned on 2026-07-22.
+
+The existing semantic React surfaces require one coherent presentation pass. The
+target is a quiet internal operations tool, not a generic analytics or AI dashboard.
+The visual hierarchy follows the governed workflow: application context, current
+identity, page purpose, request state, immutable evidence, then the currently allowed
+human action.
+
+Presentation rules:
+
+- Use a warm neutral canvas, near-black text, one restrained interaction accent, and
+  semantic colors only for state and feedback.
+- Use thin rules, spacing, and typography to group content. Avoid grids of decorative
+  cards, gradients, glass effects, glow, large metric tiles, and ornamental charts.
+- Keep the shell horizontal and compact. The synthetic-demo marker and current
+  authenticated identity remain visible without competing with the page task.
+- Render human-readable status labels and timestamps while retaining complete stable
+  identifiers as selectable, wrapping secondary data.
+- Present request detail as a readable record with compact workflow progression;
+  place the current decision beside the evidence on wide screens and below it on
+  narrow screens.
+- Preserve semantic HTML, keyboard operation, visible focus, non-color status labels,
+  reduced-motion preferences, and readable layouts from 360px upward.
+
+Implementation order:
+
+1. Establish CSS custom properties, reset/base rules, typography, focus, feedback,
+   form, and responsive layout primitives in one global stylesheet.
+2. Refine the application shell and demo identity selector into a compact utility
+   header without changing authentication behavior.
+3. Apply the same page header, section, form, status, identifier, and action patterns
+   to list, new-request, and detail surfaces.
+4. Add small presentation-only React helpers only where repeated semantics justify
+   them; do not add a component library, icon library, CSS-in-JS runtime, or state
+   framework.
+5. Validate the complete requester, business approver, and DevOps paths at desktop
+   and narrow viewports, including loading, error, empty, pending, and completed states.
+
+Presentation acceptance:
+
+- All three routes use the project-owned visual system rather than browser defaults.
+- Request detail uses a purposeful record/action split on wide screens and one logical
+  column at 360px, with no page-level horizontal overflow.
+- Raw status enums are not primary user-facing labels; complete IDs and authoritative
+  timestamps remain available, selectable, and layout-safe.
+- Approve, reject, identity, navigation, and form controls are keyboard reachable,
+  visibly focused, and practically sized; status meaning never depends on color alone.
+- Loading, error, disabled, completed, rejected, active, and provisioning-failed
+  states remain understandable and preserve existing safe payload behavior.
+- No new runtime UI dependency is added, and the stylesheet contains no gradient,
+  backdrop-blur, glow, decorative chart, or dashboard metric-tile treatment.
+
 ## Technical Context
 
 **Language/Version**: C# 14 on .NET 10 LTS; TypeScript with React 19.2; Node.js 24 LTS for frontend build tooling
 
-**Primary Dependencies**: ASP.NET Core 10 MVC controllers and static files, React 19.2, React Router, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`
+**Primary Dependencies**: ASP.NET Core 10 MVC controllers and static files, React 19.2, React Router, plain CSS with custom properties, Vite and its official React plugin, `Microsoft.Extensions.AI`, official `ModelContextProtocol` packages, EF Core 10 SQLite, `System.Text.Json`; no frontend component or icon library
 
 **Storage**: One local SQLite database through EF Core; deterministic seed data for request context and principals; insert-only audit rows; provisioning operations and grants uniquely keyed by immutable request ID
 
-**Testing**: xUnit, ASP.NET Core `WebApplicationFactory`, SQLite in-memory databases, deterministic fake `IChatClient`, controllable synthetic provisioner, Vitest, and React Testing Library
+**Testing**: xUnit, ASP.NET Core `WebApplicationFactory`, SQLite in-memory databases, deterministic fake `IChatClient`, controllable synthetic provisioner, Vitest, React Testing Library, and a bounded manual responsive/accessibility presentation check
 
 **Target Platform**: One local cross-platform ASP.NET Core deployment serving a modern-browser React bundle; development uses .NET 10 SDK and Node.js 24 LTS
 
@@ -80,7 +136,7 @@ complete evidence scope into an earlier phase.
 
 **Performance Goals**: Normal local list/detail/action feedback within 2 seconds; primary demonstrations within 15 minutes; 100 concurrent duplicate provisioning attempts create exactly one grant; frontend production assets use hashed Vite output
 
-**Constraints**: No live model in tests; one executable and one production origin; exactly three read-only model-visible MCP tools; no public provisioning endpoint; authenticated actor comes from server cookie context; every unsafe `/api` request requires antiforgery validation; model/MCP/provisioning timeouts are 30/5/10 seconds; cancellation crosses async boundaries; raw prompts, secrets, and full MCP payloads are not logged
+**Constraints**: No live model in tests; one executable and one production origin; exactly three read-only model-visible MCP tools; no public provisioning endpoint; authenticated actor comes from server cookie context; every unsafe `/api` request requires antiforgery validation; model/MCP/provisioning timeouts are 30/5/10 seconds; cancellation crosses async boundaries; raw prompts, secrets, and full MCP payloads are not logged; presentation remains usable at 200% zoom and 360px width, exposes visible keyboard focus, and never relies on color alone
 
 **Access Lifetime**: Requesters and approvers provide no duration; every successful grant expires exactly eight hours after activation.
 
@@ -107,12 +163,14 @@ baseline are applied as the operative gates:
 | Browser identity and claims are untrusted | PASS | HttpOnly server cookie establishes actor; action bodies contain no actor, roles, or approver identity. |
 | Cookie-authenticated mutations resist CSRF | PASS | Same-origin antiforgery token plus `X-XSRF-TOKEN`; all unsafe application endpoints validate it. |
 | Single-host, proportionate structure | PASS | One executable serves React assets, API, and MCP; Vite is build/dev tooling, not a production service. |
+| UI presentation remains thin and non-authoritative | PASS | Project-owned plain CSS and presentation-only mappings add no route, API, runtime framework, or authorization input. |
 | Typed failures, timeouts, cancellation, safe logging | PASS | Contracts enumerate expected outcomes; timeout policies link caller cancellation; logging captures metadata only. |
 | Required negative, authorization, stale-state, MCP, and idempotency tests | PASS | Quickstart matrix and test-project boundaries cover all mandatory scenarios without a live LLM. |
 
-**Post-design re-check**: PASS. The data model and contracts preserve all gates. No
+**Post-design re-check**: PASS. The data model and contracts preserve all gates. The
+UI correction adds only client-side presentation projections and plain CSS; no
 additional executable, workflow engine, generic repository, state-changing MCP tool,
-or autonomous agent is introduced.
+runtime UI framework, or autonomous agent is introduced.
 
 ## Project Structure
 
@@ -150,6 +208,7 @@ src/
     │   │   ├── auth/
     │   │   ├── components/
     │   │   ├── pages/
+    │   │   ├── styles.css
     │   │   └── test/
     │   ├── package.json
     │   └── vite.config.ts
@@ -185,6 +244,12 @@ thin React presentation.
   Antiforgery validation is applied to unsafe actions without affecting request GETs.
 - React invokes focused same-origin JSON commands and queries through one typed fetch
   wrapper; UI visibility is never treated as authorization.
+- React presentation uses one global stylesheet, semantic class names, and at most a
+  few repeated presentation helpers. Visual status and action prominence derive only
+  from server-returned state and actions and never create an authorization decision.
+- The visual system favors record layouts, rules, and typographic grouping over
+  card-grid dashboard composition. Responsive changes alter layout only; no data,
+  evidence, or protected action is hidden solely because of viewport width.
 - Request detail is delivered progressively through one stable endpoint and route:
   US2 establishes participant visibility, immutable scope, status, and available
   business actions; later stories enrich the response without deferring reachability

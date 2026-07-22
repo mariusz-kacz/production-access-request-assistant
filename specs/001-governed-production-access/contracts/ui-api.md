@@ -113,5 +113,34 @@ browser provisioning endpoint.
 | `/requests/new` | prepare draft, create request |
 | `/requests/:requestId` | immutable detail and business decision from US2; later enriched with DevOps, retry, grant, and audit evidence |
 
+## Client presentation contract
+
+This presentation contract changes no HTTP shape and grants no authority. The React
+client renders only server-visible data and uses `availableActions` and session
+capabilities as presentation hints; protected endpoints remain authoritative.
+
+- The application shell exposes the product name, a visible synthetic-demo marker,
+  compact primary navigation, and the authenticated demo identity without presenting
+  a general-purpose dashboard or administration area.
+- Every route has one primary page heading. Page structure uses semantic sections,
+  definition lists, forms, tables or lists as appropriate; bordered containers are
+  reserved for meaningful records, decisions, or feedback rather than wrapping every
+  text block in a card.
+- Persisted enum values are mapped to human-readable labels. Status and feedback use
+  both text and semantic visual treatment; color alone never carries meaning.
+- Stable identifiers remain complete and selectable. Long IDs and error details wrap
+  without causing horizontal page overflow at 360px or 200% zoom.
+- Unsafe primary actions are visually distinct from secondary and rejection actions,
+  but action visibility never substitutes for server authorization. Pending actions
+  disable duplicate submission and communicate progress without layout movement.
+- Loading, unauthenticated, empty, validation-error, dependency-error, pending,
+  completed, active, rejected, and expired states preserve the same shell and reading
+  order. Focus moves only when required for error recovery and is never trapped.
+- The visual implementation uses plain CSS and existing semantic React components.
+  It introduces no component framework, icon framework, analytics tiles, decorative
+  charts, gradients, glass effects, glow, or animation required to understand state.
+- Wide layouts may place request evidence and the current action side by side. Narrow
+  layouts retain all evidence and actions in source order with no horizontal scroll.
+
 SPA fallback handles only UI routes. `/api/*` and `/mcp` never fall back to
 `index.html`.

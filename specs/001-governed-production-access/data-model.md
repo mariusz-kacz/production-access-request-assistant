@@ -195,3 +195,34 @@ a nonparticipant receives no detail. Later stories extend this same projection w
 ordered decisions, current validation, provisioning operation, grant, logical expiry,
 retry eligibility, and ordered audit events. Those extensions do not change the
 immutable request entity or introduce a second detail endpoint.
+
+## Client-only presentation projections
+
+The UI quality correction adds no persisted entity, relationship, status, or trusted
+authorization field. The following values are derived in the React boundary from the
+authenticated server projection and are never submitted as authority.
+
+### RequestStatusPresentation
+
+| Server status | Human label | Tone | Current workflow point |
+|---|---|---|---|
+| `AwaitingBusinessApproval` | Awaiting business approval | Pending | Business review |
+| `AwaitingDevOpsApproval` | Awaiting DevOps approval | Pending | DevOps review |
+| `ProvisioningFailed` | Provisioning failed | Critical | Provisioning recovery |
+| `Active` | Active | Positive | Access active |
+| `Rejected` | Rejected | Critical | Workflow ended |
+
+The human label and tone are presentation only. A tone must always be paired with the
+label, and workflow logic continues to use the server status and `AvailableActions`.
+
+### RequestRecordPresentation
+
+- Stable request, client, environment, role, incident, grant, and correlation IDs are
+  displayed in full, remain selectable, and may wrap. They are not abbreviated into
+  ambiguous values.
+- When a human display name exists, it is primary and the stable identifier is
+  subordinate evidence; absence of a display name does not fabricate one.
+- UTC timestamps remain the contract value. The client may display a locale-readable
+  value while retaining the original timestamp in the semantic `dateTime` attribute.
+- Workflow progression is derived from status and returned decision evidence. It does
+  not predict approval, provisioning success, or a protected action.

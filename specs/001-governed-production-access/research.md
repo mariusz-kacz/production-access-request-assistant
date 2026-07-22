@@ -270,4 +270,72 @@ User Story 2 panel unreachable); move the complete User Story 4 query and eviden
 scope earlier (breaks story independence and requires unimplemented provisioning
 state); use hard-coded browser fixtures (does not demonstrate server authorization).
 
+## UI visual language
+
+**Decision**: Use a document-first operations visual language: warm neutral canvas,
+near-black typography, one restrained interaction accent, semantic feedback colors,
+thin dividing rules, modest corner radii, and little or no shadow. Organize pages
+around the current task and governed record rather than metric tiles.
+
+**Rationale**: The product is a small approval and evidence tool, not an analytics
+surface. Strong type, spacing, and rules make dense identifiers and workflow evidence
+scannable without the decorative card grids, gradients, glow, and oversized headings
+commonly associated with template-generated dashboards.
+
+**Alternatives considered**: A sidebar dashboard with cards and summary metrics
+(misrepresents three routes and adds visual noise); a glass/gradient AI aesthetic
+(poor fit for governed operations and weak contrast); completely unstyled native HTML
+(functional but does not communicate hierarchy or state).
+
+## UI implementation strategy
+
+**Decision**: Implement the visual system with one global plain-CSS entry point,
+CSS custom properties, existing semantic markup, and only small React presentation
+helpers for genuinely repeated concepts such as status labels or workflow stages.
+Use the platform/system font stack and `ui-monospace` for identifiers.
+
+**Rationale**: The current client is three routes with local state and already has
+useful semantic class names. Plain CSS adds no runtime dependency, keeps the bundle and
+single-host architecture proportionate, and avoids importing another product's visual
+identity. Full stable identifiers remain selectable and wrap safely instead of being
+hidden behind icon-only affordances.
+
+**Alternatives considered**: A component framework (too much dependency and generic
+visual character); Tailwind or CSS-in-JS (new tooling or runtime for a small client);
+custom webfont and icon packages (network/bundle overhead with no workflow benefit).
+
+## UI information hierarchy and responsive behavior
+
+**Decision**: Use a compact horizontal application header, a clearly subordinate demo
+identity utility, bounded reading width, and a record/action split on wide request
+detail views that collapses to one source-ordered column below the wide breakpoint.
+New-request content follows a linear describe, review, submit progression. Request
+status is always expressed with readable text and a restrained visual marker.
+
+**Rationale**: The workflow is sequential and evidence-heavy. A stable reading order
+helps users identify the request, understand its current gate, inspect immutable scope,
+and then act. Source-order-first responsiveness preserves keyboard and screen-reader
+navigation and avoids a separate mobile interaction model.
+
+**Alternatives considered**: Persistent sidebar navigation (wastes space for three
+routes); dense multi-column forms (harder correction path on narrow screens); hiding
+secondary evidence on mobile (undermines the governed record).
+
+## UI accessibility and validation
+
+**Decision**: Preserve native elements and landmarks; require visible `:focus-visible`
+states, programmatic labels and descriptions, status text that does not rely on color,
+AA-level text contrast, practical 44px primary controls, wrapping at 360px and 200%
+zoom, reduced-motion behavior, and polite live regions only for meaningful asynchronous
+outcomes. Validate behavior with the existing thin React smokes plus a short manual
+route/state matrix rather than screenshot-heavy testing.
+
+**Rationale**: These constraints make the interface reliably usable and objective
+without expanding the portfolio MVP into a design-system or exhaustive browser-test
+project. Existing workflow authorization remains covered by .NET tests.
+
+**Alternatives considered**: Color-only badges (inaccessible); animated transitions
+for every state (distracting and unnecessary); large visual-regression infrastructure
+(disproportionate to three routes).
+
 All technical-context clarifications are resolved.
