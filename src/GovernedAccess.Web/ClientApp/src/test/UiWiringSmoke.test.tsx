@@ -86,6 +86,24 @@ describe("thin UI wiring", () => {
     expect(currentStep?.getAttribute("aria-current")).toBe("step");
     expect(within(currentStep as HTMLElement).getByText("Current")).toBeTruthy();
 
+    const scopeHeading = screen.getByRole("heading", {
+      name: "Submitted request",
+    });
+    const decisionsHeading = screen.getByRole("heading", {
+      name: "Approval history",
+    });
+    const actionRegion = screen.getByRole("complementary", {
+      name: "Action required",
+    });
+    expect(
+      scopeHeading.compareDocumentPosition(actionRegion) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      decisionsHeading.compareDocumentPosition(actionRegion) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
     const approveButton = screen.getByRole("button", {
       name: "Approve request",
     });
@@ -111,6 +129,10 @@ describe("thin UI wiring", () => {
         "Business approved. Waiting for DevOps.",
       ),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("complementary", { name: "Action recorded" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
   });
 
   it("wires the DevOps action to a safe active-grant summary", async () => {
@@ -252,6 +274,13 @@ describe("thin UI wiring", () => {
 
     expect(
       await screen.findByRole("heading", { name: "Request submitted" }),
+    ).toBeTruthy();
+    const completedProgress = screen.getByRole("list", {
+      name: "Request preparation steps",
+    });
+    expect(within(completedProgress).getAllByRole("listitem")).toHaveLength(2);
+    expect(
+      within(completedProgress).getByText("Review and submit"),
     ).toBeTruthy();
     expect(
       screen.queryByRole("textbox", { name: "Access request description" }),

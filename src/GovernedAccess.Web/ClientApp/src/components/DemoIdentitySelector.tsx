@@ -178,9 +178,9 @@ export function DemoIdentitySelector({
       aria-labelledby="demo-identity-title"
     >
       <div className="demo-identity-selector__intro">
-        <h2 id="demo-identity-title">Demo identity</h2>
+        <h2 id="demo-identity-title">Acting identity</h2>
         <p id="demo-identity-description">
-          Switch roles to test each part of the workflow.
+          Change roles to inspect the governed workflow.
         </p>
       </div>
 

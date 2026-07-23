@@ -30,55 +30,59 @@ function ApplicationShell() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header__primary">
-          <div className="app-header__identity">
-            <Link className="app-brand" to="/requests">
+      <aside className="app-rail">
+        <header className="app-rail__brand">
+          <Link className="app-brand" to="/requests">
+            <span>
               Governed Access
-            </Link>
-          </div>
+              <small>Production access</small>
+            </span>
+          </Link>
+        </header>
 
-          <nav className="app-navigation" aria-label="Primary navigation">
+        <nav className="app-navigation" aria-label="Primary navigation">
+          <NavLink
+            to="/requests"
+            end
+            className={({ isActive }) =>
+              isActive
+                ? "navigation-link navigation-link--active"
+                : "navigation-link"
+            }
+          >
+            <span aria-hidden="true">01</span>
+            Requests
+          </NavLink>
+          {canCreateRequest && (
             <NavLink
-              to="/requests"
-              end
+              to="/requests/new"
               className={({ isActive }) =>
                 isActive
                   ? "navigation-link navigation-link--active"
                   : "navigation-link"
               }
             >
-              Requests
+              <span aria-hidden="true">02</span>
+              New request
             </NavLink>
-            {canCreateRequest && (
-              <NavLink
-                to="/requests/new"
-                className={({ isActive }) =>
-                  isActive
-                    ? "navigation-link navigation-link--active"
-                    : "navigation-link"
-                }
-              >
-                New request
-              </NavLink>
-            )}
-          </nav>
-        </div>
+          )}
+        </nav>
 
         <DemoIdentitySelector onSessionChange={setSession} />
-      </header>
+      </aside>
 
-      {session === null ? (
-        <SessionLoadingPage />
-      ) : session.authenticated ? (
-        <AuthenticatedRoutes
-          key={session.principal.id}
-          canCreateRequest={canCreateRequest}
-        />
-      ) : (
-        <SignInRequiredPage />
-      )}
-
+      <div className="app-workspace">
+        {session === null ? (
+          <SessionLoadingPage />
+        ) : session.authenticated ? (
+          <AuthenticatedRoutes
+            key={session.principal.id}
+            canCreateRequest={canCreateRequest}
+          />
+        ) : (
+          <SignInRequiredPage />
+        )}
+      </div>
     </div>
   );
 }

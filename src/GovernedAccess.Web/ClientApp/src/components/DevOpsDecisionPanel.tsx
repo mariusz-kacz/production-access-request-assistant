@@ -192,13 +192,6 @@ export function DevOpsDecisionPanel({
         <p>Approve to provision the approved role for eight hours, or reject.</p>
       </header>
 
-      <div className="decision-panel__scope-note">
-        <strong>Access</strong>
-        <span>
-          Approved role · eight hours
-        </span>
-      </div>
-
       {error !== undefined && (
         <div className="problem-summary" role="alert">
           <h3>Decision or provisioning did not complete</h3>

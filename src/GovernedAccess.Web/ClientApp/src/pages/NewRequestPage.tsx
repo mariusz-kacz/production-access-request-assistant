@@ -58,7 +58,7 @@ const preparationOutcomeMessages: Record<
     "Draft preparation is unavailable. Enter the request details below or try again later.",
 };
 
-const preparationSteps = ["Describe", "Review", "Submit"] as const;
+const preparationSteps = ["Describe", "Review and submit"] as const;
 
 export function NewRequestPage() {
   const [intent, setIntent] = useState("");
@@ -244,6 +244,8 @@ export function NewRequestPage() {
           </p>
         </header>
 
+        <RequestPreparationSteps completedSteps={preparationSteps.length} />
+
         <section
           className="submission-success"
           aria-labelledby="request-created-status-title"
@@ -297,28 +299,10 @@ export function NewRequestPage() {
         </p>
       </header>
 
-      <ol className="request-steps" aria-label="Request preparation steps">
-        {preparationSteps.map((step, index) => {
-          const stepNumber = index + 1;
-          const state =
-            stepNumber <= completedPreparationStep
-              ? "complete"
-              : stepNumber === activePreparationStep
-                ? "current"
-                : "upcoming";
-
-          return (
-            <li
-              key={step}
-              className={`request-steps__item request-steps__item--${state}`}
-              aria-current={state === "current" ? "step" : undefined}
-            >
-              <span>Step {stepNumber}</span>
-              <strong>{step}</strong>
-            </li>
-          );
-        })}
-      </ol>
+      <RequestPreparationSteps
+        activeStep={activePreparationStep}
+        completedSteps={completedPreparationStep}
+      />
 
       {draft === undefined ? (
         <section
@@ -326,7 +310,7 @@ export function NewRequestPage() {
           aria-labelledby="request-intent-title"
         >
         <div className="request-step__header">
-            <p>Step 1 of 3</p>
+            <p>Step 1 of 2</p>
             <h2 id="request-intent-title">Describe the work</h2>
         </div>
         <form className="request-intent-form" onSubmit={prepareDraft}>
@@ -367,17 +351,15 @@ export function NewRequestPage() {
           className="request-step request-step--describe request-step--completed"
           aria-labelledby="request-intent-complete-title"
         >
-          <div className="request-step__header">
-            <p>Step 1 of 3 · Complete</p>
-            <h2 id="request-intent-complete-title">Description captured</h2>
-            <p>
-              Check the extracted values below.
+          <div className="request-step-completion">
+            <p className="request-step-completion__status">
+              Step 1 complete
             </p>
+            <div className="request-step-completion__content">
+              <h2 id="request-intent-complete-title">Description captured</h2>
+              <p>The prepared request values are ready to review.</p>
+            </div>
           </div>
-          <dl className="request-intent-summary">
-            <dt>Original description</dt>
-            <dd>{intent.trim()}</dd>
-          </dl>
         </section>
       )}
 
@@ -404,7 +386,7 @@ export function NewRequestPage() {
           aria-labelledby="draft-review-title"
         >
           <div className="request-step__header">
-            <p>Step 2 of 3</p>
+            <p>Step 2 of 2</p>
             <h2 id="draft-review-title">Check the request</h2>
             <p>
               Edit anything the draft got wrong. Values are checked again when you
@@ -499,7 +481,6 @@ export function NewRequestPage() {
             />
 
             <div className="request-submit-action">
-              <p>Step 3 of 3</p>
               <h3>Submit for approval</h3>
               <p>
                 After submission, this request cannot be edited.
@@ -515,6 +496,39 @@ export function NewRequestPage() {
       )}
 
     </main>
+  );
+}
+
+function RequestPreparationSteps({
+  activeStep,
+  completedSteps,
+}: {
+  activeStep?: number;
+  completedSteps: number;
+}) {
+  return (
+    <ol className="request-steps" aria-label="Request preparation steps">
+      {preparationSteps.map((step, index) => {
+        const stepNumber = index + 1;
+        const state =
+          stepNumber <= completedSteps
+            ? "complete"
+            : stepNumber === activeStep
+              ? "current"
+              : "upcoming";
+
+        return (
+          <li
+            key={step}
+            className={`request-steps__item request-steps__item--${state}`}
+            aria-current={state === "current" ? "step" : undefined}
+          >
+            <span>Step {stepNumber}</span>
+            <strong>{step}</strong>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

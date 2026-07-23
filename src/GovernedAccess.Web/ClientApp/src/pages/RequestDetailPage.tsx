@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 
 import { ApiError, apiRequest } from "../api/client";
 import type {
@@ -46,6 +46,7 @@ export function RequestDetailPage() {
     useState<RequestDetailResponse>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<RequestDetailError>();
+  const [actionCompleted, setActionCompleted] = useState(false);
   const evidenceRefreshRequest = useRef<AbortController | undefined>(
     undefined,
   );
@@ -55,6 +56,7 @@ export function RequestDetailPage() {
     evidenceRefreshRequest.current = undefined;
     setCurrentRequest(undefined);
     setError(undefined);
+    setActionCompleted(false);
 
     if (requestId === undefined || requestId.length === 0) {
       setLoading(false);
@@ -96,6 +98,7 @@ export function RequestDetailPage() {
   }, [requestId]);
 
   function applyBusinessDecision(response: BusinessDecisionResponse) {
+    setActionCompleted(true);
     setCurrentRequest((current) => {
       if (current === undefined || current.requestId !== response.requestId) {
         return current;
@@ -143,6 +146,7 @@ export function RequestDetailPage() {
   }
 
   function applyDevOpsDecision(response: DevOpsDecisionResponse) {
+    setActionCompleted(true);
     setCurrentRequest((current) => {
       if (current === undefined || current.requestId !== response.requestId) {
         return current;
@@ -159,6 +163,7 @@ export function RequestDetailPage() {
   }
 
   function applyProvisioningRetry(response: ProvisioningRetryResponse) {
+    setActionCompleted(true);
     setCurrentRequest((current) => {
       if (current === undefined || current.requestId !== response.requestId) {
         return current;
@@ -212,15 +217,25 @@ export function RequestDetailPage() {
     );
   }
 
+  const showActionArea =
+    currentRequest.availableActions.length > 0 || actionCompleted;
+
   return (
     <main className="request-detail-page" aria-labelledby="request-detail-title">
-      <header className="page-header">
-        <p className="eyebrow">Access request</p>
-        <h1 id="request-detail-title">Request details</h1>
-        <p>Submitted scope, decisions, and activity. This record is read-only.</p>
-        <p className="page-header__identifier">
-          Request <span className="identifier">{currentRequest.requestId}</span>
-        </p>
+      <header className="page-header request-detail-header">
+        <div className="page-header__title">
+          <Link className="request-detail-back" to="/requests">
+            Back to requests
+          </Link>
+          <p className="eyebrow">Production access</p>
+          <h1 id="request-detail-title">Request details</h1>
+          <p>Submitted scope, decisions, and recorded activity.</p>
+          <div className="request-detail-header__meta">
+            <span>Request ID</span>
+            <strong className="identifier">{currentRequest.requestId}</strong>
+            <span className="request-detail-header__readonly">Read-only</span>
+          </div>
+        </div>
       </header>
 
       <RequestStatus status={currentRequest.status} />
@@ -229,42 +244,44 @@ export function RequestDetailPage() {
         <div className="request-detail-evidence">
           <RequestSummary request={currentRequest} />
           <DecisionEvidence decisions={currentRequest.decisions} />
+          {showActionArea && (
+            <aside
+              className="request-detail-actions"
+              aria-label={actionCompleted ? "Action recorded" : "Action required"}
+            >
+              <header className="request-detail-actions__header">
+                <p className="eyebrow">
+                  {actionCompleted ? "Action recorded" : "Action required"}
+                </p>
+                <p>
+                  {actionCompleted
+                    ? "The request state has been updated."
+                    : "Review the submitted request before deciding."}
+                </p>
+              </header>
+              <BusinessDecisionPanel
+                requestId={currentRequest.requestId}
+                availableActions={currentRequest.availableActions}
+                onDecisionCompleted={applyBusinessDecision}
+              />
+              <DevOpsDecisionPanel
+                requestId={currentRequest.requestId}
+                availableActions={currentRequest.availableActions}
+                onDecisionCompleted={applyDevOpsDecision}
+              />
+              <ProvisioningRetryPanel
+                requestId={currentRequest.requestId}
+                availableActions={currentRequest.availableActions}
+                onRetryCompleted={applyProvisioningRetry}
+              />
+            </aside>
+          )}
           <ProvisioningEvidence
             operation={currentRequest.provisioningOperation}
           />
           <GrantEvidence grant={currentRequest.grant} />
           <AuditTimeline auditEvents={currentRequest.auditEvents} />
         </div>
-
-        <aside
-          className="request-detail-actions"
-          aria-labelledby="request-actions-title"
-        >
-          <header className="request-detail-actions__header">
-            <h2 id="request-actions-title">Action</h2>
-            <p>Available for your current demo identity.</p>
-          </header>
-          <BusinessDecisionPanel
-            requestId={currentRequest.requestId}
-            availableActions={currentRequest.availableActions}
-            onDecisionCompleted={applyBusinessDecision}
-          />
-          <DevOpsDecisionPanel
-            requestId={currentRequest.requestId}
-            availableActions={currentRequest.availableActions}
-            onDecisionCompleted={applyDevOpsDecision}
-          />
-          <ProvisioningRetryPanel
-            requestId={currentRequest.requestId}
-            availableActions={currentRequest.availableActions}
-            onRetryCompleted={applyProvisioningRetry}
-          />
-          {currentRequest.availableActions.length === 0 && (
-            <p className="request-detail-actions__empty">
-              No action available for this identity.
-            </p>
-          )}
-        </aside>
       </div>
     </main>
   );
@@ -276,10 +293,8 @@ function RequestSummary({ request }: { request: RequestDetailResponse }) {
       className="evidence-section"
       aria-labelledby="request-summary-title"
     >
-      <h2 id="request-summary-title">Request scope</h2>
+      <h2 id="request-summary-title">Submitted request</h2>
       <dl className="evidence-list">
-        <dt>Request ID</dt>
-        <dd className="identifier">{request.requestId}</dd>
         <dt>Requester</dt>
         <dd className="identifier">{request.requesterId}</dd>
         <dt>Client</dt>
@@ -317,9 +332,9 @@ function DecisionEvidence({
       className="evidence-section"
       aria-labelledby="approval-evidence-title"
     >
-      <h2 id="approval-evidence-title">Decisions</h2>
+      <h2 id="approval-evidence-title">Approval history</h2>
       {decisions.length === 0 ? (
-        <p>No decisions recorded.</p>
+        <p>No approval decision has been recorded yet.</p>
       ) : (
         <ol className="decision-evidence-list">
           {decisions.map((decision) => (
@@ -361,92 +376,90 @@ function ProvisioningEvidence({
 }: {
   operation: ProvisioningOperationResponse | null;
 }) {
+  if (operation === null) {
+    return null;
+  }
+
   return (
     <section
       className="evidence-section"
       aria-labelledby="provisioning-evidence-title"
     >
       <h2 id="provisioning-evidence-title">Provisioning</h2>
-      {operation === null ? (
-        <p>No provisioning attempt recorded.</p>
-      ) : (
-        <dl className="evidence-list">
-          <dt>Operation and request ID</dt>
-          <dd className="identifier">{operation.requestId}</dd>
-          <dt>Status</dt>
-          <dd>{operation.status}</dd>
-          <dt>Environment</dt>
-          <dd className="identifier">{operation.environmentId}</dd>
-          <dt>Role</dt>
-          <dd className="identifier">{operation.roleId}</dd>
-          <dt>Attempt count</dt>
-          <dd>{operation.attemptCount}</dd>
-          <dt>Last outcome code</dt>
-          <dd className="identifier">
-            {operation.lastOutcomeCode ?? "No outcome recorded"}
-          </dd>
-          <dt>Created</dt>
-          <dd>
-            <Timestamp value={operation.createdAt} />
-          </dd>
-          <dt>Last attempted</dt>
-          <dd>
-            <Timestamp value={operation.lastAttemptAt} />
-          </dd>
-        </dl>
-      )}
+      <dl className="evidence-list">
+        <dt>Operation and request ID</dt>
+        <dd className="identifier">{operation.requestId}</dd>
+        <dt>Status</dt>
+        <dd>{operation.status}</dd>
+        <dt>Environment</dt>
+        <dd className="identifier">{operation.environmentId}</dd>
+        <dt>Role</dt>
+        <dd className="identifier">{operation.roleId}</dd>
+        <dt>Attempt count</dt>
+        <dd>{operation.attemptCount}</dd>
+        <dt>Last outcome code</dt>
+        <dd className="identifier">
+          {operation.lastOutcomeCode ?? "No outcome recorded"}
+        </dd>
+        <dt>Created</dt>
+        <dd>
+          <Timestamp value={operation.createdAt} />
+        </dd>
+        <dt>Last attempted</dt>
+        <dd>
+          <Timestamp value={operation.lastAttemptAt} />
+        </dd>
+      </dl>
     </section>
   );
 }
 
 function GrantEvidence({ grant }: { grant: RequestGrantResponse | null }) {
+  if (grant === null) {
+    return null;
+  }
+
   return (
     <section
       className="evidence-section"
       aria-labelledby="grant-evidence-title"
     >
       <h2 id="grant-evidence-title">Grant</h2>
-      {grant === null ? (
-        <p>No grant recorded.</p>
-      ) : (
-        <>
-          <p
-            className={
-              grant.isExpired
-                ? "grant-status grant-status--expired"
-                : "grant-status grant-status--active"
-            }
-          >
-            {grant.isExpired
-              ? "Expired — the fixed access window has ended."
-              : "Active — the fixed access window has not expired."}
-          </p>
-          <dl className="evidence-list">
-            <dt>Grant ID</dt>
-            <dd className="identifier">{grant.grantId}</dd>
-            <dt>Request ID</dt>
-            <dd className="identifier">{grant.requestId}</dd>
-            <dt>Requester</dt>
-            <dd className="identifier">{grant.requesterId}</dd>
-            <dt>Environment</dt>
-            <dd className="identifier">{grant.environmentId}</dd>
-            <dt>Role</dt>
-            <dd className="identifier">{grant.roleId}</dd>
-            <dt>Outcome</dt>
-            <dd>{grant.outcome}</dd>
-            <dt>Activated</dt>
-            <dd>
-              <Timestamp value={grant.activatedAt} />
-            </dd>
-            <dt>Expires</dt>
-            <dd>
-              <Timestamp value={grant.expiresAt} />
-            </dd>
-            <dt>Correlation ID</dt>
-            <dd className="identifier">{grant.correlationId}</dd>
-          </dl>
-        </>
-      )}
+      <p
+        className={
+          grant.isExpired
+            ? "grant-status grant-status--expired"
+            : "grant-status grant-status--active"
+        }
+      >
+        {grant.isExpired
+          ? "Expired — the fixed access window has ended."
+          : "Active — the fixed access window has not expired."}
+      </p>
+      <dl className="evidence-list">
+        <dt>Grant ID</dt>
+        <dd className="identifier">{grant.grantId}</dd>
+        <dt>Request ID</dt>
+        <dd className="identifier">{grant.requestId}</dd>
+        <dt>Requester</dt>
+        <dd className="identifier">{grant.requesterId}</dd>
+        <dt>Environment</dt>
+        <dd className="identifier">{grant.environmentId}</dd>
+        <dt>Role</dt>
+        <dd className="identifier">{grant.roleId}</dd>
+        <dt>Outcome</dt>
+        <dd>{grant.outcome}</dd>
+        <dt>Activated</dt>
+        <dd>
+          <Timestamp value={grant.activatedAt} />
+        </dd>
+        <dt>Expires</dt>
+        <dd>
+          <Timestamp value={grant.expiresAt} />
+        </dd>
+        <dt>Correlation ID</dt>
+        <dd className="identifier">{grant.correlationId}</dd>
+      </dl>
     </section>
   );
 }

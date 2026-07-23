@@ -176,7 +176,10 @@ describe("application session wiring", () => {
       await screen.findByText("Signed in as Client Alpha Business Approver"),
     ).toBeTruthy();
     expect(
-      await screen.findByRole("heading", { level: 1, name: "Requests" }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Access requests",
+      }),
     ).toBeTruthy();
     expect(
       screen.queryByRole("heading", { name: "New access request" }),
@@ -224,7 +227,10 @@ describe("application session wiring", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Request details" }),
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "Request details",
+      }),
     ).toBeTruthy();
     expect(
       screen.getByRole("region", {
@@ -233,6 +239,9 @@ describe("application session wiring", () => {
     ).toBeTruthy();
     expect(screen.getByText("client-alpha-production")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve request" })).toBeNull();
+    expect(
+      screen.queryByRole("complementary", { name: "Action required" }),
+    ).toBeNull();
 
     await user.selectOptions(
       screen.getByRole("combobox", { name: "Demo identity" }),

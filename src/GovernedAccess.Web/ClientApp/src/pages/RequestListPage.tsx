@@ -105,10 +105,10 @@ export function RequestListPage({
   return (
     <main className="request-list-page" aria-labelledby="request-list-title">
       <header className="page-header">
-        <div>
+        <div className="page-header__title">
           <p className="eyebrow">Production access</p>
-          <h1 id="request-list-title">Requests</h1>
-          <p>Requests visible to your current demo identity.</p>
+          <h1 id="request-list-title">Access requests</h1>
+          <p>Records assigned to or submitted by the acting identity.</p>
         </div>
         {canCreateRequest && (
           <Link className="button-link button-link--primary" to="/requests/new">
@@ -120,7 +120,7 @@ export function RequestListPage({
       <section className="request-list-filter" aria-labelledby="filter-title">
         <div className="request-list-filter__intro">
           <h2 id="filter-title">Filter</h2>
-          <p>Narrow this list by status.</p>
+          <p>Case state</p>
         </div>
         <div className="request-list-filter__control">
           <label htmlFor="request-status-filter">Status</label>
@@ -143,10 +143,11 @@ export function RequestListPage({
 
       <section className="request-list-results" aria-labelledby="results-title">
         <header className="request-list-results__header">
-          <h2 id="results-title">Requests</h2>
+          <h2 id="results-title">Register</h2>
           {!loading && error === undefined && (
             <p aria-live="polite">
-              {requests.length} {requests.length === 1 ? "request" : "requests"}
+              {requests.length.toString().padStart(2, "0")}{" "}
+              {requests.length === 1 ? "record" : "records"}
             </p>
           )}
         </header>
@@ -197,8 +198,8 @@ function RequestListItem({
     <li className="request-record">
       <article aria-labelledby={`request-${request.requestId}`}>
         <header className="request-record__header">
-          <div>
-            <p className="request-record__label">Access request</p>
+          <div className="request-record__identity">
+            <p className="request-record__label">Request</p>
             <h3 id={`request-${request.requestId}`}>
               <Link
                 className="identifier"
