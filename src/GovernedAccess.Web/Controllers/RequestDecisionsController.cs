@@ -18,7 +18,7 @@ public sealed class RequestDecisionsController : ControllerBase
     public async Task<ActionResult<BusinessDecisionResponse>> RecordBusinessDecisionAsync(
         Guid requestId,
         BusinessDecisionRequest request,
-        [FromServices] BusinessDecisionService decisionService,
+        [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
         var decision = request.Decision switch
@@ -37,7 +37,7 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await decisionService.DecideAsync(
+        var outcome = await workflowService.DecideBusinessAsync(
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -45,24 +45,23 @@ public sealed class RequestDecisionsController : ControllerBase
             HttpContext.GetCorrelationId(),
             cancellationToken);
 
-        return outcome switch
+        if (outcome.IsFailure)
         {
-            BusinessDecisionCompleted completed => Ok(
-                new BusinessDecisionResponse(
-                    completed.Request.Id,
-                    completed.Request.Status.ToString(),
-                    completed.Decision.CorrelationId)),
-            BusinessDecisionFailed failed => failed.Failure.ToProblemDetails(HttpContext),
-            _ => throw new InvalidOperationException(
-                "The business decision outcome is unsupported."),
-        };
+            return outcome.Failure!.ToProblemDetails(HttpContext);
+        }
+
+        var completed = outcome.Value;
+        return Ok(new BusinessDecisionResponse(
+            completed.Request.Id,
+            completed.Request.Status.ToString(),
+            completed.Decision.CorrelationId));
     }
 
     [HttpPost("devops-decisions")]
     public async Task<ActionResult<DevOpsDecisionResponse>> RecordDevOpsDecisionAsync(
         Guid requestId,
         DevOpsDecisionRequest request,
-        [FromServices] DevOpsDecisionService decisionService,
+        [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
         var decision = request.Decision switch
@@ -81,7 +80,7 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await decisionService.DecideAsync(
+        var outcome = await workflowService.DecideDevOpsAsync(
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -89,25 +88,24 @@ public sealed class RequestDecisionsController : ControllerBase
             HttpContext.GetCorrelationId(),
             cancellationToken);
 
-        return outcome switch
+        if (outcome.IsFailure)
         {
-            DevOpsDecisionCompleted completed => Ok(
-                new DevOpsDecisionResponse(
-                    completed.Request.Id,
-                    completed.Request.Status.ToString(),
-                    completed.Decision.CorrelationId,
-                    completed.Grant is null
-                        ? null
-                        : new DevOpsAccessGrantResponse(
-                            completed.Grant.Id,
-                            completed.Grant.EnvironmentId,
-                            completed.Grant.RoleId,
-                            completed.Grant.ActivatedAt,
-                            completed.Grant.ExpiresAt))),
-            DevOpsDecisionFailed failed => failed.Failure.ToProblemDetails(HttpContext),
-            _ => throw new InvalidOperationException(
-                "The DevOps decision outcome is unsupported."),
-        };
+            return outcome.Failure!.ToProblemDetails(HttpContext);
+        }
+
+        var completed = outcome.Value;
+        return Ok(new DevOpsDecisionResponse(
+            completed.Request.Id,
+            completed.Request.Status.ToString(),
+            completed.Decision.CorrelationId,
+            completed.Grant is null
+                ? null
+                : new DevOpsAccessGrantResponse(
+                    completed.Grant.Id,
+                    completed.Grant.EnvironmentId,
+                    completed.Grant.RoleId,
+                    completed.Grant.ActivatedAt,
+                    completed.Grant.ExpiresAt)));
     }
 }
 

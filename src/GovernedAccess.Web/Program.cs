@@ -38,11 +38,8 @@ builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
 builder.Services.AddScoped<RequestValidator>();
 builder.Services.AddScoped<RequestSubmissionService>();
 builder.Services.AddScoped<RequestQueryService>();
-builder.Services.AddScoped<WorkflowCommandContextLoader>();
-builder.Services.AddScoped<RejectedWorkflowAttemptRecorder>();
-builder.Services.AddScoped<BusinessDecisionService>();
 builder.Services.AddScoped<ProtectedProvisioningService>();
-builder.Services.AddScoped<DevOpsDecisionService>();
+builder.Services.AddScoped<AccessRequestWorkflowService>();
 builder.Services.AddSingleton<SyntheticAccessProvisionerControl>();
 builder.Services.AddSingleton<SyntheticAccessProvisioner>();
 builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>

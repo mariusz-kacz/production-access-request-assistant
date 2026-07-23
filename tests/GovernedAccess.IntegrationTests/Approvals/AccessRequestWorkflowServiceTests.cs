@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-public sealed class DevOpsDecisionServiceTests
+public sealed class AccessRequestWorkflowServiceTests
 {
     [Fact]
     public async Task ApprovalIsDurableBeforeProvisioningStarts()
@@ -26,7 +26,7 @@ public sealed class DevOpsDecisionServiceTests
         var provisioner = new PersistenceInspectingProvisioner(dbContext);
         var service = CreateService(dbContext, provisioner, factory.Clock);
 
-        var outcome = await service.DecideAsync(
+        var outcome = await service.DecideDevOpsAsync(
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -34,7 +34,8 @@ public sealed class DevOpsDecisionServiceTests
             "devops-service-correlation",
             cancellationToken);
 
-        var completed = Assert.IsType<DevOpsDecisionCompleted>(outcome);
+        Assert.True(outcome.IsSuccess);
+        var completed = outcome.Value;
         Assert.True(provisioner.DecisionWasPersistedBeforeInvocation);
         Assert.True(provisioner.OperationWasPersistedBeforeInvocation);
         Assert.Equal(RequestStatus.Active, completed.Request.Status);
@@ -56,7 +57,7 @@ public sealed class DevOpsDecisionServiceTests
         var provisioner = new FailingProvisioner();
         var service = CreateService(dbContext, provisioner, factory.Clock);
 
-        var outcome = await service.DecideAsync(
+        var outcome = await service.DecideDevOpsAsync(
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -64,8 +65,8 @@ public sealed class DevOpsDecisionServiceTests
             "devops-failure-correlation",
             cancellationToken);
 
-        var failed = Assert.IsType<DevOpsDecisionFailed>(outcome);
-        Assert.Equal(FailingProvisioner.FailureCode, failed.Failure.Code);
+        Assert.True(outcome.IsFailure);
+        Assert.Equal(FailingProvisioner.FailureCode, outcome.Failure!.Code);
 
         var storedRequest = await dbContext.AccessRequests
             .AsNoTracking()
@@ -89,19 +90,18 @@ public sealed class DevOpsDecisionServiceTests
             cancellationToken));
     }
 
-    private static DevOpsDecisionService CreateService(
+    private static AccessRequestWorkflowService CreateService(
         GovernedAccessDbContext dbContext,
         IAccessProvisioner provisioner,
         IClock clock)
     {
         var requestContext = new EfRequestContextReader(dbContext);
         var workflowStore = new EfWorkflowStore(dbContext);
-        return new DevOpsDecisionService(
+        return new AccessRequestWorkflowService(
+            requestContext,
             workflowStore,
             new RequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
-            new WorkflowCommandContextLoader(requestContext, workflowStore),
-            new RejectedWorkflowAttemptRecorder(workflowStore, clock),
             clock);
     }
 
