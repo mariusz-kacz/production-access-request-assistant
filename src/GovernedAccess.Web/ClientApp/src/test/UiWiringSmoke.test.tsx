@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { apiRequest } from "../api/client";
 import type { RequestDetailResponse } from "../api/contracts";
 import { BUSINESS_DECISION_ACTION } from "../components/BusinessDecisionPanel";
 import { DEVOPS_DECISION_ACTION } from "../components/DevOpsDecisionPanel";
+import { NewRequestPage } from "../pages/NewRequestPage";
 import { RequestDetailPage } from "../pages/RequestDetailPage";
 
 vi.mock("../api/client", async (importOriginal) => {
@@ -32,6 +33,11 @@ const requestDetail: RequestDetailResponse = {
   createdAt: "2026-07-20T08:00:00Z",
   lastModifiedAt: "2026-07-20T08:00:00Z",
   availableActions: [BUSINESS_DECISION_ACTION],
+  validation: { isValid: true, fieldErrors: [] },
+  decisions: [],
+  provisioningOperation: null,
+  grant: null,
+  auditEvents: [],
 };
 
 describe("thin UI wiring", () => {
@@ -64,9 +70,29 @@ describe("thin UI wiring", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      await screen.findByRole("button", { name: "Approve request" }),
-    );
+    const statusRegion = await screen.findByRole("region", {
+      name: "Awaiting business approval",
+    });
+    expect(within(statusRegion).getByText("Pending")).toBeTruthy();
+    expect(
+      within(statusRegion).getByRole("heading", {
+        name: "Workflow progress",
+      }),
+    ).toBeTruthy();
+    const workflow = within(statusRegion).getByRole("list");
+    const currentStep = within(workflow)
+      .getByText("Business review")
+      .closest("li");
+    expect(currentStep?.getAttribute("aria-current")).toBe("step");
+    expect(within(currentStep as HTMLElement).getByText("Current")).toBeTruthy();
+
+    const approveButton = screen.getByRole("button", {
+      name: "Approve request",
+    });
+    expect(
+      screen.getByRole("button", { name: "Reject request" }),
+    ).toBeTruthy();
+    await user.click(approveButton);
 
     expect(mockedApiRequest).toHaveBeenCalledWith(
       `/api/requests/${requestId}/business-decisions`,
@@ -76,7 +102,13 @@ describe("thin UI wiring", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(await screen.findByText("AwaitingDevOpsApproval")).toBeTruthy();
+
+    const nextStatusRegion = await screen.findByRole("region", {
+      name: "Awaiting DevOps approval",
+    });
+    expect(
+      within(nextStatusRegion).getByText("AwaitingDevOpsApproval"),
+    ).toBeTruthy();
   });
 
   it("wires the DevOps action to a safe active-grant summary", async () => {
@@ -109,7 +141,7 @@ describe("thin UI wiring", () => {
       throw new Error(`Unexpected API request: ${path}`);
     });
     const user = userEvent.setup();
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={[`/requests/${requestId}`]}>
         <Routes>
           <Route path="/requests/:requestId" element={<RequestDetailPage />} />
@@ -117,9 +149,13 @@ describe("thin UI wiring", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      await screen.findByRole("button", { name: "Approve and provision" }),
-    );
+    const approveAndProvisionButton = await screen.findByRole("button", {
+      name: "Approve and provision",
+    });
+    expect(
+      screen.getByRole("button", { name: "Reject request" }),
+    ).toBeTruthy();
+    await user.click(approveAndProvisionButton);
 
     expect(mockedApiRequest).toHaveBeenCalledWith(
       `/api/requests/${requestId}/devops-decisions`,
@@ -129,13 +165,108 @@ describe("thin UI wiring", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(await screen.findByText("Active")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Active grant" })).toBeTruthy();
+
     expect(
-      container.querySelector(`time[datetime="${activatedAt}"]`),
+      await screen.findByRole("region", { name: "Active" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Active grant" })).toBeTruthy();
+    const grantSummary = screen.getByLabelText("Active access grant");
+    expect(
+      within(grantSummary).getByText(
+        "5b70a7a0-31f9-4f46-bab1-7f0bd8bc40ed",
+      ),
     ).toBeTruthy();
     expect(
-      container.querySelector(`time[datetime="${expiresAt}"]`),
+      within(grantSummary).getByText(requestDetail.environmentId),
+    ).toBeTruthy();
+    expect(
+      within(grantSummary).getByText(requestDetail.requestedRoleId),
+    ).toBeTruthy();
+    expect(
+      grantSummary.querySelector(`time[datetime="${activatedAt}"]`),
+    ).toBeTruthy();
+    expect(
+      grantSummary.querySelector(`time[datetime="${expiresAt}"]`),
+    ).toBeTruthy();
+    expect(screen.getByText("correlation-devops-ui-smoke")).toBeTruthy();
+  });
+
+  it("replaces drafting controls after an immutable request is submitted", async () => {
+    mockedApiRequest.mockImplementation(async (path) => {
+      if (path === "/api/request-drafts/prepare") {
+        return {
+          outcome: "Prepared",
+          draft: {
+            clientId: requestDetail.clientId,
+            environmentId: requestDetail.environmentId,
+            requestedRole: requestDetail.requestedRoleId,
+            justification: requestDetail.justification,
+            incidentId: requestDetail.incidentId,
+          },
+        } as never;
+      }
+
+      if (path === "/api/requests") {
+        return {
+          requestId,
+          status: "AwaitingBusinessApproval",
+          correlationId: "correlation-request-created",
+        } as never;
+      }
+
+      throw new Error(`Unexpected API request: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <NewRequestPage />
+      </MemoryRouter>,
+    );
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Access request description" }),
+      "Investigate the active Client Alpha production incident.",
+    );
+    await user.click(screen.getByRole("button", { name: "Prepare draft" }));
+    const submitButton = await screen.findByRole("button", {
+      name: "Validate and submit request",
+    });
+    expect(
+      screen.getByRole("heading", { name: "Description captured" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("textbox", { name: "Access request description" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Prepare draft" }),
+    ).toBeNull();
+    expect(
+      mockedApiRequest.mock.calls.filter(
+        ([path]) => path === "/api/request-drafts/prepare",
+      ),
+    ).toHaveLength(1);
+
+    await user.click(submitButton);
+
+    expect(
+      await screen.findByRole("heading", { name: "Request submitted" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("textbox", { name: "Access request description" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Prepare draft" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: "Validate and submit request",
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Prepare another request" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "View request details" }),
     ).toBeTruthy();
   });
 });

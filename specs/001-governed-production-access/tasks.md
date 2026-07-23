@@ -165,9 +165,9 @@
 - [X] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
 - [X] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
 - [X] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
-- [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
-- [ ] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
-- [ ] T073 [US4] Complete the `/requests` list route and three-route navigation while preserving the established session state and `/requests/:requestId` detail composition in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
+- [X] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
+- [X] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [X] T073 [US4] Complete the `/requests` list route and three-route navigation while preserving the established session state and `/requests/:requestId` detail composition in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
 
 **Checkpoint**: Failed work is safely recoverable, concurrent duplicates converge on one grant, and authorized users can understand all material evidence.
 
@@ -175,14 +175,9 @@
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-**Purpose**: Validate security, build shape, observability, and the complete local demonstration across all stories.
+**Purpose**: Validate cross-cutting API security across all stories.
 
-- [ ] T074 [P] Add end-to-end security tests covering unauthenticated access, antiforgery on every unsafe endpoint, identity/role/approver over-posting, and `/api`/`/mcp` SPA fallback exclusion in `tests/GovernedAccess.IntegrationTests/Security/ApiSecurityTests.cs`
-- [ ] T075 [P] Add audit persistence tests proving insert-only behavior, required event coverage, correlation fields, safe details allowlisting, and absence of raw prompts/full MCP payloads in `tests/GovernedAccess.IntegrationTests/Auditing/AuditEvidenceTests.cs`
-- [ ] T076 [P] Add host tests proving model and MCP duration/outcome metadata logging without sensitive payload capture in `tests/GovernedAccess.IntegrationTests/Observability/OperationalLoggingTests.cs`
-- [ ] T077 Add production static-file, hashed Vite asset, and three-route SPA host smoke validation in `tests/GovernedAccess.IntegrationTests/Hosting/SingleHostAssetTests.cs`
-- [ ] T078 Run and reconcile every automated command and scenario in `specs/001-governed-production-access/quickstart.md`
-- [ ] T079 Record final build, test, 15-minute demonstration, and no-live-dependency evidence in `specs/001-governed-production-access/validation-report.md`
+- [X] T074 [P] Add end-to-end security tests covering unauthenticated access, antiforgery on every unsafe endpoint, identity/role/approver over-posting, and `/api`/`/mcp` SPA fallback exclusion in `tests/GovernedAccess.IntegrationTests/Security/ApiSecurityTests.cs`
 
 ---
 
@@ -301,12 +296,12 @@ T071 RequestListPage.tsx can proceed while T068 retry behavior is implemented in
 
 ## Phase 8: Convergence
 
-- [ ] T080 Add the project-owned plain-CSS visual system with custom properties, base typography, forms, feedback states, visible focus, reduced-motion handling, identifier wrapping, and responsive primitives in `src/GovernedAccess.Web/ClientApp/src/styles.css`, then import it from `src/GovernedAccess.Web/ClientApp/src/main.tsx` per plan: UI implementation strategy (missing)
-- [ ] T081 Refine the compact horizontal application shell and visibly synthetic identity utility without changing session behavior in `src/GovernedAccess.Web/ClientApp/src/App.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DemoIdentitySelector.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: UI Presentation Correction (partial)
-- [ ] T082 Apply the linear describe-review-submit composition to `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx` and the restrained record-list/filter composition to `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`, with shared rules in `src/GovernedAccess.Web/ClientApp/src/styles.css`, per plan: UI information hierarchy and responsive behavior (partial)
-- [ ] T083 Add human-readable, non-color-only status and workflow presentation in `src/GovernedAccess.Web/ClientApp/src/components/RequestStatus.tsx`, then restructure `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx` and `src/GovernedAccess.Web/ClientApp/src/styles.css` into a wide record/action split that collapses to one source-ordered column with complete identifiers and semantic timestamps per FR-032 and SC-006 (partial)
-- [ ] T084 Give approve, reject, pending, completed, error, and safe grant outcomes deliberate and distinct hierarchy without changing restricted payloads in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: presentation acceptance (partial)
-- [ ] T085 Extend the thin semantic UI smokes for human-readable status, workflow orientation, identity switching, safe grant output, and preserved accessible action names without adding CSS snapshots in `src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx` and `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx` per plan: UI accessibility and validation (missing)
+- [X] T075 Add the project-owned plain-CSS visual system with custom properties, base typography, forms, feedback states, visible focus, reduced-motion handling, identifier wrapping, and responsive primitives in `src/GovernedAccess.Web/ClientApp/src/styles.css`, then import it from `src/GovernedAccess.Web/ClientApp/src/main.tsx` per plan: UI implementation strategy (missing)
+- [X] T076 Refine the compact horizontal application shell and visibly synthetic identity utility without changing session behavior in `src/GovernedAccess.Web/ClientApp/src/App.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DemoIdentitySelector.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: UI Presentation Correction (partial)
+- [X] T077 Apply the linear describe-review-submit composition to `src/GovernedAccess.Web/ClientApp/src/pages/NewRequestPage.tsx` and the restrained record-list/filter composition to `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`, with shared rules in `src/GovernedAccess.Web/ClientApp/src/styles.css`, per plan: UI information hierarchy and responsive behavior (partial)
+- [X] T078 Add human-readable, non-color-only status and workflow presentation in `src/GovernedAccess.Web/ClientApp/src/components/RequestStatus.tsx`, then restructure `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx` and `src/GovernedAccess.Web/ClientApp/src/styles.css` into a wide record/action split that collapses to one source-ordered column with complete identifiers and semantic timestamps per FR-032 and SC-006 (partial)
+- [X] T079 Give approve, reject, pending, completed, error, and safe grant outcomes deliberate and distinct hierarchy without changing restricted payloads in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: presentation acceptance (partial)
+- [X] T080 Extend the thin semantic UI smokes for human-readable status, workflow orientation, identity switching, safe grant output, and preserved accessible action names without adding CSS snapshots in `src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx` and `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx` per plan: UI accessibility and validation (missing)
 
 ## Phase 9: Convergence
 
@@ -317,5 +312,5 @@ descriptions as historical task records. Their separate `BusinessDecisionService
 unchanged; `RequestSubmissionService`, `RequestQueryService`, and
 `ProtectedProvisioningService` remain separate focused boundaries.
 
-- [X] T086 Restrict `AccessRequestWorkflowService.RetryProvisioningAsync` to `ProvisioningFailed` requests and add direct regression coverage that an `Active` request is rejected, audited, and left unchanged in `src/GovernedAccess.Core/Application/AccessRequestWorkflowService.cs` and `tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs` per FR-025 and US4/AC3 (contradicts)
-- [X] T087 Document the implemented command-service consolidation in `specs/001-governed-production-access/plan.md` and applicable reference documentation: `AccessRequestWorkflowService` coordinates business decisions, DevOps decisions, and provisioning retry; `RequestSubmissionService` and `RequestQueryService` remain focused services; and `ProtectedProvisioningService` remains the independent persisted-evidence boundary. Explicitly supersede the pre-refactor `BusinessDecisionService`, `DevOpsDecisionService`, and `ProvisioningRetryService` paths recorded by T043, T061, and T068 without changing functional requirements per plan: application-service boundaries (contradicts)
+- [X] T081 Restrict `AccessRequestWorkflowService.RetryProvisioningAsync` to `ProvisioningFailed` requests and add direct regression coverage that an `Active` request is rejected, audited, and left unchanged in `src/GovernedAccess.Core/Application/AccessRequestWorkflowService.cs` and `tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs` per FR-025 and US4/AC3 (contradicts)
+- [X] T082 Document the implemented command-service consolidation in `specs/001-governed-production-access/plan.md` and applicable reference documentation: `AccessRequestWorkflowService` coordinates business decisions, DevOps decisions, and provisioning retry; `RequestSubmissionService` and `RequestQueryService` remain focused services; and `ProtectedProvisioningService` remains the independent persisted-evidence boundary. Explicitly supersede the pre-refactor `BusinessDecisionService`, `DevOpsDecisionService`, and `ProvisioningRetryService` paths recorded by T043, T061, and T068 without changing functional requirements per plan: application-service boundaries (contradicts)

@@ -62,18 +62,43 @@ export function BusinessDecisionPanel({
   }
 
   if (completedDecision !== undefined) {
+    const approved = completedDecision.status === "AwaitingDevOpsApproval";
+
     return (
       <section
-        className="business-decision-panel business-decision-panel--completed"
+        className={`business-decision-panel decision-panel decision-panel--completed decision-panel--${
+          approved ? "positive" : "critical"
+        }`}
         aria-labelledby="business-decision-title"
       >
-        <h2 id="business-decision-title">Business decision</h2>
-        <p role="status" aria-live="polite">
-          {completedDecision.status === "AwaitingDevOpsApproval"
-            ? "Business approval recorded. The request is awaiting DevOps approval."
-            : "Business rejection recorded. The request is rejected."}
-        </p>
-        <p>Correlation ID: {completedDecision.correlationId}</p>
+        <header className="decision-panel__header">
+          <p className="eyebrow">Decision recorded</p>
+          <h2 id="business-decision-title">Business decision</h2>
+        </header>
+        <div
+          className={`decision-panel__outcome decision-panel__outcome--${
+            approved ? "positive" : "critical"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <strong>{approved ? "Approved" : "Rejected"}</strong>
+          <span>
+            {approved
+              ? "Business approval is recorded. The request now requires DevOps review."
+              : "Business rejection is recorded. This request cannot continue."}
+          </span>
+        </div>
+        <dl className="decision-panel__result">
+          <div>
+            <dt>Recorded outcome</dt>
+            <dd>{approved ? "Business approval" : "Business rejection"}</dd>
+          </div>
+          <div>
+            <dt>Correlation ID</dt>
+            <dd className="identifier">{completedDecision.correlationId}</dd>
+          </div>
+        </dl>
       </section>
     );
   }
@@ -135,23 +160,42 @@ export function BusinessDecisionPanel({
 
   return (
     <section
-      className="business-decision-panel"
+      className="business-decision-panel decision-panel"
       aria-labelledby="business-decision-title"
+      aria-busy={busy}
     >
-      <h2 id="business-decision-title">Business decision</h2>
-      <p>
-        Approve or reject this immutable request scope. The server verifies your
-        authenticated identity, environment responsibility, and the current request
-        state before recording the decision.
-      </p>
+      <header className="decision-panel__header">
+        <p className="eyebrow">Business review</p>
+        <h2 id="business-decision-title">Business decision</h2>
+        <p>
+          Approve or reject this immutable request scope. The server verifies your
+          authenticated identity, environment responsibility, and the current request
+          state before recording the decision.
+        </p>
+      </header>
+
+      <div className="decision-panel__scope-note">
+        <strong>Decision boundary</strong>
+        <span>
+          Your decision applies only to this request ID and its unchanged submitted
+          scope.
+        </span>
+      </div>
 
       {error !== undefined && (
         <div className="problem-summary" role="alert">
           <h3>Decision not recorded</h3>
           <p>{error.message}</p>
-          {error.code !== undefined && <p>Code: {error.code}</p>}
+          {error.code !== undefined && (
+            <p>
+              Code: <span className="identifier">{error.code}</span>
+            </p>
+          )}
           {error.correlationId !== undefined && (
-            <p>Correlation ID: {error.correlationId}</p>
+            <p>
+              Correlation ID:{" "}
+              <span className="identifier">{error.correlationId}</span>
+            </p>
           )}
         </div>
       )}
@@ -176,20 +220,36 @@ export function BusinessDecisionPanel({
         />
       </div>
 
-      <div className="business-decision-panel__actions">
+      <p
+        className={`decision-panel__activity decision-panel__activity--${
+          busy ? "pending" : "ready"
+        }`}
+        role={busy ? "status" : undefined}
+        aria-live={busy ? "polite" : undefined}
+      >
+        {pendingDecision === "Approve"
+          ? "Recording business approval…"
+          : pendingDecision === "Reject"
+            ? "Recording business rejection…"
+            : "Ready for an authenticated business decision."}
+      </p>
+
+      <div className="business-decision-panel__actions decision-panel__actions">
         <button
           type="button"
+          className="decision-action decision-action--approve"
           onClick={() => void submitDecision("Approve")}
           disabled={busy}
         >
-          {pendingDecision === "Approve" ? "Approving..." : "Approve request"}
+          {pendingDecision === "Approve" ? "Approving…" : "Approve request"}
         </button>
         <button
           type="button"
+          className="decision-action decision-action--reject"
           onClick={() => void submitDecision("Reject")}
           disabled={busy}
         >
-          {pendingDecision === "Reject" ? "Rejecting..." : "Reject request"}
+          {pendingDecision === "Reject" ? "Rejecting…" : "Reject request"}
         </button>
       </div>
     </section>

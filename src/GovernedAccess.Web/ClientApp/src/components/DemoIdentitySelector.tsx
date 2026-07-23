@@ -177,23 +177,26 @@ export function DemoIdentitySelector({
       className="demo-identity-selector"
       aria-labelledby="demo-identity-title"
     >
-      <h2 id="demo-identity-title">Demo session</h2>
-      <p>
-        Select one fixed synthetic identity. The server issues the authenticated
-        session and determines its authorization claims.
-      </p>
-
-      {session?.authenticated === true && (
-        <p role="status" aria-live="polite">
-          Signed in as {session.principal.displayName}
+      <div className="demo-identity-selector__intro">
+        <h2 id="demo-identity-title">Synthetic demo identity</h2>
+        <p id="demo-identity-description">
+          Choose one fixed identity. The server supplies its authorization claims.
         </p>
-      )}
+      </div>
 
-      {activity === "loading" && (
-        <p role="status" aria-live="polite">
-          Loading session…
-        </p>
-      )}
+      <div className="demo-identity-selector__status">
+        {session?.authenticated === true ? (
+          <p role="status" aria-live="polite">
+            Signed in as {session.principal.displayName}
+          </p>
+        ) : activity === "loading" ? (
+          <p role="status" aria-live="polite">
+            Loading demo session…
+          </p>
+        ) : (
+          <p>No demo identity is signed in.</p>
+        )}
+      </div>
 
       {error !== undefined && (
         <div className="problem-summary" role="alert">
@@ -206,38 +209,46 @@ export function DemoIdentitySelector({
         </div>
       )}
 
-      <form onSubmit={signIn}>
-        <label htmlFor="demo-principal-key">Demo identity</label>
-        <select
-          id="demo-principal-key"
-          name="principalKey"
-          value={selectedPrincipalKey}
-          onChange={(event) => {
-            setSelectedPrincipalKey(event.target.value as DemoPrincipalKey);
-            setError(undefined);
-          }}
-          disabled={busy}
-        >
-          {demoIdentities.map((identity) => (
-            <option key={identity.key} value={identity.key}>
-              {identity.label}
-            </option>
-          ))}
-        </select>
-        <button type="submit" disabled={busy}>
-          {activity === "signingIn"
-            ? "Changing identity…"
-            : session?.authenticated === true
-              ? "Switch identity"
-              : "Sign in"}
-        </button>
-      </form>
+      <div className="demo-identity-selector__controls">
+        <form onSubmit={signIn}>
+          <label htmlFor="demo-principal-key">Demo identity</label>
+          <select
+            id="demo-principal-key"
+            name="principalKey"
+            value={selectedPrincipalKey}
+            aria-describedby="demo-identity-description"
+            onChange={(event) => {
+              setSelectedPrincipalKey(event.target.value as DemoPrincipalKey);
+              setError(undefined);
+            }}
+            disabled={busy}
+          >
+            {demoIdentities.map((identity) => (
+              <option key={identity.key} value={identity.key}>
+                {identity.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit" disabled={busy}>
+            {activity === "signingIn"
+              ? "Changing identity…"
+              : session?.authenticated === true
+                ? "Switch identity"
+                : "Sign in"}
+          </button>
+        </form>
 
-      {session?.authenticated === true && (
-        <button type="button" onClick={() => void signOut()} disabled={busy}>
-          {activity === "signingOut" ? "Signing out…" : "Sign out"}
-        </button>
-      )}
+        {session?.authenticated === true && (
+          <button
+            className="demo-identity-selector__sign-out"
+            type="button"
+            onClick={() => void signOut()}
+            disabled={busy}
+          >
+            {activity === "signingOut" ? "Signing out…" : "Sign out"}
+          </button>
+        )}
+      </div>
     </section>
   );
 }

@@ -39,6 +39,16 @@ interface DecisionError {
   provisioningOutcomeUnknown: boolean;
 }
 
+const utcTimestampFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+  timeZoneName: "short",
+});
+
 export function DevOpsDecisionPanel({
   requestId,
   availableActions,
@@ -72,23 +82,48 @@ export function DevOpsDecisionPanel({
   }
 
   if (completedDecision !== undefined) {
+    const active = completedDecision.status === "Active";
+
     return (
       <section
-        className="devops-decision-panel devops-decision-panel--completed"
+        className={`devops-decision-panel decision-panel decision-panel--completed decision-panel--${
+          active ? "positive" : "critical"
+        }`}
         aria-labelledby="devops-decision-title"
       >
-        <h2 id="devops-decision-title">DevOps decision</h2>
-        <p role="status" aria-live="polite">
-          {completedDecision.status === "Active"
-            ? "DevOps approval recorded. Synthetic access is active."
-            : "DevOps rejection recorded. The request is rejected."}
-        </p>
+        <header className="decision-panel__header">
+          <p className="eyebrow">Decision recorded</p>
+          <h2 id="devops-decision-title">DevOps decision</h2>
+        </header>
+        <div
+          className={`decision-panel__outcome decision-panel__outcome--${
+            active ? "positive" : "critical"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <strong>{active ? "Approved and provisioned" : "Rejected"}</strong>
+          <span>
+            {active
+              ? "DevOps approval is recorded and synthetic access is active."
+              : "DevOps rejection is recorded. This request cannot continue."}
+          </span>
+        </div>
 
         {completedDecision.grant !== null && (
           <SafeGrantSummary grant={completedDecision.grant} />
         )}
 
-        <p>Correlation ID: {completedDecision.correlationId}</p>
+        <dl className="decision-panel__result">
+          <div>
+            <dt>Recorded outcome</dt>
+            <dd>{active ? "Access active" : "DevOps rejection"}</dd>
+          </div>
+          <div>
+            <dt>Correlation ID</dt>
+            <dd className="identifier">{completedDecision.correlationId}</dd>
+          </div>
+        </dl>
       </section>
     );
   }
@@ -151,15 +186,26 @@ export function DevOpsDecisionPanel({
 
   return (
     <section
-      className="devops-decision-panel"
+      className="devops-decision-panel decision-panel"
       aria-labelledby="devops-decision-title"
+      aria-busy={busy}
     >
-      <h2 id="devops-decision-title">DevOps decision</h2>
-      <p>
-        Approval provisions the exact business-approved role for the fixed access
-        window. The server reloads and validates the approved request scope before
-        provisioning.
-      </p>
+      <header className="decision-panel__header">
+        <p className="eyebrow">Final review</p>
+        <h2 id="devops-decision-title">DevOps decision</h2>
+        <p>
+          Approval provisions the exact business-approved role for the fixed access
+          window. The server reloads and validates the approved request scope before
+          provisioning.
+        </p>
+      </header>
+
+      <div className="decision-panel__scope-note">
+        <strong>Approval effect</strong>
+        <span>
+          Exact business-approved role · fixed eight-hour synthetic access window
+        </span>
+      </div>
 
       {error !== undefined && (
         <div className="problem-summary" role="alert">
@@ -171,9 +217,16 @@ export function DevOpsDecisionPanel({
               provisioning can be retried safely.
             </p>
           )}
-          {error.code !== undefined && <p>Code: {error.code}</p>}
+          {error.code !== undefined && (
+            <p>
+              Code: <span className="identifier">{error.code}</span>
+            </p>
+          )}
           {error.correlationId !== undefined && (
-            <p>Correlation ID: {error.correlationId}</p>
+            <p>
+              Correlation ID:{" "}
+              <span className="identifier">{error.correlationId}</span>
+            </p>
           )}
         </div>
       )}
@@ -198,22 +251,38 @@ export function DevOpsDecisionPanel({
         />
       </div>
 
-      <div className="devops-decision-panel__actions">
+      <p
+        className={`decision-panel__activity decision-panel__activity--${
+          busy ? "pending" : "ready"
+        }`}
+        role={busy ? "status" : undefined}
+        aria-live={busy ? "polite" : undefined}
+      >
+        {pendingDecision === "Approve"
+          ? "Recording approval and provisioning stored scope…"
+          : pendingDecision === "Reject"
+            ? "Recording DevOps rejection…"
+            : "Ready for an authenticated DevOps decision."}
+      </p>
+
+      <div className="devops-decision-panel__actions decision-panel__actions">
         <button
           type="button"
+          className="decision-action decision-action--approve"
           onClick={() => void submitDecision("Approve")}
           disabled={busy}
         >
           {pendingDecision === "Approve"
-            ? "Approving and provisioning..."
+            ? "Approving and provisioning…"
             : "Approve and provision"}
         </button>
         <button
           type="button"
+          className="decision-action decision-action--reject"
           onClick={() => void submitDecision("Reject")}
           disabled={busy}
         >
-          {pendingDecision === "Reject" ? "Rejecting..." : "Reject request"}
+          {pendingDecision === "Reject" ? "Rejecting…" : "Reject request"}
         </button>
       </div>
     </section>
@@ -222,31 +291,55 @@ export function DevOpsDecisionPanel({
 
 function SafeGrantSummary({ grant }: { grant: DevOpsAccessGrant }) {
   return (
-    <div className="devops-decision-panel__grant" aria-label="Active access grant">
-      <h3>Active grant</h3>
-      <dl>
-        <dt>Grant ID</dt>
-        <dd>{grant.grantId}</dd>
-        <dt>Environment</dt>
-        <dd>{grant.environmentId}</dd>
-        <dt>Role</dt>
-        <dd>{grant.roleId}</dd>
-        <dt>Activated</dt>
-        <dd>
-          <time dateTime={grant.activatedAt}>{formatTimestamp(grant.activatedAt)}</time>
-        </dd>
-        <dt>Expires</dt>
-        <dd>
-          <time dateTime={grant.expiresAt}>{formatTimestamp(grant.expiresAt)}</time>
-        </dd>
+    <div className="safe-grant" aria-label="Active access grant">
+      <header className="safe-grant__header">
+        <p className="eyebrow">Synthetic outcome</p>
+        <h3>Active grant</h3>
+        <p>
+          This is the safe grant summary returned for the immutable approved scope.
+        </p>
+      </header>
+      <dl className="safe-grant__evidence">
+        <div>
+          <dt>Grant ID</dt>
+          <dd className="identifier">{grant.grantId}</dd>
+        </div>
+        <div>
+          <dt>Environment</dt>
+          <dd className="identifier">{grant.environmentId}</dd>
+        </div>
+        <div>
+          <dt>Role</dt>
+          <dd className="identifier">{grant.roleId}</dd>
+        </div>
+        <div>
+          <dt>Activated</dt>
+          <dd>
+            <GrantTimestamp value={grant.activatedAt} />
+          </dd>
+        </div>
+        <div>
+          <dt>Expires</dt>
+          <dd>
+            <GrantTimestamp value={grant.expiresAt} />
+          </dd>
+        </div>
       </dl>
     </div>
   );
 }
 
-function formatTimestamp(value: string): string {
+function GrantTimestamp({ value }: { value: string }) {
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+  const label = Number.isNaN(parsed.getTime())
+    ? value
+    : utcTimestampFormatter.format(parsed);
+
+  return (
+    <time className="timestamp" dateTime={value} title={value}>
+      {label}
+    </time>
+  );
 }
 
 function toDecisionError(error: unknown): DecisionError {

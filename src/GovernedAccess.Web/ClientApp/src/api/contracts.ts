@@ -65,6 +65,89 @@ export type RequestStatus =
   | "ProvisioningFailed"
   | "Active";
 
+export interface RequestListItemResponse {
+  requestId: string;
+  clientId: string;
+  environmentId: string;
+  requesterId: string;
+  status: RequestStatus;
+  lastModifiedAt: string;
+  // Presentation hint only; the server authorizes every protected action.
+  actionable: boolean;
+}
+
+export interface RequestListResponse {
+  items: RequestListItemResponse[];
+}
+
+export type ApprovalStage = "Business" | "DevOps";
+export type ApprovalOutcome = "Approved" | "Rejected";
+export type ProvisioningOperationStatus = "Pending" | "Succeeded" | "Failed";
+export type AccessGrantOutcome = "Succeeded";
+export type AuditEventType =
+  | "RequestCreated"
+  | "ValidationFailed"
+  | "BusinessDecision"
+  | "DevOpsDecision"
+  | "AuthorizationRejected"
+  | "InvalidTransitionRejected"
+  | "ProvisioningAttempted"
+  | "ProvisioningSucceeded"
+  | "ProvisioningFailed"
+  | "DuplicateRetryReturned";
+
+export interface RequestValidationResponse {
+  isValid: boolean;
+  fieldErrors: ApiFieldError[];
+}
+
+export interface ApprovalDecisionResponse {
+  decisionId: string;
+  requestId: string;
+  stage: ApprovalStage;
+  decision: ApprovalOutcome;
+  approverId: string;
+  approvedRoleId: ProductionRole | null;
+  comment: string | null;
+  decidedAt: string;
+  correlationId: string;
+}
+
+export interface ProvisioningOperationResponse {
+  requestId: string;
+  environmentId: string;
+  roleId: ProductionRole;
+  status: ProvisioningOperationStatus;
+  attemptCount: number;
+  lastOutcomeCode: string | null;
+  createdAt: string;
+  lastAttemptAt: string;
+}
+
+export interface RequestGrantResponse {
+  grantId: string;
+  requestId: string;
+  requesterId: string;
+  environmentId: string;
+  roleId: ProductionRole;
+  activatedAt: string;
+  expiresAt: string;
+  outcome: AccessGrantOutcome;
+  correlationId: string;
+  isExpired: boolean;
+}
+
+export interface RequestAuditEventResponse {
+  eventId: string;
+  requestId: string;
+  eventType: AuditEventType;
+  actorId: string | null;
+  occurredAt: string;
+  correlationId: string;
+  outcomeCode: string;
+  details: Record<string, unknown>;
+}
+
 export interface RequestDetailResponse {
   requestId: string;
   requesterId: string;
@@ -78,6 +161,17 @@ export interface RequestDetailResponse {
   lastModifiedAt: string;
   // Presentation hints only; the server authorizes every protected action.
   availableActions: string[];
+  validation: RequestValidationResponse;
+  decisions: ApprovalDecisionResponse[];
+  provisioningOperation: ProvisioningOperationResponse | null;
+  grant: RequestGrantResponse | null;
+  auditEvents: RequestAuditEventResponse[];
+}
+
+export interface ProvisioningRetryResponse {
+  requestId: string;
+  status: "Active";
+  grant: RequestGrantResponse;
 }
 
 export const demoPrincipalKeys = {

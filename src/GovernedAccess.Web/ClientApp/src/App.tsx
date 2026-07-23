@@ -12,6 +12,7 @@ import type { SessionView } from "./api/contracts";
 import { DemoIdentitySelector } from "./components/DemoIdentitySelector";
 import { NewRequestPage } from "./pages/NewRequestPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
+import { RequestListPage } from "./pages/RequestListPage";
 
 export function App() {
   return (
@@ -27,26 +28,43 @@ function ApplicationShell() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="app-header__identity">
-          <Link className="app-brand" to="/requests/new">
-            Governed Access
-          </Link>
-          <span className="environment-badge">Synthetic local demo</span>
+        <div className="app-header__primary">
+          <div className="app-header__identity">
+            <Link className="app-brand" to="/requests">
+              Governed Access
+            </Link>
+            <span className="environment-badge">
+              Synthetic demo · no real access
+            </span>
+          </div>
+
+          <nav className="app-navigation" aria-label="Primary navigation">
+            <NavLink
+              to="/requests"
+              end
+              className={({ isActive }) =>
+                isActive
+                  ? "navigation-link navigation-link--active"
+                  : "navigation-link"
+              }
+            >
+              Requests
+            </NavLink>
+            <NavLink
+              to="/requests/new"
+              className={({ isActive }) =>
+                isActive
+                  ? "navigation-link navigation-link--active"
+                  : "navigation-link"
+              }
+            >
+              New request
+            </NavLink>
+          </nav>
         </div>
 
-        <nav aria-label="Primary navigation">
-          <NavLink
-            to="/requests/new"
-            className={({ isActive }) =>
-              isActive ? "navigation-link navigation-link--active" : "navigation-link"
-            }
-          >
-            New request
-          </NavLink>
-        </nav>
+        <DemoIdentitySelector onSessionChange={setSession} />
       </header>
-
-      <DemoIdentitySelector onSessionChange={setSession} />
 
       {session === null ? (
         <SessionLoadingPage />
@@ -67,7 +85,8 @@ function ApplicationShell() {
 function AuthenticatedRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/requests/new" replace />} />
+      <Route path="/" element={<Navigate to="/requests" replace />} />
+      <Route path="/requests" element={<RequestListPage />} />
       <Route path="/requests/new" element={<NewRequestPage />} />
       <Route path="/requests/:requestId" element={<RequestDetailPage />} />
       <Route path="*" element={<NotFoundPage />} />
@@ -100,7 +119,7 @@ function NotFoundPage() {
     <main className="not-found-page" aria-labelledby="not-found-title">
       <h1 id="not-found-title">Page not found</h1>
       <p>The requested application page is not available.</p>
-      <Link to="/requests/new">Prepare a new request</Link>
+      <Link to="/requests">Return to relevant requests</Link>
     </main>
   );
 }

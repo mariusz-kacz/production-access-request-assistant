@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Link } from "react-router";
 
 import { ApiError, apiRequest } from "../api/client";
 import {
@@ -56,6 +57,8 @@ const preparationOutcomeMessages: Record<
   Unavailable:
     "Draft assistance is unavailable. Complete the structured form manually or try again later.",
 };
+
+const preparationSteps = ["Describe", "Review", "Submit"] as const;
 
 export function NewRequestPage() {
   const [intent, setIntent] = useState("");
@@ -231,20 +234,64 @@ export function NewRequestPage() {
     });
   }
 
-  function startAnotherRequest() {
-    activeRequest.current?.abort();
-    activeRequest.current = undefined;
-    setIntent("");
-    setIntentError(undefined);
-    setDraft(undefined);
-    setFieldErrors({});
-    setPageError(undefined);
-    setPreparationMessage(undefined);
-    setActivity(undefined);
-    setCreatedRequest(undefined);
+  if (createdRequest !== undefined) {
+    return (
+      <main
+        className="new-request-page"
+        aria-labelledby="request-created-title"
+      >
+        <header>
+          <p className="eyebrow">Immutable request submitted</p>
+          <h1 id="request-created-title">Request submitted</h1>
+          <p>
+            The drafting session is complete. This submitted scope is now
+            read-only and has entered the governed approval workflow.
+          </p>
+        </header>
+
+        <section
+          className="submission-success"
+          aria-labelledby="request-created-status-title"
+        >
+          <p className="request-step__number">Submission complete</p>
+          <h2 id="request-created-status-title">
+            Awaiting business approval
+          </h2>
+          <p>
+            Request{" "}
+            <strong className="identifier">{createdRequest.requestId}</strong> is
+            immutable. No access has been granted.
+          </p>
+          <p>
+            If the submitted scope needs correction, leave this completed record
+            and prepare a separate request with a new request ID and new approvals.
+          </p>
+          <p>
+            Correlation ID:{" "}
+            <span className="identifier">{createdRequest.correlationId}</span>
+          </p>
+          <div className="cluster">
+            <Link
+              className="button-link"
+              to={`/requests/${createdRequest.requestId}`}
+            >
+              View request details
+            </Link>
+            <Link
+              className="button-link button-link--secondary"
+              to="/requests"
+            >
+              Return to relevant requests
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
   }
 
   const busy = activity !== undefined;
+  const activePreparationStep = draft === undefined ? 1 : 2;
+  const completedPreparationStep = draft === undefined ? 0 : 1;
 
   return (
     <main className="new-request-page" aria-labelledby="new-request-title">
@@ -257,9 +304,39 @@ export function NewRequestPage() {
         </p>
       </header>
 
-      <section aria-labelledby="request-intent-title">
-        <h2 id="request-intent-title">1. Describe the need</h2>
-        <form onSubmit={prepareDraft}>
+      <ol className="request-steps" aria-label="Request preparation steps">
+        {preparationSteps.map((step, index) => {
+          const stepNumber = index + 1;
+          const state =
+            stepNumber <= completedPreparationStep
+              ? "complete"
+              : stepNumber === activePreparationStep
+                ? "current"
+                : "upcoming";
+
+          return (
+            <li
+              key={step}
+              className={`request-steps__item request-steps__item--${state}`}
+              aria-current={state === "current" ? "step" : undefined}
+            >
+              <span>Step {stepNumber}</span>
+              <strong>{step}</strong>
+            </li>
+          );
+        })}
+      </ol>
+
+      {draft === undefined ? (
+        <section
+          className="request-step request-step--describe"
+          aria-labelledby="request-intent-title"
+        >
+        <div className="request-step__header">
+          <p>Step 1 of 3</p>
+          <h2 id="request-intent-title">Describe the need</h2>
+        </div>
+        <form className="request-intent-form" onSubmit={prepareDraft}>
           <label htmlFor="request-intent">Access request description</label>
           <p id="request-intent-hint">
             Include the client, production environment, role, justification, and
@@ -290,8 +367,27 @@ export function NewRequestPage() {
           <button type="submit" disabled={busy}>
             {activity === "preparing" ? "Preparing draft…" : "Prepare draft"}
           </button>
-        </form>
-      </section>
+          </form>
+        </section>
+      ) : (
+        <section
+          className="request-step request-step--describe request-step--completed"
+          aria-labelledby="request-intent-complete-title"
+        >
+          <div className="request-step__header">
+            <p>Step 1 of 3 · Complete</p>
+            <h2 id="request-intent-complete-title">Description captured</h2>
+            <p>
+              Draft preparation is complete. Review and correct the structured
+              values in Step 2.
+            </p>
+          </div>
+          <dl className="request-intent-summary">
+            <dt>Original description</dt>
+            <dd>{intent.trim()}</dd>
+          </dl>
+        </section>
+      )}
 
       {pageError !== undefined && (
         <div className="problem-summary" role="alert">
@@ -310,16 +406,22 @@ export function NewRequestPage() {
         </p>
       )}
 
-      {draft !== undefined && createdRequest === undefined && (
-        <section aria-labelledby="draft-review-title">
-          <h2 id="draft-review-title">2. Review and correct the draft</h2>
-          <p>
-            These values are untrusted draft input. The server validates every
-            identifier and business rule against current stored data when you
-            submit.
-          </p>
+      {draft !== undefined && (
+        <section
+          className="request-step request-step--review"
+          aria-labelledby="draft-review-title"
+        >
+          <div className="request-step__header">
+            <p>Step 2 of 3</p>
+            <h2 id="draft-review-title">Review and correct the draft</h2>
+            <p>
+              These values are untrusted draft input. The server validates every
+              identifier and business rule against current stored data when you
+              submit.
+            </p>
+          </div>
 
-          <form onSubmit={submitRequest} noValidate>
+          <form className="draft-review-form" onSubmit={submitRequest} noValidate>
             <DraftTextField
               id="client-id"
               label="Client ID"
@@ -405,32 +507,23 @@ export function NewRequestPage() {
               disabled={busy}
             />
 
-            <button type="submit" disabled={busy}>
-              {activity === "submitting"
-                ? "Validating and submitting…"
-                : "Validate and submit request"}
-            </button>
+            <div className="request-submit-action">
+              <p>Step 3 of 3</p>
+              <h3>Submit for human approval</h3>
+              <p>
+                Submission makes this scope immutable. Corrections after submission
+                require a new request and new approvals.
+              </p>
+              <button type="submit" disabled={busy}>
+                {activity === "submitting"
+                  ? "Validating and submitting…"
+                  : "Validate and submit request"}
+              </button>
+            </div>
           </form>
         </section>
       )}
 
-      {createdRequest !== undefined && (
-        <section className="submission-success" aria-labelledby="request-created-title">
-          <h2 id="request-created-title">Request submitted</h2>
-          <p>
-            Request <strong>{createdRequest.requestId}</strong> is immutable and is
-            awaiting business approval. No access has been granted. Submit a new
-            request if this scope needs correction.
-          </p>
-          <p>Correlation ID: {createdRequest.correlationId}</p>
-          <p>
-            <a href={`/requests/${createdRequest.requestId}`}>View request details</a>
-          </p>
-          <button type="button" onClick={startAnotherRequest}>
-            Prepare another request
-          </button>
-        </section>
-      )}
     </main>
   );
 }

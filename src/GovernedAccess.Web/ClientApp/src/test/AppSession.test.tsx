@@ -65,6 +65,11 @@ const requestDetail: RequestDetailResponse = {
   createdAt: "2026-07-20T08:00:00Z",
   lastModifiedAt: "2026-07-20T08:00:00Z",
   availableActions: [],
+  validation: { isValid: true, fieldErrors: [] },
+  decisions: [],
+  provisioningOperation: null,
+  grant: null,
+  auditEvents: [],
 };
 
 let activePrincipalKey: DemoPrincipalKey | undefined;
@@ -143,6 +148,7 @@ describe("application session wiring", () => {
         name: "Prepare a governed access request",
       }),
     ).toBeTruthy();
+    expect(await screen.findByText("Signed in as Demo Requester")).toBeTruthy();
     expect(mockedApiRequest).toHaveBeenCalledWith(
       "/api/demo/session",
       expect.objectContaining({
@@ -162,6 +168,13 @@ describe("application session wiring", () => {
     expect(
       await screen.findByText("Signed in as Client Alpha Business Approver"),
     ).toBeTruthy();
+    expect(
+      (
+        screen.getByRole("combobox", {
+          name: "Demo identity",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe(demoPrincipalKeys.clientAlphaApprover);
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 
@@ -196,6 +209,11 @@ describe("application session wiring", () => {
     expect(
       await screen.findByRole("heading", { name: "Request details" }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("region", {
+        name: "Awaiting business approval",
+      }),
+    ).toBeTruthy();
     expect(screen.getByText("client-alpha-production")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Approve request" })).toBeNull();
 
@@ -209,6 +227,17 @@ describe("application session wiring", () => {
 
     expect(
       await screen.findByRole("button", { name: "Approve request" }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText("Signed in as Client Alpha Business Approver"),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Reject request" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("region", {
+        name: "Awaiting business approval",
+      }),
     ).toBeTruthy();
     const detailCalls = mockedApiRequest.mock.calls.filter(
       ([path]) => path === `/api/requests/${requestId}`,
