@@ -11,8 +11,10 @@ model or real production systems.
 - PowerShell 7 or a shell capable of running `dotnet`
 - Repository root as the working directory
 
-The application uses local SQLite and deterministic seed data. Configure the fake
-chat client for repeatable local validation; no model credentials are required.
+The application uses local SQLite and deterministic seed data. The shipped host uses
+the valid deterministic chat mode for repeatable local validation; no model
+credentials are required. Other chat modes are selected by integration-test host
+overrides rather than runtime configuration.
 
 ## Build and automated validation
 
@@ -31,12 +33,12 @@ tests pass without a live LLM or external network dependency.
 For production-shape validation, run the host after building the React assets:
 
 ```powershell
-dotnet run --project src/GovernedAccess.Web
+dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
 Open the HTTPS URL printed by the host; ASP.NET Core serves the React build. For HMR,
 run `npm run dev --prefix src/GovernedAccess.Web/ClientApp` in another terminal and
-open the Vite HTTPS URL. Vite proxies `/api` to ASP.NET Core, so the browser still uses
+open the URL printed by Vite. Vite proxies `/api` to ASP.NET Core, so the browser still uses
 a same-origin contract and production does not require CORS.
 
 Use the demo identity selector to issue a server-authenticated HttpOnly cookie. Verify
@@ -84,10 +86,11 @@ Expected: `PROD-ALPHA-EU`, `ProductionReadOnly`, and `INC-1042` are
 shown; stored-data validation succeeds; an immutable request enters
 `AwaitingBusinessApproval`; no approval or grant exists.
 
-Repeat with deterministic fake modes for incomplete output, malformed JSON, MCP
-not-found, MCP timeout, and cancellation. Expected: a typed correction/failure result
-and no submitted approval or grant. Inspect the initialized MCP server and verify it
-advertises exactly the three tools in [contracts/mcp-tools.json](contracts/mcp-tools.json).
+Run the draft-interpretation integration tests with deterministic test-host overrides
+for incomplete output, malformed JSON, MCP not-found, MCP timeout, and cancellation.
+Expected: a typed correction/failure result and no submitted approval or grant.
+Inspect the initialized MCP server and verify it advertises exactly the three tools in
+[contracts/mcp-tools.json](contracts/mcp-tools.json).
 
 ## Scenario 2: client-isolated business approval
 
@@ -129,8 +132,9 @@ requires both approvals.
 
 ## Scenario 5: lost response and duplicate retry
 
-1. Configure the synthetic provisioner to persist its grant and then simulate a lost
-   response on DevOps approval.
+1. Use the integration-test host control to configure the synthetic provisioner to
+   persist its grant and then simulate a lost response on DevOps approval. The shipped
+   UI has no failure-injection control.
 2. Confirm `ProvisioningFailed`, sign in as DevOps, and retry.
 3. Exercise the automated concurrency test with at least 100 attempts for the same
    request ID used for idempotency.
