@@ -164,7 +164,7 @@
 
 - [X] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
 - [X] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
-- [ ] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
+- [X] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
 - [ ] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 - [ ] T073 [US4] Complete the `/requests` list route and three-route navigation while preserving the established session state and `/requests/:requestId` detail composition in `src/GovernedAccess.Web/ClientApp/src/App.tsx`

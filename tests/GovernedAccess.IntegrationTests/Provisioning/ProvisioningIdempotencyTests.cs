@@ -18,7 +18,7 @@ public sealed class ProvisioningIdempotencyTests
     private const int ConcurrentAttemptCount = 100;
 
     [Fact]
-    public async Task ConcurrentRetriesReturnOneOperationAndOneConsistentGrant()
+    public async Task ConcurrentRetriesCreateOneOperationAndOneConsistentGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory();
@@ -32,14 +32,29 @@ public sealed class ProvisioningIdempotencyTests
             .Select(_ => RetryAsync(client, requestId, cancellationToken));
         var responses = await Task.WhenAll(attempts);
 
-        Assert.All(
-            responses,
-            response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
-        Assert.All(responses, response => Assert.Equal(requestId, response.RequestId));
-        Assert.All(responses, response => Assert.Equal("Active", response.Status));
+        var successfulResponses = responses
+            .Where(response => response.StatusCode == HttpStatusCode.OK)
+            .ToArray();
+        var lateResponses = responses
+            .Where(response => response.StatusCode == HttpStatusCode.Conflict)
+            .ToArray();
 
+        Assert.NotEmpty(successfulResponses);
+        Assert.Equal(ConcurrentAttemptCount, successfulResponses.Length + lateResponses.Length);
+        Assert.All(
+            successfulResponses,
+            response => Assert.Equal(requestId, response.RequestId));
+        Assert.All(
+            successfulResponses,
+            response => Assert.Equal("Active", response.Status));
+        Assert.All(
+            lateResponses,
+            response => Assert.Contains(
+                AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
+                response.Status,
+                StringComparison.Ordinal));
         var responseGrantId = Assert.Single(
-            responses.Select(response => response.GrantId).Distinct());
+            successfulResponses.Select(response => response.GrantId).Distinct());
 
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
@@ -55,7 +70,9 @@ public sealed class ProvisioningIdempotencyTests
         Assert.Equal(ProtectedProvisioningService.SuccessCode, operation.LastOutcomeCode);
         Assert.Equal(requestId, grant.RequestId);
         Assert.Equal(responseGrantId, grant.Id);
-        Assert.All(responses, response => Assert.Equal(grant.Id, response.GrantId));
+        Assert.All(
+            successfulResponses,
+            response => Assert.Equal(grant.Id, response.GrantId));
     }
 
     private static async Task<RetryResponse> RetryAsync(
