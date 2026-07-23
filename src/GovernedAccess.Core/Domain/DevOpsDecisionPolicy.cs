@@ -50,21 +50,16 @@ public static class DevOpsDecisionPolicy
                 DevOpsDecisionPolicyError.InvalidTransition);
         }
 
-        if (businessApproval.RequestId != request.Id ||
-            businessApproval.Stage != ApprovalStage.Business ||
-            businessApproval.Decision != ApprovalOutcome.Approved)
+        var businessApprovalError = WorkflowEvidencePolicy.ValidateBusinessApproval(
+            request,
+            businessApproval);
+        if (businessApprovalError is not null)
         {
             return new DevOpsDecisionNotApplied(
-                DevOpsDecisionPolicyError.InvalidBusinessApproval);
-        }
-
-        if (!string.Equals(
-                businessApproval.ApprovedRoleId,
-                request.RequestedRoleId,
-                StringComparison.Ordinal))
-        {
-            return new DevOpsDecisionNotApplied(
-                DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch);
+                businessApprovalError ==
+                    WorkflowEvidencePolicyError.BusinessApprovalScopeMismatch
+                    ? DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch
+                    : DevOpsDecisionPolicyError.InvalidBusinessApproval);
         }
 
         var isApproval = command.Decision == ApprovalOutcome.Approved;

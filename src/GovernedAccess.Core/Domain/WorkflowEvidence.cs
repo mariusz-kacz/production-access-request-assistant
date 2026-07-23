@@ -577,10 +577,10 @@ public sealed class AuditEvent
                 "Successful provisioning evidence requires an active request and succeeded operation.");
         }
 
-        if (grant.RequestId != request.Id ||
-            grant.RequesterId != request.RequesterId ||
-            grant.EnvironmentId != operation.EnvironmentId ||
-            grant.RoleId != operation.RoleId)
+        if (WorkflowEvidencePolicy.ValidateGrantScope(
+                request,
+                operation,
+                grant) is not null)
         {
             throw new ArgumentException(
                 "The grant scope must match the successful provisioning operation.",
@@ -709,17 +709,10 @@ public sealed class AuditEvent
         ApprovalDecision devOpsDecision,
         ProvisioningOperation operation)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(devOpsDecision);
-        ArgumentNullException.ThrowIfNull(operation);
-
-        if (devOpsDecision.RequestId != request.Id ||
-            devOpsDecision.Stage != ApprovalStage.DevOps ||
-            devOpsDecision.Decision != ApprovalOutcome.Approved ||
-            operation.RequestId != request.Id ||
-            operation.EnvironmentId != request.EnvironmentId ||
-            operation.RoleId != request.RequestedRoleId ||
-            devOpsDecision.ApprovedRoleId != operation.RoleId)
+        if (WorkflowEvidencePolicy.ValidateProvisioningEvidence(
+                request,
+                devOpsDecision,
+                operation) is not null)
         {
             throw new ArgumentException(
                 "Provisioning evidence must match the approved immutable request scope.");

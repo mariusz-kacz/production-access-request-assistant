@@ -82,6 +82,29 @@ public sealed class DevOpsDecisionPolicyTests
     }
 
     [Fact]
+    public void ApplyApprovalRejectsBusinessEvidenceThatPredatesTheRequest()
+    {
+        var (request, _) = CreateBusinessApprovedRequest();
+        var invalidBusinessApproval = CreateBusinessApproval(
+            request,
+            request.RequestedRoleId,
+            request.CreatedAt.AddTicks(-1));
+        var snapshot = RequestSnapshot.Capture(request);
+
+        var result = DevOpsDecisionPolicy.Apply(
+            request,
+            invalidBusinessApproval,
+            ValidApprovalCommand(),
+            hasExistingDevOpsDecision: false);
+
+        var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
+        Assert.Equal(
+            DevOpsDecisionPolicyError.InvalidBusinessApproval,
+            notApplied.Error);
+        snapshot.AssertUnchanged(request);
+    }
+
+    [Fact]
     public void ApplyRejectionTransitionsWithoutApprovedRoleOrProvisioningOperation()
     {
         var (request, businessApproval) = CreateBusinessApprovedRequest();
@@ -194,7 +217,8 @@ public sealed class DevOpsDecisionPolicyTests
 
     private static ApprovalDecision CreateBusinessApproval(
         AccessRequest request,
-        string approvedRoleId)
+        string approvedRoleId,
+        DateTimeOffset? decidedAt = null)
     {
         return new ApprovalDecision(
             Guid.Parse("0ff40f0c-17d7-429c-bab8-716b95928a7d"),
@@ -204,7 +228,7 @@ public sealed class DevOpsDecisionPolicyTests
             "business-alpha",
             approvedRoleId,
             null,
-            BusinessDecisionTime,
+            decidedAt ?? BusinessDecisionTime,
             "business-correlation");
     }
 

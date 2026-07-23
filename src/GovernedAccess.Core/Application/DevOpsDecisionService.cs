@@ -39,29 +39,33 @@ public sealed class DevOpsDecisionService
     public const string RequestContextInvalidCode =
         "devops_request_context_invalid";
 
-    private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
     private readonly RequestValidator requestValidator;
     private readonly ProtectedProvisioningService protectedProvisioning;
+    private readonly WorkflowCommandContextLoader commandContextLoader;
+    private readonly RejectedWorkflowAttemptRecorder rejectedAttemptRecorder;
     private readonly IClock clock;
 
     public DevOpsDecisionService(
-        IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
         RequestValidator requestValidator,
         ProtectedProvisioningService protectedProvisioning,
+        WorkflowCommandContextLoader commandContextLoader,
+        RejectedWorkflowAttemptRecorder rejectedAttemptRecorder,
         IClock clock)
     {
-        ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(protectedProvisioning);
+        ArgumentNullException.ThrowIfNull(commandContextLoader);
+        ArgumentNullException.ThrowIfNull(rejectedAttemptRecorder);
         ArgumentNullException.ThrowIfNull(clock);
 
-        this.requestContext = requestContext;
         this.workflowStore = workflowStore;
         this.requestValidator = requestValidator;
         this.protectedProvisioning = protectedProvisioning;
+        this.commandContextLoader = commandContextLoader;
+        this.rejectedAttemptRecorder = rejectedAttemptRecorder;
         this.clock = clock;
     }
 
@@ -73,40 +77,12 @@ public sealed class DevOpsDecisionService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        if (requestId == Guid.Empty)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "request_id_required",
-                "An access request identifier is required.");
-        }
-
         if (!Enum.IsDefined(decision))
         {
             return Failed(
                 ApplicationFailureKind.InvalidInput,
                 "devops_decision_invalid",
                 "The DevOps decision must be approve or reject.");
-        }
-
-        var principalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
-        if (principalId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.Unauthenticated,
-                "authentication_required",
-                "An authenticated DevOps approver is required.");
-        }
-
-        var normalizedCorrelationId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            correlationId);
-        if (normalizedCorrelationId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "correlation_id_required",
-                "A correlation identifier is required.");
         }
 
         var normalizedComment = string.IsNullOrWhiteSpace(comment)
@@ -120,42 +96,35 @@ public sealed class DevOpsDecisionService
                 $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.");
         }
 
-        var principalResult = await requestContext.GetPrincipalAsync(
-            principalId,
-            cancellationToken);
-        if (principalResult.IsFailure)
-        {
-            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? Failed(
-                    ApplicationFailureKind.Unauthenticated,
-                    "authenticated_principal_not_found",
-                    "The authenticated principal is unavailable.")
-                : new DevOpsDecisionFailed(principalResult.Failure);
-        }
-
-        var requestResult = await workflowStore.GetRequestAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
+            authenticatedPrincipalId,
+            correlationId,
             cancellationToken);
-        if (requestResult.IsFailure)
+        if (commandContextResult.IsFailure)
         {
-            return new DevOpsDecisionFailed(requestResult.Failure!);
+            return new DevOpsDecisionFailed(commandContextResult.Failure!);
         }
 
-        var request = requestResult.Value;
-        var principal = principalResult.Value;
+        var commandContext = commandContextResult.Value;
+        var request = commandContext.Request;
+        var principal = commandContext.Principal;
+        var normalizedCorrelationId = commandContext.CorrelationId;
         if (principal.Kind != PrincipalKind.DevOpsApprover)
         {
             var failure = new ApplicationFailure(
                 ApplicationFailureKind.Unauthorized,
                 ApproverNotAuthorizedCode,
                 "Only the authenticated DevOps approver can decide this request.");
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                failure,
-                authorizationRejected: true,
-                cancellationToken);
+            return new DevOpsDecisionFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.DevOps,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    failure,
+                    WorkflowAttemptRejectionKind.Authorization,
+                    cancellationToken));
         }
 
         var currentContextFailure = await ValidateCurrentContextAsync(
@@ -169,13 +138,15 @@ public sealed class DevOpsDecisionService
                 ApplicationFailureKind.Timeout or
                 ApplicationFailureKind.Cancelled
                 ? new DevOpsDecisionFailed(currentContextFailure)
-                : await RejectAndAuditAsync(
-                    request,
-                    principal.Id,
-                    normalizedCorrelationId,
-                    currentContextFailure,
-                    authorizationRejected: false,
-                    cancellationToken);
+                : new DevOpsDecisionFailed(
+                    await rejectedAttemptRecorder.RecordAsync(
+                        request,
+                        ApprovalStage.DevOps,
+                        principal.Id,
+                        normalizedCorrelationId,
+                        currentContextFailure,
+                        WorkflowAttemptRejectionKind.InvalidTransition,
+                        cancellationToken));
         }
 
         var businessApprovalResult = await workflowStore.GetApprovalDecisionAsync(
@@ -189,16 +160,18 @@ public sealed class DevOpsDecisionService
                 return new DevOpsDecisionFailed(businessApprovalResult.Failure);
             }
 
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                new ApplicationFailure(
-                    ApplicationFailureKind.InvalidTransition,
-                    InvalidBusinessApprovalCode,
-                    "A valid business approval is required before a DevOps decision."),
-                authorizationRejected: false,
-                cancellationToken);
+            return new DevOpsDecisionFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.DevOps,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    new ApplicationFailure(
+                        ApplicationFailureKind.InvalidTransition,
+                        InvalidBusinessApprovalCode,
+                        "A valid business approval is required before a DevOps decision."),
+                    WorkflowAttemptRejectionKind.InvalidTransition,
+                    cancellationToken));
         }
 
         var existingDecisionResult = await workflowStore.GetApprovalDecisionAsync(
@@ -228,13 +201,15 @@ public sealed class DevOpsDecisionService
         if (policyResult is DevOpsDecisionNotApplied notApplied)
         {
             var failure = MapPolicyFailure(notApplied.Error);
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                failure,
-                authorizationRejected: false,
-                cancellationToken);
+            return new DevOpsDecisionFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.DevOps,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    failure,
+                    WorkflowAttemptRejectionKind.InvalidTransition,
+                    cancellationToken));
         }
 
         if (policyResult is not DevOpsDecisionApplied applied)
@@ -323,40 +298,6 @@ public sealed class DevOpsDecisionService
             && fields.IncidentId == request.IncidentId
             ? null
             : InvalidCurrentContext();
-    }
-
-    private async Task<DevOpsDecisionOutcome> RejectAndAuditAsync(
-        AccessRequest request,
-        string actorId,
-        string correlationId,
-        ApplicationFailure failure,
-        bool authorizationRejected,
-        CancellationToken cancellationToken)
-    {
-        var occurredAt = clock.UtcNow.ToUniversalTime();
-        var auditEvent = authorizationRejected
-            ? AuditEvent.CreateAuthorizationRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.DevOps,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code)
-            : AuditEvent.CreateInvalidTransitionRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.DevOps,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code);
-
-        workflowStore.AddAuditEvent(auditEvent);
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new DevOpsDecisionFailed(saveResult.Failure!)
-            : new DevOpsDecisionFailed(failure);
     }
 
     private static ApplicationFailure MapPolicyFailure(

@@ -29,19 +29,27 @@ public sealed class BusinessDecisionService
 
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
+    private readonly WorkflowCommandContextLoader commandContextLoader;
+    private readonly RejectedWorkflowAttemptRecorder rejectedAttemptRecorder;
     private readonly IClock clock;
 
     public BusinessDecisionService(
         IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
+        WorkflowCommandContextLoader commandContextLoader,
+        RejectedWorkflowAttemptRecorder rejectedAttemptRecorder,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
+        ArgumentNullException.ThrowIfNull(commandContextLoader);
+        ArgumentNullException.ThrowIfNull(rejectedAttemptRecorder);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
+        this.commandContextLoader = commandContextLoader;
+        this.rejectedAttemptRecorder = rejectedAttemptRecorder;
         this.clock = clock;
     }
 
@@ -53,40 +61,12 @@ public sealed class BusinessDecisionService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        if (requestId == Guid.Empty)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "request_id_required",
-                "An access request identifier is required.");
-        }
-
         if (!Enum.IsDefined(decision))
         {
             return Failed(
                 ApplicationFailureKind.InvalidInput,
                 "business_decision_invalid",
                 "The business decision must be approve or reject.");
-        }
-
-        var principalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
-        if (principalId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.Unauthenticated,
-                "authentication_required",
-                "An authenticated business approver is required.");
-        }
-
-        var normalizedCorrelationId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            correlationId);
-        if (normalizedCorrelationId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "correlation_id_required",
-                "A correlation identifier is required.");
         }
 
         var normalizedComment = string.IsNullOrWhiteSpace(comment)
@@ -100,28 +80,18 @@ public sealed class BusinessDecisionService
                 $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.");
         }
 
-        var principalResult = await requestContext.GetPrincipalAsync(
-            principalId,
-            cancellationToken);
-        if (principalResult.IsFailure)
-        {
-            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? Failed(
-                    ApplicationFailureKind.Unauthenticated,
-                    "authenticated_principal_not_found",
-                    "The authenticated principal is unavailable.")
-                : new BusinessDecisionFailed(principalResult.Failure);
-        }
-
-        var requestResult = await workflowStore.GetRequestAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
+            authenticatedPrincipalId,
+            correlationId,
             cancellationToken);
-        if (requestResult.IsFailure)
+        if (commandContextResult.IsFailure)
         {
-            return new BusinessDecisionFailed(requestResult.Failure!);
+            return new BusinessDecisionFailed(commandContextResult.Failure!);
         }
 
-        var request = requestResult.Value;
+        var commandContext = commandContextResult.Value;
+        var request = commandContext.Request;
         var environmentResult = await requestContext.GetProductionEnvironmentAsync(
             request.EnvironmentId,
             cancellationToken);
@@ -130,7 +100,8 @@ public sealed class BusinessDecisionService
             return new BusinessDecisionFailed(environmentResult.Failure!);
         }
 
-        var principal = principalResult.Value;
+        var principal = commandContext.Principal;
+        var normalizedCorrelationId = commandContext.CorrelationId;
         var environment = environmentResult.Value;
         var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
             && StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId)
@@ -144,13 +115,15 @@ public sealed class BusinessDecisionService
                 ApplicationFailureKind.Unauthorized,
                 ApproverNotResponsibleCode,
                 "Only the configured business approver can decide this request.");
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                failure,
-                authorizationRejected: true,
-                cancellationToken);
+            return new BusinessDecisionFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.Business,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    failure,
+                    WorkflowAttemptRejectionKind.Authorization,
+                    cancellationToken));
         }
 
         var existingDecisionResult = await workflowStore.GetApprovalDecisionAsync(
@@ -191,13 +164,15 @@ public sealed class BusinessDecisionService
                 _ => throw new InvalidOperationException(
                     "The business decision policy failure is unsupported."),
             };
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                failure,
-                authorizationRejected: false,
-                cancellationToken);
+            return new BusinessDecisionFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.Business,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    failure,
+                    WorkflowAttemptRejectionKind.InvalidTransition,
+                    cancellationToken));
         }
 
         if (policyResult is not BusinessDecisionApplied applied)
@@ -218,40 +193,6 @@ public sealed class BusinessDecisionService
         return saveResult.IsFailure
             ? new BusinessDecisionFailed(saveResult.Failure!)
             : new BusinessDecisionCompleted(request, applied.Decision);
-    }
-
-    private async Task<BusinessDecisionOutcome> RejectAndAuditAsync(
-        AccessRequest request,
-        string actorId,
-        string correlationId,
-        ApplicationFailure failure,
-        bool authorizationRejected,
-        CancellationToken cancellationToken)
-    {
-        var occurredAt = clock.UtcNow.ToUniversalTime();
-        var auditEvent = authorizationRejected
-            ? AuditEvent.CreateAuthorizationRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.Business,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code)
-            : AuditEvent.CreateInvalidTransitionRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.Business,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code);
-
-        workflowStore.AddAuditEvent(auditEvent);
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new BusinessDecisionFailed(saveResult.Failure!)
-            : new BusinessDecisionFailed(failure);
     }
 
     private static BusinessDecisionFailed Failed(

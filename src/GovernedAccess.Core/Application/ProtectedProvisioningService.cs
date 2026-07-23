@@ -310,8 +310,7 @@ public sealed class ProtectedProvisioningService
                 "The request and provisioning operation are not in a provisionable state."));
         }
 
-        if (operation.EnvironmentId != request.EnvironmentId ||
-            operation.RoleId != request.RequestedRoleId)
+        if (WorkflowEvidencePolicy.ValidateOperationScope(request, operation) is not null)
         {
             return FailedContext(Stale(
                 OperationScopeMismatchCode,
@@ -338,7 +337,10 @@ public sealed class ProtectedProvisioningService
 
         var businessApproval = businessApprovalResult.Value;
         var devOpsApproval = devOpsApprovalResult.Value;
-        if (!IsApprovalEvidenceValid(request, businessApproval, devOpsApproval))
+        if (WorkflowEvidencePolicy.ValidateApprovalEvidence(
+                request,
+                businessApproval,
+                devOpsApproval) is not null)
         {
             return FailedContext(Stale(
                 ApprovalEvidenceInvalidCode,
@@ -371,10 +373,10 @@ public sealed class ProtectedProvisioningService
         }
 
         var grant = grantResult.Value;
-        return grant.RequestId == context.Request.Id &&
-               grant.RequesterId == context.Request.RequesterId &&
-               grant.EnvironmentId == context.Operation.EnvironmentId &&
-               grant.RoleId == context.Operation.RoleId
+        return WorkflowEvidencePolicy.ValidateGrantScope(
+                   context.Request,
+                   context.Operation,
+                   grant) is null
             ? new ProtectedProvisioningCompleted(
                 context.Request,
                 context.Operation,
@@ -396,23 +398,6 @@ public sealed class ProtectedProvisioningService
             (RequestStatus.Active, ProvisioningOperationStatus.Succeeded) => true,
             _ => false,
         };
-    }
-
-    private static bool IsApprovalEvidenceValid(
-        AccessRequest request,
-        ApprovalDecision businessApproval,
-        ApprovalDecision devOpsApproval)
-    {
-        return businessApproval.RequestId == request.Id &&
-               businessApproval.Stage == ApprovalStage.Business &&
-               businessApproval.Decision == ApprovalOutcome.Approved &&
-               businessApproval.ApprovedRoleId == request.RequestedRoleId &&
-               businessApproval.DecidedAt >= request.CreatedAt &&
-               devOpsApproval.RequestId == request.Id &&
-               devOpsApproval.Stage == ApprovalStage.DevOps &&
-               devOpsApproval.Decision == ApprovalOutcome.Approved &&
-               devOpsApproval.ApprovedRoleId == businessApproval.ApprovedRoleId &&
-               devOpsApproval.DecidedAt >= businessApproval.DecidedAt;
     }
 
     private static ApplicationFailure MapMissingApproval(ApplicationFailure failure)

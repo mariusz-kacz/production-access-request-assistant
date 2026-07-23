@@ -24,26 +24,22 @@ public sealed class ProvisioningRetryService
     public const string InvalidTransitionCode =
         "provisioning_retry_invalid_transition";
 
-    private readonly IRequestContextReader requestContext;
-    private readonly IWorkflowStore workflowStore;
     private readonly ProtectedProvisioningService protectedProvisioning;
-    private readonly IClock clock;
+    private readonly WorkflowCommandContextLoader commandContextLoader;
+    private readonly RejectedWorkflowAttemptRecorder rejectedAttemptRecorder;
 
     public ProvisioningRetryService(
-        IRequestContextReader requestContext,
-        IWorkflowStore workflowStore,
         ProtectedProvisioningService protectedProvisioning,
-        IClock clock)
+        WorkflowCommandContextLoader commandContextLoader,
+        RejectedWorkflowAttemptRecorder rejectedAttemptRecorder)
     {
-        ArgumentNullException.ThrowIfNull(requestContext);
-        ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(protectedProvisioning);
-        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(commandContextLoader);
+        ArgumentNullException.ThrowIfNull(rejectedAttemptRecorder);
 
-        this.requestContext = requestContext;
-        this.workflowStore = workflowStore;
         this.protectedProvisioning = protectedProvisioning;
-        this.clock = clock;
+        this.commandContextLoader = commandContextLoader;
+        this.rejectedAttemptRecorder = rejectedAttemptRecorder;
     }
 
     public async Task<ProvisioningRetryOutcome> RetryAsync(
@@ -52,85 +48,52 @@ public sealed class ProvisioningRetryService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        if (requestId == Guid.Empty)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "request_id_required",
-                "An access request identifier is required.");
-        }
-
-        var principalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
-        if (principalId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.Unauthenticated,
-                "authentication_required",
-                "An authenticated DevOps approver is required.");
-        }
-
-        var normalizedCorrelationId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            correlationId);
-        if (normalizedCorrelationId is null)
-        {
-            return Failed(
-                ApplicationFailureKind.InvalidInput,
-                "correlation_id_required",
-                "A correlation identifier is required.");
-        }
-
-        var principalResult = await requestContext.GetPrincipalAsync(
-            principalId,
-            cancellationToken);
-        if (principalResult.IsFailure)
-        {
-            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? Failed(
-                    ApplicationFailureKind.Unauthenticated,
-                    "authenticated_principal_not_found",
-                    "The authenticated principal is unavailable.")
-                : new ProvisioningRetryFailed(principalResult.Failure);
-        }
-
-        var requestResult = await workflowStore.GetRequestAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
+            authenticatedPrincipalId,
+            correlationId,
             cancellationToken);
-        if (requestResult.IsFailure)
+        if (commandContextResult.IsFailure)
         {
-            return new ProvisioningRetryFailed(requestResult.Failure!);
+            return new ProvisioningRetryFailed(commandContextResult.Failure!);
         }
 
-        var request = requestResult.Value;
-        var principal = principalResult.Value;
+        var commandContext = commandContextResult.Value;
+        var request = commandContext.Request;
+        var principal = commandContext.Principal;
+        var normalizedCorrelationId = commandContext.CorrelationId;
         if (principal.Kind != PrincipalKind.DevOpsApprover)
         {
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                new ApplicationFailure(
-                    ApplicationFailureKind.Unauthorized,
-                    NotAuthorizedCode,
-                    "Only the authenticated DevOps approver can retry provisioning."),
-                authorizationRejected: true,
-                cancellationToken);
+            return new ProvisioningRetryFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.DevOps,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    new ApplicationFailure(
+                        ApplicationFailureKind.Unauthorized,
+                        NotAuthorizedCode,
+                        "Only the authenticated DevOps approver can retry provisioning."),
+                    WorkflowAttemptRejectionKind.Authorization,
+                    cancellationToken));
         }
 
         if (request.Status is not (
                 RequestStatus.ProvisioningFailed or
                 RequestStatus.Active))
         {
-            return await RejectAndAuditAsync(
-                request,
-                principal.Id,
-                normalizedCorrelationId,
-                new ApplicationFailure(
-                    ApplicationFailureKind.InvalidTransition,
-                    InvalidTransitionCode,
-                    "Only a request with failed provisioning can be retried."),
-                authorizationRejected: false,
-                cancellationToken);
+            return new ProvisioningRetryFailed(
+                await rejectedAttemptRecorder.RecordAsync(
+                    request,
+                    ApprovalStage.DevOps,
+                    principal.Id,
+                    normalizedCorrelationId,
+                    new ApplicationFailure(
+                        ApplicationFailureKind.InvalidTransition,
+                        InvalidTransitionCode,
+                        "Only a request with failed provisioning can be retried."),
+                    WorkflowAttemptRejectionKind.InvalidTransition,
+                    cancellationToken));
         }
 
         var outcome = await protectedProvisioning.RetryAsync(
@@ -150,46 +113,4 @@ public sealed class ProvisioningRetryService
         };
     }
 
-    private async Task<ProvisioningRetryOutcome> RejectAndAuditAsync(
-        AccessRequest request,
-        string actorId,
-        string correlationId,
-        ApplicationFailure failure,
-        bool authorizationRejected,
-        CancellationToken cancellationToken)
-    {
-        var occurredAt = clock.UtcNow.ToUniversalTime();
-        var auditEvent = authorizationRejected
-            ? AuditEvent.CreateAuthorizationRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.DevOps,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code)
-            : AuditEvent.CreateInvalidTransitionRejected(
-                Guid.NewGuid(),
-                request,
-                ApprovalStage.DevOps,
-                actorId,
-                occurredAt,
-                correlationId,
-                failure.Code);
-
-        workflowStore.AddAuditEvent(auditEvent);
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new ProvisioningRetryFailed(saveResult.Failure!)
-            : new ProvisioningRetryFailed(failure);
-    }
-
-    private static ProvisioningRetryFailed Failed(
-        ApplicationFailureKind kind,
-        string code,
-        string message)
-    {
-        return new ProvisioningRetryFailed(
-            new ApplicationFailure(kind, code, message));
-    }
 }

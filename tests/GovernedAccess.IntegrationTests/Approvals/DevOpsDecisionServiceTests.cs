@@ -97,10 +97,11 @@ public sealed class DevOpsDecisionServiceTests
         var requestContext = new EfRequestContextReader(dbContext);
         var workflowStore = new EfWorkflowStore(dbContext);
         return new DevOpsDecisionService(
-            requestContext,
             workflowStore,
             new RequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
+            new WorkflowCommandContextLoader(requestContext, workflowStore),
+            new RejectedWorkflowAttemptRecorder(workflowStore, clock),
             clock);
     }
 
