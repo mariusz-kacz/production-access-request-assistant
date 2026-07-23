@@ -165,6 +165,98 @@ public sealed class ProtectedProvisioningTests
         Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
     }
 
+    [Fact]
+    public async Task RetryAsyncValidatesStoredEvidenceBeforeAdvancingAttempt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        await SeedFailedProvisioningAsync(factory, cancellationToken: cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
+        var service = new ProtectedProvisioningService(
+            new EfWorkflowStore(dbContext),
+            provisioner,
+            factory.Clock);
+
+        var outcome = await service.RetryAsync(RequestId, cancellationToken);
+
+        var completed = Assert.IsType<ProtectedProvisioningCompleted>(outcome);
+        Assert.Equal(2, completed.Operation.AttemptCount);
+        Assert.Equal(RequestStatus.Active, completed.Request.Status);
+        Assert.Equal(ProviderGrantId, completed.Grant.Id);
+        var providerRequest = Assert.Single(provisioner.Requests);
+        Assert.Equal(RequestId, providerRequest.RequestId);
+        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, providerRequest.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, providerRequest.RoleId);
+    }
+
+    [Fact]
+    public async Task RetryAsyncRejectsStoredScopeMismatchWithoutAdvancingAttempt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        await SeedFailedProvisioningAsync(
+            factory,
+            operationRoleId: ProductionRoleIds.Support,
+            cancellationToken: cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
+        var service = new ProtectedProvisioningService(
+            new EfWorkflowStore(dbContext),
+            provisioner,
+            factory.Clock);
+
+        var outcome = await service.RetryAsync(RequestId, cancellationToken);
+
+        var failed = Assert.IsType<ProtectedProvisioningFailed>(outcome);
+        Assert.Equal(
+            ProtectedProvisioningService.OperationScopeMismatchCode,
+            failed.Failure.Code);
+        var operation = await dbContext.ProvisioningOperations
+            .AsNoTracking()
+            .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
+        Assert.Equal(1, operation.AttemptCount);
+        Assert.Empty(provisioner.Requests);
+    }
+
+    private static async Task SeedFailedProvisioningAsync(
+        GovernedAccessWebFactory factory,
+        string? operationRoleId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await SeedAwaitingProvisioningAsync(
+            factory,
+            operationRoleId: operationRoleId,
+            cancellationToken: cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        _ = await dbContext.AccessRequests
+            .Where(item => item.Id == RequestId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.Status,
+                    RequestStatus.ProvisioningFailed),
+                cancellationToken);
+        _ = await dbContext.ProvisioningOperations
+            .Where(item => item.RequestId == RequestId)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        item => item.Status,
+                        ProvisioningOperationStatus.Failed)
+                    .SetProperty(
+                        item => item.LastOutcomeCode,
+                        "synthetic_provisioning_failed"),
+                cancellationToken);
+    }
+
     private static async Task SeedAwaitingProvisioningAsync(
         GovernedAccessWebFactory factory,
         bool includeBusinessApproval = true,

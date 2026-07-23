@@ -15,7 +15,8 @@ public sealed record ProtectedProvisioningFailed(ApplicationFailure Failure)
 
 /// <summary>
 /// Executes provisioning only after reloading and independently validating the
-/// persisted request, approval, and operation evidence.
+/// persisted request, approval, and operation evidence. It also owns retry attempt
+/// preparation, provider outcome persistence, and concurrent idempotent completion.
 /// </summary>
 public sealed class ProtectedProvisioningService
 {
@@ -28,6 +29,9 @@ public sealed class ProtectedProvisioningService
     public const string ApprovalEvidenceInvalidCode = "provisioning_approval_invalid";
 
     public const string CompletedGrantMissingCode = "provisioning_completed_grant_missing";
+
+    public const string AttemptCountInvalidCode =
+        "provisioning_attempt_count_invalid";
 
     public const string SuccessCode = "provisioning_succeeded";
 
@@ -53,6 +57,27 @@ public sealed class ProtectedProvisioningService
         Guid requestId,
         CancellationToken cancellationToken)
     {
+        return await ExecuteAsync(
+            requestId,
+            isRetry: false,
+            cancellationToken);
+    }
+
+    public async Task<ProtectedProvisioningOutcome> RetryAsync(
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        return await ExecuteAsync(
+            requestId,
+            isRetry: true,
+            cancellationToken);
+    }
+
+    private async Task<ProtectedProvisioningOutcome> ExecuteAsync(
+        Guid requestId,
+        bool isRetry,
+        CancellationToken cancellationToken)
+    {
         if (requestId == Guid.Empty)
         {
             return Failed(
@@ -73,6 +98,28 @@ public sealed class ProtectedProvisioningService
         if (initialContext.Operation.Status == ProvisioningOperationStatus.Succeeded)
         {
             return await GetCompletedAsync(initialContext, cancellationToken);
+        }
+
+        if (isRetry)
+        {
+            if (initialContext.Request.Status != RequestStatus.ProvisioningFailed ||
+                initialContext.Operation.Status != ProvisioningOperationStatus.Failed)
+            {
+                return Failed(
+                    ApplicationFailureKind.InvalidTransition,
+                    WorkflowStateInvalidCode,
+                    "The request and provisioning operation are not in a retryable state.");
+            }
+
+            if (initialContext.Operation.AttemptCount == int.MaxValue)
+            {
+                return Failed(
+                    ApplicationFailureKind.DependencyFailure,
+                    AttemptCountInvalidCode,
+                    "The provisioning retry count cannot be advanced safely.");
+            }
+
+            initialContext.Operation.AttemptCount++;
         }
 
         var attemptedAt = clock.UtcNow.ToUniversalTime();
@@ -101,7 +148,10 @@ public sealed class ProtectedProvisioningService
 
         if (providerOutcome is AccessProvisioningFailed providerFailed)
         {
-            return new ProtectedProvisioningFailed(providerFailed.Failure);
+            return await PersistProvisioningFailureAsync(
+                initialContext,
+                providerFailed.Failure,
+                cancellationToken);
         }
 
         if (providerOutcome is not AccessProvisioningSucceeded providerSucceeded)
@@ -147,12 +197,80 @@ public sealed class ProtectedProvisioningService
             completedAt));
 
         var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new ProtectedProvisioningFailed(saveResult.Failure!)
-            : new ProtectedProvisioningCompleted(
+        if (saveResult.IsSuccess)
+        {
+            return new ProtectedProvisioningCompleted(
                 initialContext.Request,
                 initialContext.Operation,
                 grant);
+        }
+
+        var recovered = await TryGetConcurrentlyCompletedAsync(
+            requestId,
+            saveResult.Failure!,
+            cancellationToken);
+        return recovered is not null
+            ? recovered
+            : new ProtectedProvisioningFailed(saveResult.Failure!);
+    }
+
+    private async Task<ProtectedProvisioningOutcome> PersistProvisioningFailureAsync(
+        AuthoritativeProvisioningContext context,
+        ApplicationFailure provisioningFailure,
+        CancellationToken cancellationToken)
+    {
+        if (provisioningFailure.Kind == ApplicationFailureKind.Cancelled)
+        {
+            return new ProtectedProvisioningFailed(provisioningFailure);
+        }
+
+        var failedAt = clock.UtcNow.ToUniversalTime();
+        context.Request.Status = RequestStatus.ProvisioningFailed;
+        context.Request.LastModifiedAt = failedAt;
+        context.Request.PersistenceVersion++;
+        context.Operation.Status = ProvisioningOperationStatus.Failed;
+        context.Operation.LastOutcomeCode = provisioningFailure.Code;
+
+        workflowStore.AddAuditEvent(AuditEvent.CreateProvisioningFailed(
+            Guid.NewGuid(),
+            context.Request,
+            context.DevOpsApproval,
+            context.Operation,
+            failedAt,
+            provisioningFailure.Code));
+
+        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
+        return saveResult.IsFailure
+            ? new ProtectedProvisioningFailed(saveResult.Failure!)
+            : new ProtectedProvisioningFailed(provisioningFailure);
+    }
+
+    private async Task<ProtectedProvisioningCompleted?>
+        TryGetConcurrentlyCompletedAsync(
+            Guid requestId,
+            ApplicationFailure saveFailure,
+            CancellationToken cancellationToken)
+    {
+        if (saveFailure.Kind is not (
+                ApplicationFailureKind.ConcurrencyConflict or
+                ApplicationFailureKind.DependencyFailure))
+        {
+            return null;
+        }
+
+        var contextResult = await LoadAndValidateAsync(
+            requestId,
+            cancellationToken);
+        if (contextResult.IsFailure ||
+            contextResult.Value.Request.Status != RequestStatus.Active ||
+            contextResult.Value.Operation.Status != ProvisioningOperationStatus.Succeeded)
+        {
+            return null;
+        }
+
+        return await GetCompletedAsync(
+            contextResult.Value,
+            cancellationToken) as ProtectedProvisioningCompleted;
     }
 
     private async Task<ApplicationResult<AuthoritativeProvisioningContext>>

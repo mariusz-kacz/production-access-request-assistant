@@ -16,8 +16,8 @@ public sealed record DevOpsDecisionFailed(ApplicationFailure Failure)
 
 /// <summary>
 /// Records an authenticated DevOps decision before invoking the protected
-/// provisioning handler and persists a retryable failure transition when provider
-/// work does not complete successfully.
+/// provisioning handler, which owns the resulting success or retryable failure
+/// transition.
 /// </summary>
 public sealed class DevOpsDecisionService
 {
@@ -289,17 +289,7 @@ public sealed class DevOpsDecisionService
                 "The protected provisioning outcome is unsupported.");
         }
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            return new DevOpsDecisionFailed(provisioningFailed.Failure);
-        }
-
-        var transitionFailure = await PersistProvisioningFailureAsync(
-            request.Id,
-            applied.Decision,
-            provisioningFailed.Failure,
-            cancellationToken);
-        return new DevOpsDecisionFailed(transitionFailure ?? provisioningFailed.Failure);
+        return new DevOpsDecisionFailed(provisioningFailed.Failure);
     }
 
     private async Task<ApplicationFailure?> ValidateCurrentContextAsync(
@@ -333,88 +323,6 @@ public sealed class DevOpsDecisionService
             && fields.IncidentId == request.IncidentId
             ? null
             : InvalidCurrentContext();
-    }
-
-    private async Task<ApplicationFailure?> PersistProvisioningFailureAsync(
-        Guid requestId,
-        ApprovalDecision devOpsDecision,
-        ApplicationFailure provisioningFailure,
-        CancellationToken cancellationToken)
-    {
-        if (provisioningFailure.Kind == ApplicationFailureKind.Cancelled ||
-            IsWorkflowPersistenceFailure(provisioningFailure))
-        {
-            return null;
-        }
-
-        var requestResult = await workflowStore.ReloadRequestAsync(
-            requestId,
-            cancellationToken);
-        if (requestResult.IsFailure)
-        {
-            return requestResult.Failure;
-        }
-
-        var operationResult = await workflowStore.ReloadProvisioningOperationAsync(
-            requestId,
-            cancellationToken);
-        if (operationResult.IsFailure)
-        {
-            return operationResult.Failure;
-        }
-
-        var request = requestResult.Value;
-        var operation = operationResult.Value;
-        if (!CanTransitionProvisioningFailure(
-                request,
-                devOpsDecision,
-                operation))
-        {
-            return null;
-        }
-
-        var failedAt = clock.UtcNow.ToUniversalTime();
-
-        request.Status = RequestStatus.ProvisioningFailed;
-        request.LastModifiedAt = failedAt;
-        request.PersistenceVersion++;
-        operation.Status = ProvisioningOperationStatus.Failed;
-        operation.LastOutcomeCode = provisioningFailure.Code;
-
-        workflowStore.AddAuditEvent(AuditEvent.CreateProvisioningFailed(
-            Guid.NewGuid(),
-            request,
-            devOpsDecision,
-            operation,
-            failedAt,
-            provisioningFailure.Code));
-
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure ? saveResult.Failure : null;
-    }
-
-    private static bool CanTransitionProvisioningFailure(
-        AccessRequest request,
-        ApprovalDecision devOpsDecision,
-        ProvisioningOperation operation)
-    {
-        return request.Status == RequestStatus.AwaitingDevOpsApproval
-            && operation.Status == ProvisioningOperationStatus.Pending
-            && devOpsDecision.RequestId == request.Id
-            && devOpsDecision.Stage == ApprovalStage.DevOps
-            && devOpsDecision.Decision == ApprovalOutcome.Approved
-            && operation.RequestId == request.Id
-            && operation.EnvironmentId == request.EnvironmentId
-            && operation.RoleId == request.RequestedRoleId
-            && devOpsDecision.ApprovedRoleId == operation.RoleId;
-    }
-
-    private static bool IsWorkflowPersistenceFailure(ApplicationFailure failure)
-    {
-        return failure.Code is
-            "workflow_concurrency_conflict" or
-            "workflow_persistence_failed" or
-            "workflow_persistence_unavailable";
     }
 
     private async Task<DevOpsDecisionOutcome> RejectAndAuditAsync(

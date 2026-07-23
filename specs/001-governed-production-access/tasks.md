@@ -162,7 +162,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
+- [X] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
 - [ ] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
 - [ ] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
