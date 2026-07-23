@@ -471,9 +471,7 @@ public sealed class AccessRequestWorkflowService
                     cancellationToken));
         }
 
-        if (request.Status is not (
-                RequestStatus.ProvisioningFailed or
-                RequestStatus.Active))
+        if (request.Status != RequestStatus.ProvisioningFailed)
         {
             return ApplicationResult.Failed<ProvisioningRetryResult>(
                 await RecordRejectedAttemptAsync(

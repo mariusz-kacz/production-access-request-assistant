@@ -90,6 +90,74 @@ public sealed class AccessRequestWorkflowServiceTests
             cancellationToken));
     }
 
+    [Fact]
+    public async Task RetryRejectsActiveRequestAndAuditsWithoutChangingProtectedState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var (request, _) = await SeedBusinessApprovedRequestAsync(
+            dbContext,
+            factory.Clock.UtcNow,
+            cancellationToken);
+        var provisioner = new PersistenceInspectingProvisioner(dbContext);
+        var service = CreateService(dbContext, provisioner, factory.Clock);
+
+        var approvalOutcome = await service.DecideDevOpsAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            ApprovalOutcome.Approved,
+            null,
+            "devops-service-correlation",
+            cancellationToken);
+        Assert.True(approvalOutcome.IsSuccess);
+        Assert.Equal(RequestStatus.Active, approvalOutcome.Value.Request.Status);
+
+        var retryOutcome = await service.RetryProvisioningAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            "active-retry-correlation",
+            cancellationToken);
+
+        Assert.True(retryOutcome.IsFailure);
+        Assert.Equal(
+            ApplicationFailureKind.InvalidTransition,
+            retryOutcome.Failure!.Kind);
+        Assert.Equal(
+            AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
+            retryOutcome.Failure.Code);
+
+        dbContext.ChangeTracker.Clear();
+        var storedRequest = await dbContext.AccessRequests
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == request.Id, cancellationToken);
+        var operation = await dbContext.ProvisioningOperations
+            .AsNoTracking()
+            .SingleAsync(item => item.RequestId == request.Id, cancellationToken);
+        var grantCount = await dbContext.AccessGrants
+            .AsNoTracking()
+            .CountAsync(item => item.RequestId == request.Id, cancellationToken);
+        var rejection = await dbContext.AuditEvents
+            .AsNoTracking()
+            .SingleAsync(
+                item => item.RequestId == request.Id
+                    && item.EventType == AuditEventType.InvalidTransitionRejected
+                    && item.CorrelationId == "active-retry-correlation",
+                cancellationToken);
+
+        Assert.Equal(RequestStatus.Active, storedRequest.Status);
+        Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
+        Assert.Equal(1, operation.AttemptCount);
+        Assert.Equal(1, grantCount);
+        Assert.Equal(1, provisioner.InvocationCount);
+        Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, rejection.ActorId);
+        Assert.Equal(
+            AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
+            rejection.OutcomeCode);
+    }
+
     private static AccessRequestWorkflowService CreateService(
         GovernedAccessDbContext dbContext,
         IAccessProvisioner provisioner,
@@ -146,10 +214,13 @@ public sealed class AccessRequestWorkflowServiceTests
 
         public bool OperationWasPersistedBeforeInvocation { get; private set; }
 
+        public int InvocationCount { get; private set; }
+
         public async Task<AccessProvisioningOutcome> GetOrCreateAsync(
             AccessProvisioningRequest request,
             CancellationToken cancellationToken)
         {
+            InvocationCount++;
             DecisionWasPersistedBeforeInvocation = await dbContext.ApprovalDecisions
                 .AsNoTracking()
                 .AnyAsync(

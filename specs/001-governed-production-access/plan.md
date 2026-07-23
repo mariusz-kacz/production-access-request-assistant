@@ -1,6 +1,6 @@
 # Implementation Plan: Governed Production Access
 
-**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-22 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-governed-production-access` | **Date**: 2026-07-12 | **Last updated**: 2026-07-23 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/001-governed-production-access/spec.md`
 
@@ -48,6 +48,41 @@ Implementation order:
 
 Completion requires no remaining `AccessData`, `IAccessDataReader`, `accessData`, or
 `access-data-*` umbrella names outside this migration record.
+
+## Workflow Command Service Consolidation
+
+**Status**: Implemented on 2026-07-23.
+
+This is an application-composition refactor. Functional requirements, domain policies,
+workflow states, persistence shape, HTTP contracts, authenticated actor rules, and the
+independent provisioning trust boundary remain unchanged.
+
+| Responsibility | Current application owner |
+|---|---|
+| Validate and submit an immutable request | `RequestSubmissionService` |
+| Produce participant-authorized list and detail projections | `RequestQueryService` |
+| Coordinate authenticated business decisions, DevOps decisions, and provisioning retry | `AccessRequestWorkflowService` |
+| Reload persisted authorization evidence and execute idempotent provisioning | `ProtectedProvisioningService` |
+
+`AccessRequestWorkflowService` is the single command coordinator for authenticated
+human workflow actions. It loads trusted request context and persisted workflow state,
+applies the existing deterministic business and DevOps policies, records decisions and
+rejected attempts, and invokes protected provisioning by immutable request ID. It does
+not absorb the domain policies or accept browser assertions about actor, approval,
+scope, duration, or validation.
+
+`ProtectedProvisioningService` deliberately remains separate. Initial provisioning
+and retry reach it only through the workflow coordinator, but the protected service
+independently reloads request, approval, operation, and grant evidence before invoking
+the provider. This prevents consolidation from making the coordinator an authorization
+assertion trusted by provisioning.
+
+The completed T043, T061, and T068 task descriptions preserve the original
+implementation history. Their `BusinessDecisionService`, `DevOpsDecisionService`, and
+`ProvisioningRetryService` file paths are superseded by
+`AccessRequestWorkflowService.cs`; their behavioral requirements remain in force.
+`RequestDecisionsController` resolves the coordinator for both decision endpoints, and
+the retry endpoint resolves the same coordinator when it is implemented.
 
 ## Independently Navigable Story Slices
 
@@ -152,7 +187,7 @@ baseline are applied as the operative gates:
 
 | Gate | Result | Design evidence |
 |---|---|---|
-| AI interprets only; humans approve; deterministic code authorizes and executes | PASS | Drafting adapter is isolated from decision and provisioning services; protected actions use authenticated server context. |
+| AI interprets only; humans approve; deterministic code authorizes and executes | PASS | Drafting is isolated from `AccessRequestWorkflowService`; authenticated workflow commands apply deterministic policies, and `ProtectedProvisioningService` independently validates persisted evidence. |
 | Domain/application code has no AI-provider or MCP SDK contracts | PASS | `GovernedAccess.Core` exposes provider-neutral ports and typed outcomes; SDK types remain in `GovernedAccess.Web` adapters. |
 | Model output is schema-validated and identifiers are checked against trusted server data | PASS | Draft JSON schema plus submission validator; provisioning reloads and validates persisted workflow evidence. |
 | Model receives exactly the three allowed read-only MCP tools | PASS | MCP contract declares only the required tools; tool registration uses an explicit allowlist. |
@@ -262,6 +297,16 @@ thin React presentation.
 - Protected API inputs contain resource/decision data only. The actor is
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
+- `RequestSubmissionService` owns validated immutable request creation, and
+  `RequestQueryService` owns participant-authorized read projections. Neither
+  coordinates approval or provisioning commands.
+- `AccessRequestWorkflowService` is the single application coordinator for business
+  decisions, DevOps decisions, and provisioning retry. It resolves trusted actor and
+  current context, applies deterministic domain policies, persists decision and audit
+  evidence, and passes only the immutable request ID into protected provisioning.
+- `ProtectedProvisioningService` remains an independent internal trust boundary. It
+  reloads persisted request, approval, operation, and grant evidence and never trusts
+  the workflow coordinator to assert that authorization or validation succeeded.
 - `IChatClient` and MCP client types are adapted in `GovernedAccess.Web`; MCP server
   types are isolated in `GovernedAccess.Mcp`. Core sees only
   `DraftInterpretationRequest`, `DraftInterpretationOutcome`, and the request-context
@@ -269,9 +314,10 @@ thin React presentation.
 - The AI adapter uses a strict JSON-schema response and an explicit MCP-tool allowlist.
   Its MCP client calls the same host's configured loopback `/mcp` Streamable HTTP
   endpoint, preserving a real protocol boundary without another process.
-- DevOps approval persists the authenticated decision and provisioning operation,
-  then invokes the protected handler. The handler reloads the immutable request,
-  approvals, and request-bound operation before calling the synthetic provider.
+- `AccessRequestWorkflowService` persists the authenticated DevOps decision and
+  request-bound provisioning operation, then invokes `ProtectedProvisioningService`.
+  The protected service reloads the immutable request, approvals, and operation before
+  calling the synthetic provider.
 - Provider success and workflow activation are finalized in one local database save.
   The provider call and local save are not a cross-system atomic operation. A timeout
   or lost response records `ProvisioningFailed`; retry reuses the same request ID.

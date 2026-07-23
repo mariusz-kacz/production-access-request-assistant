@@ -20,6 +20,167 @@ public sealed class RequestQueriesTests
     private const string Justification = "Investigate the active production incident.";
 
     [Fact]
+    public async Task QueryServiceListsOnlyParticipantRequestsAndMarksCurrentActions()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        var alphaAwaitingBusiness = await CreateRequestAsync(
+            factory,
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            DemoDataIds.PrimaryIncidentId,
+            cancellationToken);
+        var betaAwaitingBusiness = await CreateRequestAsync(
+            factory,
+            DemoDataIds.ClientBetaId,
+            DemoDataIds.ClientBetaEnvironmentId,
+            DemoDataIds.ClientBetaIncidentId,
+            cancellationToken);
+        var alphaAwaitingDevOps = await CreateRequestAsync(
+            factory,
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            DemoDataIds.PrimaryIncidentId,
+            cancellationToken);
+        await ApproveBusinessAsync(
+            factory,
+            alphaAwaitingDevOps,
+            DemoPrincipalKeys.ClientAlphaApprover,
+            cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<RequestQueryService>();
+
+        var requesterResult = await service.ListAsync(
+            DemoDataIds.RequesterPrincipalId,
+            status: null,
+            cancellationToken);
+        Assert.True(requesterResult.IsSuccess);
+        Assert.Equal(
+            new[] { alphaAwaitingBusiness, betaAwaitingBusiness, alphaAwaitingDevOps }
+                .Order(),
+            requesterResult.Value.Select(item => item.RequestId).Order());
+        Assert.All(requesterResult.Value, item => Assert.False(item.Actionable));
+
+        var alphaResult = await service.ListAsync(
+            DemoDataIds.ClientAlphaApproverPrincipalId,
+            status: null,
+            cancellationToken);
+        Assert.True(alphaResult.IsSuccess);
+        Assert.Equal(
+            new[] { alphaAwaitingBusiness, alphaAwaitingDevOps }.Order(),
+            alphaResult.Value.Select(item => item.RequestId).Order());
+        Assert.True(alphaResult.Value.Single(item =>
+            item.RequestId == alphaAwaitingBusiness).Actionable);
+        Assert.False(alphaResult.Value.Single(item =>
+            item.RequestId == alphaAwaitingDevOps).Actionable);
+
+        var betaResult = await service.ListAsync(
+            DemoDataIds.ClientBetaApproverPrincipalId,
+            RequestStatus.AwaitingDevOpsApproval,
+            cancellationToken);
+        Assert.True(betaResult.IsSuccess);
+        Assert.Empty(betaResult.Value);
+
+        var devOpsResult = await service.ListAsync(
+            DemoDataIds.DevOpsApproverPrincipalId,
+            status: null,
+            cancellationToken);
+        Assert.True(devOpsResult.IsSuccess);
+        var devOpsItem = Assert.Single(devOpsResult.Value);
+        Assert.Equal(alphaAwaitingDevOps, devOpsItem.RequestId);
+        Assert.True(devOpsItem.Actionable);
+    }
+
+    [Fact]
+    public async Task QueryServiceReturnsEnrichedOrderedEvidenceAndLogicalExpiry()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        var requestId = await CreateActiveRequestAsync(factory, cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<RequestQueryService>();
+        var result = await service.GetDetailAsync(
+            requestId,
+            DemoDataIds.RequesterPrincipalId,
+            cancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var detail = result.Value;
+        Assert.Equal(RequestStatus.Active, detail.Status);
+        Assert.Empty(detail.AvailableActions);
+        Assert.True(detail.Validation.IsValid);
+        Assert.Empty(detail.Validation.FieldErrors);
+        Assert.Collection(
+            detail.Decisions,
+            business => Assert.Equal(ApprovalStage.Business, business.Stage),
+            devOps => Assert.Equal(ApprovalStage.DevOps, devOps.Stage));
+        Assert.Equal(
+            ProvisioningOperationStatus.Succeeded,
+            detail.ProvisioningOperation?.Status);
+        Assert.Equal(1, detail.ProvisioningOperation?.AttemptCount);
+        Assert.NotNull(detail.Grant);
+        Assert.False(detail.Grant.IsExpired);
+        Assert.Equal(5, detail.AuditEvents.Count);
+        Assert.Equal(
+            detail.AuditEvents.Select(item => item.OccurredAt).Order(),
+            detail.AuditEvents.Select(item => item.OccurredAt));
+
+        factory.Clock.Advance(AccessGrant.FixedLifetime);
+        var expiredResult = await service.GetDetailAsync(
+            requestId,
+            DemoDataIds.RequesterPrincipalId,
+            cancellationToken);
+        Assert.True(expiredResult.IsSuccess);
+        Assert.Equal(RequestStatus.Active, expiredResult.Value.Status);
+        Assert.True(expiredResult.Value.Grant?.IsExpired);
+
+        var wrongClientResult = await service.GetDetailAsync(
+            requestId,
+            DemoDataIds.ClientBetaApproverPrincipalId,
+            cancellationToken);
+        Assert.True(wrongClientResult.IsFailure);
+        Assert.Equal(
+            ApplicationFailureKind.NotFound,
+            wrongClientResult.Failure!.Kind);
+    }
+
+    [Fact]
+    public async Task QueryServiceOffersRetryOnlyToDevOpsForFailedProvisioning()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
+        var requestId = await CreateFailedRequestAsync(factory, cancellationToken);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<RequestQueryService>();
+
+        var devOpsResult = await service.GetDetailAsync(
+            requestId,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            cancellationToken);
+        Assert.True(devOpsResult.IsSuccess);
+        Assert.Equal(
+            RetryProvisioningAction,
+            Assert.Single(devOpsResult.Value.AvailableActions));
+        Assert.Equal(
+            ProvisioningOperationStatus.Failed,
+            devOpsResult.Value.ProvisioningOperation?.Status);
+        Assert.Null(devOpsResult.Value.Grant);
+
+        var requesterResult = await service.GetDetailAsync(
+            requestId,
+            DemoDataIds.RequesterPrincipalId,
+            cancellationToken);
+        Assert.True(requesterResult.IsSuccess);
+        Assert.Empty(requesterResult.Value.AvailableActions);
+    }
+
+    [Fact]
     public async Task ListsAreParticipantFilteredAndMarkOnlyCurrentActions()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

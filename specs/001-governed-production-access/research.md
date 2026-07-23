@@ -87,6 +87,29 @@ endpoint, so the Vite toolchain and MCP boundary do not become separate services
 runtime, deployment, database-locking, and endpoint-isolation concerns); broader
 project-per-layer structure (more ceremony than this MVP needs).
 
+## Workflow command coordination
+
+**Decision**: Use `AccessRequestWorkflowService` as the single application
+coordinator for authenticated business decisions, DevOps decisions, and provisioning
+retry. Keep `RequestSubmissionService` and `RequestQueryService` focused on request
+creation and read projections. Keep `ProtectedProvisioningService` separate as the
+internal boundary that reloads persisted evidence and invokes the synthetic provider.
+
+**Rationale**: The three human workflow commands share actor loading, request loading,
+rejected-attempt auditing, correlation handling, deterministic transition policies,
+and persistence coordination. One command coordinator removes repeated application
+orchestration without introducing a workflow engine. The protected provisioning
+service must remain separate because it distrusts its caller, accepts only the
+immutable request ID, and independently validates stored authorization evidence.
+
+**Alternatives considered**: Separate `BusinessDecisionService`,
+`DevOpsDecisionService`, and `ProvisioningRetryService` classes (duplicated command
+orchestration around one workflow); moving submission and queries into the coordinator
+(an oversized application service with unrelated read and creation responsibilities);
+folding protected provisioning into the coordinator (weakens the explicit
+persisted-evidence trust boundary); a generic workflow framework (outside the
+single-host MVP scope).
+
 ## Model abstraction and structured output
 
 **Decision**: Define a core drafting port and implement it with

@@ -163,7 +163,7 @@
 ### Implementation for User Story 4
 
 - [X] T068 [US4] Implement DevOps-only retry from `ProvisioningFailed` using the stored scope and immutable request ID through the same protected handler in `src/GovernedAccess.Core/Application/ProvisioningRetryService.cs`
-- [ ] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
+- [X] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
 - [ ] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [ ] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
 - [ ] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
@@ -263,7 +263,7 @@ T057 DevOpsDecisionPolicy.cs | T058 Provisioning.cs | T060 SyntheticAccessProvis
 
 ```text
 T065 RetryProvisioningTests.cs | T066 ProvisioningIdempotencyTests.cs | T067 RequestQueriesTests.cs
-T071 RequestListPage.tsx can proceed while T068 ProvisioningRetryService.cs is implemented
+T071 RequestListPage.tsx can proceed while T068 retry behavior is implemented in AccessRequestWorkflowService.cs
 ```
 
 ## Implementation Strategy
@@ -307,3 +307,15 @@ T071 RequestListPage.tsx can proceed while T068 ProvisioningRetryService.cs is i
 - [ ] T083 Add human-readable, non-color-only status and workflow presentation in `src/GovernedAccess.Web/ClientApp/src/components/RequestStatus.tsx`, then restructure `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx` and `src/GovernedAccess.Web/ClientApp/src/styles.css` into a wide record/action split that collapses to one source-ordered column with complete identifiers and semantic timestamps per FR-032 and SC-006 (partial)
 - [ ] T084 Give approve, reject, pending, completed, error, and safe grant outcomes deliberate and distinct hierarchy without changing restricted payloads in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`, `src/GovernedAccess.Web/ClientApp/src/components/DevOpsDecisionPanel.tsx`, and `src/GovernedAccess.Web/ClientApp/src/styles.css` per plan: presentation acceptance (partial)
 - [ ] T085 Extend the thin semantic UI smokes for human-readable status, workflow orientation, identity switching, safe grant output, and preserved accessible action names without adding CSS snapshots in `src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx` and `src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx` per plan: UI accessibility and validation (missing)
+
+## Phase 9: Convergence
+
+**Implementation-path supersession**: T043, T061, and T068 retain their original
+descriptions as historical task records. Their separate `BusinessDecisionService.cs`,
+`DevOpsDecisionService.cs`, and `ProvisioningRetryService.cs` paths are superseded by
+`AccessRequestWorkflowService.cs`. The behavioral scope of those completed tasks is
+unchanged; `RequestSubmissionService`, `RequestQueryService`, and
+`ProtectedProvisioningService` remain separate focused boundaries.
+
+- [X] T086 Restrict `AccessRequestWorkflowService.RetryProvisioningAsync` to `ProvisioningFailed` requests and add direct regression coverage that an `Active` request is rejected, audited, and left unchanged in `src/GovernedAccess.Core/Application/AccessRequestWorkflowService.cs` and `tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs` per FR-025 and US4/AC3 (contradicts)
+- [X] T087 Document the implemented command-service consolidation in `specs/001-governed-production-access/plan.md` and applicable reference documentation: `AccessRequestWorkflowService` coordinates business decisions, DevOps decisions, and provisioning retry; `RequestSubmissionService` and `RequestQueryService` remain focused services; and `ProtectedProvisioningService` remains the independent persisted-evidence boundary. Explicitly supersede the pre-refactor `BusinessDecisionService`, `DevOpsDecisionService`, and `ProvisioningRetryService` paths recorded by T043, T061, and T068 without changing functional requirements per plan: application-service boundaries (contradicts)

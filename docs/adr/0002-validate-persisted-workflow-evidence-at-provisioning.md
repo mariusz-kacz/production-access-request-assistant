@@ -2,8 +2,9 @@
 
 - **Status**: Accepted
 - **Date**: 2026-07-22
+- **Last updated**: 2026-07-23
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/spec.md`, `docs/adr/0001-use-one-deployable-service-including-mcp.md`
+- **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/spec.md`, `specs/001-governed-production-access/plan.md`, `docs/adr/0001-use-one-deployable-service-including-mcp.md`
 
 ## Context
 
@@ -71,7 +72,8 @@ immutable.
 - Provisioning has one fewer application dependency and fewer failure branches.
 - Tests cover states reachable through the MVP rather than simulated reference-data
   mutation.
-- Request-context validation is not duplicated in two application services.
+- Request-context validation is not duplicated in both
+  `AccessRequestWorkflowService` and `ProtectedProvisioningService`.
 - The design remains proportionate to one local host and one fixed dataset.
 - Initial attempts and later retries share the same focused stored-evidence checks.
 
@@ -101,12 +103,13 @@ This would reduce duplicated comparison code but retain unnecessary context read
 failure modes. It would also mix caller-input validation concerns such as required
 fields and justification with stored workflow authorization.
 
-### Trust the DevOps decision service completely
+### Trust the workflow command coordinator completely
 
 Passing a prepared scope or approval assertions directly to the provider would be
 simpler but would weaken the retry path and make the protected handler depend on its
-caller's correctness. It is rejected; the handler continues to accept only the stable
-operation reference and reload stored evidence.
+caller's correctness. It is rejected; `ProtectedProvisioningService` continues to
+accept only the stable request ID and reload stored evidence rather than trusting
+`AccessRequestWorkflowService` to assert approval or scope.
 
 ## Revisit criteria
 
