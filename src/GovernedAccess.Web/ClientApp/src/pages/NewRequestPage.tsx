@@ -291,12 +291,15 @@ export function NewRequestPage() {
 
   return (
     <main className="new-request-page" aria-labelledby="new-request-title">
-      <header>
-        <p className="eyebrow">Production access</p>
-        <h1 id="new-request-title">New access request</h1>
-        <p>
-          Describe the work, check the request details, then submit for approval.
-        </p>
+      <header className="page-header">
+        <div className="page-header__title">
+          <p className="eyebrow">Production access</p>
+          <h1 id="new-request-title">New access request</h1>
+          <p>
+            Describe the work, check the request details, then submit for
+            approval.
+          </p>
+        </div>
       </header>
 
       <RequestPreparationSteps

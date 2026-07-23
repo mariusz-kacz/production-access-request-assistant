@@ -30,46 +30,43 @@ function ApplicationShell() {
 
   return (
     <div className="app-shell">
-      <aside className="app-rail">
-        <header className="app-rail__brand">
-          <Link className="app-brand" to="/requests">
-            <span>
-              Governed Access
-              <small>Production access</small>
-            </span>
-          </Link>
-        </header>
+      <header className="app-header">
+        <div className="app-header__inner">
+          <div className="app-header__primary">
+            <Link className="app-brand" to="/requests">
+              Access Desk
+            </Link>
 
-        <nav className="app-navigation" aria-label="Primary navigation">
-          <NavLink
-            to="/requests"
-            end
-            className={({ isActive }) =>
-              isActive
-                ? "navigation-link navigation-link--active"
-                : "navigation-link"
-            }
-          >
-            <span aria-hidden="true">01</span>
-            Requests
-          </NavLink>
-          {canCreateRequest && (
-            <NavLink
-              to="/requests/new"
-              className={({ isActive }) =>
-                isActive
-                  ? "navigation-link navigation-link--active"
-                  : "navigation-link"
-              }
-            >
-              <span aria-hidden="true">02</span>
-              New request
-            </NavLink>
-          )}
-        </nav>
+            <nav className="app-navigation" aria-label="Primary navigation">
+              <NavLink
+                to="/requests"
+                end
+                className={({ isActive }) =>
+                  isActive
+                    ? "navigation-link navigation-link--active"
+                    : "navigation-link"
+                }
+              >
+                Requests
+              </NavLink>
+              {canCreateRequest && (
+                <NavLink
+                  to="/requests/new"
+                  className={({ isActive }) =>
+                    isActive
+                      ? "navigation-link navigation-link--active"
+                      : "navigation-link"
+                  }
+                >
+                  New request
+                </NavLink>
+              )}
+            </nav>
+          </div>
 
-        <DemoIdentitySelector onSessionChange={setSession} />
-      </aside>
+          <DemoIdentitySelector onSessionChange={setSession} />
+        </div>
+      </header>
 
       <div className="app-workspace">
         {session === null ? (
