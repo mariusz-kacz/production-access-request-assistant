@@ -115,6 +115,10 @@ describe("application session wiring", () => {
         }
       }
 
+      if (path === "/api/requests" && (options.method ?? "GET") === "GET") {
+        return { items: [] } as never;
+      }
+
       throw new Error(`Unexpected API request: ${options.method ?? "GET"} ${path}`);
     });
   });
@@ -134,7 +138,7 @@ describe("application session wiring", () => {
     );
     expect(
       screen.queryByRole("heading", {
-        name: "Prepare a governed access request",
+        name: "New access request",
       }),
     ).toBeNull();
 
@@ -145,10 +149,13 @@ describe("application session wiring", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Prepare a governed access request",
+        name: "New access request",
       }),
     ).toBeTruthy();
     expect(await screen.findByText("Signed in as Demo Requester")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "New request" }),
+    ).toBeTruthy();
     expect(mockedApiRequest).toHaveBeenCalledWith(
       "/api/demo/session",
       expect.objectContaining({
@@ -169,6 +176,16 @@ describe("application session wiring", () => {
       await screen.findByText("Signed in as Client Alpha Business Approver"),
     ).toBeTruthy();
     expect(
+      await screen.findByRole("heading", { level: 1, name: "Requests" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "New access request" }),
+    ).toBeNull();
+    expect(screen.queryByRole("link", { name: "New request" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Prepare draft" }),
+    ).toBeNull();
+    expect(
       (
         screen.getByRole("combobox", {
           name: "Demo identity",
@@ -181,7 +198,7 @@ describe("application session wiring", () => {
     await waitFor(() => {
       expect(
         screen.queryByRole("heading", {
-          name: "Prepare a governed access request",
+          name: "New access request",
         }),
       ).toBeNull();
     });

@@ -59,7 +59,11 @@ const utcTimestampFormatter = new Intl.DateTimeFormat(undefined, {
   timeZoneName: "short",
 });
 
-export function RequestListPage() {
+export function RequestListPage({
+  canCreateRequest,
+}: {
+  canCreateRequest: boolean;
+}) {
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
   const [requests, setRequests] = useState<RequestListItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,28 +106,24 @@ export function RequestListPage() {
     <main className="request-list-page" aria-labelledby="request-list-title">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Governed production access</p>
-          <h1 id="request-list-title">Relevant requests</h1>
-          <p>
-            Review requests visible to your current identity and identify the
-            workflow steps that currently need your action.
-          </p>
+          <p className="eyebrow">Production access</p>
+          <h1 id="request-list-title">Requests</h1>
+          <p>Requests visible to your current demo identity.</p>
         </div>
-        <Link className="button-link button-link--primary" to="/requests/new">
-          Prepare a new request
-        </Link>
+        {canCreateRequest && (
+          <Link className="button-link button-link--primary" to="/requests/new">
+            New request
+          </Link>
+        )}
       </header>
 
       <section className="request-list-filter" aria-labelledby="filter-title">
         <div className="request-list-filter__intro">
-          <h2 id="filter-title">Filter requests</h2>
-          <p>
-            Filters narrow the requests the server already permits this identity
-            to see.
-          </p>
+          <h2 id="filter-title">Filter</h2>
+          <p>Narrow this list by status.</p>
         </div>
         <div className="request-list-filter__control">
-          <label htmlFor="request-status-filter">Workflow status</label>
+          <label htmlFor="request-status-filter">Status</label>
           <select
             id="request-status-filter"
             value={statusFilter}
@@ -171,8 +171,8 @@ export function RequestListPage() {
         {!loading && error === undefined && requests.length === 0 && (
           <p className="empty-state">
             {statusFilter === ""
-              ? "No requests are currently relevant to this identity."
-              : `No relevant requests have the status “${statusLabels[statusFilter]}”.`}
+              ? "No requests to show."
+              : `No requests match “${statusLabels[statusFilter]}”.`}
           </p>
         )}
 
@@ -252,7 +252,7 @@ function RequestListItem({
             {request.actionable ? "Action required" : "No action required"}
           </span>
           <Link to={`/requests/${encodeURIComponent(request.requestId)}`}>
-            View request details
+            Open request
           </Link>
         </footer>
       </article>

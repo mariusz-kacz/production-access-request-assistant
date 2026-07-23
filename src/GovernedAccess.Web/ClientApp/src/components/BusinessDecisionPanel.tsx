@@ -72,7 +72,7 @@ export function BusinessDecisionPanel({
         aria-labelledby="business-decision-title"
       >
         <header className="decision-panel__header">
-          <p className="eyebrow">Decision recorded</p>
+          <p className="eyebrow">Business review</p>
           <h2 id="business-decision-title">Business decision</h2>
         </header>
         <div
@@ -85,15 +85,11 @@ export function BusinessDecisionPanel({
           <strong>{approved ? "Approved" : "Rejected"}</strong>
           <span>
             {approved
-              ? "Business approval is recorded. The request now requires DevOps review."
-              : "Business rejection is recorded. This request cannot continue."}
+              ? "Sent to DevOps for review."
+              : "Request closed."}
           </span>
         </div>
         <dl className="decision-panel__result">
-          <div>
-            <dt>Recorded outcome</dt>
-            <dd>{approved ? "Business approval" : "Business rejection"}</dd>
-          </div>
           <div>
             <dt>Correlation ID</dt>
             <dd className="identifier">{completedDecision.correlationId}</dd>
@@ -167,20 +163,8 @@ export function BusinessDecisionPanel({
       <header className="decision-panel__header">
         <p className="eyebrow">Business review</p>
         <h2 id="business-decision-title">Business decision</h2>
-        <p>
-          Approve or reject this immutable request scope. The server verifies your
-          authenticated identity, environment responsibility, and the current request
-          state before recording the decision.
-        </p>
+        <p>Review the submitted scope, then approve or reject it.</p>
       </header>
-
-      <div className="decision-panel__scope-note">
-        <strong>Decision boundary</strong>
-        <span>
-          Your decision applies only to this request ID and its unchanged submitted
-          scope.
-        </span>
-      </div>
 
       {error !== undefined && (
         <div className="problem-summary" role="alert">
@@ -220,19 +204,17 @@ export function BusinessDecisionPanel({
         />
       </div>
 
-      <p
-        className={`decision-panel__activity decision-panel__activity--${
-          busy ? "pending" : "ready"
-        }`}
-        role={busy ? "status" : undefined}
-        aria-live={busy ? "polite" : undefined}
-      >
-        {pendingDecision === "Approve"
-          ? "Recording business approval…"
-          : pendingDecision === "Reject"
-            ? "Recording business rejection…"
-            : "Ready for an authenticated business decision."}
-      </p>
+      {busy && (
+        <p
+          className="decision-panel__activity decision-panel__activity--pending"
+          role="status"
+          aria-live="polite"
+        >
+          {pendingDecision === "Approve"
+            ? "Recording business approval…"
+            : "Recording business rejection…"}
+        </p>
+      )}
 
       <div className="business-decision-panel__actions decision-panel__actions">
         <button

@@ -178,9 +178,9 @@ export function DemoIdentitySelector({
       aria-labelledby="demo-identity-title"
     >
       <div className="demo-identity-selector__intro">
-        <h2 id="demo-identity-title">Synthetic demo identity</h2>
+        <h2 id="demo-identity-title">Demo identity</h2>
         <p id="demo-identity-description">
-          Choose one fixed identity. The server supplies its authorization claims.
+          Switch roles to test each part of the workflow.
         </p>
       </div>
 

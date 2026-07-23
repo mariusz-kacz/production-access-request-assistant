@@ -92,7 +92,7 @@ export function DevOpsDecisionPanel({
         aria-labelledby="devops-decision-title"
       >
         <header className="decision-panel__header">
-          <p className="eyebrow">Decision recorded</p>
+          <p className="eyebrow">DevOps review</p>
           <h2 id="devops-decision-title">DevOps decision</h2>
         </header>
         <div
@@ -105,8 +105,8 @@ export function DevOpsDecisionPanel({
           <strong>{active ? "Approved and provisioned" : "Rejected"}</strong>
           <span>
             {active
-              ? "DevOps approval is recorded and synthetic access is active."
-              : "DevOps rejection is recorded. This request cannot continue."}
+              ? "Access is active."
+              : "Request closed."}
           </span>
         </div>
 
@@ -115,10 +115,6 @@ export function DevOpsDecisionPanel({
         )}
 
         <dl className="decision-panel__result">
-          <div>
-            <dt>Recorded outcome</dt>
-            <dd>{active ? "Access active" : "DevOps rejection"}</dd>
-          </div>
           <div>
             <dt>Correlation ID</dt>
             <dd className="identifier">{completedDecision.correlationId}</dd>
@@ -191,19 +187,15 @@ export function DevOpsDecisionPanel({
       aria-busy={busy}
     >
       <header className="decision-panel__header">
-        <p className="eyebrow">Final review</p>
+        <p className="eyebrow">DevOps review</p>
         <h2 id="devops-decision-title">DevOps decision</h2>
-        <p>
-          Approval provisions the exact business-approved role for the fixed access
-          window. The server reloads and validates the approved request scope before
-          provisioning.
-        </p>
+        <p>Approve to provision the approved role for eight hours, or reject.</p>
       </header>
 
       <div className="decision-panel__scope-note">
-        <strong>Approval effect</strong>
+        <strong>Access</strong>
         <span>
-          Exact business-approved role · fixed eight-hour synthetic access window
+          Approved role · eight hours
         </span>
       </div>
 
@@ -213,8 +205,7 @@ export function DevOpsDecisionPanel({
           <p>{error.message}</p>
           {error.provisioningOutcomeUnknown && (
             <p>
-              Refresh the request before trying again. The server determines whether
-              provisioning can be retried safely.
+              Refresh before trying again; the operation may have completed.
             </p>
           )}
           {error.code !== undefined && (
@@ -251,19 +242,17 @@ export function DevOpsDecisionPanel({
         />
       </div>
 
-      <p
-        className={`decision-panel__activity decision-panel__activity--${
-          busy ? "pending" : "ready"
-        }`}
-        role={busy ? "status" : undefined}
-        aria-live={busy ? "polite" : undefined}
-      >
-        {pendingDecision === "Approve"
-          ? "Recording approval and provisioning stored scope…"
-          : pendingDecision === "Reject"
-            ? "Recording DevOps rejection…"
-            : "Ready for an authenticated DevOps decision."}
-      </p>
+      {busy && (
+        <p
+          className="decision-panel__activity decision-panel__activity--pending"
+          role="status"
+          aria-live="polite"
+        >
+          {pendingDecision === "Approve"
+            ? "Approving and provisioning…"
+            : "Recording DevOps rejection…"}
+        </p>
+      )}
 
       <div className="devops-decision-panel__actions decision-panel__actions">
         <button
@@ -293,11 +282,8 @@ function SafeGrantSummary({ grant }: { grant: DevOpsAccessGrant }) {
   return (
     <div className="safe-grant" aria-label="Active access grant">
       <header className="safe-grant__header">
-        <p className="eyebrow">Synthetic outcome</p>
+        <p className="eyebrow">Grant</p>
         <h3>Active grant</h3>
-        <p>
-          This is the safe grant summary returned for the immutable approved scope.
-        </p>
       </header>
       <dl className="safe-grant__evidence">
         <div>

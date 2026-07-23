@@ -7,7 +7,6 @@ interface StatusPresentation {
   label: string;
   tone: StatusTone;
   toneLabel: string;
-  workflowPoint: string;
   description: string;
 }
 
@@ -21,41 +20,31 @@ const statusPresentations: Record<RequestStatusValue, StatusPresentation> = {
     label: "Awaiting business approval",
     tone: "pending",
     toneLabel: "Pending",
-    workflowPoint: "Business review",
-    description:
-      "The configured business approver must review the immutable request scope.",
+    description: "Waiting for the assigned business approver.",
   },
   AwaitingDevOpsApproval: {
     label: "Awaiting DevOps approval",
     tone: "pending",
     toneLabel: "Pending",
-    workflowPoint: "DevOps review",
-    description:
-      "Business approval is recorded. DevOps must review the approved role and duration.",
+    description: "Business approved. Waiting for DevOps.",
   },
   ProvisioningFailed: {
     label: "Provisioning failed",
     tone: "critical",
     toneLabel: "Recovery required",
-    workflowPoint: "Provisioning recovery",
-    description:
-      "The approved scope is unchanged, but the deterministic provisioning operation needs attention.",
+    description: "The existing provisioning operation needs attention.",
   },
   Active: {
     label: "Active",
     tone: "positive",
-    toneLabel: "Completed",
-    workflowPoint: "Access active",
-    description:
-      "Provisioning completed and the fixed access window is in effect.",
+    toneLabel: "Complete",
+    description: "Access is active for the approved eight-hour window.",
   },
   Rejected: {
     label: "Rejected",
     tone: "critical",
-    toneLabel: "Ended",
-    workflowPoint: "Workflow ended",
-    description:
-      "A human reviewer rejected this request. Corrections require a new request.",
+    toneLabel: "Closed",
+    description: "This request is closed. Changes require a new request.",
   },
 };
 
@@ -89,22 +78,10 @@ export function RequestStatus({ status }: RequestStatusProps) {
           </span>
         </div>
         <p aria-live="polite">{presentation.description}</p>
-        <dl className="request-status__metadata">
-          <div>
-            <dt>Workflow point</dt>
-            <dd>{presentation.workflowPoint}</dd>
-          </div>
-          {presentation.label !== status && (
-            <div>
-              <dt>System value</dt>
-              <dd className="identifier">{status}</dd>
-            </div>
-          )}
-        </dl>
       </div>
 
       <div className="request-status__workflow">
-        <h3>Workflow progress</h3>
+        <h3>Workflow</h3>
         <ol>
           {workflow.map((step, index) => (
             <li

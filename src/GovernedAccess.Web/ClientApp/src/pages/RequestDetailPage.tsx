@@ -215,12 +215,9 @@ export function RequestDetailPage() {
   return (
     <main className="request-detail-page" aria-labelledby="request-detail-title">
       <header className="page-header">
-        <p className="eyebrow">Immutable access request</p>
+        <p className="eyebrow">Access request</p>
         <h1 id="request-detail-title">Request details</h1>
-        <p>
-          Human decisions and provisioning apply only to this request identifier
-          and its unchanged submitted scope.
-        </p>
+        <p>Submitted scope, decisions, and activity. This record is read-only.</p>
         <p className="page-header__identifier">
           Request <span className="identifier">{currentRequest.requestId}</span>
         </p>
@@ -231,7 +228,6 @@ export function RequestDetailPage() {
       <div className="request-detail-layout">
         <div className="request-detail-evidence">
           <RequestSummary request={currentRequest} />
-          <ValidationEvidence request={currentRequest} />
           <DecisionEvidence decisions={currentRequest.decisions} />
           <ProvisioningEvidence
             operation={currentRequest.provisioningOperation}
@@ -245,12 +241,8 @@ export function RequestDetailPage() {
           aria-labelledby="request-actions-title"
         >
           <header className="request-detail-actions__header">
-            <p className="eyebrow">Current action</p>
-            <h2 id="request-actions-title">Next governed action</h2>
-            <p>
-              Available actions come from the server. Every submitted decision
-              is revalidated and authorized against the authenticated identity.
-            </p>
+            <h2 id="request-actions-title">Action</h2>
+            <p>Available for your current demo identity.</p>
           </header>
           <BusinessDecisionPanel
             requestId={currentRequest.requestId}
@@ -269,7 +261,7 @@ export function RequestDetailPage() {
           />
           {currentRequest.availableActions.length === 0 && (
             <p className="request-detail-actions__empty">
-              No additional action is currently available to this identity.
+              No action available for this identity.
             </p>
           )}
         </aside>
@@ -284,7 +276,7 @@ function RequestSummary({ request }: { request: RequestDetailResponse }) {
       className="evidence-section"
       aria-labelledby="request-summary-title"
     >
-      <h2 id="request-summary-title">Immutable request scope</h2>
+      <h2 id="request-summary-title">Request scope</h2>
       <dl className="evidence-list">
         <dt>Request ID</dt>
         <dd className="identifier">{request.requestId}</dd>
@@ -315,36 +307,6 @@ function RequestSummary({ request }: { request: RequestDetailResponse }) {
   );
 }
 
-function ValidationEvidence({ request }: { request: RequestDetailResponse }) {
-  return (
-    <section
-      className="evidence-section"
-      aria-labelledby="request-validation-title"
-    >
-      <h2 id="request-validation-title">Current validation</h2>
-      {request.validation.isValid ? (
-        <p className="validation-status validation-status--valid">
-          The immutable request scope is valid against current authoritative data.
-        </p>
-      ) : (
-        <>
-          <p className="validation-status validation-status--invalid">
-            Current authoritative data no longer validates every submitted value.
-          </p>
-          <ul className="validation-error-list">
-            {request.validation.fieldErrors.map((fieldError) => (
-              <li key={`${fieldError.field}-${fieldError.code}`}>
-                <strong>{fieldError.field}</strong>: {fieldError.message}{" "}
-                <span className="identifier">({fieldError.code})</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
-  );
-}
-
 function DecisionEvidence({
   decisions,
 }: {
@@ -355,9 +317,9 @@ function DecisionEvidence({
       className="evidence-section"
       aria-labelledby="approval-evidence-title"
     >
-      <h2 id="approval-evidence-title">Approval evidence</h2>
+      <h2 id="approval-evidence-title">Decisions</h2>
       {decisions.length === 0 ? (
-        <p>No human decision has been recorded.</p>
+        <p>No decisions recorded.</p>
       ) : (
         <ol className="decision-evidence-list">
           {decisions.map((decision) => (
@@ -404,9 +366,9 @@ function ProvisioningEvidence({
       className="evidence-section"
       aria-labelledby="provisioning-evidence-title"
     >
-      <h2 id="provisioning-evidence-title">Provisioning evidence</h2>
+      <h2 id="provisioning-evidence-title">Provisioning</h2>
       {operation === null ? (
-        <p>No provisioning operation has been created.</p>
+        <p>No provisioning attempt recorded.</p>
       ) : (
         <dl className="evidence-list">
           <dt>Operation and request ID</dt>
@@ -443,9 +405,9 @@ function GrantEvidence({ grant }: { grant: RequestGrantResponse | null }) {
       className="evidence-section"
       aria-labelledby="grant-evidence-title"
     >
-      <h2 id="grant-evidence-title">Access grant</h2>
+      <h2 id="grant-evidence-title">Grant</h2>
       {grant === null ? (
-        <p>No access grant has been recorded.</p>
+        <p>No grant recorded.</p>
       ) : (
         <>
           <p
@@ -499,9 +461,9 @@ function AuditTimeline({
       className="evidence-section"
       aria-labelledby="audit-timeline-title"
     >
-      <h2 id="audit-timeline-title">Audit timeline</h2>
+      <h2 id="audit-timeline-title">Activity</h2>
       {auditEvents.length === 0 ? (
-        <p>No audit events are visible.</p>
+        <p>No activity recorded.</p>
       ) : (
         <ol className="audit-timeline">
           {auditEvents.map((auditEvent) => (
@@ -576,8 +538,7 @@ function ProvisioningRetryPanel({
       >
         <h2 id="provisioning-retry-title">Provisioning retry</h2>
         <p role="status" aria-live="polite">
-          Provisioning succeeded for the stored immutable scope. The single grant
-          is active.
+          Provisioning succeeded. The existing grant is active.
         </p>
         <p>
           Grant ID: <span className="identifier">{completed.grant.grantId}</span>
@@ -631,8 +592,7 @@ function ProvisioningRetryPanel({
     >
       <h2 id="provisioning-retry-title">Provisioning retry</h2>
       <p>
-        Retry the failed operation with the same request ID and persisted approved
-        scope. No role, environment, duration, approval, or actor values are sent.
+        Retry the existing operation without changing its approved scope.
       </p>
 
       {error !== undefined && (

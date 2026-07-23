@@ -24,6 +24,9 @@ export function App() {
 
 function ApplicationShell() {
   const [session, setSession] = useState<SessionView | null>(null);
+  const canCreateRequest =
+    session?.authenticated === true &&
+    session.capabilities.includes("createRequest");
 
   return (
     <div className="app-shell">
@@ -33,9 +36,6 @@ function ApplicationShell() {
             <Link className="app-brand" to="/requests">
               Governed Access
             </Link>
-            <span className="environment-badge">
-              Synthetic demo · no real access
-            </span>
           </div>
 
           <nav className="app-navigation" aria-label="Primary navigation">
@@ -50,16 +50,18 @@ function ApplicationShell() {
             >
               Requests
             </NavLink>
-            <NavLink
-              to="/requests/new"
-              className={({ isActive }) =>
-                isActive
-                  ? "navigation-link navigation-link--active"
-                  : "navigation-link"
-              }
-            >
-              New request
-            </NavLink>
+            {canCreateRequest && (
+              <NavLink
+                to="/requests/new"
+                className={({ isActive }) =>
+                  isActive
+                    ? "navigation-link navigation-link--active"
+                    : "navigation-link"
+                }
+              >
+                New request
+              </NavLink>
+            )}
           </nav>
         </div>
 
@@ -69,25 +71,40 @@ function ApplicationShell() {
       {session === null ? (
         <SessionLoadingPage />
       ) : session.authenticated ? (
-        <AuthenticatedRoutes key={session.principal.id} />
+        <AuthenticatedRoutes
+          key={session.principal.id}
+          canCreateRequest={canCreateRequest}
+        />
       ) : (
         <SignInRequiredPage />
       )}
 
-      <footer className="app-footer">
-        AI assists with interpretation. Humans approve. Deterministic services
-        authorize and execute.
-      </footer>
     </div>
   );
 }
 
-function AuthenticatedRoutes() {
+function AuthenticatedRoutes({
+  canCreateRequest,
+}: {
+  canCreateRequest: boolean;
+}) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/requests" replace />} />
-      <Route path="/requests" element={<RequestListPage />} />
-      <Route path="/requests/new" element={<NewRequestPage />} />
+      <Route
+        path="/requests"
+        element={<RequestListPage canCreateRequest={canCreateRequest} />}
+      />
+      <Route
+        path="/requests/new"
+        element={
+          canCreateRequest ? (
+            <NewRequestPage />
+          ) : (
+            <Navigate to="/requests" replace />
+          )
+        }
+      />
       <Route path="/requests/:requestId" element={<RequestDetailPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
@@ -97,8 +114,8 @@ function AuthenticatedRoutes() {
 function SessionLoadingPage() {
   return (
     <main className="session-page" aria-labelledby="session-loading-title">
-      <h1 id="session-loading-title">Checking your demo session</h1>
-      <p>Protected application content will appear after the session is loaded.</p>
+      <h1 id="session-loading-title">Loading session</h1>
+      <p>Checking the current demo identity.</p>
     </main>
   );
 }
@@ -107,9 +124,7 @@ function SignInRequiredPage() {
   return (
     <main className="session-page" aria-labelledby="sign-in-required-title">
       <h1 id="sign-in-required-title">Sign in to continue</h1>
-      <p>
-        Select a fixed demo identity to use protected application capabilities.
-      </p>
+      <p>Select a demo identity above.</p>
     </main>
   );
 }

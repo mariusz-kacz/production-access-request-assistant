@@ -49,13 +49,13 @@ const preparationOutcomeMessages: Record<
   string
 > = {
   MalformedModelOutput:
-    "Draft assistance returned an unreadable result. Complete the structured form manually or revise the description and try again.",
+    "The draft could not be read. Enter the request details below or try again.",
   Timeout:
-    "Draft assistance timed out. Complete the structured form manually or try again.",
+    "Draft preparation timed out. Enter the request details below or try again.",
   Cancelled:
-    "Draft preparation was cancelled. Complete the structured form manually or try again.",
+    "Draft preparation was cancelled. Enter the request details below or try again.",
   Unavailable:
-    "Draft assistance is unavailable. Complete the structured form manually or try again later.",
+    "Draft preparation is unavailable. Enter the request details below or try again later.",
 };
 
 const preparationSteps = ["Describe", "Review", "Submit"] as const;
@@ -113,9 +113,7 @@ export function NewRequestPage() {
 
       if (response.outcome === "Prepared") {
         setDraft(toDraftForm(response.draft));
-        setPreparationMessage(
-          "Draft prepared. Review every value before submitting it for human approval.",
-        );
+        setPreparationMessage("Draft ready. Check the details before submitting.");
         return;
       }
 
@@ -123,9 +121,7 @@ export function NewRequestPage() {
         const form = toDraftForm(response.draft);
         setDraft(form);
         setFieldErrors(validateDraft(form).fieldErrors);
-        setPreparationMessage(
-          "Draft preparation needs more information. Complete the highlighted fields before submission.",
-        );
+        setPreparationMessage("Add the missing details before submitting.");
         return;
       }
 
@@ -241,11 +237,10 @@ export function NewRequestPage() {
         aria-labelledby="request-created-title"
       >
         <header>
-          <p className="eyebrow">Immutable request submitted</p>
+          <p className="eyebrow">Submission complete</p>
           <h1 id="request-created-title">Request submitted</h1>
           <p>
-            The drafting session is complete. This submitted scope is now
-            read-only and has entered the governed approval workflow.
+            This request is now read-only and awaiting approval.
           </p>
         </header>
 
@@ -260,11 +255,10 @@ export function NewRequestPage() {
           <p>
             Request{" "}
             <strong className="identifier">{createdRequest.requestId}</strong> is
-            immutable. No access has been granted.
+            recorded. No access has been granted.
           </p>
           <p>
-            If the submitted scope needs correction, leave this completed record
-            and prepare a separate request with a new request ID and new approvals.
+            Need to change it? Create a new request; this record cannot be edited.
           </p>
           <p>
             Correlation ID:{" "}
@@ -296,11 +290,10 @@ export function NewRequestPage() {
   return (
     <main className="new-request-page" aria-labelledby="new-request-title">
       <header>
-        <p className="eyebrow">Temporary production access</p>
-        <h1 id="new-request-title">Prepare a governed access request</h1>
+        <p className="eyebrow">Production access</p>
+        <h1 id="new-request-title">New access request</h1>
         <p>
-          Describe the work, review the structured scope, and submit it for two
-          human approval stages. Preparing a draft never grants access.
+          Describe the work, check the request details, then submit for approval.
         </p>
       </header>
 
@@ -333,14 +326,14 @@ export function NewRequestPage() {
           aria-labelledby="request-intent-title"
         >
         <div className="request-step__header">
-          <p>Step 1 of 3</p>
-          <h2 id="request-intent-title">Describe the need</h2>
+            <p>Step 1 of 3</p>
+            <h2 id="request-intent-title">Describe the work</h2>
         </div>
         <form className="request-intent-form" onSubmit={prepareDraft}>
           <label htmlFor="request-intent">Access request description</label>
-          <p id="request-intent-hint">
-            Include the client, production environment, role, justification, and
-            incident when applicable. Successful access lasts eight hours.
+            <p id="request-intent-hint">
+              Include the client, environment, role, reason, and incident if there
+              is one.
           </p>
           <textarea
             id="request-intent"
@@ -378,8 +371,7 @@ export function NewRequestPage() {
             <p>Step 1 of 3 · Complete</p>
             <h2 id="request-intent-complete-title">Description captured</h2>
             <p>
-              Draft preparation is complete. Review and correct the structured
-              values in Step 2.
+              Check the extracted values below.
             </p>
           </div>
           <dl className="request-intent-summary">
@@ -413,10 +405,9 @@ export function NewRequestPage() {
         >
           <div className="request-step__header">
             <p>Step 2 of 3</p>
-            <h2 id="draft-review-title">Review and correct the draft</h2>
+            <h2 id="draft-review-title">Check the request</h2>
             <p>
-              These values are untrusted draft input. The server validates every
-              identifier and business rule against current stored data when you
+              Edit anything the draft got wrong. Values are checked again when you
               submit.
             </p>
           </div>
@@ -509,10 +500,9 @@ export function NewRequestPage() {
 
             <div className="request-submit-action">
               <p>Step 3 of 3</p>
-              <h3>Submit for human approval</h3>
+              <h3>Submit for approval</h3>
               <p>
-                Submission makes this scope immutable. Corrections after submission
-                require a new request and new approvals.
+                After submission, this request cannot be edited.
               </p>
               <button type="submit" disabled={busy}>
                 {activity === "submitting"

@@ -76,7 +76,7 @@ describe("thin UI wiring", () => {
     expect(within(statusRegion).getByText("Pending")).toBeTruthy();
     expect(
       within(statusRegion).getByRole("heading", {
-        name: "Workflow progress",
+        name: "Workflow",
       }),
     ).toBeTruthy();
     const workflow = within(statusRegion).getByRole("list");
@@ -107,7 +107,9 @@ describe("thin UI wiring", () => {
       name: "Awaiting DevOps approval",
     });
     expect(
-      within(nextStatusRegion).getByText("AwaitingDevOpsApproval"),
+      within(nextStatusRegion).getByText(
+        "Business approved. Waiting for DevOps.",
+      ),
     ).toBeTruthy();
   });
 
