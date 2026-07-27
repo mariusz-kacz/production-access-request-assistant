@@ -95,7 +95,7 @@ trusted Web link, with no approval, operation, or grant.
 - [X] T012 [P] [US1] Implement the immutable 30-minute prepared snapshot, reserved request ID, ownership checks, and guarded status transitions in src/GovernedAccess.Core/Domain/PreparedAccessRequest.cs
 - [X] T013 [US1] Verify conversation identity, prepared-snapshot construction, immutable canonical scope, fixed expiry, reserved request identity, and allowed initial transitions in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
 - [X] T014 [P] [US1] Document structured logging as the only pre-submission operation history and omit a separate persisted event entity in specs/002-teams-access-intake/data-model.md
-- [ ] T015 [US1] Define channel-neutral authenticated actor binding, preparation and confirmation commands/outcomes, and `IRequestIntakeStore` over the preparation entities in src/GovernedAccess.Core/Ports/RequestIntake.cs
+- [X] T015 [US1] Define channel-neutral authenticated actor binding, preparation and confirmation commands/outcomes, and `IRequestIntakeStore` over the preparation entities in src/GovernedAccess.Core/Ports/RequestIntake.cs
 - [ ] T016 [US1] Implement deterministic candidate validation, canonicalization, ready-snapshot creation, and typed preparation outcomes in src/GovernedAccess.Core/Application/RequestPreparationService.cs
 - [ ] T017 [US1] Map conversations, prepared snapshots, relationships, UTC timestamps, unique active binding, unique reserved ID, and concurrency tokens in src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs
 - [ ] T018 [US1] Implement preparation lookup and snapshot persistence over the shared DbContext in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
