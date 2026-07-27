@@ -123,7 +123,7 @@ Verify in 100% of tested deliveries:
 - one `AccessRequest` exists;
 - its ID equals the prepared `ReservedRequestId`;
 - every accepted response returns that same ID;
-- one request-created audit event and one first-confirmation intake event exist;
+- one request-created audit event exists;
 - duplicate responses do not create duplicate audit history, approvals, operations,
   or grants.
 

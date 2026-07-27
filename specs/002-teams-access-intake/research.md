@@ -167,9 +167,10 @@ Sources: [M365 Agents SDK authentication](https://learn.microsoft.com/en-us/micr
 
 **Decision**: Generate both a high-entropy preparation reference and reserved request
 ID when deterministic validation succeeds. On confirmation, atomically transition the
-prepared row and insert the access request, request-created audit, and intake event in
-the same SQLite save. Enforce unique reserved request ID and optimistic concurrency;
-on an expected collision, reload and return the stored request ID.
+prepared row and insert the access request and request-created audit in the same
+SQLite save. Enforce unique reserved request ID and optimistic concurrency; on an
+expected collision, reload and return the stored request ID. Emit structured
+operational telemetry after the transaction commits.
 
 **Rationale**: Teams may redeliver actions or lose responses. The prepared reference
 identifies the user interaction, while the reserved request ID makes every accepted

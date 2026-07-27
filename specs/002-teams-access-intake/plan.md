@@ -31,9 +31,8 @@ the current stable `Microsoft.Agents.AI` 1.15.0 and
 existing Adaptive Card activity contract without adding a UI framework or a second
 agent-hosting protocol.
 
-**Storage**: Existing local SQLite database through EF Core; add conversations,
-prepared snapshots, and metadata-only intake events to the same `DbContext` and
-transaction boundary
+**Storage**: Existing local SQLite database through EF Core; add conversations and
+prepared snapshots to the same `DbContext` and transaction boundary
 
 **Testing**: Existing xUnit unit and integration projects, ASP.NET Core
 `WebApplicationFactory`, SQLite in-memory databases, deterministic fake
@@ -106,8 +105,7 @@ src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
 │   │   ├── RequestPreparationConversation.cs
-│   │   ├── PreparedAccessRequest.cs
-│   │   └── RequestIntakeEvent.cs
+│   │   └── PreparedAccessRequest.cs
 │   ├── Application/
 │   │   ├── RequestPreparationService.cs
 │   │   └── PreparedRequestConfirmationService.cs
@@ -119,7 +117,7 @@ src/
 │   └── McpRegistration.cs
 └── GovernedAccess.Web/
     ├── Ai/
-    │   ├── MafRequestIntakeInterpreter.cs
+    │   ├── MafRequestPreparationInterpreter.cs
     │   └── DeterministicChatClient.cs
     ├── Teams/
     │   ├── TeamsAccessRequestAgent.cs
@@ -166,7 +164,7 @@ only executable.
 - Actor ownership uses the authenticated channel actor binding in addition to the
   fixed synthetic requester ID. Mapping all users to `requester` must not allow one
   Teams user to confirm another user's snapshot.
-- `MafRequestIntakeInterpreter` constructs one bounded `ChatClientAgent` invocation
+- `MafRequestPreparationInterpreter` constructs one bounded `ChatClientAgent` invocation
   from the current compact candidate and latest message. MAF owns the model/tool loop,
   but its session, response, and history are not authoritative application state.
 - The interpreter lists the loopback MCP catalog, requires exact equality with
@@ -178,8 +176,9 @@ only executable.
   validation can create a prepared snapshot.
 - The application persists only the compact current candidate and pending
   clarification needed for the active conversation. It clears that content after
-  submission, supersession, or expiry and retains only metadata events plus the
-  immutable prepared/request evidence required for replay and audit.
+  submission, supersession, or expiry. Structured logs provide pre-submission
+  observability; immutable prepared/request evidence provides replay safety and
+  durable audit.
 - A ready snapshot is rendered only from persisted server fields. The card contains no
   inputs and its sole action carries only schema version and opaque preparation
   reference.
@@ -193,8 +192,8 @@ only executable.
   server ID while prepared confirmation can supply only its server-reserved ID.
   Principal checks, validation, immutable construction, and request-created audit
   logic are shared rather than duplicated.
-- Confirmation status, immutable request, request-created audit, and intake event
-  commit in one `SaveChangesAsync`. A unique reserved request ID plus optimistic
+- Confirmation status, immutable request, and request-created audit commit in one
+  `SaveChangesAsync`. A unique reserved request ID plus optimistic
   concurrency makes duplicate or concurrent delivery reload and return the same
   request ID.
 - The existing `/requests/{requestId}` React route is the only post-submission link.

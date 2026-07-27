@@ -141,41 +141,17 @@ Ready ─────────┼──────────────> 
 Submitted ──duplicate confirmation──> Submitted (same request ID, no new event)
 ```
 
-## Request Intake Event
+## Pre-Submission Operational Evidence
 
-Insert-only metadata evidence for activity before an `AccessRequest` exists. It is
-separate from the existing `AuditEvent`, whose foreign key requires a submitted
-request.
+Preparation activity before an `AccessRequest` exists is recorded only as structured
+operational logs. Logs may include a correlation ID, safe actor and conversation
+identifiers, preparation ID and status transition, operation, outcome, duration, and
+submitted request ID when available.
 
-### Fields
-
-| Field | Type | Rules |
-|---|---|---|
-| `Id` | `Guid` | Server-generated primary key |
-| `ConversationRecordId` | nullable `Guid` | Related preparation conversation |
-| `PreparationId` | nullable `Guid` | Related prepared snapshot |
-| `ReservedRequestId` | nullable `Guid` | Correlation to eventual request |
-| `EventType` | enum | See event types below |
-| `ChannelActorId` | nullable string | Authenticated actor binding for accepted/rejected operation metadata |
-| `OccurredAt` | `DateTimeOffset` | Server clock |
-| `CorrelationId` | string | Required |
-| `OutcomeCode` | string | Stable typed outcome |
-| `DurationMilliseconds` | nullable double | Model/MCP/action operation duration where applicable |
-| `DetailsJson` | nullable JSON | Versioned metadata only; no candidate, prompt, transcript, card, or full MCP payload |
-
-Suggested event types:
-
-- `TurnProcessed`
-- `PreparationReady`
-- `PreparationSuperseded`
-- `PreparationExpired`
-- `PreparationInvalidated`
-- `ConfirmationSubmitted`
-- `ConfirmationReplayReturned`
-- `ConfirmationRejected`
-
-Authentication failures that occur before an actor/conversation can safely be derived
-are operational logs rather than persisted intake events.
+These logs are observability data, not durable domain evidence. They must not contain
+tokens, prompts, transcripts, candidate values, card bodies, model bodies, or complete
+MCP payloads. Authentication failures that occur before an actor or conversation can
+safely be derived are also operational logs.
 
 ## Existing Access Request
 
@@ -197,8 +173,6 @@ The existing immutable `AccessRequest` remains the workflow aggregate.
 
 ```text
 RequestPreparationConversation 1 ─── 0..1 PreparedAccessRequest
-RequestPreparationConversation 1 ─── 0..* RequestIntakeEvent
-PreparedAccessRequest           1 ─── 0..* RequestIntakeEvent
 PreparedAccessRequest           1 ─── 0..1 AccessRequest
 AccessRequest                   1 ─── 0..* existing ApprovalDecision
 AccessRequest                   1 ─── 0..1 existing ProvisioningOperation
@@ -216,9 +190,11 @@ For the first accepted confirmation, one `SaveChangesAsync` must commit:
 
 1. prepared status `Ready → Submitted`;
 2. cleared/terminal conversation content;
-3. immutable `AccessRequest` with the reserved ID;
-4. existing `RequestCreated` audit event; and
-5. `ConfirmationSubmitted` intake event.
+3. immutable `AccessRequest` with the reserved ID; and
+4. existing `RequestCreated` audit event.
+
+The handler emits a structured confirmation outcome log after the transaction
+commits. That log is operational telemetry, not part of the atomic domain evidence.
 
 If a concurrent save loses on the prepared concurrency token or request primary key,
 the handler clears failed tracking state, reloads by `PreparationId`, and:
