@@ -45,7 +45,9 @@ Product baseline:
 - A submitted request is read-only; corrections require a new request and new approvals.
 - Access to one client environment never authorizes another.
 - DevOps must not change the business-approved role.
-- DevOps may reduce duration but must not increase it.
+- DevOps may reduce duration only when the active product baseline defines an
+  adjustable duration and must never increase it. The current baseline fixes every
+  grant at eight hours, so DevOps cannot alter duration.
 - Authoritative client, environment, role, incident, and approver context is validated
   when requests and human decisions are recorded against the fixed synthetic dataset.
 - Provisioning must be idempotent.
