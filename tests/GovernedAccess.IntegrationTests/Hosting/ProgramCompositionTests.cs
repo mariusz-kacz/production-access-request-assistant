@@ -2,17 +2,24 @@ using System.Net;
 using System.Text.Json;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
+using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Teams;
+using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
 public sealed class ProgramCompositionTests
 {
+    private const string BotConnectionName = "BotServiceConnection";
+
     [Fact]
     public async Task StartupCreatesAndSeedsTheConfiguredDatabase()
     {
@@ -93,4 +100,149 @@ public sealed class ProgramCompositionTests
         Assert.NotEqual("text/html", missingApi.Content.Headers.ContentType?.MediaType);
         Assert.NotEqual("text/html", missingMcp.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public void TeamsOptionsAcceptTheBoundedSingleTenantConfiguration()
+    {
+        var configuration = CreateTeamsConfiguration();
+
+        var (options, result) = ValidateTeamsOptions(configuration);
+
+        Assert.True(
+            result.Succeeded,
+            result.FailureMessage ?? "Teams option validation failed.");
+        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, options.AllowedTenantId);
+        Assert.Equal(BotConnectionName, options.BotConnectionName);
+        Assert.Equal(GovernedAccessWebFactory.DefaultTrustedWebBaseUri, options.TrustedWebBaseUri);
+        Assert.Equal(TeamsAccessRequestOptions.MaximumModelTimeout, options.ModelTimeout);
+        Assert.Equal(TeamsAccessRequestOptions.MaximumMcpTimeout, options.McpTimeout);
+        Assert.Equal(
+            TeamsAccessRequestOptions.RequiredPreparationLifetime,
+            options.PreparationLifetime);
+    }
+
+    [Theory]
+    [InlineData(
+        "TeamsAccessRequest:AllowedTenantId",
+        "",
+        "AllowedTenantId")]
+    [InlineData(
+        "TeamsAccessRequest:BotConnectionName",
+        "invalid:name",
+        "BotConnectionName")]
+    [InlineData(
+        "TokenValidation:Enabled",
+        "false",
+        "TokenValidation:Enabled")]
+    [InlineData(
+        "TokenValidation:TenantId",
+        "33333333-3333-3333-3333-333333333333",
+        "TokenValidation:TenantId")]
+    [InlineData(
+        "Connections:BotServiceConnection:Settings:AuthType",
+        "ManagedIdentity",
+        "AuthType")]
+    [InlineData(
+        "Connections:BotServiceConnection:Settings:ClientId",
+        "",
+        "Settings:ClientId")]
+    [InlineData(
+        "Connections:BotServiceConnection:Settings:TenantId",
+        "33333333-3333-3333-3333-333333333333",
+        "Settings:TenantId")]
+    [InlineData(
+        "Connections:BotServiceConnection:Settings:ClientSecret",
+        "",
+        "ClientSecret")]
+    [InlineData(
+        "Connections:BotServiceConnection:Settings:Scopes:0",
+        "https://graph.microsoft.com/.default",
+        "Settings:Scopes")]
+    [InlineData(
+        "TokenValidation:Audiences:0",
+        "44444444-4444-4444-4444-444444444444",
+        "TokenValidation:Audiences")]
+    [InlineData(
+        "ConnectionsMap:0:ServiceUrl",
+        "https://smba.trafficmanager.net/emea/",
+        "ConnectionsMap")]
+    [InlineData(
+        "TeamsAccessRequest:TrustedWebBaseUri",
+        "http://governed-access.test/",
+        "TrustedWebBaseUri")]
+    [InlineData(
+        "TeamsAccessRequest:ModelTimeout",
+        "00:00:31",
+        "ModelTimeout")]
+    [InlineData(
+        "TeamsAccessRequest:McpTimeout",
+        "00:00:06",
+        "McpTimeout")]
+    [InlineData(
+        "TeamsAccessRequest:PreparationLifetime",
+        "00:29:59",
+        "PreparationLifetime")]
+    public void TeamsOptionsFailClosedForUnsafeConfiguration(
+        string key,
+        string value,
+        string expectedFailure)
+    {
+        var configuration = CreateTeamsConfiguration();
+        configuration[key] = value;
+
+        var (_, result) = ValidateTeamsOptions(configuration);
+
+        Assert.True(result.Failed);
+        Assert.Contains(
+            result.Failures,
+            failure => failure.Contains(expectedFailure, StringComparison.Ordinal));
+    }
+
+    private static (
+        TeamsAccessRequestOptions Options,
+        ValidateOptionsResult Result)
+        ValidateTeamsOptions(Dictionary<string, string?> values)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(values)
+            .Build();
+        var options = configuration
+            .GetRequiredSection(TeamsAccessRequestOptions.SectionName)
+            .Get<TeamsAccessRequestOptions>()
+            ?? throw new InvalidOperationException(
+                "The valid test configuration could not bind Teams options.");
+        var validator = new TeamsAccessRequestOptionsValidator(configuration);
+
+        return (options, validator.Validate(Options.DefaultName, options));
+    }
+
+    private static Dictionary<string, string?> CreateTeamsConfiguration() =>
+        new()
+        {
+            ["TokenValidation:Enabled"] = bool.TrueString,
+            ["TokenValidation:Audiences:0"] =
+                FakeTeamsActivityBuilder.DefaultBotAppId,
+            ["TokenValidation:TenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            [$"Connections:{BotConnectionName}:Settings:AuthType"] =
+                "ClientSecret",
+            [$"Connections:{BotConnectionName}:Settings:ClientId"] =
+                FakeTeamsActivityBuilder.DefaultBotAppId,
+            [$"Connections:{BotConnectionName}:Settings:ClientSecret"] =
+                "integration-test-only",
+            [$"Connections:{BotConnectionName}:Settings:TenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            [$"Connections:{BotConnectionName}:Settings:Scopes:0"] =
+                AuthenticationConstants.BotFrameworkDefaultScope,
+            ["ConnectionsMap:0:ServiceUrl"] = "*",
+            ["ConnectionsMap:0:Connection"] = BotConnectionName,
+            ["TeamsAccessRequest:AllowedTenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,
+            ["TeamsAccessRequest:TrustedWebBaseUri"] =
+                GovernedAccessWebFactory.DefaultTrustedWebBaseUri.AbsoluteUri,
+            ["TeamsAccessRequest:ModelTimeout"] = "00:00:30",
+            ["TeamsAccessRequest:McpTimeout"] = "00:00:05",
+            ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
+        };
 }

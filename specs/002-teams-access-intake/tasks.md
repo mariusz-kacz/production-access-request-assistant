@@ -64,11 +64,11 @@ before implementing any user journey.
 
 **CRITICAL**: No user-story implementation begins until these foundations compile.
 
-- [ ] T005 Add strongly typed Teams tenant, bot, trusted-link, and deadline options with fail-closed validation in src/GovernedAccess.Web/Teams/TeamsAccessRequestOptions.cs
-- [ ] T006 [P] Add a fake SDK-authenticated personal-activity builder that can vary tenant, actor, conversation, channel, conversation type, text, and invoke data in tests/GovernedAccess.IntegrationTests/Teams/FakeTeamsActivityBuilder.cs
-- [ ] T007 [P] Add deterministic candidate, clarification, malformed, timeout, cancellation, unavailable, and prompt-injection response modes without live model calls in src/GovernedAccess.Web/Ai/DeterministicChatClient.cs
-- [ ] T008 Extend the integration test host with replaceable chat, authenticated Teams boundary, trusted Web base URI, and database cleanup seams in tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
-- [ ] T009 Add configuration validation and one-executable-host tests for the Teams options in tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs
+- [X] T005 Add strongly typed Teams tenant, bot, trusted-link, and deadline options with fail-closed validation in src/GovernedAccess.Web/Teams/TeamsAccessRequestOptions.cs
+- [X] T006 [P] Add a fake SDK-authenticated personal-activity builder that can vary tenant, actor, conversation, channel, conversation type, text, and invoke data in tests/GovernedAccess.IntegrationTests/Teams/FakeTeamsActivityBuilder.cs
+- [X] T007 [P] Add deterministic candidate, clarification, malformed, timeout, cancellation, unavailable, and prompt-injection response modes without live model calls in src/GovernedAccess.Web/Ai/DeterministicChatClient.cs
+- [X] T008 Extend the integration test host with replaceable chat, authenticated Teams boundary, trusted Web base URI, and database cleanup seams in tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
+- [X] T009 Add fail-closed configuration validation tests for the Teams options in tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs
 
 **Checkpoint**: Automated tests can drive authenticated Teams activities and every
 model outcome locally without real credentials or network dependencies.
@@ -90,7 +90,7 @@ trusted Web link, with no approval, operation, or grant.
 
 > Write these tests first and verify that they fail for the intended missing behavior.
 
-- [ ] T010 [P] [US1] Add unit tests for conversation identity, prepared-snapshot construction, immutable canonical scope, fixed expiry, reserved request identity, and allowed initial transitions in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
+- [X] T010 [P] [US1] Add unit tests for conversation identity, prepared-snapshot construction, immutable canonical scope, fixed expiry, reserved request identity, and allowed initial transitions in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
 - [ ] T011 [P] [US1] Add contract tests for the closed proposal schema, exact final-card facts, no inputs, one `Action.Execute`, and opaque-only action data in tests/GovernedAccess.IntegrationTests/Teams/TeamsContractTests.cs
 - [ ] T012 [P] [US1] Add integration tests for authenticated `/api/messages` route ordering, personal-chat preparation, fixed requester mapping, deterministic readiness, persisted snapshot, and absence of workflow state changes before confirmation in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs
 - [ ] T013 [P] [US1] Add unit tests for first confirmation ownership checks, authoritative revalidation, exact prepared scope, reserved ID, and typed outcomes in tests/GovernedAccess.UnitTests/PreparedRequestConfirmationTests.cs
