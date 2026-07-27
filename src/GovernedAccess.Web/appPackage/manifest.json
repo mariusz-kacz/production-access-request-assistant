@@ -1,0 +1,37 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "${{APP_ID}}",
+  "developer": {
+    "name": "Governed Access Demo",
+    "websiteUrl": "https://example.com/governed-access",
+    "privacyUrl": "https://example.com/governed-access/privacy",
+    "termsOfUseUrl": "https://example.com/governed-access/terms"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Governed Access",
+    "full": "Governed Production Access Request Assistant"
+  },
+  "description": {
+    "short": "Prepare governed production access requests in a personal Teams chat.",
+    "full": "Prepare and confirm synthetic production access requests in personal Teams chats. Human approvers and deterministic services continue to govern approval and provisioning."
+  },
+  "accentColor": "#1F4E78",
+  "bots": [
+    {
+      "botId": "${{BOT_ID}}",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "permissions": [],
+  "validDomains": []
+}

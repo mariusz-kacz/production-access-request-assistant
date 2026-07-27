@@ -48,9 +48,9 @@ goal and independent test.
 personal-scope Teams package needed by the approved single-host design.
 
 - [X] T001 Add exact `Microsoft.Agents.AI` 1.15.0 and `Microsoft.Agents.Hosting.AspNetCore` 1.6.150 package references in src/GovernedAccess.Web/GovernedAccess.Web.csproj
-- [ ] T002 Add tenant, bot authentication, trusted Web base URI, 30-second model timeout, 5-second MCP timeout, and 30-minute preparation lifetime settings without secrets in src/GovernedAccess.Web/appsettings.json and src/GovernedAccess.Web/appsettings.Development.json
-- [ ] T003 [P] Create a personal-scope-only Teams app manifest template with bot/app ID placeholders in src/GovernedAccess.Web/appPackage/manifest.json
-- [ ] T004 [P] Add valid Teams color and outline icons in src/GovernedAccess.Web/appPackage/color.png and src/GovernedAccess.Web/appPackage/outline.png
+- [X] T002 Add tenant, bot authentication, trusted Web base URI, 30-second model timeout, 5-second MCP timeout, and 30-minute preparation lifetime settings without secrets in src/GovernedAccess.Web/appsettings.json and src/GovernedAccess.Web/appsettings.Development.json
+- [X] T003 [P] Create a personal-scope-only Teams app manifest template with bot/app ID placeholders in src/GovernedAccess.Web/appPackage/manifest.json
+- [X] T004 [P] Add valid Teams color and outline icons in src/GovernedAccess.Web/appPackage/color.png and src/GovernedAccess.Web/appPackage/outline.png
 
 **Checkpoint**: The existing executable restores with pinned SDK versions, and the
 source-controlled configuration and app package contain no credential.
