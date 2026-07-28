@@ -1,7 +1,10 @@
 using GovernedAccess.Core.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GovernedAccess.Web.Persistence;
 
@@ -13,9 +16,30 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     private const int CorrelationIdLength = 128;
     private const int OutcomeCodeLength = 100;
 
+    private static readonly JsonSerializerOptions ClarificationJsonOptions =
+        CreateClarificationJsonOptions();
+
     private static readonly ValueConverter<DateTimeOffset, long> UtcTimestampConverter = new(
         value => value.UtcDateTime.Ticks,
         value => new DateTimeOffset(value, TimeSpan.Zero));
+
+    private static readonly ValueConverter<DateTimeOffset?, long?>
+        NullableUtcTimestampConverter = new(
+            value => value.HasValue ? value.Value.UtcDateTime.Ticks : null,
+            value => value.HasValue
+                ? new DateTimeOffset(value.Value, TimeSpan.Zero)
+                : null);
+
+    private static readonly ValueConverter<RequestClarificationContext?, string?>
+        ClarificationContextConverter = new(
+            value => value == null ? null : SerializeClarification(value),
+            value => value == null ? null : DeserializeClarification(value));
+
+    private static readonly ValueComparer<RequestClarificationContext?>
+        ClarificationContextComparer = new(
+            (left, right) => ClarificationsEqual(left, right),
+            value => value == null ? 0 : GetClarificationHashCode(value),
+            value => value == null ? null : CloneClarification(value));
 
     public DbSet<Client> Clients => Set<Client>();
 
@@ -37,6 +61,12 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
+    public DbSet<RequestPreparationConversation> RequestPreparationConversations =>
+        Set<RequestPreparationConversation>();
+
+    public DbSet<PreparedAccessRequest> PreparedAccessRequests =>
+        Set<PreparedAccessRequest>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -51,6 +81,155 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         ConfigureProvisioningOperation(modelBuilder.Entity<ProvisioningOperation>());
         ConfigureAccessGrant(modelBuilder.Entity<AccessGrant>());
         ConfigureAuditEvent(modelBuilder.Entity<AuditEvent>());
+        ConfigureRequestPreparationConversation(
+            modelBuilder.Entity<RequestPreparationConversation>());
+        ConfigurePreparedAccessRequest(modelBuilder.Entity<PreparedAccessRequest>());
+    }
+
+    private static void ConfigureRequestPreparationConversation(
+        EntityTypeBuilder<RequestPreparationConversation> entity)
+    {
+        entity.ToTable("RequestPreparationConversations");
+        entity.HasKey(conversation => conversation.Id);
+        entity.Property(conversation => conversation.Channel).HasMaxLength(32);
+        entity.Property(conversation => conversation.TenantId).HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.ChannelActorId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.ConversationId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.RequesterId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.Status)
+            .HasConversion<string>()
+            .HasMaxLength(16);
+        entity.Property(conversation => conversation.ClientId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.EnvironmentId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.RequestedRoleId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.Justification)
+            .HasMaxLength(AccessRequest.MaximumJustificationLength);
+        entity.Property(conversation => conversation.IncidentId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(conversation => conversation.PendingClarification)
+            .HasConversion(ClarificationContextConverter)
+            .Metadata.SetValueComparer(ClarificationContextComparer);
+        entity.Property(conversation => conversation.PendingClarification)
+            .HasColumnName("PendingClarificationJson")
+            .HasColumnType("TEXT");
+        entity.Property(conversation => conversation.CorrelationId)
+            .HasMaxLength(CorrelationIdLength);
+        entity.Property(conversation => conversation.PersistenceVersion)
+            .IsConcurrencyToken()
+            .ValueGeneratedNever();
+
+        ConfigureUtcTimestamp(entity.Property(conversation => conversation.CreatedAt));
+        ConfigureUtcTimestamp(entity.Property(conversation => conversation.LastTurnAt));
+
+        entity.HasIndex(conversation => new
+        {
+            conversation.Channel,
+            conversation.TenantId,
+            conversation.ChannelActorId,
+            conversation.ConversationId,
+        })
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('Collecting', 'Ready')");
+        entity.HasIndex(conversation => conversation.ActivePreparationId)
+            .IsUnique();
+
+        entity.HasOne<AuthenticatedPrincipal>()
+            .WithMany()
+            .HasForeignKey(conversation => conversation.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Candidate identifiers remain untrusted until a prepared snapshot is
+        // created, so they deliberately do not receive authoritative foreign keys.
+    }
+
+    private static void ConfigurePreparedAccessRequest(
+        EntityTypeBuilder<PreparedAccessRequest> entity)
+    {
+        entity.ToTable(
+            "PreparedAccessRequests",
+            table => table.HasCheckConstraint(
+                "CK_PreparedAccessRequests_SubmittedRequestId",
+                "\"SubmittedRequestId\" IS NULL OR \"SubmittedRequestId\" = \"ReservedRequestId\""));
+        entity.HasKey(prepared => prepared.PreparationId);
+        entity.Property(prepared => prepared.Channel).HasMaxLength(32);
+        entity.Property(prepared => prepared.TenantId).HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.ChannelActorId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.ConversationId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.RequesterId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.ClientId).HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.EnvironmentId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.RequestedRoleId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.Justification)
+            .HasMaxLength(AccessRequest.MaximumJustificationLength);
+        entity.Property(prepared => prepared.IncidentId).HasMaxLength(IdentifierLength);
+        entity.Property(prepared => prepared.Status)
+            .HasConversion<string>()
+            .HasMaxLength(16);
+        entity.Property(prepared => prepared.CorrelationId)
+            .HasMaxLength(CorrelationIdLength);
+        entity.Property(prepared => prepared.PersistenceVersion)
+            .IsConcurrencyToken()
+            .ValueGeneratedNever();
+
+        ConfigureUtcTimestamp(entity.Property(prepared => prepared.CreatedAt));
+        ConfigureUtcTimestamp(entity.Property(prepared => prepared.ExpiresAt));
+        ConfigureUtcTimestamp(entity.Property(prepared => prepared.SubmittedAt));
+
+        entity.HasIndex(prepared => prepared.ConversationRecordId).IsUnique();
+        entity.HasIndex(prepared => prepared.ReservedRequestId).IsUnique();
+        entity.HasIndex(prepared => prepared.SubmittedRequestId).IsUnique();
+
+        entity.HasOne<RequestPreparationConversation>()
+            .WithOne()
+            .HasForeignKey<PreparedAccessRequest>(
+                prepared => prepared.ConversationRecordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<AccessRequest>()
+            .WithOne()
+            .HasForeignKey<PreparedAccessRequest>(
+                prepared => prepared.SubmittedRequestId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<AuthenticatedPrincipal>()
+            .WithMany()
+            .HasForeignKey(prepared => prepared.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<Client>()
+            .WithMany()
+            .HasForeignKey(prepared => prepared.ClientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<ProductionEnvironment>()
+            .WithMany()
+            .HasForeignKey(prepared => prepared.EnvironmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<EnvironmentRole>()
+            .WithMany()
+            .HasForeignKey(prepared => new
+            {
+                prepared.EnvironmentId,
+                prepared.RequestedRoleId,
+            })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        entity.HasOne<Incident>()
+            .WithMany()
+            .HasForeignKey(prepared => prepared.IncidentId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureClient(EntityTypeBuilder<Client> entity)
@@ -314,4 +493,66 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     {
         property.HasConversion(UtcTimestampConverter).HasColumnType("INTEGER");
     }
+
+    private static void ConfigureUtcTimestamp(
+        PropertyBuilder<DateTimeOffset?> property)
+    {
+        property.HasConversion(NullableUtcTimestampConverter).HasColumnType("INTEGER");
+    }
+
+    private static JsonSerializerOptions CreateClarificationJsonOptions()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
+    }
+
+    private static string SerializeClarification(
+        RequestClarificationContext clarification) =>
+        JsonSerializer.Serialize(
+            new StoredClarification(
+                clarification.Target,
+                clarification.Prompt,
+                clarification.Options.ToArray()),
+            ClarificationJsonOptions);
+
+    private static RequestClarificationContext DeserializeClarification(string json)
+    {
+        var stored = JsonSerializer.Deserialize<StoredClarification>(
+            json,
+            ClarificationJsonOptions)
+            ?? throw new InvalidOperationException(
+                "The stored clarification context is invalid.");
+        return new RequestClarificationContext(
+            stored.Target,
+            stored.Prompt,
+            stored.Options);
+    }
+
+    private static bool ClarificationsEqual(
+        RequestClarificationContext? left,
+        RequestClarificationContext? right) =>
+        ReferenceEquals(left, right)
+        || (left is not null
+            && right is not null
+            && string.Equals(
+                SerializeClarification(left),
+                SerializeClarification(right),
+                StringComparison.Ordinal));
+
+    private static int GetClarificationHashCode(
+        RequestClarificationContext clarification) =>
+        StringComparer.Ordinal.GetHashCode(SerializeClarification(clarification));
+
+    private static RequestClarificationContext CloneClarification(
+        RequestClarificationContext clarification) =>
+        DeserializeClarification(SerializeClarification(clarification));
+
+    private sealed record StoredClarification(
+        RequestClarificationTarget Target,
+        string Prompt,
+        RequestClarificationOption[] Options);
 }
