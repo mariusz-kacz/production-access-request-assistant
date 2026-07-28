@@ -34,7 +34,7 @@ conversation.
 | `RequestedRoleId` | nullable string | Current untrusted candidate value |
 | `Justification` | nullable string | Current untrusted candidate value; maximum 2,000 characters |
 | `IncidentId` | nullable string | Current untrusted candidate value |
-| `PendingClarification` | nullable string | Schema-bounded question needed for the next turn |
+| `PendingClarification` | nullable typed context | One target, bounded prompt, and up to 10 ordered canonical stable-ID/display-label options needed for the next turn |
 | `ActivePreparationId` | nullable `Guid` | Set only after a ready snapshot is created |
 | `CreatedAt` | `DateTimeOffset` | Server clock |
 | `LastTurnAt` | `DateTimeOffset` | Updated for accepted personal-chat turns |
@@ -49,8 +49,11 @@ mandatory even though every accepted actor maps to the same synthetic requester.
 
 ### Content lifecycle
 
-- While `Collecting`, candidate fields and the pending question contain only the
-  minimum context required for the next turn.
+- While `Collecting`, candidate fields and the pending typed clarification contain
+  only the minimum context required for the next turn.
+- Clarification option values and labels are reloaded and canonicalized from
+  authoritative application data before persistence. Their order helps interpret
+  bounded replies such as "the first one" but never constitutes authorization.
 - When a prepared request is submitted, superseded, or expires, candidate fields and
   `PendingClarification` are cleared.
 - Raw activities, prompts, model messages, MCP payloads, and complete transcripts are
@@ -85,6 +88,24 @@ the interpreter on each turn.
 The model may propose this value object, but `RequestValidator` owns canonicalization,
 relationship checks, and readiness. A structurally complete candidate is not
 necessarily valid.
+
+## Request Clarification Context
+
+Provider-neutral, bounded memory for one focused clarification. It is supplied to the
+interpreter with the compact candidate and latest message, but is not a transcript or
+authorization evidence.
+
+| Field | Type | Rules |
+|---|---|---|
+| `Target` | enum | One of `ClientId`, `EnvironmentId`, `RequestedRoleId`, `Justification`, or `IncidentId` |
+| `Prompt` | string | Trimmed, non-empty, maximum 500 characters |
+| `Options` | ordered list | Zero to 10 unique options; each contains a stable value and display label of at most 200 characters |
+
+Interpreter-proposed option identifiers are untrusted. `RequestPreparationService`
+reloads each option through `IRequestContextReader`, verifies applicable
+client/environment relationships and role availability, replaces the label with
+authoritative display data, and rejects the whole proposal when any option cannot be
+validated. Justification clarification remains free text and has no options.
 
 ## Prepared Access Request
 

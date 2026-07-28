@@ -54,18 +54,21 @@ authorization claim, or validated scope.
 1. Load or create the one active preparation conversation for the binding.
 2. If a ready prepared request already exists, the new request-intent turn supersedes
    it; the old card remains visually immutable but can no longer be confirmed.
-3. Invoke the provider-neutral request-intake interpreter with the latest text and
-   compact current candidate.
+3. Invoke the provider-neutral request-intake interpreter with the latest text,
+   compact current candidate, and one bounded typed clarification context when
+   present.
 4. Strictly validate the closed proposal schema.
 5. Revalidate candidate values with authoritative stored context.
-6. Persist either the updated compact candidate/question or an immutable prepared
-   snapshot.
+6. Authoritatively canonicalize any bounded ordered clarification options.
+7. Persist either the updated compact candidate/typed clarification or an immutable
+   prepared snapshot.
 
 ### Outcomes
 
 | Outcome | Teams response | State effect |
 |---|---|---|
-| `ClarificationRequired` | One focused question | Update compact candidate and pending question |
+| `ClarificationRequired` | One focused prompt with optional numbered choices | Update compact candidate and one bounded typed clarification |
+| `CandidateRejected` | Application-owned validation correction with clear provenance | No synthetic interpreter question and no prepared request |
 | `ReadyForConfirmation` | Server-rendered final Adaptive Card | Create immutable prepared snapshot and reserved request ID |
 | `MalformedModelOutput` | Safe retry/start-over guidance | No prepared request |
 | `Timeout` | Safe timeout guidance | No prepared request |

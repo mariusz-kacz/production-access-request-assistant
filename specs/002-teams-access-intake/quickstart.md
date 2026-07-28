@@ -90,11 +90,16 @@ Verify:
 
 ## Scenario 2: Multi-turn Clarification
 
-Send an incomplete initial message, then answer at least two focused questions.
+Send an incomplete initial message, then answer at least two focused questions. When
+a clarification presents ordered environment or role choices, include one reply such
+as `the first one` or `the other role`.
 
 Verify after each turn:
 
-- established candidate values remain in compact server state;
+- established candidate values and at most one bounded typed clarification remain in
+  compact server state;
+- displayed option identifiers and labels were authoritatively canonicalized before
+  persistence, and ordinal references resolve only against the current choices;
 - the model proposal is schema-valid but remains untrusted;
 - no final card appears while `RequestValidator` reports missing or invalid fields;
 - raw messages and model responses are not persisted as transcripts; and

@@ -17,8 +17,6 @@ public sealed class RequestPreparationConversation
 {
     public const string TeamsChannel = "msteams";
 
-    public const int MaximumPendingClarificationLength = 500;
-
     public RequestPreparationConversation(
         Guid id,
         string channel,
@@ -82,7 +80,7 @@ public sealed class RequestPreparationConversation
 
     public string? IncidentId { get; private set; }
 
-    public string? PendingClarification { get; private set; }
+    public RequestClarificationContext? PendingClarification { get; private set; }
 
     public Guid? ActivePreparationId { get; private set; }
 
@@ -100,7 +98,7 @@ public sealed class RequestPreparationConversation
         string? requestedRoleId,
         string? justification,
         string? incidentId,
-        string? pendingClarification,
+        RequestClarificationContext? pendingClarification,
         DateTimeOffset occurredAt,
         string correlationId)
     {
@@ -111,7 +109,6 @@ public sealed class RequestPreparationConversation
         requestedRoleId = NormalizeOptional(requestedRoleId);
         justification = NormalizeOptional(justification);
         incidentId = NormalizeOptional(incidentId);
-        pendingClarification = NormalizeOptional(pendingClarification);
 
         if (requestedRoleId is not null
             && !ProductionRoleIds.IsSupported(requestedRoleId))
@@ -128,14 +125,6 @@ public sealed class RequestPreparationConversation
                 nameof(justification),
                 justification.Length,
                 $"A candidate justification cannot exceed {AccessRequest.MaximumJustificationLength} characters.");
-        }
-
-        if (pendingClarification?.Length > MaximumPendingClarificationLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(pendingClarification),
-                pendingClarification.Length,
-                $"A pending clarification cannot exceed {MaximumPendingClarificationLength} characters.");
         }
 
         var operation = PrepareOperation(occurredAt, correlationId);

@@ -68,8 +68,8 @@ appears until all required values pass deterministic validation.
 **Acceptance Scenarios**:
 
 1. **Given** a developer omits a required request value, **When** the assistant
-   processes the description, **Then** it asks a focused question and does not display
-   a final request.
+   processes the description, **Then** it asks a focused question with bounded
+   authoritative choices when applicable and does not display a final request.
 2. **Given** the assistant proposes an identifier that does not exist or conflicts
    with authoritative client, environment, role, or incident data, **When** the
    candidate is checked, **Then** the invalid value is not accepted and the developer
@@ -80,6 +80,10 @@ appears until all required values pass deterministic validation.
 4. **Given** the assistant claims that preparation is complete while deterministic
    validation still finds an error, **When** the turn is evaluated, **Then** no final
    request is created or displayed.
+5. **Given** the current clarification contains ordered choices, **When** the
+   developer refers to a displayed choice as "the first one" or "the other role",
+   **Then** only that bounded current option context is used to interpret the reply,
+   and the selected identifier is still deterministically validated.
 
 ---
 
@@ -179,14 +183,15 @@ scope, audit, failure, retry, and idempotent provisioning rules.
 - **FR-004**: The system MUST maintain at most one active request-preparation
   conversation for each authenticated developer and personal conversation.
 - **FR-005**: The assistant MUST interpret request intent, carry forward candidate
-  values across turns, and ask focused questions when required information cannot be
-  established.
+  values and one bounded typed clarification context across turns, and ask focused
+  questions with authoritative ordered choices when applicable.
 - **FR-006**: The assistant MUST receive exactly the existing three approved
   read-only context capabilities for production environment, incident, and available
   role data and MUST receive no additional context or state-changing capability.
 - **FR-007**: Every assistant turn MUST produce a closed, schema-valid proposal to
-  either ask a clarification question or propose a typed request candidate; arbitrary
-  assistant prose MUST NOT determine readiness or cause a state change.
+  either supply one bounded typed clarification target, prompt, and optional ordered
+  choices or propose a typed request candidate; arbitrary assistant prose MUST NOT
+  determine readiness or cause a state change.
 - **FR-008**: Every model-proposed client, environment, role, incident, and business
   value MUST be checked against authoritative stored data and existing request rules.
 - **FR-009**: The system MUST determine readiness using deterministic validation and
@@ -234,8 +239,9 @@ scope, audit, failure, retry, and idempotent provisioning rules.
   request, record either approval, transition workflow state, provision or revoke
   access, retry provisioning, or access arbitrary stored data.
 - **FR-024**: Preparation MUST expose safe typed outcomes for clarification required,
-  ready for confirmation, malformed model output, timeout, cancellation, and
-  dependency unavailability.
+  deterministically rejected candidate with application-owned provenance, ready for
+  confirmation, malformed model output, timeout, cancellation, and dependency
+  unavailability.
 - **FR-025**: Active conversation content MUST be retained only as needed to continue
   the preparation and MUST be discarded after submission, supersession, or expiry;
   audit evidence MUST contain operation metadata rather than raw conversation
@@ -316,9 +322,10 @@ scope, audit, failure, retry, and idempotent provisioning rules.
 ### Key Entities
 
 - **Request Preparation Conversation**: The short-lived state for one authenticated
-  developer in one personal Teams conversation, including the current candidate,
-  pending clarification, timestamps, and correlation metadata. It is not approval or
-  authorization evidence.
+  developer in one personal Teams conversation, including the current candidate, one
+  bounded typed clarification with optional ordered authoritative choices, timestamps,
+  and correlation metadata. It is not approval or authorization evidence and does not
+  contain a transcript or general conversation history.
 - **Prepared Access Request**: A server-owned, immutable, time-limited snapshot ready
   for requester confirmation. It contains an opaque preparation reference, reserved
   request ID, requester and conversation binding, exact canonical request scope,
@@ -334,12 +341,12 @@ scope, audit, failure, retry, and idempotent provisioning rules.
   reserved-request identity, and idempotent confirmation. Existing request,
   approval, immutable-scope, fixed-duration, and provisioning policies remain covered.
 - **Integration/contract coverage**: Verify authenticated personal-chat intake,
-  fixed synthetic requester mapping, multi-turn state isolation, exact final-request
-  presentation, opaque confirmation actions, persistence, repeated confirmation,
-  stable request links, and continued web behavior. Verify the exact three-tool
-  read-only context contract and model tool allowlist. No automated test may require
-  a live model; deterministic fake behavior must cover clarification and candidate
-  proposals.
+  fixed synthetic requester mapping, multi-turn state isolation, bounded typed
+  clarification and ordinal option selection, exact final-request presentation,
+  opaque confirmation actions, persistence, repeated confirmation, stable request
+  links, and continued web behavior. Verify the exact three-tool read-only context
+  contract and model tool allowlist. No automated test may require a live model;
+  deterministic fake behavior must cover clarification and candidate proposals.
 - **Negative coverage**: Verify unauthenticated or non-personal activities, forged
   identity and scope fields, cross-developer confirmation, unknown/expired/superseded
   preparation references, conversation mismatch, stale authoritative context,

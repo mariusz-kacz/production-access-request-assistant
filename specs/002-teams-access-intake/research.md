@@ -51,15 +51,19 @@ Sources: [MAF repository and fit guidance](https://github.com/microsoft/agent-fr
 
 ## 3. Conversation State Ownership
 
-**Decision**: Persist a compact application-owned candidate and pending clarification
-per authenticated actor and personal conversation. Reconstruct each MAF turn from that
-state and the latest message. Do not persist raw Teams transcripts or treat a MAF
-thread/session as authoritative draft state.
+**Decision**: Persist a compact application-owned candidate and one bounded typed
+clarification context per authenticated actor and personal conversation. The context
+contains one target, a bounded prompt, and at most ten ordered authoritative
+stable-ID/display-label options. Reconstruct each MAF turn from that state and the
+latest message. Do not persist raw Teams transcripts or treat a MAF thread/session as
+authoritative draft state.
 
 **Rationale**: The application must enforce one active preparation, content disposal,
 expiry, supersession, and deterministic readiness. Provider or transport session state
 cannot supply those guarantees and would duplicate persistence. Compact structured
-state is sufficient for clarification while reducing privacy and logging risk.
+state is sufficient for focused clarification, including bounded references such as
+"the first one", while reducing privacy and logging risk. Interpreter-proposed option
+identifiers and labels are reloaded and canonicalized before persistence.
 
 **Alternatives considered**:
 
@@ -75,9 +79,10 @@ Source: [Microsoft 365 Agents SDK application and state model](https://learn.mic
 
 **Decision**: Require every MAF turn to produce the closed
 `request-intake-proposal.schema.json` contract: a complete nullable candidate snapshot
-and either a bounded clarification question or a candidate proposal. Deserialize
-strictly, reject extra fields, validate the kind/question pairing in the
-provider-neutral proposal constructor, and let deterministic code decide readiness.
+and either a bounded typed clarification context or a candidate proposal. Deserialize
+strictly, reject extra fields, validate the kind/clarification pairing in the
+provider-neutral proposal constructor, authoritatively canonicalize any ordered
+option identifiers and labels, and let deterministic code decide readiness.
 The schema intentionally avoids conditional JSON Schema keywords that are not
 uniformly supported by structured-output model providers.
 

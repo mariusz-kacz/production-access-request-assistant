@@ -108,23 +108,14 @@ public abstract record RequestPreparationOutcome;
 
 public sealed record RequestClarificationRequired : RequestPreparationOutcome
 {
-    public RequestClarificationRequired(string question)
+    public RequestClarificationRequired(
+        RequestClarificationContext clarification)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(question);
-        question = question.Trim();
-
-        if (question.Length > RequestPreparationProposal.MaximumClarificationQuestionLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(question),
-                question.Length,
-                $"A clarification question cannot exceed {RequestPreparationProposal.MaximumClarificationQuestionLength} characters.");
-        }
-
-        Question = question;
+        ArgumentNullException.ThrowIfNull(clarification);
+        Clarification = clarification;
     }
 
-    public string Question { get; }
+    public RequestClarificationContext Clarification { get; }
 }
 
 public sealed record RequestReadyForConfirmation : RequestPreparationOutcome
@@ -136,6 +127,32 @@ public sealed record RequestReadyForConfirmation : RequestPreparationOutcome
     }
 
     public PreparedAccessRequest PreparedRequest { get; }
+}
+
+/// <summary>
+/// The interpreter claimed to have a candidate, but deterministic validation
+/// rejected it. Channel adapters may render safe application-owned correction
+/// guidance from these errors, but must not present it as an interpreter question.
+/// </summary>
+public sealed record RequestCandidateRejected : RequestPreparationOutcome
+{
+    public RequestCandidateRejected(
+        IEnumerable<FieldValidationError> validationErrors)
+    {
+        ArgumentNullException.ThrowIfNull(validationErrors);
+
+        var errors = validationErrors.ToArray();
+        if (errors.Length == 0)
+        {
+            throw new ArgumentException(
+                "At least one candidate validation error is required.",
+                nameof(validationErrors));
+        }
+
+        ValidationErrors = Array.AsReadOnly(errors);
+    }
+
+    public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
 }
 
 public sealed record RequestPreparationFailed : RequestPreparationOutcome

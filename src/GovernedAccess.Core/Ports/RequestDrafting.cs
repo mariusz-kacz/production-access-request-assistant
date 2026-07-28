@@ -148,22 +148,12 @@ public sealed record RequestPreparationTurn
     public RequestPreparationTurn(
         string latestMessage,
         RequestCandidate candidate,
-        string? pendingClarification,
+        RequestClarificationContext? pendingClarification,
         string correlationId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(latestMessage);
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
-
-        pendingClarification = NormalizeOptional(pendingClarification);
-        if (pendingClarification?.Length
-            > RequestPreparationProposal.MaximumClarificationQuestionLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(pendingClarification),
-                pendingClarification.Length,
-                "A pending clarification question exceeds the supported length.");
-        }
 
         LatestMessage = latestMessage.Trim();
         Candidate = candidate;
@@ -175,12 +165,9 @@ public sealed record RequestPreparationTurn
 
     public RequestCandidate Candidate { get; }
 
-    public string? PendingClarification { get; }
+    public RequestClarificationContext? PendingClarification { get; }
 
     public string CorrelationId { get; }
-
-    private static string? NormalizeOptional(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 /// <summary>
@@ -255,16 +242,14 @@ public enum RequestPreparationProposalKind
 
 /// <summary>
 /// A closed interpreter proposal. Every proposal carries the complete nullable
-/// candidate shape and either one bounded clarification question or no question.
+/// candidate shape and either one bounded typed clarification or no clarification.
 /// </summary>
 public sealed record RequestPreparationProposal
 {
-    public const int MaximumClarificationQuestionLength = 500;
-
     public RequestPreparationProposal(
         RequestPreparationProposalKind kind,
         RequestCandidate candidate,
-        string? clarificationQuestion)
+        RequestClarificationContext? clarification)
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
@@ -273,38 +258,26 @@ public sealed record RequestPreparationProposal
             throw new ArgumentOutOfRangeException(nameof(kind));
         }
 
-        clarificationQuestion = string.IsNullOrWhiteSpace(clarificationQuestion)
-            ? null
-            : clarificationQuestion.Trim();
-
-        if (clarificationQuestion?.Length > MaximumClarificationQuestionLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(clarificationQuestion),
-                clarificationQuestion.Length,
-                $"A clarification question cannot exceed {MaximumClarificationQuestionLength} characters.");
-        }
-
         if ((kind == RequestPreparationProposalKind.Clarification
-                && clarificationQuestion is null)
+                && clarification is null)
             || (kind == RequestPreparationProposalKind.Candidate
-                && clarificationQuestion is not null))
+                && clarification is not null))
         {
             throw new ArgumentException(
-                "The proposal kind and clarification question do not form a valid closed proposal.",
-                nameof(clarificationQuestion));
+                "The proposal kind and clarification context do not form a valid closed proposal.",
+                nameof(clarification));
         }
 
         Kind = kind;
         Candidate = candidate;
-        ClarificationQuestion = clarificationQuestion;
+        Clarification = clarification;
     }
 
     public RequestPreparationProposalKind Kind { get; }
 
     public RequestCandidate Candidate { get; }
 
-    public string? ClarificationQuestion { get; }
+    public RequestClarificationContext? Clarification { get; }
 }
 
 public enum RequestPreparationInterpretationOutcomeKind

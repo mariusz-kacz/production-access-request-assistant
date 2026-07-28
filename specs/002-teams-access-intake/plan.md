@@ -10,8 +10,9 @@ Add one Teams personal-chat adapter to the existing ASP.NET Core executable. The
 Microsoft 365 Agents SDK authenticates and routes Teams activities; one Microsoft
 Agent Framework `ChatClientAgent` interprets each developer turn and can call only the
 existing three read-only MCP tools. Application-owned services persist a compact
-candidate, determine readiness using the existing authoritative validator, and create
-an immutable 30-minute prepared snapshot with a reserved request ID.
+candidate and one bounded typed clarification context, authoritatively canonicalize
+any ordered options, determine readiness using the existing validator, and create an
+immutable 30-minute prepared snapshot with a reserved request ID.
 
 The server renders that snapshot as an Adaptive Card with one **Confirm and submit**
 action. Confirmation is a deterministic authenticated channel command, not a
@@ -104,6 +105,7 @@ ProductionAccessRequestAssistant.sln
 src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
+│   │   ├── RequestClarificationContext.cs
 │   │   ├── RequestPreparationConversation.cs
 │   │   └── PreparedAccessRequest.cs
 │   ├── Application/
@@ -174,11 +176,13 @@ only executable.
   `contracts/request-intake-proposal.schema.json`. Candidate identifiers and
   relationships are reloaded and checked by `RequestValidator`; only deterministic
   validation can create a prepared snapshot.
-- The application persists only the compact current candidate and pending
-  clarification needed for the active conversation. It clears that content after
-  submission, supersession, or expiry. Structured logs provide pre-submission
-  observability; immutable prepared/request evidence provides replay safety and
-  durable audit.
+- The application persists only the compact current candidate and one bounded typed
+  clarification needed for the active conversation. It reloads and canonicalizes
+  every proposed option identifier and label before persistence, and clears that
+  content after submission, supersession, or expiry. Option ordering supports only
+  bounded references to the current choices; no transcript or general conversation
+  history is stored. Structured logs provide pre-submission observability; immutable
+  prepared/request evidence provides replay safety and durable audit.
 - A ready snapshot is rendered only from persisted server fields. The card contains no
   inputs and its sole action carries only schema version and opaque preparation
   reference.

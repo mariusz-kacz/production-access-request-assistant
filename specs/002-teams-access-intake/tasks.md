@@ -90,21 +90,21 @@ trusted Web link, with no approval, operation, or grant.
 
 ### Vertical Implementation Sequence for User Story 1
 
-- [X] T010 [P] [US1] Evolve the provider-neutral turn input, complete nullable candidate, closed clarification/candidate proposal, and typed interpretation outcomes in src/GovernedAccess.Core/Ports/RequestDrafting.cs
-- [X] T011 [P] [US1] Implement compact candidate state, authenticated binding, terminal content clearing, and guarded transitions in src/GovernedAccess.Core/Domain/RequestPreparationConversation.cs
+- [X] T010 [P] [US1] Evolve the provider-neutral turn input, complete nullable candidate, bounded typed clarification target/options, closed clarification/candidate proposal, and typed interpretation outcomes in src/GovernedAccess.Core/Ports/RequestDrafting.cs, src/GovernedAccess.Core/Domain/RequestClarificationContext.cs, and specs/002-teams-access-intake/contracts/request-intake-proposal.schema.json
+- [X] T011 [P] [US1] Implement compact candidate and typed clarification state, authenticated binding, terminal content clearing, and guarded transitions in src/GovernedAccess.Core/Domain/RequestPreparationConversation.cs
 - [X] T012 [P] [US1] Implement the immutable 30-minute prepared snapshot, reserved request ID, ownership checks, and guarded status transitions in src/GovernedAccess.Core/Domain/PreparedAccessRequest.cs
-- [X] T013 [US1] Verify conversation identity, prepared-snapshot construction, immutable canonical scope, fixed expiry, reserved request identity, and allowed initial transitions in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
-- [X] T014 [P] [US1] Document structured logging as the only pre-submission operation history and omit a separate persisted event entity in specs/002-teams-access-intake/data-model.md
-- [X] T015 [US1] Define channel-neutral authenticated actor binding, preparation and confirmation commands/outcomes, and `IRequestIntakeStore` over the preparation entities in src/GovernedAccess.Core/Ports/RequestIntake.cs
-- [ ] T016 [US1] Implement deterministic candidate validation, canonicalization, ready-snapshot creation, and typed preparation outcomes in src/GovernedAccess.Core/Application/RequestPreparationService.cs
-- [ ] T017 [US1] Map conversations, prepared snapshots, relationships, UTC timestamps, unique active binding, unique reserved ID, and concurrency tokens in src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs
-- [ ] T018 [US1] Implement preparation lookup and snapshot persistence over the shared DbContext in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
-- [ ] T019 [US1] Implement one bounded `ChatClientAgent` turn with strict structured-output deserialization and translation to Core contracts in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
+- [X] T013 [US1] Verify conversation identity, typed clarification bounds/lifecycle, authoritative option canonicalization and rejection, candidate-rejection provenance, prepared-snapshot construction, immutable canonical scope, fixed expiry, reserved request identity, and allowed initial transitions in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
+- [X] T014 [P] [US1] Document bounded typed clarification state, authoritative option canonicalization, structured logging as the only pre-submission operation history, and omission of transcript/general-history persistence in specs/002-teams-access-intake/spec.md, specs/002-teams-access-intake/plan.md, specs/002-teams-access-intake/research.md, specs/002-teams-access-intake/data-model.md, specs/002-teams-access-intake/quickstart.md, and specs/002-teams-access-intake/contracts/teams-activity-contract.md
+- [X] T015 [US1] Define channel-neutral authenticated actor binding, typed clarification and candidate-rejection preparation outcomes, confirmation commands/outcomes, and `IRequestIntakeStore` over the preparation entities in src/GovernedAccess.Core/Ports/RequestIntake.cs
+- [X] T016 [US1] Implement deterministic candidate validation, strict candidate rejection without synthesized interpreter questions, authoritative clarification-option canonicalization, ready-snapshot creation, and typed preparation outcomes in src/GovernedAccess.Core/Application/RequestPreparationService.cs
+- [ ] T017 [US1] Map conversations including one bounded typed clarification and ordered options, prepared snapshots, relationships, UTC timestamps, unique active binding, unique reserved ID, and concurrency tokens in src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs
+- [ ] T018 [US1] Implement compact candidate and typed-clarification lookup plus snapshot persistence over the shared DbContext in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
+- [ ] T019 [US1] Implement one bounded `ChatClientAgent` turn with strict typed-clarification structured-output deserialization and translation to Core contracts in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
 - [ ] T020 [P] [US1] Resolve only authenticated `msteams` personal activities from the configured tenant and map them server-side to `DemoPrincipalKeys.Requester` in src/GovernedAccess.Web/Teams/TeamsActorResolver.cs
 - [ ] T021 [P] [US1] Render persisted canonical fields into the immutable no-input one-action Adaptive Card contract in src/GovernedAccess.Web/Teams/PreparedRequestCardFactory.cs
-- [ ] T022 [US1] Handle authenticated personal-message preparation and render typed preparation outcomes in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [ ] T022 [US1] Handle authenticated personal-message preparation and render typed clarification, candidate-rejection provenance, readiness, and failure outcomes in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 - [ ] T023 [US1] Register the Agents SDK, interpreter, preparation services, shared store, validated options, and authenticated `/api/messages` endpoint before API and SPA fallbacks in src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs and src/GovernedAccess.Web/Program.cs
-- [ ] T024 [US1] Verify authenticated `/api/messages` route ordering, personal-chat preparation, fixed requester mapping, deterministic readiness, strongly typed EF snapshot persistence, and no workflow state before confirmation in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs
+- [ ] T024 [US1] Verify authenticated `/api/messages` route ordering, personal-chat preparation, fixed requester mapping, typed clarification persistence, deterministic readiness, strongly typed EF snapshot persistence, and no workflow state before confirmation in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs
 - [ ] T025 [US1] Refactor browser request creation to share validated immutable construction and audit logic while allowing only prepared confirmation to supply a server-reserved ID in src/GovernedAccess.Core/Application/RequestSubmissionService.cs
 - [ ] T026 [US1] Implement authenticated reload, binding checks, status checks, authoritative revalidation, exact-scope submission, and typed confirmation outcomes in src/GovernedAccess.Core/Application/PreparedRequestConfirmationService.cs
 - [ ] T027 [US1] Verify first-confirmation ownership checks, authoritative revalidation, exact prepared scope, reserved ID, and typed outcomes in tests/GovernedAccess.UnitTests/PreparedRequestConfirmationTests.cs
@@ -120,28 +120,33 @@ workflow, retry, provisioning, or revocation tool.
 
 ## Phase 4: User Story 2 - Clarify an Incomplete Request (Priority: P2)
 
-**Goal**: Carry compact candidate values across focused clarification turns and show
-the final card only after deterministic validation accepts every required field and
-relationship.
+**Goal**: Carry compact candidate values and one bounded typed clarification context
+across focused turns, support natural references to its authoritative ordered
+options, and show the final card only after deterministic validation accepts every
+required field and relationship.
 
 **Independent Test**: Start with at least two missing values, answer over multiple
-turns, and verify retained candidate state, focused questions, authoritative
-correction of invalid identifiers, and no final card until deterministic readiness.
+turns using both a direct choice and an ordinal reference such as "the first one",
+and verify retained candidate state, authoritative bounded options, focused
+questions, safe rejection of invalid candidates, and no final card until
+deterministic readiness.
 
 ### Vertical Implementation Sequence for User Story 2
 
-- [ ] T031 [US2] Merge each complete nullable proposal into compact state, preserve established values, select one focused clarification, and defer readiness to `RequestValidator` in src/GovernedAccess.Core/Application/RequestPreparationService.cs
-- [ ] T032 [US2] Verify candidate merging, pending clarification, deterministic readiness precedence, supersession, and content disposal in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
-- [ ] T033 [US2] Reconstruct each MAF turn from compact candidate plus latest text, enforce proposal kind/question invariants, and exclude raw transcript persistence in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
-- [ ] T034 [US2] Persist only the current candidate and pending question per actor/conversation in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs and return focused clarification or a final card from src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [ ] T035 [P] [US2] Verify two missing values, candidate carry-forward, actor/conversation isolation, and final-card timing in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
-- [ ] T036 [P] [US2] Verify unknown and cross-client client/environment/role/incident proposals and false model-complete claims in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs
-- [ ] T037 [P] [US2] Verify representative complete and incomplete utterances reach accurate preparation within five developer messages in tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs
+- [ ] T031 [US2] Merge each complete nullable proposal into compact state, preserve established values, require any selected target value to match the current typed clarification options when present, and defer readiness to `RequestValidator` in src/GovernedAccess.Core/Application/RequestPreparationService.cs
+- [ ] T032 [US2] Verify candidate merging, current-option membership enforcement, deterministic readiness precedence, supersession, and content disposal in tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
+- [ ] T033 [US2] Reconstruct each MAF turn from compact candidate, typed clarification context, and latest text; enforce closed proposal invariants; interpret direct and ordinal references such as "the first one" and "the other role" only against current bounded options; and exclude raw transcript persistence in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
+- [ ] T034 [US2] Persist only the compact candidate and one bounded typed clarification context per actor/conversation, render authoritative numbered choices and candidate-rejection guidance with clear provenance, and return a final card only for deterministic readiness in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [ ] T035 [P] [US2] Verify two missing values, direct and ordinal option selection, candidate carry-forward, actor/conversation isolation, no transcript storage, and final-card timing in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
+- [ ] T036 [P] [US2] Verify unknown and cross-client client/environment/role/incident proposals and clarification options plus false model-complete rejection without synthesized interpreter questions in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs
+- [ ] T037 [P] [US2] Verify available-role discovery and representative complete and incomplete utterances reach accurate preparation within five developer messages in tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs
 - [ ] T038 [US2] Supersede an unsubmitted ready snapshot on new request intent and clear active content while keeping the old card immutable in src/GovernedAccess.Core/Application/RequestPreparationService.cs and src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
 - [ ] T039 [US2] Verify start-over supersession, immutable old-card behavior, and absence of text-triggered submission in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
 
-**Checkpoint**: User Stories 1 and 2 support complete and ambiguous intent while
-keeping readiness, canonicalization, and state transitions deterministic.
+**Checkpoint**: User Stories 1 and 2 support complete and ambiguous intent, including
+bounded references to the current clarification choices, while keeping readiness,
+canonicalization, option validation, and state transitions deterministic and storing
+no transcript or general conversation history.
 
 ---
 
@@ -262,9 +267,11 @@ composition; confirmation tests T027 and T029 follow their corresponding service
 
 ### User Story 2
 
-After candidate merging and multi-turn persistence are implemented, integration tests
-T035-T037 target separate files and can run in parallel. Supersession implementation
-T038 then receives focused integration coverage in T039.
+After the foundational typed clarification contract, candidate merging and its unit
+coverage proceed through T031-T032, followed by interpreter and persistence/Teams
+wiring in T033-T034. Integration tests T035-T037 target separate files and can run in
+parallel. Supersession implementation T038 then receives focused integration coverage
+in T039.
 
 ### User Story 3
 
@@ -310,6 +317,9 @@ additional agents, services, queues, or workflow infrastructure.
 
 - `[P]` means file-level parallelism, not architectural concurrency.
 - MAF is used only for interpretation and read-only tool dispatch.
+- Structured clarification state is bounded to the current target and ordered
+  authoritative choices; it is not a transcript, autonomous memory, or generic
+  conversational workflow.
 - Tests never call a live model, Teams tenant, Azure Bot, or production system.
 - No task adds Slack, group chat, proactive messages, Graph/SSO, a workflow engine,
   multiple agents, model-visible state changes, or a second executable.
