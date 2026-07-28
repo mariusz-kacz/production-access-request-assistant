@@ -7,6 +7,7 @@ using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
+using GovernedAccess.Web.Teams;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
@@ -61,6 +62,7 @@ builder.Services.AddDemoAuthentication();
 builder.Services.AddAuthorization();
 builder.Services.AddGovernedAccessAntiforgery();
 builder.Services.AddGovernedAccessMcp();
+builder.AddGovernedAccessTeams();
 
 var app = builder.Build();
 
@@ -72,6 +74,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.MapGovernedAccessTeams();
 app.MapControllers();
 app.MapGovernedAccessMcp();
 

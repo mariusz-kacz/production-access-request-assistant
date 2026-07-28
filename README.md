@@ -184,6 +184,7 @@ specs/
 ## Documentation
 
 - [Product baseline](docs/governed-production-access-product-baseline.md)
+- [Product roadmap](docs/roadmap.md)
 - [As-built architecture](docs/architecture.md)
 - [Security and trust model](docs/security-model.md)
 - [Local development guide](docs/local-development.md)
