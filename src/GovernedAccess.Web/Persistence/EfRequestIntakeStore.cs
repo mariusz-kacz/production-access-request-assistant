@@ -105,7 +105,10 @@ internal sealed class EfRequestIntakeStore(
     {
         try
         {
+            await using var transaction =
+                await dbContext.Database.BeginTransactionAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return ApplicationResult.Succeeded();
         }
         catch (DbUpdateConcurrencyException)

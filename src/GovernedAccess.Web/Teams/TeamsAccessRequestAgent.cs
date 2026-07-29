@@ -1,11 +1,14 @@
 using System.Text;
+using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using Microsoft.Agents.Builder;
 using Microsoft.Agents.Builder.App;
+using Microsoft.Agents.Builder.App.AdaptiveCards;
 using Microsoft.Agents.Builder.State;
 using Microsoft.Agents.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.Web.Teams;
 
@@ -15,6 +18,8 @@ namespace GovernedAccess.Web.Teams;
 /// </summary>
 public sealed class TeamsAccessRequestAgent : AgentApplication
 {
+    private const string ConfirmAndSubmitVerb = "confirmAndSubmit";
+
     private const string RejectedActivityMessage =
         "This assistant accepts production-access requests only from an authenticated personal Microsoft Teams chat.";
 
@@ -23,22 +28,36 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
 
     private readonly TeamsActorResolver actorResolver;
     private readonly RequestPreparationService preparationService;
+    private readonly PreparedRequestConfirmationService confirmationService;
     private readonly PreparedRequestCardFactory cardFactory;
+    private readonly Uri trustedWebBaseUri;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
         RequestPreparationService preparationService,
-        PreparedRequestCardFactory cardFactory)
+        PreparedRequestConfirmationService confirmationService,
+        PreparedRequestCardFactory cardFactory,
+        IOptions<TeamsAccessRequestOptions> teamsOptions)
         : base(options)
     {
         ArgumentNullException.ThrowIfNull(actorResolver);
         ArgumentNullException.ThrowIfNull(preparationService);
+        ArgumentNullException.ThrowIfNull(confirmationService);
         ArgumentNullException.ThrowIfNull(cardFactory);
+        ArgumentNullException.ThrowIfNull(teamsOptions);
 
         this.actorResolver = actorResolver;
         this.preparationService = preparationService;
+        this.confirmationService = confirmationService;
         this.cardFactory = cardFactory;
+        trustedWebBaseUri = teamsOptions.Value.TrustedWebBaseUri
+            ?? throw new InvalidOperationException(
+                "A trusted Web base URI is required for Teams request links.");
+
+        AdaptiveCards.OnActionExecute(
+            ConfirmAndSubmitVerb,
+            OnConfirmAndSubmitAsync);
     }
 
     [MessageRoute]
@@ -116,6 +135,49 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
                 throw new InvalidOperationException(
                     "The request-preparation outcome is unsupported.");
         }
+    }
+
+    private async Task<AdaptiveCardInvokeResponse> OnConfirmAndSubmitAsync(
+        ITurnContext turnContext,
+        ITurnState _,
+        object data,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(turnContext);
+
+        if (!actorResolver.TryResolve(
+                turnContext.Activity,
+                turnContext.Identity,
+                out var actor))
+        {
+            return AdaptiveCardInvokeResponseFactory.BadRequest(
+                RejectedActivityMessage);
+        }
+
+        if (!TryReadConfirmationData(data, out var preparationId))
+        {
+            return AdaptiveCardInvokeResponseFactory.BadRequest(
+                "The confirmation action is invalid. No request was submitted.");
+        }
+
+        var outcome = await confirmationService.ConfirmAsync(
+            new ConfirmPreparedAccessRequestCommand(
+                actor,
+                preparationId,
+                CreateCorrelationId()),
+            cancellationToken);
+
+        return outcome switch
+        {
+            PreparedRequestConfirmationSucceeded succeeded =>
+                AdaptiveCardInvokeResponseFactory.Message(
+                    CreateConfirmationMessage(succeeded)),
+            PreparedRequestConfirmationFailed failed =>
+                AdaptiveCardInvokeResponseFactory.Message(
+                    CreateConfirmationFailureMessage(failed.Failure)),
+            _ => throw new InvalidOperationException(
+                "The prepared-request confirmation outcome is unsupported."),
+        };
     }
 
     private async Task SendReadyCardAsync(
@@ -217,6 +279,88 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
             "Correct the listed details in your next message. Nothing has been submitted.");
 
         return message.ToString();
+    }
+
+    private string CreateConfirmationMessage(
+        PreparedRequestConfirmationSucceeded outcome)
+    {
+        var requestUri = new Uri(
+            trustedWebBaseUri,
+            $"requests/{outcome.RequestId:D}");
+        var status = outcome.WasAlreadySubmitted
+            ? "was already submitted"
+            : "was submitted";
+
+        return $"Request {outcome.RequestId:D} {status} and is awaiting business approval. Access is not yet approved or granted. Open the request: {requestUri.AbsoluteUri}";
+    }
+
+    private static string CreateConfirmationFailureMessage(
+        ApplicationFailure failure)
+    {
+        return failure.Kind switch
+        {
+            ApplicationFailureKind.Unauthorized
+                or ApplicationFailureKind.NotFound =>
+                "The prepared request could not be found for this authenticated conversation. No request was submitted.",
+            ApplicationFailureKind.InvalidTransition =>
+                "This prepared request can no longer be submitted. Start a new request in this chat.",
+            ApplicationFailureKind.ConcurrencyConflict =>
+                "The prepared request changed while confirmation was being processed. No additional request was submitted.",
+            ApplicationFailureKind.DependencyUnavailable
+                or ApplicationFailureKind.DependencyFailure =>
+                "Request confirmation is temporarily unavailable. No request was submitted; please try again later.",
+            _ =>
+                "The request could not be confirmed safely. No request was submitted.",
+        };
+    }
+
+    private static bool TryReadConfirmationData(
+        object? data,
+        out Guid preparationId)
+    {
+        preparationId = Guid.Empty;
+
+        try
+        {
+            var element = data switch
+            {
+                JsonElement jsonElement => jsonElement,
+                JsonDocument jsonDocument => jsonDocument.RootElement,
+                not null => JsonSerializer.SerializeToElement(data),
+                _ => default,
+            };
+
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var properties = element.EnumerateObject().ToArray();
+            if (properties.Length != 2
+                || !element.TryGetProperty("schemaVersion", out var schemaVersion)
+                || schemaVersion.ValueKind != JsonValueKind.Number
+                || !schemaVersion.TryGetInt32(out var version)
+                || version != 1
+                || !element.TryGetProperty(
+                    "preparedRequestId",
+                    out var preparedRequestId)
+                || preparedRequestId.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            var reference = preparedRequestId.GetString();
+            return Guid.TryParseExact(reference, "D", out preparationId)
+                && preparationId != Guid.Empty;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
     }
 
     private static Task SendTextAsync(

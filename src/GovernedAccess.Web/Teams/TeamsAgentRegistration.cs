@@ -47,6 +47,7 @@ public static class TeamsAgentRegistration
             IRequestPreparationInterpreter,
             MafRequestPreparationInterpreter>();
         builder.Services.AddScoped<RequestPreparationService>();
+        builder.Services.AddScoped<PreparedRequestConfirmationService>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();
 
