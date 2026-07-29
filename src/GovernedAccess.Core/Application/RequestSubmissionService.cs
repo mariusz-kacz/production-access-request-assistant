@@ -72,6 +72,7 @@ public sealed class RequestSubmissionService
             input,
             correlationId,
             reservedRequestId: null,
+            occurredAt: null,
             cancellationToken);
 
         if (stagedOutcome is not RequestSubmitted submitted)
@@ -93,6 +94,7 @@ public sealed class RequestSubmissionService
     internal Task<RequestSubmissionOutcome> StagePreparedConfirmationAsync(
         PreparedAccessRequest preparedRequest,
         string? correlationId,
+        DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(preparedRequest);
@@ -107,6 +109,7 @@ public sealed class RequestSubmissionService
                 preparedRequest.IncidentId),
             correlationId,
             preparedRequest.ReservedRequestId,
+            occurredAt,
             cancellationToken);
     }
 
@@ -115,6 +118,7 @@ public sealed class RequestSubmissionService
         RequestValidationInput input,
         string? correlationId,
         Guid? reservedRequestId,
+        DateTimeOffset? occurredAt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -184,7 +188,7 @@ public sealed class RequestSubmissionService
         cancellationToken.ThrowIfCancellationRequested();
 
         var fields = validationSucceeded.Fields;
-        var occurredAt = clock.UtcNow.ToUniversalTime();
+        var requestCreatedAt = (occurredAt ?? clock.UtcNow).ToUniversalTime();
         var request = new AccessRequest(
             reservedRequestId ?? Guid.NewGuid(),
             principal.Id,
@@ -193,7 +197,7 @@ public sealed class RequestSubmissionService
             fields.RequestedRoleId,
             fields.Justification,
             fields.IncidentId,
-            occurredAt,
+            requestCreatedAt,
             normalizedCorrelationId);
 
         var auditEvent = AuditEvent.CreateRequestCreated(
