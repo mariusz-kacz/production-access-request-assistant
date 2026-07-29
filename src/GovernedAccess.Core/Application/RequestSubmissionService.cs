@@ -67,6 +67,56 @@ public sealed class RequestSubmissionService
         string? correlationId,
         CancellationToken cancellationToken)
     {
+        var stagedOutcome = await CreateAndStageValidatedRequestAsync(
+            authenticatedPrincipalId,
+            input,
+            correlationId,
+            reservedRequestId: null,
+            cancellationToken);
+
+        if (stagedOutcome is not RequestSubmitted submitted)
+        {
+            return stagedOutcome;
+        }
+
+        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
+        return saveResult.IsFailure
+            ? new RequestSubmissionFailed(saveResult.Failure!)
+            : submitted;
+    }
+
+    /// <summary>
+    /// Revalidates and stages the immutable request and request-created audit
+    /// evidence for a prepared confirmation. The enclosing confirmation service
+    /// owns the atomic save with the prepared-request transition.
+    /// </summary>
+    internal Task<RequestSubmissionOutcome> StagePreparedConfirmationAsync(
+        PreparedAccessRequest preparedRequest,
+        string? correlationId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(preparedRequest);
+
+        return CreateAndStageValidatedRequestAsync(
+            preparedRequest.RequesterId,
+            new RequestValidationInput(
+                preparedRequest.ClientId,
+                preparedRequest.EnvironmentId,
+                preparedRequest.RequestedRoleId,
+                preparedRequest.Justification,
+                preparedRequest.IncidentId),
+            correlationId,
+            preparedRequest.ReservedRequestId,
+            cancellationToken);
+    }
+
+    private async Task<RequestSubmissionOutcome> CreateAndStageValidatedRequestAsync(
+        string? authenticatedPrincipalId,
+        RequestValidationInput input,
+        string? correlationId,
+        Guid? reservedRequestId,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(input);
 
         var normalizedPrincipalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
@@ -136,7 +186,7 @@ public sealed class RequestSubmissionService
         var fields = validationSucceeded.Fields;
         var occurredAt = clock.UtcNow.ToUniversalTime();
         var request = new AccessRequest(
-            Guid.NewGuid(),
+            reservedRequestId ?? Guid.NewGuid(),
             principal.Id,
             fields.ClientId,
             fields.EnvironmentId,
@@ -154,9 +204,6 @@ public sealed class RequestSubmissionService
         workflowStore.AddRequest(request);
         workflowStore.AddAuditEvent(auditEvent);
 
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new RequestSubmissionFailed(saveResult.Failure!)
-            : new RequestSubmitted(request);
+        return new RequestSubmitted(request);
     }
 }

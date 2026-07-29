@@ -62,7 +62,7 @@ public static class TeamsAgentRegistration
 
         var endpoint = app
             .MapAgentEndpoints<TeamsAccessRequestAgent>(
-                requireAuth: false,
+                requireAuth: true,
                 path: MessagesPath)
             .DisableAntiforgery();
 
