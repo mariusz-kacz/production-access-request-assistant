@@ -162,9 +162,9 @@ Microsoft Agents, Adaptive Card, and MCP SDK types.
 
 ### Characterization Tests for User Story 5
 
-- [ ] T030 [P] [US5] Add behavior-first unit characterization for collecting-to-ready, immutable ready scope, authenticated ownership, authoritative confirmation revalidation, reserved request identity, and typed failure categories without asserting current class names in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs
-- [ ] T031 [P] [US5] Add persistence characterization proving one shared save commits intake status, immutable request, and request-created audit together and that a forced save failure leaves no partial rows in tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakePersistenceTests.cs
-- [ ] T032 [P] [US5] Extend the hosted User Story 1 characterization to pin the card contract, opaque action payload, trusted request link, fixed requester, and absence of approval/provisioning/grant side effects in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
+- [X] T030 [P] [US5] Add behavior-first unit characterization for collecting-to-ready, immutable ready scope, authenticated ownership, authoritative confirmation revalidation, reserved request identity, and typed failure categories without asserting current class names in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs
+- [X] T031 [P] [US5] Add persistence characterization proving one shared save commits intake status, immutable request, and request-created audit together and that a forced save failure leaves no partial rows in tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakePersistenceTests.cs
+- [X] T032 [P] [US5] Extend the hosted User Story 1 characterization to pin the card contract, opaque action payload, trusted request link, fixed requester, and absence of approval/provisioning/grant side effects in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
 
 ### Target Contract and Aggregate
 
