@@ -172,6 +172,11 @@ At startup, the host calls EF Core `EnsureCreatedAsync`, then:
 
 Workflow records are preserved between runs when the same SQLite file is used.
 
+This reference implementation uses `EnsureCreatedAsync` rather than migrations.
+After changing the EF model—including the request-intake table simplification—delete
+and recreate the disposable local synthetic database before starting the updated
+host. Existing local schema files are not upgraded in place.
+
 The default relative connection string creates `governed-access.db` in the host
 process working directory. When location matters, use an explicit connection string
 rather than relying on the current directory.

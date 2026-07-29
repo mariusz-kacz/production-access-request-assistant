@@ -91,24 +91,19 @@ public sealed class RequestSubmissionService
     /// evidence for a prepared confirmation. The enclosing confirmation service
     /// owns the atomic save with the prepared-request transition.
     /// </summary>
-    internal Task<RequestSubmissionOutcome> StagePreparedConfirmationAsync(
-        PreparedAccessRequest preparedRequest,
+    internal Task<RequestSubmissionOutcome> StageAsync(
+        string requesterId,
+        RequestValidationInput input,
+        Guid reservedRequestId,
         string? correlationId,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(preparedRequest);
-
         return CreateAndStageValidatedRequestAsync(
-            preparedRequest.RequesterId,
-            new RequestValidationInput(
-                preparedRequest.ClientId,
-                preparedRequest.EnvironmentId,
-                preparedRequest.RequestedRoleId,
-                preparedRequest.Justification,
-                preparedRequest.IncidentId),
+            requesterId,
+            input,
             correlationId,
-            preparedRequest.ReservedRequestId,
+            reservedRequestId,
             occurredAt,
             cancellationToken);
     }

@@ -83,36 +83,36 @@ public sealed class TeamsRequestPreparationTests
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider
             .GetRequiredService<GovernedAccessDbContext>();
-        var conversation = await dbContext.RequestPreparationConversations
+        var session = await dbContext.RequestIntakeSessions
             .AsNoTracking()
             .SingleAsync(cancellationToken);
 
-        Assert.Equal(RequestPreparationConversation.TeamsChannel, conversation.Channel);
-        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, conversation.TenantId);
+        Assert.Equal(RequestIntakeSession.TeamsChannel, session.Channel);
+        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, session.TenantId);
         Assert.Equal(
             FakeTeamsActivityBuilder.DefaultActorId,
-            conversation.ChannelActorId);
+            session.ChannelActorId);
         Assert.Equal(
             FakeTeamsActivityBuilder.DefaultConversationId,
-            conversation.ConversationId);
-        Assert.Equal(DemoPrincipalKeys.Requester, conversation.RequesterId);
+            session.ConversationId);
+        Assert.Equal(DemoPrincipalKeys.Requester, session.RequesterId);
         Assert.Equal(
-            RequestPreparationConversationStatus.Collecting,
-            conversation.Status);
-        Assert.Equal("client-alpha", conversation.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", conversation.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, conversation.RequestedRoleId);
-        Assert.Null(conversation.Justification);
-        Assert.Equal("INC-1042", conversation.IncidentId);
-        Assert.Equal(
-            GovernedAccessWebFactory.DefaultUtcNow,
-            conversation.CreatedAt);
+            RequestIntakeStatus.Collecting,
+            session.Status);
+        Assert.Equal("client-alpha", session.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
+        Assert.Null(session.Justification);
+        Assert.Equal("INC-1042", session.IncidentId);
         Assert.Equal(
             GovernedAccessWebFactory.DefaultUtcNow,
-            conversation.LastTurnAt);
+            session.CreatedAt);
+        Assert.Equal(
+            GovernedAccessWebFactory.DefaultUtcNow,
+            session.LastUpdatedAt);
 
         var clarification = Assert.IsType<RequestClarificationContext>(
-            conversation.PendingClarification);
+            session.PendingClarification);
         Assert.Equal(
             RequestClarificationTarget.Justification,
             clarification.Target);
@@ -120,97 +120,7 @@ public sealed class TeamsRequestPreparationTests
             "What operational justification should be recorded for this request?",
             clarification.Prompt);
         Assert.Empty(clarification.Options);
-        Assert.Null(conversation.ActivePreparationId);
-        Assert.Empty(
-            await dbContext.PreparedAccessRequests
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-
-        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
-    }
-
-    [Fact]
-    public async Task CompletePersonalChatCreatesDeterministicallyReadyEfSnapshotOnly()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate);
-        using var client = factory.CreateTeamsClient();
-        var activity = CreateExpectRepliesActivity(CompleteRequest);
-
-        using var response = await client.PostAsJsonAsync(
-            "/api/messages",
-            activity,
-            ProtocolJsonSerializer.SerializationOptions,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        Assert.Contains(
-            "Confirm production access request",
-            responseBody,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "it does not approve or grant production access",
-            responseBody,
-            StringComparison.Ordinal);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        var conversation = await dbContext.RequestPreparationConversations
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        var preparedRequest = await dbContext.PreparedAccessRequests
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-
-        Assert.Equal(
-            RequestPreparationConversationStatus.Ready,
-            conversation.Status);
-        Assert.Equal(preparedRequest.PreparationId, conversation.ActivePreparationId);
-        Assert.Null(conversation.PendingClarification);
-
-        Assert.NotEqual(Guid.Empty, preparedRequest.PreparationId);
-        Assert.NotEqual(Guid.Empty, preparedRequest.ReservedRequestId);
-        Assert.Equal(conversation.Id, preparedRequest.ConversationRecordId);
-        Assert.Equal(RequestPreparationConversation.TeamsChannel, preparedRequest.Channel);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultTenantId,
-            preparedRequest.TenantId);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultActorId,
-            preparedRequest.ChannelActorId);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultConversationId,
-            preparedRequest.ConversationId);
-        Assert.Equal(DemoPrincipalKeys.Requester, preparedRequest.RequesterId);
-        Assert.Equal("client-alpha", preparedRequest.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", preparedRequest.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, preparedRequest.RequestedRoleId);
-        Assert.Equal(
-            "Investigate the active production incident.",
-            preparedRequest.Justification);
-        Assert.Equal("INC-1042", preparedRequest.IncidentId);
-        Assert.Equal(PreparedAccessRequestStatus.Ready, preparedRequest.Status);
-        Assert.Equal(
-            GovernedAccessWebFactory.DefaultUtcNow,
-            preparedRequest.CreatedAt);
-        Assert.Equal(
-            GovernedAccessWebFactory.DefaultUtcNow.Add(
-                PreparedAccessRequest.ConfirmationLifetime),
-            preparedRequest.ExpiresAt);
-        Assert.Null(preparedRequest.SubmittedAt);
-        Assert.Null(preparedRequest.SubmittedRequestId);
-
-        Assert.Contains(
-            preparedRequest.PreparationId.ToString("D"),
-            responseBody,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            preparedRequest.ReservedRequestId.ToString("D"),
-            responseBody,
-            StringComparison.Ordinal);
+        Assert.Null(session.ReservedRequestId);
 
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }

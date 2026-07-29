@@ -10,6 +10,10 @@ using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.Web.Ai;
 
+/// <summary>
+/// Stateless MAF boundary: translates one provider-neutral turn into one compact
+/// interpretation outcome. Agent sessions and transcripts are never persisted.
+/// </summary>
 public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterpreter
 {
     private const string AgentInstructions =

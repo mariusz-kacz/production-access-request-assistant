@@ -72,9 +72,9 @@ public sealed record PrepareAccessRequestCommand
 /// Confirms one server-owned prepared snapshot. The command deliberately contains
 /// no caller-supplied request scope, role, duration, or approval assertion.
 /// </summary>
-public sealed record ConfirmPreparedAccessRequestCommand
+public sealed record ConfirmRequestIntakeCommand
 {
-    public ConfirmPreparedAccessRequestCommand(
+    public ConfirmRequestIntakeCommand(
         AuthenticatedChannelActor actor,
         Guid preparationId,
         string correlationId)
@@ -101,46 +101,66 @@ public sealed record ConfirmPreparedAccessRequestCommand
     public string CorrelationId { get; }
 }
 
-/// <summary>
-/// Closed application result for one request-preparation turn.
-/// </summary>
-public abstract record RequestPreparationOutcome;
-
-public sealed record RequestClarificationRequired : RequestPreparationOutcome
+public enum RequestPreparationResultKind
 {
-    public RequestClarificationRequired(
+    ClarificationRequired,
+    ReadyForConfirmation,
+    CandidateRejected,
+    Failed,
+}
+
+/// <summary>
+/// Closed application result for one request-preparation turn. Only the payload
+/// matching <see cref="Kind"/> is populated.
+/// </summary>
+public sealed class RequestPreparationResult
+{
+    private RequestPreparationResult(
+        RequestPreparationResultKind kind,
+        RequestClarificationContext? clarification = null,
+        RequestIntakeSession? session = null,
+        IReadOnlyList<FieldValidationError>? validationErrors = null,
+        ApplicationFailure? failure = null)
+    {
+        Kind = kind;
+        Clarification = clarification;
+        Session = session;
+        ValidationErrors = validationErrors ?? [];
+        Failure = failure;
+    }
+
+    public RequestPreparationResultKind Kind { get; }
+
+    public RequestClarificationContext? Clarification { get; }
+
+    public RequestIntakeSession? Session { get; }
+
+    public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
+
+    public ApplicationFailure? Failure { get; }
+
+    public static RequestPreparationResult ClarificationRequired(
         RequestClarificationContext clarification)
     {
         ArgumentNullException.ThrowIfNull(clarification);
-        Clarification = clarification;
+        return new(
+            RequestPreparationResultKind.ClarificationRequired,
+            clarification: clarification);
     }
 
-    public RequestClarificationContext Clarification { get; }
-}
-
-public sealed record RequestReadyForConfirmation : RequestPreparationOutcome
-{
-    public RequestReadyForConfirmation(PreparedAccessRequest preparedRequest)
+    public static RequestPreparationResult ReadyForConfirmation(
+        RequestIntakeSession session)
     {
-        ArgumentNullException.ThrowIfNull(preparedRequest);
-        PreparedRequest = preparedRequest;
+        ArgumentNullException.ThrowIfNull(session);
+        return new(
+            RequestPreparationResultKind.ReadyForConfirmation,
+            session: session);
     }
 
-    public PreparedAccessRequest PreparedRequest { get; }
-}
-
-/// <summary>
-/// The interpreter claimed to have a candidate, but deterministic validation
-/// rejected it. Channel adapters may render safe application-owned correction
-/// guidance from these errors, but must not present it as an interpreter question.
-/// </summary>
-public sealed record RequestCandidateRejected : RequestPreparationOutcome
-{
-    public RequestCandidateRejected(
+    public static RequestPreparationResult CandidateRejected(
         IEnumerable<FieldValidationError> validationErrors)
     {
         ArgumentNullException.ThrowIfNull(validationErrors);
-
         var errors = validationErrors.ToArray();
         if (errors.Length == 0)
         {
@@ -149,34 +169,64 @@ public sealed record RequestCandidateRejected : RequestPreparationOutcome
                 nameof(validationErrors));
         }
 
-        ValidationErrors = Array.AsReadOnly(errors);
+        return new(
+            RequestPreparationResultKind.CandidateRejected,
+            validationErrors: Array.AsReadOnly(errors));
     }
 
-    public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
-}
-
-public sealed record RequestPreparationFailed : RequestPreparationOutcome
-{
-    public RequestPreparationFailed(ApplicationFailure failure)
+    public static RequestPreparationResult Failed(ApplicationFailure failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
-        Failure = failure;
+        return new(RequestPreparationResultKind.Failed, failure: failure);
     }
+}
 
-    public ApplicationFailure Failure { get; }
+public enum RequestConfirmationResultKind
+{
+    Submitted,
+    AlreadySubmitted,
+    Failed,
 }
 
 /// <summary>
 /// Closed application result for deterministic prepared-request confirmation.
 /// </summary>
-public abstract record PreparedRequestConfirmationOutcome;
-
-public sealed record PreparedRequestConfirmationSucceeded
-    : PreparedRequestConfirmationOutcome
+public sealed class RequestConfirmationResult
 {
-    public PreparedRequestConfirmationSucceeded(
+    private RequestConfirmationResult(
+        RequestConfirmationResultKind kind,
         Guid requestId,
-        bool wasAlreadySubmitted)
+        ApplicationFailure? failure)
+    {
+        Kind = kind;
+        RequestId = requestId;
+        Failure = failure;
+    }
+
+    public RequestConfirmationResultKind Kind { get; }
+
+    public Guid RequestId { get; }
+
+    public ApplicationFailure? Failure { get; }
+
+    public bool WasAlreadySubmitted =>
+        Kind == RequestConfirmationResultKind.AlreadySubmitted;
+
+    public static RequestConfirmationResult Submitted(Guid requestId) =>
+        Succeeded(RequestConfirmationResultKind.Submitted, requestId);
+
+    public static RequestConfirmationResult AlreadySubmitted(Guid requestId) =>
+        Succeeded(RequestConfirmationResultKind.AlreadySubmitted, requestId);
+
+    public static RequestConfirmationResult Failed(ApplicationFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        return new(RequestConfirmationResultKind.Failed, Guid.Empty, failure);
+    }
+
+    private static RequestConfirmationResult Succeeded(
+        RequestConfirmationResultKind kind,
+        Guid requestId)
     {
         if (requestId == Guid.Empty)
         {
@@ -185,25 +235,8 @@ public sealed record PreparedRequestConfirmationSucceeded
                 nameof(requestId));
         }
 
-        RequestId = requestId;
-        WasAlreadySubmitted = wasAlreadySubmitted;
+        return new(kind, requestId, failure: null);
     }
-
-    public Guid RequestId { get; }
-
-    public bool WasAlreadySubmitted { get; }
-}
-
-public sealed record PreparedRequestConfirmationFailed
-    : PreparedRequestConfirmationOutcome
-{
-    public PreparedRequestConfirmationFailed(ApplicationFailure failure)
-    {
-        ArgumentNullException.ThrowIfNull(failure);
-        Failure = failure;
-    }
-
-    public ApplicationFailure Failure { get; }
 }
 
 /// <summary>
@@ -213,24 +246,14 @@ public sealed record PreparedRequestConfirmationFailed
 /// </summary>
 public interface IRequestIntakeStore
 {
-    void AddConversation(RequestPreparationConversation conversation);
+    void Add(RequestIntakeSession session);
 
-    Task<ApplicationResult<RequestPreparationConversation>> GetActiveConversationAsync(
+    Task<ApplicationResult<RequestIntakeSession>> GetActiveAsync(
         AuthenticatedChannelActor actor,
         CancellationToken cancellationToken);
 
-    Task<ApplicationResult<RequestPreparationConversation>> GetConversationAsync(
-        Guid conversationRecordId,
-        CancellationToken cancellationToken);
-
-    void AddPreparedRequest(PreparedAccessRequest preparedRequest);
-
-    Task<ApplicationResult<PreparedAccessRequest>> GetPreparedRequestAsync(
-        Guid preparationId,
-        CancellationToken cancellationToken);
-
-    Task<ApplicationResult<PreparedAccessRequest>> ReloadPreparedRequestAsync(
-        Guid preparationId,
+    Task<ApplicationResult<RequestIntakeSession>> GetAsync(
+        Guid sessionId,
         CancellationToken cancellationToken);
 
     Task<ApplicationResult> SaveChangesAsync(CancellationToken cancellationToken);

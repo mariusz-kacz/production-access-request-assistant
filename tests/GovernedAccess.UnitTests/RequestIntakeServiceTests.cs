@@ -7,6 +7,15 @@ namespace GovernedAccess.UnitTests;
 public sealed class RequestIntakeServiceTests
 {
     [Fact]
+    public void CompactResultFactoriesRejectMissingRequiredEvidence()
+    {
+        Assert.Throws<ArgumentException>(
+            () => RequestPreparationResult.CandidateRejected([]));
+        Assert.Throws<ArgumentException>(
+            () => RequestConfirmationResult.Submitted(Guid.Empty));
+    }
+
+    [Fact]
     public async Task PrepareAndConfirmPreserveOneImmutableScopeAndReservedIdentity()
     {
         var scenario = new IntakeScenario();
@@ -30,7 +39,6 @@ public sealed class RequestIntakeServiceTests
         Assert.True(confirmed.IsSuccess);
         Assert.Equal(ready.ReservedRequestId, confirmed.RequestId);
         Assert.Equal("Submitted", scenario.IntakeStatus);
-        Assert.Equal("Submitted", scenario.PreparedStatus);
         Assert.Equal(2, scenario.SaveCount);
 
         var request = Assert.Single(scenario.Requests);
@@ -115,6 +123,88 @@ public sealed class RequestIntakeServiceTests
         Assert.Empty(scenario.AuditEvents);
     }
 
+    [Fact]
+    public async Task PreparationReturnsTypedFailureWhenTheSingleSaveFails()
+    {
+        var scenario = new IntakeScenario
+        {
+            SaveFailure = new ApplicationFailure(
+                ApplicationFailureKind.DependencyFailure,
+                "forced_save_failure",
+                "The test save failed."),
+        };
+
+        var result = await scenario.PrepareAsync();
+
+        Assert.False(result.IsReady);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.FailureKind);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task PreparationPropagatesCallerCancellation()
+    {
+        var scenario = new IntakeScenario();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => scenario.PrepareAsync(cancellation.Token));
+
+        Assert.Equal(0, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public void TerminalAggregateRetainsIdentityAndClearsSensitiveCandidate()
+    {
+        var occurredAt = new DateTimeOffset(
+            2026,
+            7,
+            27,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        var requestId = Guid.NewGuid();
+        var session = new RequestIntakeSession(
+            Guid.NewGuid(),
+            RequestIntakeSession.TeamsChannel,
+            "tenant",
+            "actor",
+            "conversation",
+            "requester",
+            occurredAt,
+            "created");
+        session.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            pendingClarification: null,
+            occurredAt,
+            "candidate");
+        session.MarkReady(requestId, occurredAt, "ready");
+
+        session.MarkSubmitted(occurredAt.AddMinutes(1), "submitted");
+
+        Assert.Equal(RequestIntakeStatus.Submitted, session.Status);
+        Assert.Equal(requestId, session.ReservedRequestId);
+        Assert.Null(session.ClientId);
+        Assert.Null(session.EnvironmentId);
+        Assert.Null(session.RequestedRoleId);
+        Assert.Null(session.Justification);
+        Assert.Null(session.IncidentId);
+        Assert.Throws<InvalidOperationException>(
+            () => session.MarkSubmitted(
+                occurredAt.AddMinutes(2),
+                "duplicate-submit"));
+    }
+
     private sealed record PreparationObservation(
         bool IsReady,
         Guid PreparationId,
@@ -142,10 +232,8 @@ public sealed class RequestIntakeServiceTests
             new(2026, 7, 27, 10, 5, 0, TimeSpan.Zero);
 
         private readonly RequestPreparationInterpretationOutcome interpretation;
-        private readonly RequestPreparationService preparationService;
-        private readonly PreparedRequestConfirmationService confirmationService;
-        private RequestPreparationConversation? conversation;
-        private PreparedAccessRequest? preparedRequest;
+        private readonly RequestIntakeService service;
+        private RequestIntakeSession? session;
 
         public IntakeScenario(
             RequestPreparationInterpretationOutcomeKind? interpretationFailure = null)
@@ -165,21 +253,23 @@ public sealed class RequestIntakeServiceTests
                     interpretationFailure.Value);
 
             var validator = new RequestValidator(this);
-            preparationService = new RequestPreparationService(
-                this,
+            var submissionService = new RequestSubmissionService(
                 validator,
                 this,
                 this,
                 this);
-            confirmationService = new PreparedRequestConfirmationService(
+            service = new RequestIntakeService(
                 this,
-                new RequestSubmissionService(validator, this, this, this),
+                validator,
+                this,
+                this,
+                submissionService,
                 this);
         }
 
         public static AuthenticatedChannelActor Owner { get; } =
             new(
-                RequestPreparationConversation.TeamsChannel,
+                RequestIntakeSession.TeamsChannel,
                 "tenant-001",
                 "actor-001",
                 "conversation-001",
@@ -189,11 +279,11 @@ public sealed class RequestIntakeServiceTests
 
         public string? StatusWhenAdded { get; private set; }
 
-        public string? IntakeStatus => conversation?.Status.ToString();
-
-        public string? PreparedStatus => preparedRequest?.Status.ToString();
+        public string? IntakeStatus => session?.Status.ToString();
 
         public int SaveCount { get; private set; }
+
+        public ApplicationFailure? SaveFailure { get; init; }
 
         public List<AccessRequest> Requests { get; } = [];
 
@@ -201,28 +291,31 @@ public sealed class RequestIntakeServiceTests
 
         public DateTimeOffset UtcNow => CurrentTime;
 
-        public async Task<PreparationObservation> PrepareAsync()
+        public async Task<PreparationObservation> PrepareAsync(
+            CancellationToken? cancellationToken = null)
         {
-            var outcome = await preparationService.PrepareAsync(
+            var outcome = await service.PrepareAsync(
                 new PrepareAccessRequestCommand(
                     Owner,
                     "I need production access.",
                     "prepare-correlation"),
-                TestContext.Current.CancellationToken);
+                cancellationToken ?? TestContext.Current.CancellationToken);
 
-            return outcome switch
+            return outcome.Kind switch
             {
-                RequestReadyForConfirmation ready => new PreparationObservation(
+                RequestPreparationResultKind.ReadyForConfirmation =>
+                    new PreparationObservation(
                     true,
-                    ready.PreparedRequest.PreparationId,
-                    ready.PreparedRequest.ReservedRequestId,
-                    ready.PreparedRequest.ClientId,
-                    ready.PreparedRequest.EnvironmentId,
-                    ready.PreparedRequest.RequestedRoleId,
-                    ready.PreparedRequest.Justification,
-                    ready.PreparedRequest.IncidentId,
+                    outcome.Session!.Id,
+                    outcome.Session.ReservedRequestId!.Value,
+                    outcome.Session.ClientId,
+                    outcome.Session.EnvironmentId,
+                    outcome.Session.RequestedRoleId,
+                    outcome.Session.Justification,
+                    outcome.Session.IncidentId,
                     null),
-                RequestPreparationFailed failed => new PreparationObservation(
+                RequestPreparationResultKind.Failed =>
+                    new PreparationObservation(
                     false,
                     Guid.Empty,
                     Guid.Empty,
@@ -231,7 +324,7 @@ public sealed class RequestIntakeServiceTests
                     null,
                     null,
                     null,
-                    failed.Failure.Kind),
+                    outcome.Failure!.Kind),
                 _ => throw new InvalidOperationException(
                     "The scenario expected either readiness or a typed failure."),
             };
@@ -240,31 +333,32 @@ public sealed class RequestIntakeServiceTests
         public async Task<ConfirmationObservation> ConfirmAsync(
             AuthenticatedChannelActor actor)
         {
-            if (preparedRequest is null)
+            if (session is null)
             {
                 throw new InvalidOperationException(
                     "The scenario must be prepared before confirmation.");
             }
 
-            var outcome = await confirmationService.ConfirmAsync(
-                new ConfirmPreparedAccessRequestCommand(
+            var outcome = await service.ConfirmAsync(
+                new ConfirmRequestIntakeCommand(
                     actor,
-                    preparedRequest.PreparationId,
+                    session.Id,
                     "confirm-correlation"),
                 TestContext.Current.CancellationToken);
 
-            return outcome switch
+            return outcome.Kind switch
             {
-                PreparedRequestConfirmationSucceeded succeeded =>
+                RequestConfirmationResultKind.Submitted
+                    or RequestConfirmationResultKind.AlreadySubmitted =>
                     new ConfirmationObservation(
                         true,
-                        succeeded.RequestId,
+                        outcome.RequestId,
                         null),
-                PreparedRequestConfirmationFailed failed =>
+                RequestConfirmationResultKind.Failed =>
                     new ConfirmationObservation(
                         false,
                         null,
-                        failed.Failure.Kind),
+                        outcome.Failure!.Kind),
                 _ => throw new InvalidOperationException(
                     "The scenario received an unsupported confirmation outcome."),
             };
@@ -272,7 +366,7 @@ public sealed class RequestIntakeServiceTests
 
         public void AttemptReadyScopeChange()
         {
-            var current = conversation
+            var current = session
                 ?? throw new InvalidOperationException("No intake exists.");
             current.UpdateCandidate(
                 "other-client",
@@ -293,56 +387,41 @@ public sealed class RequestIntakeServiceTests
             return Task.FromResult(interpretation);
         }
 
-        public void AddConversation(RequestPreparationConversation value)
+        public void Add(RequestIntakeSession value)
         {
             StatusWhenAdded = value.Status.ToString();
-            conversation = value;
+            session = value;
         }
 
-        public void AddPreparedRequest(PreparedAccessRequest value) =>
-            preparedRequest = value;
-
-        public Task<ApplicationResult<RequestPreparationConversation>>
-            GetActiveConversationAsync(
+        public Task<ApplicationResult<RequestIntakeSession>>
+            GetActiveAsync(
                 AuthenticatedChannelActor actor,
                 CancellationToken cancellationToken) =>
             FromOptional(
-                conversation,
+                session is { Status: RequestIntakeStatus.Collecting or RequestIntakeStatus.Ready }
+                    ? session
+                    : null,
                 "active_intake_not_found",
                 cancellationToken);
 
-        public Task<ApplicationResult<RequestPreparationConversation>>
-            GetConversationAsync(
-                Guid conversationRecordId,
+        public Task<ApplicationResult<RequestIntakeSession>>
+            GetAsync(
+                Guid sessionId,
                 CancellationToken cancellationToken) =>
             FromOptional(
-                conversation?.Id == conversationRecordId ? conversation : null,
+                session?.Id == sessionId ? session : null,
                 "intake_not_found",
                 cancellationToken);
-
-        public Task<ApplicationResult<PreparedAccessRequest>>
-            GetPreparedRequestAsync(
-                Guid preparationId,
-                CancellationToken cancellationToken) =>
-            FromOptional(
-                preparedRequest?.PreparationId == preparationId
-                    ? preparedRequest
-                    : null,
-                "prepared_intake_not_found",
-                cancellationToken);
-
-        public Task<ApplicationResult<PreparedAccessRequest>>
-            ReloadPreparedRequestAsync(
-                Guid preparationId,
-                CancellationToken cancellationToken) =>
-            GetPreparedRequestAsync(preparationId, cancellationToken);
 
         public Task<ApplicationResult> SaveChangesAsync(
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             SaveCount++;
-            return Task.FromResult(ApplicationResult.Succeeded());
+            return Task.FromResult(
+                SaveFailure is null
+                    ? ApplicationResult.Succeeded()
+                    : ApplicationResult.Failed(SaveFailure));
         }
 
         public Task<ApplicationResult<Client>> GetClientAsync(

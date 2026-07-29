@@ -47,21 +47,21 @@ public sealed class TeamsRequestConfirmationTests
                 + preparationBody);
         }
 
-        PreparedAccessRequest preparedBeforeConfirmation;
+        RequestIntakeSession sessionBeforeConfirmation;
         await using (var preparationScope = factory.Services.CreateAsyncScope())
         {
             var dbContext = preparationScope.ServiceProvider
                 .GetRequiredService<GovernedAccessDbContext>();
-            preparedBeforeConfirmation = await dbContext.PreparedAccessRequests
+            sessionBeforeConfirmation = await dbContext.RequestIntakeSessions
                 .AsNoTracking()
                 .SingleAsync(cancellationToken);
 
             Assert.Equal(
-                PreparedAccessRequestStatus.Ready,
-                preparedBeforeConfirmation.Status);
+                RequestIntakeStatus.Ready,
+                sessionBeforeConfirmation.Status);
             Assert.Equal(
                 DemoPrincipalKeys.Requester,
-                preparedBeforeConfirmation.RequesterId);
+                sessionBeforeConfirmation.RequesterId);
             Assert.Empty(
                 await dbContext.AccessRequests
                     .AsNoTracking()
@@ -74,7 +74,7 @@ public sealed class TeamsRequestConfirmationTests
 
         var confirmationAction = AssertCardContract(
             preparationBody,
-            preparedBeforeConfirmation);
+            sessionBeforeConfirmation);
         using var confirmationResponse = await client.PostAsJsonAsync(
             "/api/messages",
             CreateConfirmationActivity(confirmationAction),
@@ -90,9 +90,9 @@ public sealed class TeamsRequestConfirmationTests
 
         var expectedRequestLink = new Uri(
             trustedWebBaseUri,
-            $"requests/{preparedBeforeConfirmation.ReservedRequestId:D}");
+            $"requests/{sessionBeforeConfirmation.ReservedRequestId:D}");
         Assert.Contains(
-            preparedBeforeConfirmation.ReservedRequestId.ToString("D"),
+            sessionBeforeConfirmation.ReservedRequestId!.Value.ToString("D"),
             confirmationBody,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -112,51 +112,40 @@ public sealed class TeamsRequestConfirmationTests
         var confirmationDbContext = confirmationScope.ServiceProvider
             .GetRequiredService<GovernedAccessDbContext>();
 
-        var submittedPreparation = await confirmationDbContext.PreparedAccessRequests
+        var submittedSession = await confirmationDbContext.RequestIntakeSessions
             .AsNoTracking()
             .SingleAsync(cancellationToken);
         Assert.Equal(
-            preparedBeforeConfirmation.PreparationId,
-            submittedPreparation.PreparationId);
+            sessionBeforeConfirmation.Id,
+            submittedSession.Id);
         Assert.Equal(
-            PreparedAccessRequestStatus.Submitted,
-            submittedPreparation.Status);
+            RequestIntakeStatus.Submitted,
+            submittedSession.Status);
         Assert.Equal(
-            preparedBeforeConfirmation.ReservedRequestId,
-            submittedPreparation.SubmittedRequestId);
-        Assert.Equal(factory.Clock.UtcNow, submittedPreparation.SubmittedAt);
-
-        var submittedConversation = await confirmationDbContext
-            .RequestPreparationConversations
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        Assert.Equal(
-            RequestPreparationConversationStatus.Submitted,
-            submittedConversation.Status);
-        Assert.Equal(
-            preparedBeforeConfirmation.PreparationId,
-            submittedConversation.ActivePreparationId);
-        Assert.Null(submittedConversation.ClientId);
-        Assert.Null(submittedConversation.EnvironmentId);
-        Assert.Null(submittedConversation.RequestedRoleId);
-        Assert.Null(submittedConversation.Justification);
-        Assert.Null(submittedConversation.IncidentId);
-        Assert.Null(submittedConversation.PendingClarification);
+            sessionBeforeConfirmation.ReservedRequestId,
+            submittedSession.ReservedRequestId);
+        Assert.Equal(factory.Clock.UtcNow, submittedSession.SubmittedAt);
+        Assert.Null(submittedSession.ClientId);
+        Assert.Null(submittedSession.EnvironmentId);
+        Assert.Null(submittedSession.RequestedRoleId);
+        Assert.Null(submittedSession.Justification);
+        Assert.Null(submittedSession.IncidentId);
+        Assert.Null(submittedSession.PendingClarification);
 
         var request = await confirmationDbContext.AccessRequests
             .AsNoTracking()
             .SingleAsync(cancellationToken);
-        Assert.Equal(preparedBeforeConfirmation.ReservedRequestId, request.Id);
+        Assert.Equal(sessionBeforeConfirmation.ReservedRequestId, request.Id);
         Assert.Equal(DemoPrincipalKeys.Requester, request.RequesterId);
-        Assert.Equal(preparedBeforeConfirmation.ClientId, request.ClientId);
-        Assert.Equal(preparedBeforeConfirmation.EnvironmentId, request.EnvironmentId);
+        Assert.Equal(sessionBeforeConfirmation.ClientId, request.ClientId);
+        Assert.Equal(sessionBeforeConfirmation.EnvironmentId, request.EnvironmentId);
         Assert.Equal(
-            preparedBeforeConfirmation.RequestedRoleId,
+            sessionBeforeConfirmation.RequestedRoleId,
             request.RequestedRoleId);
         Assert.Equal(
-            preparedBeforeConfirmation.Justification,
+            sessionBeforeConfirmation.Justification,
             request.Justification);
-        Assert.Equal(preparedBeforeConfirmation.IncidentId, request.IncidentId);
+        Assert.Equal(sessionBeforeConfirmation.IncidentId, request.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
         Assert.Equal(factory.Clock.UtcNow, request.CreatedAt);
 
@@ -194,7 +183,7 @@ public sealed class TeamsRequestConfirmationTests
 
     private static JsonElement AssertCardContract(
         string responseBody,
-        PreparedAccessRequest preparedRequest)
+        RequestIntakeSession session)
     {
         using var document = JsonDocument.Parse(responseBody);
         var activity = Assert.Single(
@@ -236,7 +225,7 @@ public sealed class TeamsRequestConfirmationTests
             body[1].GetProperty("text").GetString());
         Assert.Equal("Justification", body[3].GetProperty("text").GetString());
         Assert.Equal(
-            preparedRequest.Justification,
+            session.Justification,
             body[4].GetProperty("text").GetString());
 
         var facts = body[2].GetProperty("facts");
@@ -245,23 +234,23 @@ public sealed class TeamsRequestConfirmationTests
             fact => AssertFact(
                 fact,
                 "Request ID",
-                preparedRequest.ReservedRequestId.ToString("D")),
+                session.ReservedRequestId!.Value.ToString("D")),
             fact => AssertFact(
                 fact,
                 "Client",
-                $"Client Alpha ({preparedRequest.ClientId})"),
+                $"Client Alpha ({session.ClientId})"),
             fact => AssertFact(
                 fact,
                 "Environment",
-                $"Client Alpha Production EU ({preparedRequest.EnvironmentId})"),
+                $"Client Alpha Production EU ({session.EnvironmentId})"),
             fact => AssertFact(
                 fact,
                 "Requested role",
-                $"Production read-only ({preparedRequest.RequestedRoleId})"),
+                $"Production read-only ({session.RequestedRoleId})"),
             fact => AssertFact(
                 fact,
                 "Incident",
-                $"Client Alpha production investigation ({preparedRequest.IncidentId})"),
+                $"Client Alpha production investigation ({session.IncidentId})"),
             fact => AssertFact(
                 fact,
                 "Access lifetime",
@@ -269,7 +258,7 @@ public sealed class TeamsRequestConfirmationTests
             fact => AssertFact(
                 fact,
                 "Confirm by",
-                preparedRequest.ExpiresAt.UtcDateTime.ToString(
+                session.ExpiresAt!.Value.UtcDateTime.ToString(
                     "O",
                     CultureInfo.InvariantCulture)));
 
@@ -295,11 +284,11 @@ public sealed class TeamsRequestConfirmationTests
             PreparedRequestCardFactory.ContractSchemaVersion,
             actionData.GetProperty("schemaVersion").GetInt32());
         Assert.Equal(
-            preparedRequest.PreparationId.ToString("D"),
+            session.Id.ToString("D"),
             actionData.GetProperty("preparedRequestId").GetString());
         Assert.NotEqual(
-            preparedRequest.ReservedRequestId,
-            preparedRequest.PreparationId);
+            session.ReservedRequestId,
+            session.Id);
         return action.Clone();
     }
 

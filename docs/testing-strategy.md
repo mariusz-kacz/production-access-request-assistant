@@ -83,6 +83,19 @@ serialization. Domain rules should not require a host fixture.
 Each test can reset its database to known seed state. Tests never depend on execution
 order or the developer's `governed-access.db`.
 
+Keep this layer deliberately small:
+
+- exercise a real boundary: hosted HTTP/authentication, SQLite persistence, MCP
+  transport, provider coordination, or SDK translation;
+- use one cohesive scenario to assert its response, persisted state, and audit
+  evidence instead of repeating the same workflow at service and HTTP levels;
+- keep variant matrices inside one test when setup and expected behavior are the
+  same;
+- do not integration-test deterministic test fakes, factory helpers, pure mapping
+  methods, or middleware by direct construction; and
+- retain separate tests only when they prove a distinct security boundary,
+  transaction boundary, concurrency rule, or external contract.
+
 ### Integration coverage
 
 | Area | Evidence |
@@ -236,15 +249,16 @@ npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 
 ## Current test baseline
 
-At the last documentation review, the repository passed:
+After the integration-suite consolidation on 2026-07-29, the repository contains:
 
-- 42 .NET unit tests;
-- 126 .NET integration tests; and
+- 53 .NET unit tests;
+- 56 integration-test methods producing 59 cases across 21 files; and
 - 5 frontend tests in 2 files.
 
-These counts are a useful snapshot, not an acceptance criterion. A change may
-legitimately alter the count, but the required rule and negative-scenario coverage
-must remain.
+The integration baseline was reduced from 107 methods and 151 cases across 27 files.
+The removed coverage duplicated another hosted scenario or tested helpers and pure
+functions without crossing an integration boundary. Counts remain a diagnostic, not
+an acceptance criterion; required rules and negative scenarios must remain covered.
 
 ## Recommended validation order
 

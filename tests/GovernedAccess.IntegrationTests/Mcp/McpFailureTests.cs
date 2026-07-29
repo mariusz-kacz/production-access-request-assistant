@@ -14,44 +14,44 @@ namespace GovernedAccess.IntegrationTests.Mcp;
 
 public sealed class McpFailureTests
 {
-    [Theory]
-    [InlineData(ApplicationFailureKind.NotFound, "NotFound", "environment-not-found")]
-    [InlineData(
-        ApplicationFailureKind.DependencyUnavailable,
-        "Unavailable",
-        "request-context-unavailable")]
-    [InlineData(ApplicationFailureKind.Timeout, "Timeout", "request-context-timeout")]
-    [InlineData(ApplicationFailureKind.Cancelled, "Cancelled", "request-context-cancelled")]
-    public async Task ExpectedReaderFailuresReturnTypedMcpFailureEnvelopes(
-        ApplicationFailureKind failureKind,
-        string expectedOutcome,
-        string expectedCode)
+    [Fact]
+    public async Task ExpectedReaderFailuresReturnTypedMcpFailureEnvelopes()
     {
-        var reader = new StubRequestContextReader
+        (ApplicationFailureKind Kind, string Outcome, string Code)[] failures =
+        [
+            (ApplicationFailureKind.NotFound, "NotFound", "environment-not-found"),
+            (ApplicationFailureKind.DependencyUnavailable, "Unavailable", "request-context-unavailable"),
+            (ApplicationFailureKind.Timeout, "Timeout", "request-context-timeout"),
+            (ApplicationFailureKind.Cancelled, "Cancelled", "request-context-cancelled"),
+        ];
+
+        foreach (var (failureKind, expectedOutcome, expectedCode) in failures)
         {
-            GetProductionEnvironment = (_, _) => Task.FromResult(
-                ApplicationResult.Failed<ProductionEnvironment>(
-                    new ApplicationFailure(
-                        failureKind,
-                        expectedCode,
-                        "The environment lookup did not complete successfully."))),
-        };
-
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, reader);
-        await using var client = await CreateMcpClientAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-        var tool = await GetToolAsync(client, "get_production_environment");
-
-        var result = await tool.CallAsync(
-            new Dictionary<string, object?>
+            var reader = new StubRequestContextReader
             {
-                ["environmentId"] = "PROD-UNKNOWN",
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
+                GetProductionEnvironment = (_, _) => Task.FromResult(
+                    ApplicationResult.Failed<ProductionEnvironment>(
+                        new ApplicationFailure(
+                            failureKind,
+                            expectedCode,
+                            "The environment lookup did not complete successfully."))),
+            };
 
-        AssertTypedFailure(result, expectedOutcome, expectedCode);
+            await using var rootFactory = new GovernedAccessWebFactory();
+            await using var factory = CreateFactory(rootFactory, reader);
+            await using var client = await CreateMcpClientAsync(
+                factory,
+                TestContext.Current.CancellationToken);
+            var tool = await GetToolAsync(client, "get_production_environment");
+            var result = await tool.CallAsync(
+                new Dictionary<string, object?>
+                {
+                    ["environmentId"] = "PROD-UNKNOWN",
+                },
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            AssertTypedFailure(result, expectedOutcome, expectedCode);
+        }
     }
 
     [Fact]

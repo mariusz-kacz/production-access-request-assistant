@@ -43,19 +43,26 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         $"Data Source=governed-access-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SemaphoreSlim databaseResetLock = new(1, 1);
     private readonly IChatClient? replacementChatClient;
+    private readonly ILoggerProvider? loggerProvider;
 
     public GovernedAccessWebFactory(
         IChatClient? chatClient = null,
-        Uri? trustedWebBaseUri = null)
+        Uri? trustedWebBaseUri = null,
+        ILoggerProvider? loggerProvider = null)
     {
         replacementChatClient = chatClient;
+        this.loggerProvider = loggerProvider;
         TrustedWebBaseUri = trustedWebBaseUri ?? DefaultTrustedWebBaseUri;
     }
 
     public GovernedAccessWebFactory(
         DeterministicChatMode chatMode,
-        Uri? trustedWebBaseUri = null)
-        : this(new DeterministicChatClient(chatMode), trustedWebBaseUri)
+        Uri? trustedWebBaseUri = null,
+        ILoggerProvider? loggerProvider = null)
+        : this(
+            new DeterministicChatClient(chatMode),
+            trustedWebBaseUri,
+            loggerProvider)
     {
     }
 
@@ -164,7 +171,14 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.UseEnvironment("Testing");
-        builder.ConfigureLogging(logging => logging.ClearProviders());
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            if (loggerProvider is not null)
+            {
+                logging.AddProvider(loggerProvider);
+            }
+        });
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(CreateTeamsConfiguration()));
         builder.ConfigureServices(services =>

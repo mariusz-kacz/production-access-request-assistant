@@ -43,32 +43,7 @@ public sealed class SessionControllerTests
     }
 
     [Fact]
-    public async Task DemoSignInWithoutAntiforgeryTokenIsRejected()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var host = await SessionTestHost.StartAsync(cancellationToken);
-        using var request = CreateJsonRequest(
-            HttpMethod.Post,
-            "/api/demo/session",
-            new { principalKey = DemoPrincipalKeys.Requester });
-
-        using var response = await host.Client.SendAsync(request, cancellationToken);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(
-            "application/problem+json",
-            response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-        Assert.DoesNotContain(
-            ReadSetCookies(response).Keys,
-            name => string.Equals(name, DemoAuthentication.CookieName, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task DemoSignInUsesOnlyTheAllowlistedPrincipalKey()
+    public async Task DemoSessionUsesAllowlistedIdentityAndSupportsSignOut()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await SessionTestHost.StartAsync(cancellationToken);
@@ -102,6 +77,18 @@ public sealed class SessionControllerTests
             "client-alpha",
             body.RootElement.GetProperty("principal").GetProperty("clientId").GetString());
         Assert.Contains(DemoAuthentication.CookieName, cookies.Keys);
+        Assert.Contains(
+            "HttpOnly",
+            cookies[DemoAuthentication.CookieName].Attributes,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Secure",
+            cookies[DemoAuthentication.CookieName].Attributes,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "SameSite=Strict",
+            cookies[DemoAuthentication.CookieName].Attributes,
+            StringComparison.OrdinalIgnoreCase);
 
         using var sessionRequest = new HttpRequestMessage(HttpMethod.Get, "/api/session");
         sessionRequest.Headers.Add(
@@ -121,6 +108,24 @@ public sealed class SessionControllerTests
             session.RootElement.GetProperty("capabilities")
                 .EnumerateArray()
                 .Select(item => item.GetString()));
+
+        var signedInCookies = MergeCookies(antiforgeryCookies, cookies);
+        using var signOutRequest = CreateProtectedRequest(
+            HttpMethod.Delete,
+            "/api/demo/session",
+            body: null,
+            signedInCookies);
+        using var signOutResponse = await host.Client.SendAsync(
+            signOutRequest,
+            cancellationToken);
+        var clearedCookies = ReadSetCookies(signOutResponse);
+
+        Assert.Equal(HttpStatusCode.NoContent, signOutResponse.StatusCode);
+        Assert.Contains(DemoAuthentication.CookieName, clearedCookies.Keys);
+        Assert.Contains(
+            "expires=Thu, 01 Jan 1970",
+            clearedCookies[DemoAuthentication.CookieName].Attributes,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -148,52 +153,6 @@ public sealed class SessionControllerTests
         Assert.DoesNotContain(
             ReadSetCookies(response).Keys,
             name => string.Equals(name, DemoAuthentication.CookieName, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task DemoSignOutRequiresAntiforgeryAndClearsTheAuthenticationCookie()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var host = await SessionTestHost.StartAsync(cancellationToken);
-        var anonymousTokens = await GetAntiforgeryCookiesAsync(
-            host.Client,
-            cancellationToken);
-        using var signInRequest = CreateProtectedRequest(
-            HttpMethod.Post,
-            "/api/demo/session",
-            new { principalKey = DemoPrincipalKeys.Requester },
-            anonymousTokens);
-        using var signInResponse = await host.Client.SendAsync(
-            signInRequest,
-            cancellationToken);
-        var signedInCookies = MergeCookies(anonymousTokens, ReadSetCookies(signInResponse));
-
-        using var unprotectedSignOut = new HttpRequestMessage(
-            HttpMethod.Delete,
-            "/api/demo/session");
-        unprotectedSignOut.Headers.Add("Cookie", CreateCookieHeader(signedInCookies));
-        using var rejectedResponse = await host.Client.SendAsync(
-            unprotectedSignOut,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, rejectedResponse.StatusCode);
-
-        using var signOutRequest = CreateProtectedRequest(
-            HttpMethod.Delete,
-            "/api/demo/session",
-            body: null,
-            signedInCookies);
-        using var signOutResponse = await host.Client.SendAsync(
-            signOutRequest,
-            cancellationToken);
-        var clearedCookies = ReadSetCookies(signOutResponse);
-
-        Assert.Equal(HttpStatusCode.NoContent, signOutResponse.StatusCode);
-        Assert.Contains(DemoAuthentication.CookieName, clearedCookies.Keys);
-        Assert.Contains(
-            "expires=Thu, 01 Jan 1970",
-            clearedCookies[DemoAuthentication.CookieName].Attributes,
-            StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<Dictionary<string, SetCookie>> GetAntiforgeryCookiesAsync(

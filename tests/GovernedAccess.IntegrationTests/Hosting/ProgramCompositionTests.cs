@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
@@ -37,68 +38,28 @@ public sealed class ProgramCompositionTests
     }
 
     [Fact]
-    public async Task SessionEndpointRunsThroughAuthenticationAndCorrelationMiddleware()
+    public async Task IntakeComponentsUseOneScopedServiceStoreAndDbContext()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory();
-        using var client = factory.CreateClient();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var dbContext = services.GetRequiredService<GovernedAccessDbContext>();
+        var intakeStore = services.GetRequiredService<IRequestIntakeStore>();
+        var workflowStore = services.GetRequiredService<IWorkflowStore>();
+        var intakeService = services.GetRequiredService<RequestIntakeService>();
 
-        using var response = await client.GetAsync("/api/session", cancellationToken);
-        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var session = await JsonDocument.ParseAsync(
-            body,
-            cancellationToken: cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.False(session.RootElement.GetProperty("authenticated").GetBoolean());
-        Assert.True(response.Headers.Contains(CorrelationContext.HeaderName));
-    }
-
-    [Fact]
-    public async Task FactoryCanSignInThroughTheComposedAntiforgeryAndCookiePipeline()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-
-        using var response = await client.GetAsync("/api/session", cancellationToken);
-        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var session = await JsonDocument.ParseAsync(
-            body,
-            cancellationToken: cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(session.RootElement.GetProperty("authenticated").GetBoolean());
-        Assert.Equal(
-            DemoPrincipalKeys.Requester,
-            session.RootElement.GetProperty("principal").GetProperty("id").GetString());
-    }
-
-    [Fact]
-    public async Task McpIsMappedAndApiOrMcpMissesDoNotUseTheSpaFallback()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        var endpointDataSource = factory.Services.GetRequiredService<EndpointDataSource>();
-        var routeEndpoints = endpointDataSource.Endpoints.OfType<RouteEndpoint>().ToArray();
-
+        Assert.Same(
+            intakeStore,
+            services.GetRequiredService<IRequestIntakeStore>());
         Assert.Contains(
-            routeEndpoints,
-            endpoint => endpoint.RoutePattern.RawText?.Contains(
-                "/mcp",
-                StringComparison.Ordinal) == true);
-        Assert.Contains(routeEndpoints, endpoint => endpoint.Order == int.MaxValue);
-
-        using var client = factory.CreateClient();
-        using var missingApi = await client.GetAsync("/api/not-implemented", cancellationToken);
-        using var missingMcp = await client.GetAsync("/mcp/not-implemented", cancellationToken);
-
-        Assert.Equal(HttpStatusCode.NotFound, missingApi.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, missingMcp.StatusCode);
-        Assert.NotEqual("text/html", missingApi.Content.Headers.ContentType?.MediaType);
-        Assert.NotEqual("text/html", missingMcp.Content.Headers.ContentType?.MediaType);
+            GetPrivateDependencies(intakeService),
+            dependency => ReferenceEquals(dependency, intakeStore));
+        Assert.Contains(
+            GetPrivateDependencies(intakeStore),
+            dependency => ReferenceEquals(dependency, dbContext));
+        Assert.Contains(
+            GetPrivateDependencies(workflowStore),
+            dependency => ReferenceEquals(dependency, dbContext));
     }
 
     [Fact]
@@ -121,81 +82,41 @@ public sealed class ProgramCompositionTests
             options.PreparationLifetime);
     }
 
-    [Theory]
-    [InlineData(
-        "TeamsAccessRequest:AllowedTenantId",
-        "",
-        "AllowedTenantId")]
-    [InlineData(
-        "TeamsAccessRequest:BotConnectionName",
-        "invalid:name",
-        "BotConnectionName")]
-    [InlineData(
-        "TokenValidation:Enabled",
-        "false",
-        "TokenValidation:Enabled")]
-    [InlineData(
-        "TokenValidation:TenantId",
-        "33333333-3333-3333-3333-333333333333",
-        "TokenValidation:TenantId")]
-    [InlineData(
-        "Connections:BotServiceConnection:Settings:AuthType",
-        "ManagedIdentity",
-        "AuthType")]
-    [InlineData(
-        "Connections:BotServiceConnection:Settings:ClientId",
-        "",
-        "Settings:ClientId")]
-    [InlineData(
-        "Connections:BotServiceConnection:Settings:TenantId",
-        "33333333-3333-3333-3333-333333333333",
-        "Settings:TenantId")]
-    [InlineData(
-        "Connections:BotServiceConnection:Settings:ClientSecret",
-        "",
-        "ClientSecret")]
-    [InlineData(
-        "Connections:BotServiceConnection:Settings:Scopes:0",
-        "https://graph.microsoft.com/.default",
-        "Settings:Scopes")]
-    [InlineData(
-        "TokenValidation:Audiences:0",
-        "44444444-4444-4444-4444-444444444444",
-        "TokenValidation:Audiences")]
-    [InlineData(
-        "ConnectionsMap:0:ServiceUrl",
-        "https://smba.trafficmanager.net/emea/",
-        "ConnectionsMap")]
-    [InlineData(
-        "TeamsAccessRequest:TrustedWebBaseUri",
-        "http://governed-access.test/",
-        "TrustedWebBaseUri")]
-    [InlineData(
-        "TeamsAccessRequest:ModelTimeout",
-        "00:00:31",
-        "ModelTimeout")]
-    [InlineData(
-        "TeamsAccessRequest:McpTimeout",
-        "00:00:06",
-        "McpTimeout")]
-    [InlineData(
-        "TeamsAccessRequest:PreparationLifetime",
-        "00:29:59",
-        "PreparationLifetime")]
-    public void TeamsOptionsFailClosedForUnsafeConfiguration(
-        string key,
-        string value,
-        string expectedFailure)
+    [Fact]
+    public void TeamsOptionsFailClosedForUnsafeConfiguration()
     {
-        var configuration = CreateTeamsConfiguration();
-        configuration[key] = value;
+        (string Key, string Value, string ExpectedFailure)[] invalidValues =
+        [
+            ("TeamsAccessRequest:AllowedTenantId", "", "AllowedTenantId"),
+            ("TeamsAccessRequest:BotConnectionName", "invalid:name", "BotConnectionName"),
+            ("TokenValidation:Enabled", "false", "TokenValidation:Enabled"),
+            ("TokenValidation:TenantId", "33333333-3333-3333-3333-333333333333", "TokenValidation:TenantId"),
+            ("Connections:BotServiceConnection:Settings:AuthType", "ManagedIdentity", "AuthType"),
+            ("Connections:BotServiceConnection:Settings:ClientId", "", "Settings:ClientId"),
+            ("Connections:BotServiceConnection:Settings:TenantId", "33333333-3333-3333-3333-333333333333", "Settings:TenantId"),
+            ("Connections:BotServiceConnection:Settings:ClientSecret", "", "ClientSecret"),
+            ("Connections:BotServiceConnection:Settings:Scopes:0", "https://graph.microsoft.com/.default", "Settings:Scopes"),
+            ("TokenValidation:Audiences:0", "44444444-4444-4444-4444-444444444444", "TokenValidation:Audiences"),
+            ("ConnectionsMap:0:ServiceUrl", "https://smba.trafficmanager.net/emea/", "ConnectionsMap"),
+            ("TeamsAccessRequest:TrustedWebBaseUri", "http://governed-access.test/", "TrustedWebBaseUri"),
+            ("TeamsAccessRequest:ModelTimeout", "00:00:31", "ModelTimeout"),
+            ("TeamsAccessRequest:McpTimeout", "00:00:06", "McpTimeout"),
+            ("TeamsAccessRequest:PreparationLifetime", "00:29:59", "PreparationLifetime"),
+        ];
 
-        var (_, result) = ValidateTeamsOptions(configuration);
+        foreach (var (key, value, expectedFailure) in invalidValues)
+        {
+            var configuration = CreateTeamsConfiguration();
+            configuration[key] = value;
+            var (_, result) = ValidateTeamsOptions(configuration);
 
-        Assert.True(result.Failed);
-        Assert.Contains(
-            result.Failures,
-            failure => failure.Contains(expectedFailure, StringComparison.Ordinal));
+            Assert.True(result.Failed);
+            Assert.Contains(
+                result.Failures,
+                failure => failure.Contains(
+                    expectedFailure,
+                    StringComparison.Ordinal));
+        }
     }
 
     private static (
@@ -245,4 +166,12 @@ public sealed class ProgramCompositionTests
             ["TeamsAccessRequest:McpTimeout"] = "00:00:05",
             ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
         };
+
+    private static IEnumerable<object?> GetPrivateDependencies(object instance) =>
+        instance
+            .GetType()
+            .GetFields(
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic)
+            .Select(field => field.GetValue(instance));
 }

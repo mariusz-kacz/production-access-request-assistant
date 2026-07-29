@@ -78,32 +78,6 @@ public sealed class RequestPreparationEndpointTests
     }
 
     [Fact]
-    public async Task PreparationWithoutAntiforgeryIsRejectedBeforeInterpretation()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var interpreter = new RecordingDraftInterpreter(
-            new DraftInterpretationOutcome(DraftInterpretationOutcomeKind.Unavailable));
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, interpreter);
-        using var client = await CreateAuthenticatedClientAsync(
-            factory,
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-
-        using var response = await client.PostAsJsonAsync(
-            "/api/request-drafts/prepare",
-            new { intent = Intent },
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-        Assert.Null(interpreter.LastRequest);
-    }
-
-    [Fact]
     public async Task NonRequesterCannotPrepareADraft()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

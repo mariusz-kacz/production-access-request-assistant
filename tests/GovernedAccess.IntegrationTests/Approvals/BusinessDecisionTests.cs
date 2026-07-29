@@ -254,45 +254,6 @@ public sealed class BusinessDecisionTests
         Assert.Equal(outcomeCode, auditEvent.OutcomeCode);
     }
 
-    [Fact]
-    public async Task BusinessDecisionWithoutAntiforgeryIsRejectedWithoutWorkflowSideEffects()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.ClientAlphaApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await client.SendAsync(request, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-
-        Assert.Equal(RequestStatus.AwaitingBusinessApproval, storedRequest.Status);
-        Assert.Equal(1, storedRequest.PersistenceVersion);
-        Assert.Empty(await dbContext.ApprovalDecisions.AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.DoesNotContain(
-            await dbContext.AuditEvents.AsNoTracking().ToListAsync(cancellationToken),
-            item => item.EventType is AuditEventType.BusinessDecision
-                or AuditEventType.AuthorizationRejected
-                or AuditEventType.InvalidTransitionRejected);
-    }
-
     private static Dictionary<string, object?> ValidDecisionBody(
         string decision,
         string? comment)

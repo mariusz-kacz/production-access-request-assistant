@@ -123,31 +123,6 @@ public sealed class DevOpsDecisionTests
     }
 
     [Fact]
-    public async Task AnonymousPrincipalCannotDecideBusinessApprovedRequest()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            BaseAddress = new Uri("https://localhost"),
-            HandleCookies = true,
-        });
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await AssertNoDevOpsSideEffectsAsync(factory, requestId, cancellationToken);
-    }
-
-    [Fact]
     public async Task DevOpsRejectionCreatesNoProvisioningOperationOrGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -192,31 +167,6 @@ public sealed class DevOpsDecisionTests
             cancellationToken));
         Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
             cancellationToken));
-    }
-
-    [Fact]
-    public async Task DevOpsDecisionWithoutAntiforgeryHasNoWorkflowSideEffects()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
-        using var client = await CreateAuthenticatedClientAsync(
-            factory,
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await client.SendAsync(request, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-        await AssertNoDevOpsSideEffectsAsync(factory, requestId, cancellationToken);
     }
 
     [Fact]

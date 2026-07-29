@@ -61,11 +61,8 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
-    public DbSet<RequestPreparationConversation> RequestPreparationConversations =>
-        Set<RequestPreparationConversation>();
-
-    public DbSet<PreparedAccessRequest> PreparedAccessRequests =>
-        Set<PreparedAccessRequest>();
+    public DbSet<RequestIntakeSession> RequestIntakeSessions =>
+        Set<RequestIntakeSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,155 +78,70 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         ConfigureProvisioningOperation(modelBuilder.Entity<ProvisioningOperation>());
         ConfigureAccessGrant(modelBuilder.Entity<AccessGrant>());
         ConfigureAuditEvent(modelBuilder.Entity<AuditEvent>());
-        ConfigureRequestPreparationConversation(
-            modelBuilder.Entity<RequestPreparationConversation>());
-        ConfigurePreparedAccessRequest(modelBuilder.Entity<PreparedAccessRequest>());
+        ConfigureRequestIntakeSession(modelBuilder.Entity<RequestIntakeSession>());
     }
 
-    private static void ConfigureRequestPreparationConversation(
-        EntityTypeBuilder<RequestPreparationConversation> entity)
+    private static void ConfigureRequestIntakeSession(
+        EntityTypeBuilder<RequestIntakeSession> entity)
     {
-        entity.ToTable("RequestPreparationConversations");
-        entity.HasKey(conversation => conversation.Id);
-        entity.Property(conversation => conversation.Channel).HasMaxLength(32);
-        entity.Property(conversation => conversation.TenantId).HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.ChannelActorId)
+        entity.ToTable("RequestIntakeSessions");
+        entity.HasKey(session => session.Id);
+        entity.Property(session => session.Channel).HasMaxLength(32);
+        entity.Property(session => session.TenantId).HasMaxLength(IdentifierLength);
+        entity.Property(session => session.ChannelActorId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.ConversationId)
+        entity.Property(session => session.ConversationId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.RequesterId)
+        entity.Property(session => session.RequesterId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.Status)
+        entity.Property(session => session.Status)
             .HasConversion<string>()
             .HasMaxLength(16);
-        entity.Property(conversation => conversation.ClientId)
+        entity.Property(session => session.ClientId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.EnvironmentId)
+        entity.Property(session => session.EnvironmentId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.RequestedRoleId)
+        entity.Property(session => session.RequestedRoleId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.Justification)
+        entity.Property(session => session.Justification)
             .HasMaxLength(AccessRequest.MaximumJustificationLength);
-        entity.Property(conversation => conversation.IncidentId)
+        entity.Property(session => session.IncidentId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(conversation => conversation.PendingClarification)
+        entity.Property(session => session.PendingClarification)
             .HasConversion(ClarificationContextConverter)
             .Metadata.SetValueComparer(ClarificationContextComparer);
-        entity.Property(conversation => conversation.PendingClarification)
+        entity.Property(session => session.PendingClarification)
             .HasColumnName("PendingClarificationJson")
             .HasColumnType("TEXT");
-        entity.Property(conversation => conversation.CorrelationId)
+        entity.Property(session => session.CorrelationId)
             .HasMaxLength(CorrelationIdLength);
-        entity.Property(conversation => conversation.PersistenceVersion)
+        entity.Property(session => session.PersistenceVersion)
             .IsConcurrencyToken()
             .ValueGeneratedNever();
 
-        ConfigureUtcTimestamp(entity.Property(conversation => conversation.CreatedAt));
-        ConfigureUtcTimestamp(entity.Property(conversation => conversation.LastTurnAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.CreatedAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.LastUpdatedAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.ExpiresAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.SubmittedAt));
 
-        entity.HasIndex(conversation => new
+        entity.HasIndex(session => new
         {
-            conversation.Channel,
-            conversation.TenantId,
-            conversation.ChannelActorId,
-            conversation.ConversationId,
+            session.Channel,
+            session.TenantId,
+            session.ChannelActorId,
+            session.ConversationId,
         })
             .IsUnique()
             .HasFilter("\"Status\" IN ('Collecting', 'Ready')");
-        entity.HasIndex(conversation => conversation.ActivePreparationId)
-            .IsUnique();
+        entity.HasIndex(session => session.ReservedRequestId).IsUnique();
 
         entity.HasOne<AuthenticatedPrincipal>()
             .WithMany()
-            .HasForeignKey(conversation => conversation.RequesterId)
+            .HasForeignKey(session => session.RequesterId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Candidate identifiers remain untrusted until a prepared snapshot is
-        // created, so they deliberately do not receive authoritative foreign keys.
-    }
-
-    private static void ConfigurePreparedAccessRequest(
-        EntityTypeBuilder<PreparedAccessRequest> entity)
-    {
-        entity.ToTable(
-            "PreparedAccessRequests",
-            table => table.HasCheckConstraint(
-                "CK_PreparedAccessRequests_SubmittedRequestId",
-                "\"SubmittedRequestId\" IS NULL OR \"SubmittedRequestId\" = \"ReservedRequestId\""));
-        entity.HasKey(prepared => prepared.PreparationId);
-        entity.Property(prepared => prepared.Channel).HasMaxLength(32);
-        entity.Property(prepared => prepared.TenantId).HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.ChannelActorId)
-            .HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.ConversationId)
-            .HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.RequesterId)
-            .HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.ClientId).HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.EnvironmentId)
-            .HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.RequestedRoleId)
-            .HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.Justification)
-            .HasMaxLength(AccessRequest.MaximumJustificationLength);
-        entity.Property(prepared => prepared.IncidentId).HasMaxLength(IdentifierLength);
-        entity.Property(prepared => prepared.Status)
-            .HasConversion<string>()
-            .HasMaxLength(16);
-        entity.Property(prepared => prepared.CorrelationId)
-            .HasMaxLength(CorrelationIdLength);
-        entity.Property(prepared => prepared.PersistenceVersion)
-            .IsConcurrencyToken()
-            .ValueGeneratedNever();
-
-        ConfigureUtcTimestamp(entity.Property(prepared => prepared.CreatedAt));
-        ConfigureUtcTimestamp(entity.Property(prepared => prepared.ExpiresAt));
-        ConfigureUtcTimestamp(entity.Property(prepared => prepared.SubmittedAt));
-
-        entity.HasIndex(prepared => prepared.ConversationRecordId).IsUnique();
-        entity.HasIndex(prepared => prepared.ReservedRequestId).IsUnique();
-        entity.HasIndex(prepared => prepared.SubmittedRequestId).IsUnique();
-
-        entity.HasOne<RequestPreparationConversation>()
-            .WithOne()
-            .HasForeignKey<PreparedAccessRequest>(
-                prepared => prepared.ConversationRecordId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<AccessRequest>()
-            .WithOne()
-            .HasForeignKey<PreparedAccessRequest>(
-                prepared => prepared.SubmittedRequestId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<AuthenticatedPrincipal>()
-            .WithMany()
-            .HasForeignKey(prepared => prepared.RequesterId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<Client>()
-            .WithMany()
-            .HasForeignKey(prepared => prepared.ClientId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<ProductionEnvironment>()
-            .WithMany()
-            .HasForeignKey(prepared => prepared.EnvironmentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<EnvironmentRole>()
-            .WithMany()
-            .HasForeignKey(prepared => new
-            {
-                prepared.EnvironmentId,
-                prepared.RequestedRoleId,
-            })
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<Incident>()
-            .WithMany()
-            .HasForeignKey(prepared => prepared.IncidentId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Candidate identifiers are untrusted until readiness and become null in
+        // terminal rows, so authoritative relationships are validated in services.
     }
 
     private static void ConfigureClient(EntityTypeBuilder<Client> entity)

@@ -26,13 +26,10 @@ public sealed class DraftInterpretationTests
         """;
 
     [Fact]
-    public async Task ValidDeterministicOutputProducesTheTypedDraft()
+    public async Task DeterministicOutputsProduceTypedCompleteOrIncompleteDrafts()
     {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Valid);
-
-        var outcome = await InterpretAsync(
-            factory,
+        var outcome = await InterpretModeAsync(
+            DeterministicChatMode.Valid,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(DraftInterpretationOutcomeKind.Prepared, outcome.Kind);
@@ -43,108 +40,91 @@ public sealed class DraftInterpretationTests
         Assert.Equal("Investigate the active production incident.", draft.Justification);
         Assert.Equal("INC-1042", draft.IncidentId);
         Assert.True(draft.IsComplete);
-    }
 
-    [Fact]
-    public async Task IncompleteDeterministicOutputPreservesKnownValuesAndRemainsIncomplete()
-    {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Incomplete);
-
-        var outcome = await InterpretAsync(
-            factory,
+        outcome = await InterpretModeAsync(
+            DeterministicChatMode.Incomplete,
             TestContext.Current.CancellationToken);
 
         Assert.Equal(DraftInterpretationOutcomeKind.Incomplete, outcome.Kind);
-        var draft = Assert.IsType<AccessRequestDraft>(outcome.Draft);
-        Assert.Equal("client-alpha", draft.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", draft.EnvironmentId);
-        Assert.Equal("ProductionReadOnly", draft.RequestedRole);
-        Assert.Null(draft.Justification);
-        Assert.False(draft.IsComplete);
+        var incompleteDraft = Assert.IsType<AccessRequestDraft>(outcome.Draft);
+        Assert.Equal("client-alpha", incompleteDraft.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", incompleteDraft.EnvironmentId);
+        Assert.Equal("ProductionReadOnly", incompleteDraft.RequestedRole);
+        Assert.Null(incompleteDraft.Justification);
+        Assert.False(incompleteDraft.IsComplete);
     }
 
     [Fact]
-    public async Task MalformedJsonReturnsATypedCorrectionOutcomeWithoutADraft()
+    public async Task InvalidModelOutputsReturnOneTypedMalformedOutcome()
     {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Malformed);
+        foreach (var mode in new[]
+                 {
+                     DeterministicChatMode.Malformed,
+                     DeterministicChatMode.Unsupported,
+                 })
+        {
+            var outcome = await InterpretModeAsync(
+                mode,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(
+                DraftInterpretationOutcomeKind.MalformedModelOutput,
+                outcome.Kind);
+            Assert.Null(outcome.Draft);
+        }
 
-        var outcome = await InterpretAsync(
-            factory,
-            TestContext.Current.CancellationToken);
+        string[] invalidResponses =
+        [
+            "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-UNKNOWN\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\"}",
+            "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-ALPHA-EU\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\",\"actorId\":\"browser-controlled\"}",
+        ];
+        foreach (var response in invalidResponses)
+        {
+            await using var rootFactory = new GovernedAccessWebFactory();
+            await using var factory = CreateFactory(
+                rootFactory,
+                new CapturingChatClient(response));
+            var outcome = await InterpretAsync(
+                factory,
+                TestContext.Current.CancellationToken);
 
-        Assert.Equal(DraftInterpretationOutcomeKind.MalformedModelOutput, outcome.Kind);
-        Assert.Null(outcome.Draft);
+            Assert.Equal(
+                DraftInterpretationOutcomeKind.MalformedModelOutput,
+                outcome.Kind);
+            Assert.Null(outcome.Draft);
+        }
     }
 
     [Fact]
-    public async Task SchemaUnsupportedValueReturnsATypedCorrectionOutcomeWithoutADraft()
+    public async Task DependencyFailuresKeepTimeoutCancellationAndUnavailableDistinct()
     {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, DeterministicChatMode.Unsupported);
-
-        var outcome = await InterpretAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(DraftInterpretationOutcomeKind.MalformedModelOutput, outcome.Kind);
-        Assert.Null(outcome.Draft);
-    }
-
-    [Fact]
-    public async Task ModelDeadlineReturnsTimeoutRatherThanCancellationOrSuccess()
-    {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(
-            rootFactory,
+        var outcome = await InterpretModeAsync(
             DeterministicChatMode.Timeout,
-            TimeSpan.FromMilliseconds(50));
-
-        var outcome = await InterpretAsync(
-            factory,
+            TimeSpan.FromMilliseconds(50),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(DraftInterpretationOutcomeKind.Timeout, outcome.Kind);
         Assert.Null(outcome.Draft);
-    }
 
-    [Fact]
-    public async Task CallerCancellationPropagatesAndReturnsCancelledRatherThanTimeout()
-    {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(
-            rootFactory,
+        await using var cancellationRootFactory = new GovernedAccessWebFactory();
+        await using var cancellationFactory = CreateFactory(
+            cancellationRootFactory,
             DeterministicChatMode.Cancellation);
         using var callerCancellation = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
 
-        var interpretation = InterpretAsync(factory, callerCancellation.Token);
+        var interpretation = InterpretAsync(
+            cancellationFactory,
+            callerCancellation.Token);
         await callerCancellation.CancelAsync();
-        var outcome = await interpretation;
+        outcome = await interpretation;
 
         Assert.Equal(DraftInterpretationOutcomeKind.Cancelled, outcome.Kind);
         Assert.Null(outcome.Draft);
-    }
 
-    [Fact]
-    public async Task UnavailableModeReturnsTypedOutcomeWithoutAnyLiveModelRegistration()
-    {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(
-            rootFactory,
-            DeterministicChatMode.Unavailable);
-        await using var scope = factory.Services.CreateAsyncScope();
-
-        var configuredChatClient = scope.ServiceProvider.GetRequiredService<IChatClient>();
-        var interpreter = scope.ServiceProvider.GetRequiredService<IRequestDraftInterpreter>();
-        var outcome = await interpreter.InterpretAsync(
-            new DraftInterpretationRequest(PrimaryIntent, CorrelationId),
+        outcome = await InterpretModeAsync(
+            DeterministicChatMode.Unavailable,
             TestContext.Current.CancellationToken);
 
-        Assert.IsType<FunctionInvokingChatClient>(configuredChatClient);
-        Assert.IsType<DeterministicChatClient>(
-            configuredChatClient.GetService(typeof(DeterministicChatClient)));
         Assert.Equal(DraftInterpretationOutcomeKind.Unavailable, outcome.Kind);
         Assert.Null(outcome.Draft);
     }
@@ -224,26 +204,6 @@ public sealed class DraftInterpretationTests
         Assert.Equal("INC-1042", toolPayload.GetProperty("incidentId").GetString());
     }
 
-    [Theory]
-    [InlineData(
-        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-UNKNOWN\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\"}")]
-    [InlineData(
-        "{\"clientId\":\"client-alpha\",\"environmentId\":\"PROD-ALPHA-EU\",\"requestedRole\":\"ProductionReadOnly\",\"justification\":\"Investigate the active production incident.\",\"incidentId\":\"INC-1042\",\"actorId\":\"browser-controlled\"}")]
-    public async Task UnknownIdentifiersAndAdditionalPropertiesAreRejected(string response)
-    {
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(
-            rootFactory,
-            new CapturingChatClient(response));
-
-        var outcome = await InterpretAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(DraftInterpretationOutcomeKind.MalformedModelOutput, outcome.Kind);
-        Assert.Null(outcome.Draft);
-    }
-
     private static WebApplicationFactory<Program> CreateFactory(
         GovernedAccessWebFactory rootFactory,
         DeterministicChatMode mode,
@@ -299,6 +259,21 @@ public sealed class DraftInterpretationTests
         return await interpreter.InterpretAsync(
             new DraftInterpretationRequest(PrimaryIntent, CorrelationId),
             cancellationToken);
+    }
+
+    private static async Task<DraftInterpretationOutcome> InterpretModeAsync(
+        DeterministicChatMode mode,
+        CancellationToken cancellationToken) =>
+        await InterpretModeAsync(mode, modelTimeout: null, cancellationToken);
+
+    private static async Task<DraftInterpretationOutcome> InterpretModeAsync(
+        DeterministicChatMode mode,
+        TimeSpan? modelTimeout,
+        CancellationToken cancellationToken)
+    {
+        await using var rootFactory = new GovernedAccessWebFactory();
+        await using var factory = CreateFactory(rootFactory, mode, modelTimeout);
+        return await InterpretAsync(factory, cancellationToken);
     }
 
     private sealed class CapturingChatClient(string responseText) : IChatClient

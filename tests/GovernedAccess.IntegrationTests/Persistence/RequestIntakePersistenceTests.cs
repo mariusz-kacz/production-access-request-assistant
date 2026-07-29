@@ -13,9 +13,7 @@ namespace GovernedAccess.IntegrationTests.Persistence;
 
 public sealed class RequestIntakePersistenceTests
 {
-    private static readonly Guid ConversationRecordId =
-        Guid.Parse("11111111-1111-1111-1111-111111111111");
-    private static readonly Guid PreparationId =
+    private static readonly Guid SessionId =
         Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid ReservedRequestId =
         Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -40,18 +38,16 @@ public sealed class RequestIntakePersistenceTests
                 ConfirmationCommand(),
                 cancellationToken);
 
-            var success =
-                Assert.IsType<PreparedRequestConfirmationSucceeded>(outcome);
-            Assert.Equal(ReservedRequestId, success.RequestId);
-            Assert.False(success.WasAlreadySubmitted);
+            Assert.Equal(
+                RequestConfirmationResultKind.Submitted,
+                outcome.Kind);
+            Assert.Equal(ReservedRequestId, outcome.RequestId);
+            Assert.False(outcome.WasAlreadySubmitted);
             Assert.Equal(1, saveCounter.Count);
         }
 
         await using var verification = new GovernedAccessDbContext(options);
-        var conversation = await verification.RequestPreparationConversations
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        var prepared = await verification.PreparedAccessRequests
+        var session = await verification.RequestIntakeSessions
             .AsNoTracking()
             .SingleAsync(cancellationToken);
         var request = await verification.AccessRequests
@@ -62,19 +58,20 @@ public sealed class RequestIntakePersistenceTests
             .SingleAsync(cancellationToken);
 
         Assert.Equal(
-            RequestPreparationConversationStatus.Submitted,
-            conversation.Status);
-        Assert.Equal(PreparedAccessRequestStatus.Submitted, prepared.Status);
-        Assert.Equal(ConfirmedAt, prepared.SubmittedAt);
-        Assert.Equal(ReservedRequestId, prepared.SubmittedRequestId);
+            RequestIntakeStatus.Submitted,
+            session.Status);
+        Assert.Equal(ConfirmedAt, session.SubmittedAt);
+        Assert.Equal(ReservedRequestId, session.ReservedRequestId);
 
         Assert.Equal(ReservedRequestId, request.Id);
-        Assert.Equal(prepared.RequesterId, request.RequesterId);
-        Assert.Equal(prepared.ClientId, request.ClientId);
-        Assert.Equal(prepared.EnvironmentId, request.EnvironmentId);
-        Assert.Equal(prepared.RequestedRoleId, request.RequestedRoleId);
-        Assert.Equal(prepared.Justification, request.Justification);
-        Assert.Equal(prepared.IncidentId, request.IncidentId);
+        Assert.Equal(DemoPrincipalKeys.Requester, request.RequesterId);
+        Assert.Equal("client-alpha", request.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", request.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, request.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            request.Justification);
+        Assert.Equal("INC-1042", request.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
 
         Assert.Equal(request.Id, auditEvent.RequestId);
@@ -111,28 +108,25 @@ public sealed class RequestIntakePersistenceTests
                 ConfirmationCommand(),
                 cancellationToken);
 
-            var failure =
-                Assert.IsType<PreparedRequestConfirmationFailed>(outcome);
+            Assert.Equal(
+                RequestConfirmationResultKind.Failed,
+                outcome.Kind);
             Assert.Equal(
                 ApplicationFailureKind.DependencyFailure,
-                failure.Failure.Kind);
+                outcome.Failure!.Kind);
             Assert.Equal(1, saveCounter.Count);
         }
 
         await using var verification = new GovernedAccessDbContext(options);
-        var conversation = await verification.RequestPreparationConversations
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        var prepared = await verification.PreparedAccessRequests
+        var session = await verification.RequestIntakeSessions
             .AsNoTracking()
             .SingleAsync(cancellationToken);
 
         Assert.Equal(
-            RequestPreparationConversationStatus.Ready,
-            conversation.Status);
-        Assert.Equal(PreparedAccessRequestStatus.Ready, prepared.Status);
-        Assert.Null(prepared.SubmittedAt);
-        Assert.Null(prepared.SubmittedRequestId);
+            RequestIntakeStatus.Ready,
+            session.Status);
+        Assert.Null(session.SubmittedAt);
+        Assert.Equal(ReservedRequestId, session.ReservedRequestId);
         Assert.Empty(
             await verification.AccessRequests
                 .AsNoTracking()
@@ -141,6 +135,39 @@ public sealed class RequestIntakePersistenceTests
             await verification.AuditEvents
                 .AsNoTracking()
                 .ToListAsync(cancellationToken));
+    }
+
+    [Fact]
+    public async Task CompetingAggregateSaveReturnsTypedConcurrencyConflict()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var saveCounter = new SaveCounter();
+        await using var connection = await CreateReadyDatabaseAsync(
+            saveCounter,
+            cancellationToken);
+        var options = CreateOptions(connection, saveCounter);
+
+        await using var firstContext = new GovernedAccessDbContext(options);
+        await using var secondContext = new GovernedAccessDbContext(options);
+        var firstStore = new EfRequestIntakeStore(firstContext);
+        var secondStore = new EfRequestIntakeStore(secondContext);
+        var first = await firstStore.GetAsync(SessionId, cancellationToken);
+        var second = await secondStore.GetAsync(SessionId, cancellationToken);
+        first.Value.MarkInvalidated(
+            ConfirmedAt,
+            "first-invalidation");
+        second.Value.MarkInvalidated(
+            ConfirmedAt,
+            "competing-invalidation");
+
+        var firstSave = await firstStore.SaveChangesAsync(cancellationToken);
+        var secondSave = await secondStore.SaveChangesAsync(cancellationToken);
+
+        Assert.True(firstSave.IsSuccess);
+        Assert.True(secondSave.IsFailure);
+        Assert.Equal(
+            ApplicationFailureKind.ConcurrencyConflict,
+            secondSave.Failure!.Kind);
     }
 
     private static async Task<SqliteConnection> CreateReadyDatabaseAsync(
@@ -156,16 +183,16 @@ public sealed class RequestIntakePersistenceTests
             await using var context = new GovernedAccessDbContext(options);
             await SyntheticDataSeeder.SeedAsync(context, cancellationToken);
 
-            var conversation = new RequestPreparationConversation(
-                ConversationRecordId,
-                RequestPreparationConversation.TeamsChannel,
+            var session = new RequestIntakeSession(
+                SessionId,
+                RequestIntakeSession.TeamsChannel,
                 FakeTeamsActivityBuilder.DefaultTenantId,
                 FakeTeamsActivityBuilder.DefaultActorId,
                 FakeTeamsActivityBuilder.DefaultConversationId,
                 DemoPrincipalKeys.Requester,
                 PreparedAt,
                 "prepare-correlation");
-            conversation.UpdateCandidate(
+            session.UpdateCandidate(
                 "client-alpha",
                 "PROD-ALPHA-EU",
                 ProductionRoleIds.ReadOnly,
@@ -174,30 +201,12 @@ public sealed class RequestIntakePersistenceTests
                 pendingClarification: null,
                 PreparedAt,
                 "prepare-correlation");
-            conversation.MarkReady(
-                PreparationId,
-                PreparedAt,
-                "prepare-correlation");
-
-            var prepared = new PreparedAccessRequest(
-                PreparationId,
-                ConversationRecordId,
+            session.MarkReady(
                 ReservedRequestId,
-                RequestPreparationConversation.TeamsChannel,
-                FakeTeamsActivityBuilder.DefaultTenantId,
-                FakeTeamsActivityBuilder.DefaultActorId,
-                FakeTeamsActivityBuilder.DefaultConversationId,
-                DemoPrincipalKeys.Requester,
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042",
                 PreparedAt,
                 "prepare-correlation");
 
-            context.RequestPreparationConversations.Add(conversation);
-            context.PreparedAccessRequests.Add(prepared);
+            context.RequestIntakeSessions.Add(session);
             await context.SaveChangesAsync(cancellationToken);
             saveCounter.Reset();
             return connection;
@@ -217,31 +226,44 @@ public sealed class RequestIntakePersistenceTests
             .AddInterceptors(saveCounter)
             .Options;
 
-    private static PreparedRequestConfirmationService CreateConfirmationService(
+    private static RequestIntakeService CreateConfirmationService(
         GovernedAccessDbContext context)
     {
         var requestContext = new EfRequestContextReader(context);
         var clock = new DeterministicClock(ConfirmedAt);
-        return new PreparedRequestConfirmationService(
+        var validator = new RequestValidator(requestContext);
+        return new RequestIntakeService(
+            new UnusedInterpreter(),
+            validator,
+            requestContext,
             new EfRequestIntakeStore(context),
             new RequestSubmissionService(
-                new RequestValidator(requestContext),
+                validator,
                 requestContext,
                 new EfWorkflowStore(context),
                 clock),
             clock);
     }
 
-    private static ConfirmPreparedAccessRequestCommand ConfirmationCommand() =>
+    private static ConfirmRequestIntakeCommand ConfirmationCommand() =>
         new(
             new AuthenticatedChannelActor(
-                RequestPreparationConversation.TeamsChannel,
+                RequestIntakeSession.TeamsChannel,
                 FakeTeamsActivityBuilder.DefaultTenantId,
                 FakeTeamsActivityBuilder.DefaultActorId,
                 FakeTeamsActivityBuilder.DefaultConversationId,
                 DemoPrincipalKeys.Requester),
-            PreparationId,
+            SessionId,
             "confirm-correlation");
+
+    private sealed class UnusedInterpreter : IRequestPreparationInterpreter
+    {
+        public Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+            RequestPreparationTurn turn,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException(
+                "Confirmation does not invoke request interpretation.");
+    }
 
     private sealed class SaveCounter : SaveChangesInterceptor
     {

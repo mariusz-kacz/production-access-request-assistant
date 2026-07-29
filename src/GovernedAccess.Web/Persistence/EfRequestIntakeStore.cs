@@ -9,94 +9,53 @@ namespace GovernedAccess.Web.Persistence;
 internal sealed class EfRequestIntakeStore(
     GovernedAccessDbContext dbContext) : IRequestIntakeStore
 {
-    public void AddConversation(RequestPreparationConversation conversation)
+    public void Add(RequestIntakeSession session)
     {
-        ArgumentNullException.ThrowIfNull(conversation);
-        dbContext.RequestPreparationConversations.Add(conversation);
+        ArgumentNullException.ThrowIfNull(session);
+        dbContext.RequestIntakeSessions.Add(session);
     }
 
-    public Task<ApplicationResult<RequestPreparationConversation>>
-        GetActiveConversationAsync(
-            AuthenticatedChannelActor actor,
-            CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(actor);
-
-        return FindAsync(
-            dbContext.RequestPreparationConversations.Where(conversation =>
-                conversation.Channel == actor.Channel
-                && conversation.TenantId == actor.TenantId
-                && conversation.ChannelActorId == actor.ChannelActorId
-                && conversation.ConversationId == actor.ConversationId
-                && conversation.RequesterId == actor.RequesterId
-                && (conversation.Status
-                        == RequestPreparationConversationStatus.Collecting
-                    || conversation.Status
-                        == RequestPreparationConversationStatus.Ready)),
-            "request_preparation_conversation_not_found",
-            "The active request preparation was not found.",
-            cancellationToken);
-    }
-
-    public Task<ApplicationResult<RequestPreparationConversation>>
-        GetConversationAsync(
-            Guid conversationRecordId,
-            CancellationToken cancellationToken)
-    {
-        return FindAsync(
-            dbContext.RequestPreparationConversations.Where(conversation =>
-                conversation.Id == conversationRecordId),
-            "request_preparation_conversation_not_found",
-            "The request preparation conversation was not found.",
-            cancellationToken);
-    }
-
-    public void AddPreparedRequest(PreparedAccessRequest preparedRequest)
-    {
-        ArgumentNullException.ThrowIfNull(preparedRequest);
-        dbContext.PreparedAccessRequests.Add(preparedRequest);
-    }
-
-    public Task<ApplicationResult<PreparedAccessRequest>> GetPreparedRequestAsync(
-        Guid preparationId,
+    public Task<ApplicationResult<RequestIntakeSession>> GetActiveAsync(
+        AuthenticatedChannelActor actor,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(actor);
         return FindAsync(
-            dbContext.PreparedAccessRequests.Where(preparedRequest =>
-                preparedRequest.PreparationId == preparationId),
-            "prepared_request_not_found",
-            "The prepared access request was not found.",
+            dbContext.RequestIntakeSessions.Where(session =>
+                session.Channel == actor.Channel
+                && session.TenantId == actor.TenantId
+                && session.ChannelActorId == actor.ChannelActorId
+                && session.ConversationId == actor.ConversationId
+                && session.RequesterId == actor.RequesterId
+                && (session.Status == RequestIntakeStatus.Collecting
+                    || session.Status == RequestIntakeStatus.Ready)),
             cancellationToken);
     }
 
-    public async Task<ApplicationResult<PreparedAccessRequest>>
-        ReloadPreparedRequestAsync(
-            Guid preparationId,
-            CancellationToken cancellationToken)
+    public async Task<ApplicationResult<RequestIntakeSession>> GetAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
     {
-        var trackedPreparedRequest = dbContext.PreparedAccessRequests.Local
-            .SingleOrDefault(preparedRequest =>
-                preparedRequest.PreparationId == preparationId);
-
-        if (trackedPreparedRequest is null)
+        var tracked = dbContext.RequestIntakeSessions.Local
+            .SingleOrDefault(session => session.Id == sessionId);
+        if (tracked is null)
         {
-            return await GetPreparedRequestAsync(
-                preparationId,
+            return await FindAsync(
+                dbContext.RequestIntakeSessions.Where(
+                    session => session.Id == sessionId),
                 cancellationToken);
         }
 
         try
         {
-            await dbContext.Entry(trackedPreparedRequest)
-                .ReloadAsync(cancellationToken);
-            return dbContext.Entry(trackedPreparedRequest).State
-                    == EntityState.Detached
-                ? PreparedRequestNotFound()
-                : ApplicationResult.Succeeded(trackedPreparedRequest);
+            await dbContext.Entry(tracked).ReloadAsync(cancellationToken);
+            return dbContext.Entry(tracked).State == EntityState.Detached
+                ? NotFound()
+                : ApplicationResult.Succeeded(tracked);
         }
         catch (DbException)
         {
-            return ReadUnavailable<PreparedAccessRequest>();
+            return Unavailable<RequestIntakeSession>();
         }
     }
 
@@ -105,10 +64,7 @@ internal sealed class EfRequestIntakeStore(
     {
         try
         {
-            await using var transaction =
-                await dbContext.Database.BeginTransactionAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
             return ApplicationResult.Succeeded();
         }
         catch (DbUpdateConcurrencyException)
@@ -117,7 +73,7 @@ internal sealed class EfRequestIntakeStore(
                 new ApplicationFailure(
                     ApplicationFailureKind.ConcurrencyConflict,
                     "request_intake_concurrency_conflict",
-                    "The request preparation changed while it was being saved."));
+                    "The request intake changed while it was being saved."));
         }
         catch (DbUpdateException)
         {
@@ -125,52 +81,39 @@ internal sealed class EfRequestIntakeStore(
                 new ApplicationFailure(
                     ApplicationFailureKind.DependencyFailure,
                     "request_intake_persistence_failed",
-                    "The request preparation could not be saved."));
+                    "The request intake could not be saved."));
         }
         catch (DbException)
         {
-            return ApplicationResult.Failed(
-                PersistenceUnavailable());
+            return ApplicationResult.Failed(PersistenceUnavailable());
         }
     }
 
-    private static async Task<ApplicationResult<T>> FindAsync<T>(
-        IQueryable<T> query,
-        string notFoundCode,
-        string notFoundMessage,
+    private static async Task<ApplicationResult<RequestIntakeSession>> FindAsync(
+        IQueryable<RequestIntakeSession> query,
         CancellationToken cancellationToken)
-        where T : class
     {
         try
         {
-            var entity = await query.SingleOrDefaultAsync(cancellationToken);
-            return entity is null
-                ? NotFound<T>(notFoundCode, notFoundMessage)
-                : ApplicationResult.Succeeded(entity);
+            var session = await query.SingleOrDefaultAsync(cancellationToken);
+            return session is null
+                ? NotFound()
+                : ApplicationResult.Succeeded(session);
         }
         catch (DbException)
         {
-            return ReadUnavailable<T>();
+            return Unavailable<RequestIntakeSession>();
         }
     }
 
-    private static ApplicationResult<PreparedAccessRequest>
-        PreparedRequestNotFound() =>
-        NotFound<PreparedAccessRequest>(
-            "prepared_request_not_found",
-            "The prepared access request was not found.");
-
-    private static ApplicationResult<T> NotFound<T>(
-        string code,
-        string message)
-        where T : notnull =>
-        ApplicationResult.Failed<T>(
+    private static ApplicationResult<RequestIntakeSession> NotFound() =>
+        ApplicationResult.Failed<RequestIntakeSession>(
             new ApplicationFailure(
                 ApplicationFailureKind.NotFound,
-                code,
-                message));
+                "request_intake_not_found",
+                "The request intake was not found."));
 
-    private static ApplicationResult<T> ReadUnavailable<T>()
+    private static ApplicationResult<T> Unavailable<T>()
         where T : notnull =>
         ApplicationResult.Failed<T>(PersistenceUnavailable());
 

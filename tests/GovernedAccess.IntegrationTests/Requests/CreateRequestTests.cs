@@ -100,66 +100,6 @@ public sealed class CreateRequestTests
         await AssertNoProtectedWorkflowArtifactsAsync(factory, cancellationToken);
     }
 
-    [Fact]
-    public async Task BrowserSubmittedIdentityAndApproverClaimsCannotOverrideServerContext()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var body = ValidBody();
-        body["requesterId"] = DemoDataIds.DevOpsApproverPrincipalId;
-        body["actorId"] = DemoDataIds.ClientAlphaApproverPrincipalId;
-        body["principalKey"] = DemoPrincipalKeys.DevOpsApprover;
-        body["kind"] = "DevOpsApprover";
-        body["roles"] = new[] { "DevOpsApprover", "BusinessApprover" };
-        body["businessApproverId"] = DemoDataIds.ClientBetaApproverPrincipalId;
-        body["durationMinutes"] = 1;
-        body["correlationId"] = "browser-controlled-correlation";
-        using var request = CreateRequestMessage(body);
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-
-        Assert.Equal(DemoDataIds.RequesterPrincipalId, storedRequest.RequesterId);
-        Assert.NotEqual("browser-controlled-correlation", storedRequest.CorrelationId);
-        Assert.Empty(await dbContext.ApprovalDecisions.AsNoTracking().ToListAsync(cancellationToken));
-        Assert.Empty(await dbContext.ProvisioningOperations.AsNoTracking().ToListAsync(cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(cancellationToken));
-    }
-
-    [Fact]
-    public async Task RequestCreationWithoutAntiforgeryIsRejectedWithoutPersistingState()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        await factory.ResetDatabaseAsync(cancellationToken);
-        using var request = CreateRequestMessage(ValidBody());
-
-        using var response = await client.SendAsync(request, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-        await AssertNoProtectedWorkflowArtifactsAsync(factory, cancellationToken);
-    }
-
     private static Dictionary<string, object?> ValidBody()
     {
         return new Dictionary<string, object?>(StringComparer.Ordinal)

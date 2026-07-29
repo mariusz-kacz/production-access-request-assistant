@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
@@ -16,7 +17,7 @@ namespace GovernedAccess.Web.Teams;
 /// Authenticated Teams transport adapter for request preparation. This agent can
 /// update preparation state and display a ready snapshot.
 /// </summary>
-public sealed class TeamsAccessRequestAgent : AgentApplication
+public sealed partial class TeamsAccessRequestAgent : AgentApplication
 {
     private const string ConfirmAndSubmitVerb = "confirmAndSubmit";
 
@@ -27,30 +28,30 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
         "Describe the temporary production access you need, including the client, environment, requested role, and operational justification.";
 
     private readonly TeamsActorResolver actorResolver;
-    private readonly RequestPreparationService preparationService;
-    private readonly PreparedRequestConfirmationService confirmationService;
+    private readonly RequestIntakeService intakeService;
     private readonly PreparedRequestCardFactory cardFactory;
+    private readonly ILogger<TeamsAccessRequestAgent> logger;
     private readonly Uri trustedWebBaseUri;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
-        RequestPreparationService preparationService,
-        PreparedRequestConfirmationService confirmationService,
+        RequestIntakeService intakeService,
         PreparedRequestCardFactory cardFactory,
+        ILogger<TeamsAccessRequestAgent> logger,
         IOptions<TeamsAccessRequestOptions> teamsOptions)
         : base(options)
     {
         ArgumentNullException.ThrowIfNull(actorResolver);
-        ArgumentNullException.ThrowIfNull(preparationService);
-        ArgumentNullException.ThrowIfNull(confirmationService);
+        ArgumentNullException.ThrowIfNull(intakeService);
         ArgumentNullException.ThrowIfNull(cardFactory);
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(teamsOptions);
 
         this.actorResolver = actorResolver;
-        this.preparationService = preparationService;
-        this.confirmationService = confirmationService;
+        this.intakeService = intakeService;
         this.cardFactory = cardFactory;
+        this.logger = logger;
         trustedWebBaseUri = teamsOptions.Value.TrustedWebBaseUri
             ?? throw new InvalidOperationException(
                 "A trusted Web base URI is required for Teams request links.");
@@ -92,42 +93,64 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        var outcome = await preparationService.PrepareAsync(
+        var correlationId = CreateCorrelationId();
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = await intakeService.PrepareAsync(
             new PrepareAccessRequestCommand(
                 actor,
                 latestMessage,
-                CreateCorrelationId()),
+                correlationId),
             cancellationToken);
-
-        switch (outcome)
+        var sessionId = outcome.Session?.Id;
+        var requestId = outcome.Session?.ReservedRequestId;
+        if (logger.IsEnabled(LogLevel.Information))
         {
-            case RequestClarificationRequired clarification:
+            var durationMs =
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            LogPreparationCompleted(
+                logger,
+                "Prepare",
+                outcome.Kind,
+                durationMs,
+                correlationId,
+                actor.Channel,
+                actor.TenantId,
+                actor.ChannelActorId,
+                actor.ConversationId,
+                actor.RequesterId,
+                sessionId,
+                requestId);
+        }
+
+        switch (outcome.Kind)
+        {
+            case RequestPreparationResultKind.ClarificationRequired:
                 await SendTextAsync(
                     turnContext,
-                    RenderClarification(clarification.Clarification),
+                    RenderClarification(outcome.Clarification!),
                     InputHints.ExpectingInput,
                     cancellationToken);
                 return;
 
-            case RequestCandidateRejected rejected:
+            case RequestPreparationResultKind.CandidateRejected:
                 await SendTextAsync(
                     turnContext,
-                    RenderCandidateRejection(rejected.ValidationErrors),
+                    RenderCandidateRejection(outcome.ValidationErrors),
                     InputHints.ExpectingInput,
                     cancellationToken);
                 return;
 
-            case RequestReadyForConfirmation ready:
+            case RequestPreparationResultKind.ReadyForConfirmation:
                 await SendReadyCardAsync(
                     turnContext,
-                    ready,
+                    outcome.Session!,
                     cancellationToken);
                 return;
 
-            case RequestPreparationFailed failed:
+            case RequestPreparationResultKind.Failed:
                 await SendFailureAsync(
                     turnContext,
-                    failed.Failure,
+                    outcome.Failure!,
                     cancellationToken);
                 return;
 
@@ -160,21 +183,45 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
                 "The confirmation action is invalid. No request was submitted.");
         }
 
-        var outcome = await confirmationService.ConfirmAsync(
-            new ConfirmPreparedAccessRequestCommand(
+        var correlationId = CreateCorrelationId();
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = await intakeService.ConfirmAsync(
+            new ConfirmRequestIntakeCommand(
                 actor,
                 preparationId,
-                CreateCorrelationId()),
+                correlationId),
             cancellationToken);
-
-        return outcome switch
+        var requestId = outcome.RequestId == Guid.Empty
+            ? (Guid?)null
+            : outcome.RequestId;
+        if (logger.IsEnabled(LogLevel.Information))
         {
-            PreparedRequestConfirmationSucceeded succeeded =>
+            var durationMs =
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            LogConfirmationCompleted(
+                logger,
+                "Confirm",
+                outcome.Kind,
+                durationMs,
+                correlationId,
+                actor.Channel,
+                actor.TenantId,
+                actor.ChannelActorId,
+                actor.ConversationId,
+                actor.RequesterId,
+                preparationId,
+                requestId);
+        }
+
+        return outcome.Kind switch
+        {
+            RequestConfirmationResultKind.Submitted
+                or RequestConfirmationResultKind.AlreadySubmitted =>
                 AdaptiveCardInvokeResponseFactory.Message(
-                    CreateConfirmationMessage(succeeded)),
-            PreparedRequestConfirmationFailed failed =>
+                    CreateConfirmationMessage(outcome)),
+            RequestConfirmationResultKind.Failed =>
                 AdaptiveCardInvokeResponseFactory.Message(
-                    CreateConfirmationFailureMessage(failed.Failure)),
+                    CreateConfirmationFailureMessage(outcome.Failure!)),
             _ => throw new InvalidOperationException(
                 "The prepared-request confirmation outcome is unsupported."),
         };
@@ -182,11 +229,11 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
 
     private async Task SendReadyCardAsync(
         ITurnContext turnContext,
-        RequestReadyForConfirmation ready,
+        RequestIntakeSession session,
         CancellationToken cancellationToken)
     {
         var cardResult = await cardFactory.CreateAsync(
-            ready.PreparedRequest,
+            session,
             cancellationToken);
         if (cardResult.IsFailure)
         {
@@ -282,7 +329,7 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
     }
 
     private string CreateConfirmationMessage(
-        PreparedRequestConfirmationSucceeded outcome)
+        RequestConfirmationResult outcome)
     {
         var requestUri = new Uri(
             trustedWebBaseUri,
@@ -390,4 +437,42 @@ public sealed class TeamsAccessRequestAgent : AgentApplication
             ? traceId.ToString()
             : Guid.NewGuid().ToString("N");
     }
+
+    [LoggerMessage(
+        EventId = 1001,
+        EventName = "TeamsIntakePreparationCompleted",
+        Level = LogLevel.Information,
+        Message = "Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}.")]
+    private static partial void LogPreparationCompleted(
+        ILogger logger,
+        string transition,
+        RequestPreparationResultKind outcome,
+        double durationMs,
+        string correlationId,
+        string channel,
+        string tenantId,
+        string channelActorId,
+        string conversationId,
+        string requesterId,
+        Guid? sessionId,
+        Guid? requestId);
+
+    [LoggerMessage(
+        EventId = 1002,
+        EventName = "TeamsIntakeConfirmationCompleted",
+        Level = LogLevel.Information,
+        Message = "Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}.")]
+    private static partial void LogConfirmationCompleted(
+        ILogger logger,
+        string transition,
+        RequestConfirmationResultKind outcome,
+        double durationMs,
+        string correlationId,
+        string channel,
+        string tenantId,
+        string channelActorId,
+        string conversationId,
+        string requesterId,
+        Guid sessionId,
+        Guid? requestId);
 }

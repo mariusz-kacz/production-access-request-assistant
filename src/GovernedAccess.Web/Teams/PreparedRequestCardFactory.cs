@@ -23,12 +23,18 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
     public const int ContractSchemaVersion = 1;
 
     public async Task<ApplicationResult<Attachment>> CreateAsync(
-        PreparedAccessRequest preparedRequest,
+        RequestIntakeSession session,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(preparedRequest);
+        ArgumentNullException.ThrowIfNull(session);
 
-        if (preparedRequest.Status != PreparedAccessRequestStatus.Ready)
+        if (session.Status != RequestIntakeStatus.Ready
+            || session.ReservedRequestId is null
+            || session.ClientId is null
+            || session.EnvironmentId is null
+            || session.RequestedRoleId is null
+            || session.Justification is null
+            || session.ExpiresAt is null)
         {
             return Failed(
                 ApplicationFailureKind.InvalidTransition,
@@ -37,7 +43,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         }
 
         var clientResult = await requestContext.GetClientAsync(
-            preparedRequest.ClientId,
+            session.ClientId,
             cancellationToken);
         if (clientResult.IsFailure)
         {
@@ -46,7 +52,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
 
         var environmentResult =
             await requestContext.GetProductionEnvironmentAsync(
-                preparedRequest.EnvironmentId,
+                session.EnvironmentId,
                 cancellationToken);
         if (environmentResult.IsFailure)
         {
@@ -55,8 +61,8 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         }
 
         var roleResult = await requestContext.GetEnvironmentRoleAsync(
-            preparedRequest.EnvironmentId,
-            preparedRequest.RequestedRoleId,
+            session.EnvironmentId,
+            session.RequestedRoleId,
             cancellationToken);
         if (roleResult.IsFailure)
         {
@@ -67,20 +73,20 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         var environment = environmentResult.Value;
         var role = roleResult.Value;
 
-        if (!Matches(preparedRequest.ClientId, client.Id)
-            || !Matches(preparedRequest.EnvironmentId, environment.Id)
-            || !Matches(preparedRequest.ClientId, environment.ClientId)
-            || !Matches(preparedRequest.EnvironmentId, role.EnvironmentId)
-            || !Matches(preparedRequest.RequestedRoleId, role.RoleId))
+        if (!Matches(session.ClientId, client.Id)
+            || !Matches(session.EnvironmentId, environment.Id)
+            || !Matches(session.ClientId, environment.ClientId)
+            || !Matches(session.EnvironmentId, role.EnvironmentId)
+            || !Matches(session.RequestedRoleId, role.RoleId))
         {
             return ContextMismatch();
         }
 
         Incident? incident = null;
-        if (preparedRequest.IncidentId is not null)
+        if (session.IncidentId is not null)
         {
             var incidentResult = await requestContext.GetIncidentAsync(
-                preparedRequest.IncidentId,
+                session.IncidentId,
                 cancellationToken);
             if (incidentResult.IsFailure)
             {
@@ -89,11 +95,11 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
             }
 
             incident = incidentResult.Value;
-            if (!Matches(preparedRequest.IncidentId, incident.Id)
-                || !Matches(preparedRequest.ClientId, incident.ClientId)
+            if (!Matches(session.IncidentId, incident.Id)
+                || !Matches(session.ClientId, incident.ClientId)
                 || (incident.EnvironmentId is not null
                     && !Matches(
-                        preparedRequest.EnvironmentId,
+                        session.EnvironmentId,
                         incident.EnvironmentId)))
             {
                 return ContextMismatch();
@@ -104,22 +110,22 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         {
             CreateFact(
                 "Request ID",
-                preparedRequest.ReservedRequestId.ToString("D")),
+                session.ReservedRequestId.Value.ToString("D")),
             CreateFact(
                 "Client",
                 FormatDisplayValue(
                     client.DisplayName,
-                    preparedRequest.ClientId)),
+                    session.ClientId)),
             CreateFact(
                 "Environment",
                 FormatDisplayValue(
                     environment.DisplayName,
-                    preparedRequest.EnvironmentId)),
+                    session.EnvironmentId)),
             CreateFact(
                 "Requested role",
                 FormatDisplayValue(
-                    GetRoleDisplayName(preparedRequest.RequestedRoleId),
-                    preparedRequest.RequestedRoleId)),
+                    GetRoleDisplayName(session.RequestedRoleId),
+                    session.RequestedRoleId)),
         };
 
         if (incident is not null)
@@ -129,14 +135,14 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                     "Incident",
                     FormatDisplayValue(
                         incident.Title,
-                        preparedRequest.IncidentId!)));
+                        session.IncidentId!)));
         }
 
         facts.Add(CreateFact("Access lifetime", "8 hours after provisioning"));
         facts.Add(
             CreateFact(
                 "Confirm by",
-                preparedRequest.ExpiresAt.UtcDateTime.ToString(
+                session.ExpiresAt.Value.UtcDateTime.ToString(
                     "O",
                     CultureInfo.InvariantCulture)));
 
@@ -177,7 +183,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 new JsonObject
                 {
                     ["type"] = "TextBlock",
-                    ["text"] = preparedRequest.Justification,
+                    ["text"] = session.Justification,
                     ["wrap"] = true,
                 },
             },
@@ -193,7 +199,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                     {
                         ["schemaVersion"] = ContractSchemaVersion,
                         ["preparedRequestId"] =
-                            preparedRequest.PreparationId.ToString("D"),
+                            session.Id.ToString("D"),
                     },
                 },
             },
