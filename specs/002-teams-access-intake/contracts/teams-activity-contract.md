@@ -19,6 +19,18 @@ feature accepts and what application commands they may cause.
 - Must not expose an anonymous development bypass in the normal application
   environment.
 
+## Request-creation boundary
+
+Authenticated `confirmAndSubmit` handling on this endpoint is the only executable
+request-creation path. The Web application retains request list/detail, business and
+DevOps decisions, provisioning retry, session, and audit presentation, but:
+
+- `POST /api/request-drafts/prepare` is not mapped;
+- `POST /api/requests` is not a request-creation method; and
+- no browser new-request route, form, navigation item, or session capability exists.
+
+Existing request and downstream workflow records remain channel-neutral and unchanged.
+
 ## Accepted conversation
 
 An activity is eligible only when all of the following are derived from the
@@ -81,7 +93,7 @@ access request, provision, revoke, or retry provisioning.
 
 ## Final prepared-request card
 
-The card is rendered from `PreparedAccessRequest` and follows
+The card is rendered from the immutable ready fields of `RequestIntakeSession` and follows
 [prepared-request-card.json](prepared-request-card.json).
 
 - It contains no editable input controls.

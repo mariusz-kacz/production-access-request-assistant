@@ -59,11 +59,7 @@ const utcTimestampFormatter = new Intl.DateTimeFormat(undefined, {
   timeZoneName: "short",
 });
 
-export function RequestListPage({
-  canCreateRequest,
-}: {
-  canCreateRequest: boolean;
-}) {
+export function RequestListPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus | "">("");
   const [requests, setRequests] = useState<RequestListItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,11 +106,6 @@ export function RequestListPage({
           <h1 id="request-list-title">Access requests</h1>
           <p>Records assigned to or submitted by the acting identity.</p>
         </div>
-        {canCreateRequest && (
-          <Link className="button-link button-link--primary" to="/requests/new">
-            New request
-          </Link>
-        )}
       </header>
 
       <section className="request-list-filter" aria-labelledby="filter-title">

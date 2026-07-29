@@ -1,10 +1,12 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
+using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Security;
 using Microsoft.Agents.Authentication;
@@ -87,6 +89,43 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         {
             databaseResetLock.Release();
         }
+    }
+
+    public Task<AccessRequest> CreateRequestFixtureAsync(
+        CancellationToken cancellationToken = default) =>
+        CreateRequestFixtureAsync(
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            DemoDataIds.PrimaryIncidentId,
+            cancellationToken);
+
+    public async Task<AccessRequest> CreateRequestFixtureAsync(
+        string clientId,
+        string environmentId,
+        string? incidentId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var request = new AccessRequest(
+            Guid.NewGuid(),
+            DemoPrincipalKeys.Requester,
+            clientId,
+            environmentId,
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            incidentId,
+            Clock.UtcNow,
+            $"fixture-{Guid.NewGuid():N}");
+        var auditEvent = AuditEvent.CreateRequestCreated(
+            Guid.NewGuid(),
+            request,
+            new RequestCreatedAuditDetails(request.Status));
+
+        dbContext.AccessRequests.Add(request);
+        dbContext.AuditEvents.Add(auditEvent);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return request;
     }
 
     public HttpClient CreateTeamsClient(bool authenticated = true)

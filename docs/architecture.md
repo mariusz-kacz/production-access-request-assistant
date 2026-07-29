@@ -50,22 +50,27 @@ flowchart LR
     Requester[Requester]
     Business[Business approver]
     DevOps[DevOps approver]
+    Teams[Microsoft Teams personal chat]
     Browser[React browser application]
 
     subgraph Host[Governed Access Host]
+        Agent[Authenticated /api/messages adapter]
         API[Same-origin UI API]
-        AI[Draft interpretation adapter]
+        AI[MAF interpretation adapter]
         MCP[Read-only /mcp endpoint]
         App[Application and domain rules]
         Provider[Synthetic access provider]
         DB[(SQLite)]
     end
 
-    Requester --> Browser
+    Requester -->|prepare and confirm| Teams
+    Requester -->|list and inspect| Browser
     Business --> Browser
     DevOps --> Browser
+    Teams --> Agent
     Browser -->|cookie-authenticated HTTPS| API
-    API --> AI
+    Agent --> AI
+    Agent --> App
     API --> App
     AI -->|loopback Streamable HTTP| MCP
     MCP --> DB
@@ -150,7 +155,8 @@ Web is the composition and infrastructure layer. It contains:
 
 - API controllers and Problem Details translation;
 - synthetic authentication and antiforgery;
-- `ChatRequestDraftInterpreter` and `DeterministicChatClient`;
+- Teams activity handling, `MafRequestPreparationInterpreter`, and
+  `DeterministicChatClient`;
 - the EF Core database context, request-context reader, workflow store, and seeder;
 - the synthetic provisioner;
 - correlation and activity instrumentation; and
@@ -163,36 +169,41 @@ request and response shapes, call application services, and map typed failures.
 
 | Component | Responsibility | Does not decide |
 |---|---|---|
-| React UI | Collect intent, display server-returned state, submit structured actions, and show audit evidence. | Identity, authorization, approver assignment, or valid workflow transitions. |
+| React UI | Display the request register/detail, submit structured approval or retry actions, and show audit evidence. | Request creation, identity, authorization, approver assignment, or valid workflow transitions. |
 | MVC controllers | Enforce endpoint authentication/antiforgery attributes, extract server identity, translate HTTP contracts, and invoke application services. | Domain policy or provisioning eligibility. |
-| `ChatRequestDraftInterpreter` | Discover the exact MCP allowlist, invoke the chat abstraction, schema-parse its output, and revalidate proposed identifiers. | Approval, authorization, workflow state, or provisioning. |
+| `TeamsAccessRequestAgent` | Route authenticated personal Teams activities to preparation or deterministic confirmation. | Actor authority, readiness, approval, or provisioning. |
+| `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the bounded agent turn, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
 | `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
-| `RequestSubmissionService` | Create and persist a validated immutable request and audit evidence. | Later approval or provisioning transitions. |
+| `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
+| `RequestSubmissionService` | Revalidate and stage a reserved-ID request and request-created audit event for confirmation; never save independently. | Public/browser submission or later approval/provisioning transitions. |
 | `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
 | `ProtectedProvisioningService` | Reload persisted workflow evidence, validate exact scope, call the provider, and persist the operation outcome. | Business or DevOps approval. |
 | `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
 
-## Request preparation
+## Teams request preparation and confirmation
 
-Draft preparation is isolated from the state-changing workflow.
+Teams confirmation is the only request-creation path. Preparation is model-assisted;
+confirmation is a direct deterministic application action.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant UI as React UI
-    participant API as RequestDraftsController
-    participant Draft as ChatRequestDraftInterpreter
-    participant Chat as Deterministic IChatClient
+    participant Teams
+    participant Agent as TeamsAccessRequestAgent
+    participant Intake as RequestIntakeService
+    participant Draft as MafRequestPreparationInterpreter
+    participant Chat as IChatClient
     participant McpClient as MCP client
     participant McpServer as /mcp server
     participant Context as IRequestContextReader
     participant DB as SQLite
 
-    User->>UI: Enter natural-language intent
-    UI->>API: POST /api/request-drafts/prepare
-    API->>Draft: InterpretAsync(intent, correlationId)
+    User->>Teams: Describe request
+    Teams->>Agent: Authenticated personal activity
+    Agent->>Intake: PrepareAsync(actor, latest message)
+    Intake->>Draft: Compact candidate + clarification + latest message
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly three read-only tools
@@ -206,16 +217,24 @@ sequenceDiagram
         Context-->>McpServer: Typed outcome
         McpServer-->>Chat: Tool result
     end
-    Chat-->>Draft: JSON draft
-    Draft->>Draft: Strict schema parsing
-    Draft->>Context: Revalidate proposed identifiers
+    Chat-->>Draft: Closed JSON proposal
+    Draft->>Draft: Strict schema parsing and boundary translation
+    Draft-->>Intake: Untrusted candidate/clarification
+    Intake->>Context: Revalidate identifiers and relationships
     Context->>DB: Query authoritative records
-    Draft-->>API: Prepared, incomplete, or typed failure
-    API-->>UI: Safe draft outcome
+    Intake->>DB: Persist compact state or immutable ready scope
+    Agent-->>Teams: Clarification, safe failure, or immutable card
+    User->>Teams: Confirm and submit
+    Teams->>Agent: Authenticated Action.Execute
+    Agent->>Intake: ConfirmAsync(actor, intake ID)
+    Intake->>DB: Reload ownership/status/scope and revalidate
+    Intake->>DB: One save: submitted intake + request + audit
+    Agent-->>Teams: Stable request ID and trusted Web link
 ```
 
-The prepared draft is untrusted and creates no request or approval. Submission is a
-separate structured action that repeats authoritative validation.
+The collecting candidate is untrusted and creates no request or approval. Only an
+owned, unexpired ready intake can be confirmed. The model and MCP never receive a
+submit capability.
 
 The adapter defaults to:
 
@@ -250,15 +269,17 @@ stateDiagram-v2
 
 ### Submission
 
-1. The controller obtains the requester ID from the authenticated principal.
-2. `RequestValidator` resolves current stored client, environment, role, and optional
-   incident context.
-3. `RequestSubmissionService` creates a new server-generated request ID.
-4. The immutable scope, initial `AwaitingBusinessApproval` state, validation evidence,
-   and creation audit event are committed together.
+1. The Teams boundary derives actor, tenant, and conversation from authenticated
+   activity context.
+2. `RequestIntakeService` reloads the ready intake, verifies ownership/status/expiry,
+   and revalidates its immutable scope.
+3. `RequestSubmissionService` requires the server-reserved request ID and confirmation
+   timestamp and stages the request plus request-created audit event.
+4. The intake transition, immutable `AwaitingBusinessApproval` request, and audit
+   event commit in one shared `SaveChangesAsync`.
 
 There is no update endpoint for a submitted request. A correction produces a new
-request and new approvals.
+Teams preparation, request ID, and new approvals.
 
 ### Business decision
 
@@ -378,14 +399,17 @@ The relevant decisions are:
 
 ### Browser API
 
-The `/api` surface is a same-origin adapter for the co-hosted React client, not a
-general public API. It provides:
+The `/api` surface is a same-origin adapter for the co-hosted React request register,
+not a general public API. It provides:
 
 - antiforgery and demo-session operations;
-- request draft preparation;
-- request submission, list, and detail queries;
+- request list and detail queries;
 - business and DevOps decision subresources; and
 - DevOps-only retry from `ProvisioningFailed`.
+
+It does not map `POST /api/request-drafts/prepare` or a request-creating
+`POST /api/requests`. Existing request rows and downstream workflow contracts are
+unchanged.
 
 Unsafe endpoints require antiforgery validation. Request bodies do not accept
 authoritative actor, role claims, approver identity, approval assertions, duration,
@@ -409,7 +433,7 @@ Core depends on focused interfaces:
 
 - `IRequestContextReader`;
 - `IWorkflowStore` and `IAuditStore`;
-- `IRequestDraftInterpreter`;
+- `IRequestPreparationInterpreter` and `IRequestIntakeStore`;
 - `IAccessProvisioner`; and
 - `IClock`.
 
@@ -471,7 +495,7 @@ production service.
 - the Web project runs `npm ci` when the lockfile requires restoration;
 - the frontend build runs before .NET build or publish when inputs changed;
 - ASP.NET Core serves the generated assets and `index.html`;
-- React Router owns `/requests`, `/requests/new`, and `/requests/:requestId`; and
+- React Router owns `/requests` and `/requests/:requestId`; and
 - Vite development mode proxies `/api` to ASP.NET Core for same-origin browser
   behavior.
 

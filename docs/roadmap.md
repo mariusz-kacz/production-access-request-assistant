@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-07-28
+- **Last reviewed**: 2026-07-29
 - **Current baseline**:
   [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 
@@ -22,6 +22,13 @@ current exact three-tool MCP surface:
 That feature should first demonstrate a bounded incident-to-environment-to-role tool
 chain, compact multi-turn clarification, deterministic validation, and safe failure
 handling.
+
+The active product boundary is Teams-only request creation: an authenticated personal
+Teams preparation becomes a request only through deterministic confirmation. The Web
+application remains the request register and business-decision, DevOps-decision,
+provisioning-retry, and audit surface. Reintroducing browser drafting, a
+request-creating `POST /api/requests`, `/requests/new`, or a `createRequest`
+capability is not roadmap work unless the product baseline is explicitly amended.
 
 ## Candidate Next Feature: Active Incident Discovery
 
@@ -183,4 +190,3 @@ This candidate feature does not justify:
 - a generic workflow engine;
 - a second deployable service; or
 - real production access or identity integration.
-

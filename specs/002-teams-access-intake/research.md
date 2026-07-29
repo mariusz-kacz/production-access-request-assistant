@@ -258,3 +258,40 @@ Sources: [MAF 1.0 announcement](https://devblogs.microsoft.com/agent-framework/m
 [M365 Agents SDK .NET reference](https://learn.microsoft.com/en-us/dotnet/api/copilot-sdk-docs-dotnet/overview),
 [MAF NuGet package](https://www.nuget.org/packages/Microsoft.Agents.AI/),
 [M365 ASP.NET hosting NuGet package](https://www.nuget.org/packages/Microsoft.Agents.Hosting.AspNetCore/)
+
+## 12. Teams-Only Request Creation
+
+**Decision**: Make authenticated confirmation of a server-owned Teams intake session
+the sole executable request-creation path. Keep the Web application as the request
+register and authenticated business-decision, DevOps-decision, provisioning-retry,
+and audit surface.
+
+**Rationale**: Maintaining both browser and Teams intake duplicated model
+interpretation, DTOs, routes, tests, and request-ID behavior without adding governed
+product value. One creation boundary makes identity, immutable scope, and idempotency
+easier to explain and verify. Existing requests and all downstream workflow entities
+remain channel-neutral and unchanged.
+
+**Removed inventory**:
+
+- browser draft endpoint and one-shot interpreter;
+- browser `POST /api/requests` and public submission operation;
+- new-request React page, route, navigation, list action, DTOs, session capability,
+  and creation-only styles;
+- tests and configuration that existed only for browser creation.
+
+**Retained inventory**:
+
+- Teams interpreter, actor resolution, intake session, immutable confirmation card,
+  deterministic confirmation, and shared save;
+- Web request list/detail, business and DevOps decisions, protected retry, session,
+  and audit presentation;
+- existing `AccessRequest`, approval, provisioning, grant, and audit persistence.
+
+**Alternatives considered**:
+
+- Keep both creation paths: preserves duplicated behavior and an ambiguous product
+  boundary.
+- Hide browser creation only in the UI: leaves an undocumented creation API.
+- Replace the removed form with a new browser form: recreates the same duplicate
+  boundary.

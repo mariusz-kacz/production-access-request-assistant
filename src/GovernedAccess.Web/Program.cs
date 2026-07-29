@@ -47,7 +47,7 @@ builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
     serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
 builder.Services
-    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Valid))
+    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Candidate))
     .UseFunctionInvocation(configure: static client =>
     {
         client.AllowConcurrentInvocation = false;
@@ -55,7 +55,6 @@ builder.Services
         client.MaximumIterationsPerRequest = 6;
         client.TerminateOnUnknownCalls = true;
     });
-builder.Services.AddScoped<IRequestDraftInterpreter, ChatRequestDraftInterpreter>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();

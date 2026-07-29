@@ -40,9 +40,9 @@ dotnet run --project src/GovernedAccess.Web --launch-profile https
 
 Open `https://localhost:7251`.
 
-The HTTPS launch profile also binds `http://localhost:5136`. The server-side draft
-interpreter uses that HTTP address for its loopback MCP client by default. Use HTTPS
-for the browser because authentication and antiforgery cookies are always Secure.
+The HTTPS launch profile also binds `http://localhost:5136` for local host/MCP
+inspection. Use HTTPS for the browser because authentication and antiforgery cookies
+are always Secure.
 
 The .NET build invokes the frontend build when its inputs have changed. Vite writes
 the generated bundle to `src/GovernedAccess.Web/wwwroot`, and ASP.NET Core serves it
@@ -63,6 +63,12 @@ dotnet run --project src/GovernedAccess.Web --launch-profile https
 
 ASP.NET Core serves the API, MCP endpoint, and compiled React assets.
 
+Request creation is exercised through the authenticated Teams `/api/messages` path
+or its fake-authenticated integration-test boundary. The browser exposes only
+request list/detail, business and DevOps decisions, protected retry, session, and
+audit presentation. It has no `/requests/new`, draft endpoint, request-creation POST,
+form, navigation item, or creation capability.
+
 ### React hot-module replacement
 
 Start the ASP.NET Core host in one terminal:
@@ -78,8 +84,8 @@ npm run dev --prefix src/GovernedAccess.Web/ClientApp
 ```
 
 Open the URL printed by Vite. It proxies `/api` to
-`https://localhost:7251`. The browser never calls `/mcp`; draft interpretation remains
-a server-side operation.
+`https://localhost:7251`. The browser is a request register and approval/retry surface;
+it never creates requests or calls `/mcp`.
 
 Set `VITE_API_PROXY_TARGET` before starting Vite if the ASP.NET Core HTTPS address is
 different:
@@ -108,22 +114,26 @@ The host uses standard ASP.NET Core configuration. The current settings are:
 | Key | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | SQLite connection string |
-| `DraftInterpretation:McpEndpoint` | `http://localhost:5136/mcp` | Server-side loopback MCP URL |
-| `DraftInterpretation:McpTimeout` | `00:00:05` | MCP connection and call timeout |
-| `DraftInterpretation:ModelTimeout` | `00:00:30` | Overall draft interpretation deadline |
+| `TeamsAccessRequest:AllowedTenantId` | empty (fail closed) | Accepted Teams tenant |
+| `TeamsAccessRequest:BotConnectionName` | `BotServiceConnection` | Configured bot connection |
+| `TeamsAccessRequest:TrustedWebBaseUri` | empty (fail closed) | Trusted origin for request links |
+| `TeamsAccessRequest:McpTimeout` | `00:00:05` | MCP deadline |
+| `TeamsAccessRequest:ModelTimeout` | `00:00:30` | Overall Teams interpretation deadline |
+| `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Immutable confirmation window |
 
 For a temporary PowerShell override, replace `:` with `__`:
 
 ```powershell
 $env:ConnectionStrings__GovernedAccess = "Data Source=governed-access-dev.db"
-$env:DraftInterpretation__McpEndpoint = "http://localhost:5136/mcp"
-$env:DraftInterpretation__McpTimeout = "00:00:05"
-$env:DraftInterpretation__ModelTimeout = "00:00:30"
+$env:TeamsAccessRequest__AllowedTenantId = "<development-tenant-guid>"
+$env:TeamsAccessRequest__TrustedWebBaseUri = "https://localhost:7251/"
+$env:TeamsAccessRequest__McpTimeout = "00:00:05"
+$env:TeamsAccessRequest__ModelTimeout = "00:00:30"
 dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
-Timeout values must parse as positive .NET `TimeSpan` values. The MCP endpoint must be
-an absolute HTTP or HTTPS URI.
+Timeout and lifetime values must parse as positive .NET `TimeSpan` values. The trusted
+Web base URI must be an absolute HTTPS URI.
 
 Do not commit machine-specific connection strings or local secrets to
 `appsettings*.json`.
@@ -133,16 +143,16 @@ Do not commit machine-specific connection strings or local secrets to
 The shipped host registers:
 
 ```text
-DeterministicChatClient(DeterministicChatMode.Valid)
+DeterministicChatClient(DeterministicChatMode.Candidate)
 ```
 
-It returns a fixed Client Alpha read-only incident draft. There is no runtime
-configuration key or browser control for changing chat mode.
+It returns a fixed Client Alpha read-only incident candidate for Teams preparation.
+There is no runtime configuration key or browser control for changing chat mode.
 
-The other deterministic modes—`Incomplete`, `Malformed`, `Unsupported`, `Timeout`,
-`Cancellation`, and `Unavailable`—are test seams. Integration tests replace the
-registered `IChatClient` in a test host to prove safe behavior without adding a
-failure-control surface to the application.
+The other deterministic modes—`Clarification`, `Malformed`, `Timeout`,
+`Cancellation`, `Unavailable`, and `PromptInjection`—are test seams. Integration
+tests replace the registered `IChatClient` in a test host to prove safe behavior
+without adding a failure-control surface to the application.
 
 If runtime-selectable demonstration modes are added later, they must remain
 development-only and must not expose provider credentials, raw prompts, or a way to
@@ -275,18 +285,6 @@ dotnet dev-certs https --trust
 ```
 
 Then restart the host and browser.
-
-### Draft preparation reports MCP unavailable
-
-Check that:
-
-- the host is bound to `http://localhost:5136`;
-- `DraftInterpretation:McpEndpoint` points to that host's `/mcp` path;
-- another process has not occupied the HTTP port; and
-- the configured MCP timeout is positive.
-
-The default HTTPS launch profile deliberately binds both HTTPS for the browser and
-HTTP for the loopback MCP client.
 
 ### Vite cannot reach the API
 

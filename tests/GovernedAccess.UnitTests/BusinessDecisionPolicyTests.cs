@@ -101,166 +101,19 @@ public sealed class BusinessDecisionPolicyTests
             "business-correlation");
     }
 
-    private static async Task<AccessRequest> CreateSubmittedRequestAsync()
+    private static Task<AccessRequest> CreateSubmittedRequestAsync()
     {
-        var requestContext = new SubmittedRequestContextReader();
-        var service = new RequestSubmissionService(
-            new RequestValidator(requestContext),
-            requestContext,
-            new SuccessfulWorkflowStore(),
-            new FixedClock(RequestCreatedAt));
-
-        var result = await service.SubmitAsync(
+        var request = new AccessRequest(
+            Guid.Parse("661718f5-b8dd-47eb-b5ab-057e23dfaeb2"),
             "requester",
-            new RequestValidationInput(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042"),
-            "request-correlation",
-            TestContext.Current.CancellationToken);
-
-        return Assert.IsType<RequestSubmitted>(result).Request;
-    }
-
-    private sealed class FixedClock(DateTimeOffset utcNow) : IClock
-    {
-        public DateTimeOffset UtcNow { get; } = utcNow;
-    }
-
-    private sealed class SubmittedRequestContextReader : IRequestContextReader
-    {
-        private readonly Client client = new("client-alpha", "Client Alpha");
-        private readonly ProductionEnvironment environment = new(
-            "PROD-ALPHA-EU",
             "client-alpha",
-            "Client Alpha Production EU",
-            "business-alpha");
-        private readonly EnvironmentRole role = new(
             "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly);
-        private readonly Incident incident = new(
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
             "INC-1042",
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            "Active Alpha incident",
-            IncidentStatus.Active);
-        private readonly AuthenticatedPrincipal requester = new(
-            "requester",
-            "Requesting Engineer",
-            PrincipalKind.Requester,
-            null);
+            RequestCreatedAt,
+            "request-correlation");
 
-        public Task<ApplicationResult<Client>> GetClientAsync(
-            string clientId,
-            CancellationToken cancellationToken) =>
-            Result(client, cancellationToken);
-
-        public Task<ApplicationResult<ProductionEnvironment>> GetProductionEnvironmentAsync(
-            string environmentId,
-            CancellationToken cancellationToken) =>
-            Result(environment, cancellationToken);
-
-        public Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
-            string environmentId,
-            string roleId,
-            CancellationToken cancellationToken) =>
-            Result(role, cancellationToken);
-
-        public Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>> GetEnvironmentRolesAsync(
-            string environmentId,
-            CancellationToken cancellationToken) =>
-            Result<IReadOnlyList<EnvironmentRole>>([role], cancellationToken);
-
-        public Task<ApplicationResult<Incident>> GetIncidentAsync(
-            string incidentId,
-            CancellationToken cancellationToken) =>
-            Result(incident, cancellationToken);
-
-        public Task<ApplicationResult<AuthenticatedPrincipal>> GetPrincipalAsync(
-            string principalId,
-            CancellationToken cancellationToken) =>
-            Result(requester, cancellationToken);
-
-        private static Task<ApplicationResult<T>> Result<T>(
-            T value,
-            CancellationToken cancellationToken)
-            where T : notnull
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(ApplicationResult.Succeeded(value));
-        }
-    }
-
-    private sealed class SuccessfulWorkflowStore : IWorkflowStore
-    {
-        public void AddRequest(AccessRequest request)
-        {
-        }
-
-        public void AddAuditEvent(AuditEvent auditEvent)
-        {
-        }
-
-        public void AddApprovalDecision(ApprovalDecision decision) =>
-            throw new NotSupportedException();
-
-        public void AddProvisioningOperation(ProvisioningOperation operation) =>
-            throw new NotSupportedException();
-
-        public void AddAccessGrant(AccessGrant grant) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<AccessRequest>> GetRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<AccessRequest>> ReloadRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<IReadOnlyList<AccessRequest>>> ListRequestsAsync(
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<ApprovalDecision>> GetApprovalDecisionAsync(
-            Guid requestId,
-            ApprovalStage stage,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<IReadOnlyList<ApprovalDecision>>> ListApprovalDecisionsAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult<IReadOnlyList<AuditEvent>>> ListAuditEventsAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException();
-
-        public Task<ApplicationResult> SaveChangesAsync(CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(ApplicationResult.Succeeded());
-        }
+        return Task.FromResult(request);
     }
 }

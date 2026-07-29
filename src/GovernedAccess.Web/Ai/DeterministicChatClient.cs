@@ -5,10 +5,7 @@ namespace GovernedAccess.Web.Ai;
 
 public enum DeterministicChatMode
 {
-    Valid,
-    Incomplete,
     Malformed,
-    Unsupported,
     Timeout,
     Cancellation,
     Unavailable,
@@ -19,24 +16,9 @@ public enum DeterministicChatMode
 
 public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatClient
 {
-    private const string ValidResponse =
-        """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"}
-        """;
-
-    private const string IncompleteResponse =
-        """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionReadOnly","justification":null,"incidentId":null}
-        """;
-
     private const string MalformedResponse =
         """
         {"clientId":"client-alpha"
-        """;
-
-    private const string UnsupportedResponse =
-        """
-        {"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRole":"ProductionAdministrator","justification":"Investigate the active production incident.","incidentId":"INC-1042"}
         """;
 
     private const string CandidateResponse =
@@ -102,10 +84,7 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
 
     private string GetResponseText() => mode switch
     {
-        DeterministicChatMode.Valid => ValidResponse,
-        DeterministicChatMode.Incomplete => IncompleteResponse,
         DeterministicChatMode.Malformed => MalformedResponse,
-        DeterministicChatMode.Unsupported => UnsupportedResponse,
         DeterministicChatMode.Candidate => CandidateResponse,
         DeterministicChatMode.Clarification => ClarificationResponse,
         DeterministicChatMode.PromptInjection => PromptInjectionResponse,

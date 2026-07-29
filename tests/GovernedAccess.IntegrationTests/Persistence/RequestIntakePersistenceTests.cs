@@ -240,8 +240,7 @@ public sealed class RequestIntakePersistenceTests
             new RequestSubmissionService(
                 validator,
                 requestContext,
-                new EfWorkflowStore(context),
-                clock),
+                new EfWorkflowStore(context)),
             clock);
     }
 

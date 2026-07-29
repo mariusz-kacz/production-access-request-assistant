@@ -253,28 +253,7 @@ public sealed class DevOpsDecisionTests
         GovernedAccessWebFactory factory,
         CancellationToken cancellationToken)
     {
-        using var requester = await CreateAuthenticatedClientAsync(
-            factory,
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/requests")
-        {
-            Content = JsonContent.Create(new
-            {
-                clientId = DemoDataIds.ClientAlphaId,
-                environmentId = DemoDataIds.ClientAlphaEnvironmentId,
-                requestedRole = ProductionRoleIds.ReadOnly,
-                justification = "Investigate the active production incident.",
-                incidentId = DemoDataIds.PrimaryIncidentId,
-            }),
-        };
-        using var createResponse = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            requester,
-            createRequest,
-            cancellationToken);
-        createResponse.EnsureSuccessStatusCode();
-        using var createBody = await ReadJsonAsync(createResponse, cancellationToken);
-        var requestId = createBody.RootElement.GetProperty("requestId").GetGuid();
+        var requestId = (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
 
         using var approver = await CreateAuthenticatedClientAsync(
             factory,

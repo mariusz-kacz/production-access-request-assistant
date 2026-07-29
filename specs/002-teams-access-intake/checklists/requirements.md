@@ -21,6 +21,8 @@
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
 - [x] Dependencies and assumptions identified
+- [x] Teams confirmation is explicitly the sole request-creation path
+- [x] Retained Web list/detail/decision/retry/audit behavior is distinguished from removed creation behavior
 
 ## Feature Readiness
 
@@ -36,4 +38,6 @@
   MCP tool names are retained as governed product contracts; implementation framework,
   language, persistence technology, and API design are intentionally deferred to
   planning.
+- Browser request drafting/submission is explicitly excluded while the Web request
+  register and governed human-action surface remain in scope.
 - No clarification markers remain. The specification is ready for planning.

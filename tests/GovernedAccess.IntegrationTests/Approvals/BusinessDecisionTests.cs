@@ -279,28 +279,7 @@ public sealed class BusinessDecisionTests
         GovernedAccessWebFactory factory,
         CancellationToken cancellationToken)
     {
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/requests")
-        {
-            Content = JsonContent.Create(new
-            {
-                clientId = DemoDataIds.ClientAlphaId,
-                environmentId = DemoDataIds.ClientAlphaEnvironmentId,
-                requestedRole = ProductionRoleIds.ReadOnly,
-                justification = "Investigate the active production incident.",
-                incidentId = DemoDataIds.PrimaryIncidentId,
-            }),
-        };
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        response.EnsureSuccessStatusCode();
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        return responseBody.RootElement.GetProperty("requestId").GetGuid();
+        return (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
     }
 
     private static void AssertAuditEvidence(

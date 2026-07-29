@@ -18,23 +18,25 @@ AI never becomes the authorization boundary.
 
 An enterprise operates separate production environments for different clients. Approval for one client environment must never authorize access to another.
 
-A requester enters:
+A requester enters in a personal Microsoft Teams conversation:
 
 > I need read-only access to Client Alpha production for four hours to investigate incident INC-1042.
 
 The system:
 
-1. asks the model to produce a typed but untrusted request draft,
+1. asks the model to produce a typed but untrusted request candidate,
 2. permits the model to call three approved read-only MCP tools for environment, role, and incident data,
 3. schema-validates the model output,
 4. deterministically validates every identifier and business rule,
-5. resolves the required business approver from stored configuration,
-6. records an explicit authenticated business decision,
-7. records an explicit authenticated DevOps decision,
-8. immediately invokes a protected internal provisioning handler after DevOps approval,
-9. reloads and validates persisted request, approval, and operation evidence,
-10. creates or returns an idempotent synthetic access grant that the model cannot request,
-11. records a straightforward audit history.
+5. presents an immutable final request for explicit requester confirmation,
+6. creates the request only after authenticated Teams confirmation,
+7. resolves the required business approver from stored configuration,
+8. records an explicit authenticated business decision in the web application,
+9. records an explicit authenticated DevOps decision in the web application,
+10. immediately invokes a protected internal provisioning handler after DevOps approval,
+11. reloads and validates persisted request, approval, and operation evidence,
+12. creates or returns an idempotent synthetic access grant that the model cannot request,
+13. records a straightforward audit history.
 
 ## 3. Scope and Trust Principles
 
@@ -159,9 +161,11 @@ This recovery action does not constitute a separate approval stage, provisioning
 The MVP contains one executable ASP.NET Core host: the Governed Access Host.
 
 ```text
-Browser
-  |
-  v
+Microsoft Teams personal chat      Browser
+  |                                  |
+  | prepare + confirm                | list/detail/decide/retry/audit
+  +----------------+-----------------+
+                   v
 +--------------------------------------------------+
 | Governed Access Host                             |
 |                                                  |
@@ -192,7 +196,7 @@ The single host is responsible for:
 - thin React UI built and served by the host,
 - same-origin typed UI query and action endpoints,
 - authenticated synthetic user context,
-- natural-language request intake,
+- authenticated Teams-only natural-language request intake and confirmation,
 - LLM orchestration,
 - MCP client configuration and tool allowlisting,
 - hosting the real read-only MCP endpoint,
@@ -508,11 +512,16 @@ action exists only for recovery from `ProvisioningFailed`.
 
 ## 8. User Interface
 
-The React UI contains only:
+The React UI is a request register and governed action surface. It contains only:
 
 - request list,
-- new-request page,
 - request detail page.
+
+It has no new-request page, request-draft form, request-submission action, or
+request-creation capability. `POST /api/request-drafts/prepare` is unavailable and
+`POST /api/requests` is not a request-creation method. Existing persisted requests
+remain queryable, and request list/detail, business decision, DevOps decision,
+provisioning retry, and audit behavior remain available.
 
 The React application is built into static assets served by the Governed Access Host.
 It uses same-origin typed query and action endpoints from that host and is not deployed
@@ -540,7 +549,9 @@ The MVP does not include audit administration or provisioning administration pag
 
 ### FR-01 Typed Request Extraction
 
-The Governed Access Host shall transform natural-language input into a typed request draft and safely reject malformed model output.
+The Governed Access Host shall accept natural-language request intent only through an
+authenticated personal Teams conversation, transform it into a typed request
+candidate, and safely reject malformed model output.
 
 ### FR-02 Restricted MCP Context
 
@@ -593,7 +604,9 @@ The Governed Access Host shall record the minimum audit events defined in this b
 
 ### FR-14 Minimal UI
 
-The Governed Access Host shall provide only the request list, new-request page, and request detail page with identity- and state-appropriate actions.
+The Governed Access Host shall provide only the request list and request detail page
+with identity- and state-appropriate review, decision, retry, and audit actions. The
+browser shall expose no request-creation route, form, endpoint, or capability.
 
 ### FR-15 Logical Expiry
 
@@ -682,13 +695,16 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 
 ### 12.1 Successful Request
 
-1. The requester asks for four hours of `ProductionReadOnly` access to Client Alpha for `INC-1042`.
+1. The requester asks in a personal Teams conversation for four hours of
+   `ProductionReadOnly` access to Client Alpha for `INC-1042`.
 2. The model uses the three read-only MCP tools as needed and produces a typed draft.
 3. Deterministic validation succeeds.
-4. The Client Alpha business approver approves the immutable request scope.
-5. DevOps approves the exact role; the system applies the fixed eight-hour lifetime.
-6. Approval immediately triggers independent persisted-evidence validation and idempotent provisioning.
-7. The request becomes `Active` and the detail page shows the grant and audit history.
+4. The requester confirms the immutable final request in Teams.
+5. The request appears in the web request register.
+6. The Client Alpha business approver approves the immutable request scope.
+7. DevOps approves the exact role; the system applies the fixed eight-hour lifetime.
+8. Approval immediately triggers independent persisted-evidence validation and idempotent provisioning.
+9. The request becomes `Active` and the detail page shows the grant and audit history.
 
 ### 12.2 Wrong Business Approver
 
@@ -696,9 +712,10 @@ The Client Beta business approver attempts to approve the Client Alpha request. 
 
 ### 12.3 Correction Creates a New Request
 
-A requester discovers an error after submission. The original request remains unchanged,
-and the requester submits a corrected request with a new request ID. The corrected
-request requires both approvals and the original request retains its evidence.
+A requester discovers an error after submission. The original request remains
+unchanged, and the requester prepares and confirms a corrected request in Teams with a
+new request ID. The corrected request requires both approvals and the original request
+retains its evidence.
 
 ### 12.4 Duplicate Provisioning Retry
 
@@ -722,7 +739,10 @@ The following remain automated negative-path tests rather than primary presentat
 The MVP includes:
 
 - one executable modular ASP.NET Core host,
-- one thin React UI with three pages, built and served by the ASP.NET Core host,
+- one thin React request register with list and detail pages, built and served by the
+  ASP.NET Core host,
+- one authenticated personal-Teams request preparation and confirmation path as the
+  sole request-creation channel,
 - authenticated synthetic user context with four principals,
 - one typed LLM extraction flow,
 - one real read-only MCP endpoint,
@@ -805,6 +825,8 @@ The project is successful when it proves that:
 - the model obtains request context through one real MCP server,
 - the model can access only the three approved read-only tools,
 - every model-proposed identifier is deterministically validated,
+- only authenticated Teams confirmation can create an access request,
+- browser draft and request-creation endpoints, routes, forms, and capabilities are absent,
 - authenticated server context determines the acting identity,
 - the requester cannot choose the approver,
 - a wrong-client approver is rejected and audited,

@@ -256,7 +256,6 @@ public sealed class RequestIntakeServiceTests
             var submissionService = new RequestSubmissionService(
                 validator,
                 this,
-                this,
                 this);
             service = new RequestIntakeService(
                 this,

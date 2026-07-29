@@ -33,69 +33,40 @@ public sealed record RequestSubmissionFailed(ApplicationFailure Failure)
     : RequestSubmissionOutcome;
 
 /// <summary>
-/// Creates and submits an access request using an actor identifier obtained from
-/// authenticated server context. Proposed request fields never supply identity or
-/// approver authority.
+/// Revalidates and stages a prepared-confirmation request plus request-created audit
+/// evidence. It has no public/browser submission operation and never saves
+/// independently.
 /// </summary>
 public sealed class RequestSubmissionService
 {
     private readonly RequestValidator requestValidator;
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
-    private readonly IClock clock;
 
     public RequestSubmissionService(
         RequestValidator requestValidator,
         IRequestContextReader requestContext,
-        IWorkflowStore workflowStore,
-        IClock clock)
+        IWorkflowStore workflowStore)
     {
         ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
-        ArgumentNullException.ThrowIfNull(clock);
 
         this.requestValidator = requestValidator;
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
-        this.clock = clock;
-    }
-
-    public async Task<RequestSubmissionOutcome> SubmitAsync(
-        string? authenticatedPrincipalId,
-        RequestValidationInput input,
-        string? correlationId,
-        CancellationToken cancellationToken)
-    {
-        var stagedOutcome = await CreateAndStageValidatedRequestAsync(
-            authenticatedPrincipalId,
-            input,
-            correlationId,
-            reservedRequestId: null,
-            occurredAt: null,
-            cancellationToken);
-
-        if (stagedOutcome is not RequestSubmitted submitted)
-        {
-            return stagedOutcome;
-        }
-
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? new RequestSubmissionFailed(saveResult.Failure!)
-            : submitted;
     }
 
     /// <summary>
-    /// Revalidates and stages the immutable request and request-created audit
-    /// evidence for a prepared confirmation. The enclosing confirmation service
-    /// owns the atomic save with the prepared-request transition.
+    /// Revalidates and stages immutable request and request-created audit evidence
+    /// for a prepared confirmation. The intake service owns the one atomic save
+    /// together with the prepared-session transition.
     /// </summary>
     internal Task<RequestSubmissionOutcome> StageAsync(
         string requesterId,
         RequestValidationInput input,
         Guid reservedRequestId,
-        string? correlationId,
+        string correlationId,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
@@ -109,17 +80,17 @@ public sealed class RequestSubmissionService
     }
 
     private async Task<RequestSubmissionOutcome> CreateAndStageValidatedRequestAsync(
-        string? authenticatedPrincipalId,
+        string requesterId,
         RequestValidationInput input,
-        string? correlationId,
-        Guid? reservedRequestId,
-        DateTimeOffset? occurredAt,
+        string correlationId,
+        Guid reservedRequestId,
+        DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         var normalizedPrincipalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
+            requesterId);
         if (normalizedPrincipalId is null)
         {
             return new RequestSubmissionFailed(
@@ -183,9 +154,9 @@ public sealed class RequestSubmissionService
         cancellationToken.ThrowIfCancellationRequested();
 
         var fields = validationSucceeded.Fields;
-        var requestCreatedAt = (occurredAt ?? clock.UtcNow).ToUniversalTime();
+        var requestCreatedAt = occurredAt.ToUniversalTime();
         var request = new AccessRequest(
-            reservedRequestId ?? Guid.NewGuid(),
+            reservedRequestId,
             principal.Id,
             fields.ClientId,
             fields.EnvironmentId,

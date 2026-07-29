@@ -46,7 +46,8 @@ The MVP protects the following properties:
 
 ### Authorization integrity
 
-- only an authenticated requester can submit a request;
+- only an SDK-authenticated personal Teams actor mapped server-side to the requester
+  can confirm and submit a prepared request;
 - only the configured client business approver can make the business decision;
 - only an authenticated DevOps approver can make the DevOps decision or retry;
 - neither the requester nor DevOps can replace the business-approved role;
@@ -106,6 +107,7 @@ for real client, incident, identity, credential, or production-access data.
 | Business approver | Authenticated human actor; authority is resolved against stored environment responsibility. |
 | DevOps approver | Authenticated human actor; may decide or retry only within deterministic state and scope rules. |
 | Browser and React UI | Untrusted presentation client. It may be modified, bypassed, or send crafted requests. |
+| Microsoft Teams activity | Untrusted payload carried through an authenticated SDK boundary; tenant, actor, channel, and conversation are derived from authenticated context. |
 | Chat model | Untrusted interpreter. Its output and proposed identifiers require schema and authoritative validation. |
 | MCP client and wire data | Untrusted protocol-boundary data until typed parsing and application validation succeed. |
 | MCP server adapter | Trusted only to translate typed read-only requests to the request-context port. It is not an authorization boundary. |
@@ -121,10 +123,12 @@ flowchart LR
 
     subgraph UntrustedClient[Untrusted client boundary]
         Browser[Browser and React UI]
+        Teams[Teams activity payload]
     end
 
     subgraph Host[Governed Access Host]
         HTTP[Authentication, antiforgery, controllers]
+        Activity[SDK authentication and actor resolution]
         App[Deterministic application and domain rules]
         AI[AI adapter]
         MCP[MCP adapter]
@@ -136,9 +140,12 @@ flowchart LR
     DB[(Authoritative local SQLite)]
 
     Human --> Browser
+    Human --> Teams
     Browser -->|crafted input is possible| HTTP
+    Teams -->|payload remains untrusted| Activity
     HTTP --> App
-    HTTP --> AI
+    Activity --> App
+    Activity --> AI
     AI --> Model
     Model -->|schema-validated proposal| AI
     AI -->|loopback read-only calls| MCP
@@ -158,7 +165,7 @@ description, or provider adapter would not preserve this boundary.
 | Invariant | Principal enforcement |
 |---|---|
 | Browser claims cannot establish identity or authority | Cookie authentication creates claims from one server-held principal map; controllers read `ClaimsPrincipal`. |
-| Unsafe browser actions resist cross-site request forgery | ASP.NET Core antiforgery validation is applied to sign-in, sign-out, draft preparation, request submission, both decisions, and retry. |
+| Unsafe browser actions resist cross-site request forgery | ASP.NET Core antiforgery validation is applied to sign-in, sign-out, both decisions, and retry. Teams activities use the separate SDK-authenticated Activity Protocol boundary. |
 | Requester cannot choose the business approver | Environment context stores the responsible approver; business decision logic reloads it. |
 | Client Alpha approval cannot authorize Client Beta | Principal client responsibility, environment client, and request client must agree. |
 | Submitted scope cannot change | Request scope properties have no workflow mutation path; correction creates a new request ID. |
@@ -221,6 +228,12 @@ cookies are always marked Secure.
 
 Session capabilities and request `availableActions` help the UI decide what to show.
 They are not access tokens or policy results that a server command trusts.
+
+The browser is not a request-creation channel. It has no draft endpoint,
+request-creating `POST /api/requests`, `/requests/new` route, creation form,
+navigation action, or `createRequest` capability. It remains an authenticated request
+register and business-decision, DevOps-decision, retry, and audit surface. Removed
+browser calls create no request or audit state.
 
 Crafting a hidden button, altering JavaScript, calling an endpoint directly, or
 adding actor, role, duration, approval, or scope fields does not grant authority.
@@ -302,7 +315,8 @@ data enumeration and resource consumption. Any real or sensitive context require
 endpoint authentication, caller authorization, transport/network controls, and a
 fresh threat assessment.
 
-The browser does not call `/mcp`; only the server-side drafting adapter uses it.
+The browser does not call `/mcp`; only the server-side Teams preparation adapter uses
+it.
 
 ## Workflow authorization boundary
 
@@ -429,7 +443,7 @@ or long-term retention solution.
 
 | Threat | Example attack | Implemented control | Residual risk |
 |---|---|---|---|
-| Identity over-posting | Browser adds `actorId`, claims, or approver fields. | Restricted request records; actor comes from authenticated server claims and stored principal context. | Demo principal selection itself is not real authentication. |
+| Identity over-posting | Browser adds `actorId`, claims, or approver fields to a decision. | Restricted decision records; actor comes from authenticated server claims and stored principal context. | Demo principal selection itself is not real authentication. |
 | Cross-site request forgery | Another site posts an approval using the victim's cookie. | SameSite Strict cookies and antiforgery cookie/header validation on every unsafe endpoint. | Requires correct HTTPS hosting and normal browser cookie behavior. |
 | Cross-client authorization | Beta approver attempts to approve Alpha access. | Stored environment responsibility and client relationship checks; rejection is audited. | No database row-level security if application checks are bypassed by direct DB access. |
 | Insecure direct object reference | User guesses another request UUID. | Server participant calculation; detail returns not found for nonparticipants. | Request metadata is visible to local DB operators. |

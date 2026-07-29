@@ -17,8 +17,6 @@ public sealed class RequestQueriesTests
 {
     private const string DevOpsDecisionAction = "decideDevOpsRequest";
     private const string RetryProvisioningAction = "retryProvisioning";
-    private const string Justification = "Investigate the active production incident.";
-
     [Fact]
     public async Task ListsAreParticipantFilteredAndMarkOnlyCurrentActions()
     {
@@ -445,27 +443,11 @@ public sealed class RequestQueriesTests
         string incidentId,
         CancellationToken cancellationToken)
     {
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/requests")
-        {
-            Content = JsonContent.Create(new
-            {
-                clientId,
-                environmentId,
-                requestedRole = ProductionRoleIds.ReadOnly,
-                justification = Justification,
-                incidentId,
-            }),
-        };
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        using var body = await ReadJsonAsync(response, cancellationToken);
-        return body.RootElement.GetProperty("requestId").GetGuid();
+        return (await factory.CreateRequestFixtureAsync(
+            clientId,
+            environmentId,
+            incidentId,
+            cancellationToken)).Id;
     }
 
     private static async Task ApproveBusinessAsync(

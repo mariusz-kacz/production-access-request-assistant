@@ -63,6 +63,8 @@ Expected:
   production system;
 - all existing request, approval, provisioning, MCP, security, and UI tests continue
   passing.
+- `POST /api/request-drafts/prepare`, request-creating `POST /api/requests`,
+  `/requests/new`, and `createRequest` are absent.
 
 ## Scenario 1: Complete Request to Submission
 
@@ -175,8 +177,15 @@ Verify:
 5. provisioning reloads persisted request and approval evidence; and
 6. repeated provisioning converges on the request-ID keyed operation and grant.
 
-Repeat the existing browser request-entry path and verify it still generates its own
-server request ID and behaves unchanged.
+Attempt the former browser creation paths and verify:
+
+- `POST /api/request-drafts/prepare` returns not found;
+- `POST /api/requests` is not an allowed creation method;
+- neither call creates request or audit state;
+- the React application has no New request navigation, list action, route, form, or
+  creation capability; and
+- request list/detail, business and DevOps decisions, retry, and audit presentation
+  remain available.
 
 ## Manual Local Transport Check
 

@@ -32,20 +32,22 @@ the current stable `Microsoft.Agents.AI` 1.15.0 and
 existing Adaptive Card activity contract without adding a UI framework or a second
 agent-hosting protocol.
 
-**Storage**: Existing local SQLite database through EF Core; add conversations and
-prepared snapshots to the same `DbContext` and transaction boundary
+**Storage**: Existing local SQLite database through EF Core; one
+`RequestIntakeSessions` table shares the existing `DbContext` and save boundary with
+requests and audit events
 
 **Testing**: Existing xUnit unit and integration projects, ASP.NET Core
 `WebApplicationFactory`, SQLite in-memory databases, deterministic fake
 `IChatClient`, fake authenticated Teams activities/adapter context, controllable
-clock, contract fixtures, and the unchanged Vitest suite
+clock, contract fixtures, focused Teams-only UI characterization, and the existing
+Vitest suite
 
 **Target Platform**: One cross-platform ASP.NET Core host; `/api/messages` is exposed
 to Microsoft Teams through an authenticated Azure Bot registration and HTTPS endpoint,
 while the host continues serving `/api`, `/mcp`, and the React bundle
 
-**Project Type**: Single deployable modular web application with Teams as an
-additional inbound adapter
+**Project Type**: Single deployable modular web application with Teams confirmation
+as the sole request-creation adapter and Web as the retained register/decision surface
 
 **Performance Goals**: Complete deterministic confirmation within the Teams invoke
 response window (target under 5 seconds); preserve the 30-second model and 5-second
@@ -69,9 +71,9 @@ queue, Slack channel, or real identity integration
 
 | Gate | Pre-research result | Design evidence |
 |---|---|---|
-| **Human authority** | PASS | Conversation turns can update only preparation state. The sole new workflow-affecting action is an authenticated requester confirmation handled by `PreparedRequestConfirmationService`; business and DevOps approvals remain the existing human actions. |
+| **Human authority** | PASS | Conversation turns can update only intake state. Authenticated requester confirmation is handled by the unified `RequestIntakeService`; business and DevOps approvals remain explicit authenticated Web actions. |
 | **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals the three existing tools before passing only those tools to MAF. |
-| **Scope integrity** | PASS | Deterministic validation creates a server-owned immutable prepared snapshot with a reserved request ID and exact scope. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
+| **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
 | **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, queue, cache, or background service. New code fits the existing Core/Web/Persistence boundaries. |
 | **Verification and operations** | PASS | Unit and integration coverage includes identity/conversation binding, schema failures, exact tool allowlisting, expiry, supersession, stale context, atomic/idempotent replay, cancellation/timeouts, and forbidden actions. Logs contain identifiers, timing, and outcomes, not prompts or transcripts. |
@@ -106,11 +108,10 @@ src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
 │   │   ├── RequestClarificationContext.cs
-│   │   ├── RequestPreparationConversation.cs
-│   │   └── PreparedAccessRequest.cs
+│   │   └── RequestIntakeSession.cs
 │   ├── Application/
-│   │   ├── RequestPreparationService.cs
-│   │   └── PreparedRequestConfirmationService.cs
+│   │   ├── RequestIntakeService.cs
+│   │   └── RequestSubmissionService.cs   # Confirmation-only staging seam
 │   └── Ports/
 │       ├── RequestDrafting.cs       # Evolved provider-neutral turn contract
 │       └── RequestIntake.cs
@@ -133,21 +134,20 @@ src/
     │   ├── manifest.json
     │   ├── color.png
     │   └── outline.png
-    ├── ClientApp/                   # Existing UI and routes retained
+    ├── ClientApp/                   # List/detail/decision/retry; no creation UI
     └── Program.cs
 tests/
 ├── GovernedAccess.UnitTests/
-│   ├── RequestPreparationTests.cs
-│   └── PreparedRequestConfirmationTests.cs
+│   └── RequestIntakeServiceTests.cs
 └── GovernedAccess.IntegrationTests/
-    ├── Ai/
     ├── Mcp/
     ├── Persistence/
+    ├── Requests/TeamsOnlyRequestCreationTests.cs
     └── Teams/
 ```
 
-**Structure Decision**: Keep all provider-neutral preparation entities, transitions,
-typed outcomes, validation coordination, and confirmation policy in
+**Structure Decision**: Keep the one provider-neutral intake aggregate, transitions,
+compact typed outcomes, validation coordination, and confirmation policy in
 `GovernedAccess.Core`. Keep Microsoft 365 Agents SDK, MAF, Activity Protocol, Adaptive
 Card, and MCP client types in `GovernedAccess.Web`. Reuse `GovernedAccess.Mcp` without
 adding tools. Both `IRequestIntakeStore` and the existing `IWorkflowStore` are backed
@@ -192,22 +192,37 @@ only executable.
 - Confirmation reloads the snapshot, verifies actor and conversation binding, applies
   lazy expiry/supersession checks, revalidates current authoritative context, and
   creates the existing `AccessRequest` with the reserved ID and exact prepared scope.
-- Refactor the request-creation internals so browser submission still receives a fresh
-  server ID while prepared confirmation can supply only its server-reserved ID.
-  Principal checks, validation, immutable construction, and request-created audit
-  logic are shared rather than duplicated.
+- Teams confirmation is the only request-creation path. `RequestSubmissionService`
+  is a prepared-confirmation-only staging seam: it requires a server-reserved request
+  ID and confirmation timestamp, revalidates scope/requester, stages the immutable
+  request and request-created audit event, and never saves independently.
 - Confirmation status, immutable request, and request-created audit commit in one
   `SaveChangesAsync`. A unique reserved request ID plus optimistic
   concurrency makes duplicate or concurrent delivery reload and return the same
   request ID.
 - The existing `/requests/{requestId}` React route is the only post-submission link.
   Its origin comes from trusted configuration, never from an incoming activity URL.
+- The Web host maps GET list/detail, business decision, DevOps decision, retry,
+  session, and audit-backed detail behavior. It does not map
+  `POST /api/request-drafts/prepare` or request-creating `POST /api/requests`, and the
+  React application has no new-request route, navigation, form, DTO, or capability.
 - `/api/messages` is mapped before `/api` and SPA fallbacks. Non-development hosting
   requires SDK token validation. Local automated tests use a fake authenticated
   channel boundary; Microsoft Agents Playground is a transport/UX aid, not evidence
   that production authentication passed.
 - No Teams approval notifications, proactive messages, request editing, approval
   cards, workflow status cards, or provisioning cards are introduced.
+
+### Browser-creation removal inventory
+
+- Removed `RequestDraftsController`, `ChatRequestDraftInterpreter`, and the stateless
+  `IRequestDraftInterpreter`/`DraftInterpretation*` contracts.
+- Removed request-creating `POST /api/requests` and its DTOs; GET list/detail and
+  protected retry remain on `AccessRequestsController`.
+- Removed `NewRequestPage`, `/requests/new`, New request navigation/list actions,
+  request-creation client DTOs, `createRequest`, and creation-only styles/tests.
+- Existing `AccessRequest`, approval, provisioning operation, grant, and audit rows
+  are unchanged; no migration or cleanup is required.
 
 ## Complexity Tracking
 

@@ -21,6 +21,39 @@ public sealed class TeamsRequestPreparationTests
         + "INC-1042 because customer-facing errors require diagnosis.";
 
     [Fact]
+    public async Task DefaultChatClientProducesCurrentCandidateContract()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory();
+        using var client = factory.CreateTeamsClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(CompleteRequest),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+
+        var responseBody = await response.Content.ReadAsStringAsync(
+            cancellationToken);
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected 200 but received {(int)response.StatusCode}: {responseBody}");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var session = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+
+        Assert.Equal(RequestIntakeStatus.Ready, session.Status);
+        Assert.Equal("client-alpha", session.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
+        Assert.Equal("INC-1042", session.IncidentId);
+    }
+
+    [Fact]
     public async Task MessagesRouteRequiresAuthenticationBeforeApiAndSpaFallbacks()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

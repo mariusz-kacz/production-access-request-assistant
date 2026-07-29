@@ -122,8 +122,7 @@ create a request and that recovery guidance never changes workflow state.
 
 Business and DevOps approvers continue to review Teams-submitted requests in the
 existing web application. Their authenticated decisions and the protected provisioning
-path behave exactly as they do for requests submitted through the web request-entry
-experience.
+path retain their existing deterministic behavior.
 
 **Why this priority**: The new intake channel must not replace or weaken the
 deterministic controls that make the product governed.
@@ -141,9 +140,35 @@ scope, audit, failure, retry, and idempotent provisioning rules.
 2. **Given** valid business approval exists, **When** an authenticated DevOps
    approver records a decision, **Then** the existing exact-role, fixed-duration,
    persisted-evidence, and provisioning rules apply unchanged.
-3. **Given** the existing web request-entry experience is used, **When** a requester
-   prepares and submits a request, **Then** that experience remains available and
-   follows the same existing behavior.
+3. **Given** a requester uses the web application, **When** they inspect available
+   routes and actions, **Then** they can list and open relevant requests but cannot
+   draft or submit a new request there.
+
+---
+
+### User Story 6 - Make Teams the Only Request-Creation Channel (Priority: P1)
+
+Requesters create access requests only by confirming a server-owned preparation in an
+authenticated personal Teams conversation. The web application remains the request
+register and authenticated review, decision, retry, and audit surface.
+
+**Why this priority**: One creation boundary removes duplicate request-intake behavior
+and makes the trust model explicit without changing downstream governance.
+
+**Independent Test**: Confirm one request through Teams, verify it is visible in the
+web request register, and verify browser draft/submit endpoints, route, navigation,
+form, and session capability are absent while approval and retry endpoints remain.
+
+**Acceptance Scenarios**:
+
+1. **Given** an authenticated requester confirms a valid Teams preparation, **When**
+   confirmation completes, **Then** exactly one immutable request and request-created
+   audit event are committed.
+2. **Given** any browser caller attempts the former draft or request-submission path,
+   **When** the request is handled, **Then** no request or audit state is created.
+3. **Given** a requester, business approver, or DevOps approver opens the web
+   application, **When** the application renders, **Then** request list/detail and
+   authorized approval or retry controls remain available without creation controls.
 
 ### Edge Cases
 
@@ -166,6 +191,8 @@ scope, audit, failure, retry, and idempotent provisioning rules.
   fails when confirmation occurs.
 - A Teams-submitted request encounters the existing provisioning failure and retry
   path.
+- A browser caller posts to a removed draft or request-creation path; the call creates
+  no request or audit evidence.
 
 ## Requirements *(mandatory)*
 
@@ -233,8 +260,11 @@ scope, audit, failure, retry, and idempotent provisioning rules.
   request.
 - **FR-021**: After successful confirmation, the system MUST present the request ID
   and a way to open the request in the existing web application.
-- **FR-022**: The existing web request-entry, request-detail, business-decision,
-  DevOps-decision, provisioning, audit, and retry experiences MUST remain available.
+- **FR-022**: Authenticated confirmation of a server-owned Teams preparation MUST be
+  the only request-creation path. The web application MUST retain request list/detail,
+  business-decision, DevOps-decision, provisioning-retry, and audit behavior while
+  exposing no browser drafting or request-submission endpoint, route, form, navigation,
+  or session capability.
 - **FR-023**: The assistant and its context capabilities MUST NOT be able to submit a
   request, record either approval, transition workflow state, provision or revoke
   access, retry provisioning, or access arbitrary stored data.
@@ -258,8 +288,8 @@ scope, audit, failure, retry, and idempotent provisioning rules.
 - Multi-turn clarification, read-only authoritative context gathering, deterministic
   readiness checks, immutable final presentation, requester confirmation, and
   idempotent submission.
-- Continued use of the existing web application for request entry, request details,
-  approvals, provisioning recovery, and audit presentation.
+- Continued use of the existing web application for request list/detail, approvals,
+  provisioning recovery, and audit presentation.
 
 **Out of scope**:
 
@@ -394,7 +424,8 @@ scope, audit, failure, retry, and idempotent provisioning rules.
   sufficient for the first version.
 - A ready prepared request expires after 30 minutes; an expired, superseded, or
   incorrect final request must be replaced by starting a new preparation.
-- The existing React request-entry and governed workflow experiences remain supported.
+- The React application remains a request register and governed approval/retry
+  surface; it does not create requests.
 - Later Teams notifications for approval, rejection, provisioning, expiry, or retry
   are deferred.
 - The fixed synthetic reference dataset, exact three-tool MCP surface, two human

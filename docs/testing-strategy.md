@@ -54,8 +54,9 @@ Representative coverage:
 
 - `RequestValidationTests`: client/environment relationship, allowed role,
   justification, and incident rules;
-- `RequestSubmissionServiceTests`: authenticated requester binding, normalized
-  immutable scope, and typed submission outcomes;
+- `RequestIntakeServiceTests`: authenticated ownership, deterministic readiness,
+  reserved identity, confirmation revalidation, exact immutable scope, and one-save
+  staging outcomes;
 - `BusinessDecisionPolicyTests`: state, exact-role binding, rejection, and duplicate
   business decisions;
 - `DevOpsDecisionPolicyTests`: prior approval, exact role, fixed scope, rejection, and
@@ -103,8 +104,9 @@ Keep this layer deliberately small:
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Request preparation | Valid, incomplete, malformed, unsupported, unavailable, timeout, and cancellation outcomes |
-| Submission | Current-data revalidation, identity over-posting resistance, immutable request creation, and no premature approval/grant |
+| Teams preparation | Authenticated personal activity, valid/incomplete/malformed/unavailable/timeout/cancellation outcomes, compact state, and final-card timing |
+| Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
+| Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact three-tool advertisement, closed schemas, stable identifiers, forbidden capability absence, typed failures, and cancellation |
 | Business decisions | Configured approver, wrong-client rejection, duplicate/invalid transitions, audit evidence, and restricted payloads |
 | DevOps decisions | Actor authorization, exact role, no caller duration, fixed expiry, rejection, and safe provisioning failure |
@@ -119,23 +121,29 @@ rejected action is not safe merely because it returned an error; tests also veri
 that requests, decisions, operations, grants, and audit evidence changed only as
 intended.
 
+`TeamsOnlyRequestCreationTests` plus `ApiSecurityTests` pin the server boundary.
+`AppSession.test.tsx` and `UiWiringSmoke.test.tsx` pin the removed creation navigation,
+route behavior, form/submission absence, empty requester creation capabilities, and
+retained list/detail/business/DevOps controls.
+
 ## Deterministic dependency testing
 
 ### Chat client
 
 `DeterministicChatClient` supports:
 
-- `Valid`;
-- `Incomplete`;
+- `Candidate`;
+- `Clarification`;
 - `Malformed`;
-- `Unsupported`;
 - `Timeout`;
-- `Cancellation`; and
-- `Unavailable`.
+- `Cancellation`;
+- `Unavailable`; and
+- `PromptInjection`.
 
-The production-shaped local host registers `Valid`. Tests replace the `IChatClient`
-to exercise other outcomes through the real draft interpreter. This validates strict
-schema parsing, identifier revalidation, timeout distinction, and safe failure
+The production-shaped local host registers `Candidate`, whose response matches the
+current Teams proposal schema. Tests replace the `IChatClient` to exercise other
+outcomes through the real MAF interpreter. This validates strict schema parsing,
+deterministic identifier revalidation, timeout distinction, and safe failure
 translation without network or model nondeterminism.
 
 ### MCP
