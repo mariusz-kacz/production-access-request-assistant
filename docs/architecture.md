@@ -1,8 +1,11 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-07-30
 - **Scope**: Governed Production Access Request Assistant MVP
+
+The history-first Teams preparation details describe the target state after Phase 6
+of `specs/002-teams-access-intake/tasks.md`.
 
 ## Purpose
 
@@ -155,8 +158,8 @@ Web is the composition and infrastructure layer. It contains:
 
 - API controllers and Problem Details translation;
 - synthetic authentication and antiforgery;
-- Teams activity handling, `MafRequestPreparationInterpreter`, and
-  `DeterministicChatClient`;
+- Teams activity handling, `MafRequestPreparationInterpreter`, bounded
+  `MafConversationSessionCache`, and `DeterministicChatClient`;
 - the EF Core database context, request-context reader, workflow store, and seeder;
 - the synthetic provisioner;
 - correlation and activity instrumentation; and
@@ -173,6 +176,7 @@ request and response shapes, call application services, and map typed failures.
 | MVC controllers | Enforce endpoint authentication/antiforgery attributes, extract server identity, translate HTTP contracts, and invoke application services. | Domain policy or provisioning eligibility. |
 | `TeamsAccessRequestAgent` | Route authenticated personal Teams activities to preparation or deterministic confirmation. | Actor authority, readiness, approval, or provisioning. |
 | `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the bounded agent turn, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
+| `MafConversationSessionCache` | Keep one bounded process-local MAF session per collecting intake, serialize its turns, report cache loss, and discard it on limits or lifecycle completion. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
 | `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
 | `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
 | `RequestSubmissionService` | Revalidate and stage a reserved-ID request and request-created audit event for confirmation; never save independently. | Public/browser submission or later approval/provisioning transitions. |
@@ -194,6 +198,7 @@ sequenceDiagram
     participant Agent as TeamsAccessRequestAgent
     participant Intake as RequestIntakeService
     participant Draft as MafRequestPreparationInterpreter
+    participant Memory as Process-local MAF session cache
     participant Chat as IChatClient
     participant McpClient as MCP client
     participant McpServer as /mcp server
@@ -203,11 +208,13 @@ sequenceDiagram
     User->>Teams: Describe request
     Teams->>Agent: Authenticated personal activity
     Agent->>Intake: PrepareAsync(actor, latest message)
-    Intake->>Draft: Compact candidate + clarification + latest message
+    Intake->>Draft: Intake ID + complete candidate + validation feedback + latest message
+    Draft->>Memory: Resolve session and serialize this intake turn
+    Memory-->>Draft: AgentSession + historyAvailable
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly three read-only tools
-    Draft->>Chat: Intent, strict JSON schema, allowed tools
+    Draft->>Chat: Current candidate, history status, latest text, strict schema, allowed tools
     opt Model requests stored context
         Chat->>McpClient: Invoke allowed tool
         McpClient->>McpServer: Typed tool call
@@ -219,10 +226,13 @@ sequenceDiagram
     end
     Chat-->>Draft: Closed JSON proposal
     Draft->>Draft: Strict schema parsing and boundary translation
-    Draft-->>Intake: Untrusted candidate/clarification
+    Draft-->>Intake: Untrusted complete candidate + optional target/message
     Intake->>Context: Revalidate identifiers and relationships
     Context->>DB: Query authoritative records
-    Intake->>DB: Persist compact state or immutable ready scope
+    Intake->>DB: Replace compact candidate or persist immutable ready scope
+    opt Ready or terminal
+        Agent->>Memory: Remove intake session
+    end
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
@@ -235,6 +245,14 @@ sequenceDiagram
 The collecting candidate is untrusted and creates no request or approval. Only an
 owned, unexpired ready intake can be confirmed. The model and MCP never receive a
 submit capability.
+
+MAF history is history-first but deliberately ephemeral. SQLite persists the accepted
+complete candidate and intake lifecycle, not clarification options, prompts,
+transcripts, or serialized sessions. The cache is isolated by server-generated intake
+ID, bounded by inactivity and turn count, and guarded against concurrent mutation.
+After restart or eviction, the next run receives the durable candidate with
+`historyAvailable = false`; an ambiguous relative reply is re-clarified rather than
+guessed. Confirmation never reads this cache.
 
 The adapter defaults to:
 

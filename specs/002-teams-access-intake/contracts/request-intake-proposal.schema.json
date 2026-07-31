@@ -78,8 +78,7 @@
       "additionalProperties": false,
       "required": [
         "target",
-        "prompt",
-        "options"
+        "message"
       ],
       "properties": {
         "target": {
@@ -92,34 +91,10 @@
             "incidentId"
           ]
         },
-        "prompt": {
+        "message": {
           "type": "string",
           "minLength": 1,
           "maxLength": 500
-        },
-        "options": {
-          "type": "array",
-          "maxItems": 10,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "value",
-              "label"
-            ],
-            "properties": {
-              "value": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              },
-              "label": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              }
-            }
-          }
         }
       }
     }

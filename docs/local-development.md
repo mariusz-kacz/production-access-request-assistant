@@ -1,7 +1,7 @@
 # Local Development Guide
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-07-30
 - **Audience**: Developers running or changing the local MVP
 
 ## Prerequisites
@@ -153,6 +153,12 @@ The other deterministic modes—`Clarification`, `Malformed`, `Timeout`,
 `Cancellation`, `Unavailable`, and `PromptInjection`—are test seams. Integration
 tests replace the registered `IChatClient` in a test host to prove safe behavior
 without adding a failure-control surface to the application.
+
+Multi-turn clarification keeps its MAF session only in the running host process.
+Restarting the host intentionally loses conversation history but preserves the
+accepted typed candidate in SQLite. A relative reply after restart is not guessed;
+the assistant repeats a self-contained clarification. No option list, transcript, or
+serialized MAF session is written to the local database.
 
 If runtime-selectable demonstration modes are added later, they must remain
 development-only and must not expose provider credentials, raw prompts, or a way to

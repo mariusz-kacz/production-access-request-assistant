@@ -8,11 +8,13 @@
 
 Add one Teams personal-chat adapter to the existing ASP.NET Core executable. The
 Microsoft 365 Agents SDK authenticates and routes Teams activities; one Microsoft
-Agent Framework `ChatClientAgent` interprets each developer turn and can call only the
-existing three read-only MCP tools. Application-owned services persist a compact
-candidate and one bounded typed clarification context, authoritatively canonicalize
-any ordered options, determine readiness using the existing validator, and create an
-immutable 30-minute prepared snapshot with a reserved request ID.
+Agent Framework `ChatClientAgent` interprets each developer turn, retains bounded
+process-local history for the active intake, and can call only the existing three
+read-only MCP tools. Application-owned services persist the compact typed candidate,
+provide it to each turn as current state, determine readiness using the existing
+validator, and create an immutable 30-minute prepared snapshot with a reserved
+request ID. Clarification wording and conversational references live only in the
+ephemeral MAF session; clarification options and transcripts are not persisted.
 
 The server renders that snapshot as an Adaptive Card with one **Confirm and submit**
 action. Confirmation is a deterministic authenticated channel command, not a
@@ -33,8 +35,9 @@ existing Adaptive Card activity contract without adding a UI framework or a seco
 agent-hosting protocol.
 
 **Storage**: Existing local SQLite database through EF Core; one
-`RequestIntakeSessions` table shares the existing `DbContext` and save boundary with
-requests and audit events
+`RequestIntakeSessions` table durably stores the typed candidate and shares the
+existing `DbContext` and save boundary with requests and audit events. Bounded MAF
+conversation sessions are process-local only and are never written to SQLite
 
 **Testing**: Existing xUnit unit and integration projects, ASP.NET Core
 `WebApplicationFactory`, SQLite in-memory databases, deterministic fake
@@ -55,15 +58,17 @@ MCP deadlines; reach a final request within five developer messages for at least
 of representative test utterances
 
 **Constraints**: Personal Teams chat only; one fixed synthetic requester mapping;
-exactly three read-only model-visible MCP tools; no live model in tests; no raw
-conversation transcript persistence or logging; no model-visible submit, approval,
-workflow, retry, provisioning, or revocation action; fixed eight-hour grant; prepared
-snapshot expires after 30 minutes; cancellation crosses asynchronous boundaries
+exactly three read-only model-visible MCP tools; no live model in tests; bounded
+process-local MAF history with no transcript persistence or logging; safe
+re-clarification after history loss; no model-visible submit, approval, workflow,
+retry, provisioning, or revocation action; fixed eight-hour grant; prepared snapshot
+expires after 30 minutes; cancellation crosses asynchronous boundaries
 
-**Scale/Scope**: Portfolio-grade local demonstration, one active preparation per
-authenticated Teams actor and personal conversation, existing two clients/two
-environments/two roles, no proactive messages, background worker, distributed cache,
-queue, Slack channel, or real identity integration
+**Scale/Scope**: Portfolio-grade local demonstration, one active preparation and one
+bounded in-process MAF session per authenticated Teams actor and personal
+conversation, existing two clients/two environments/two roles, no proactive
+messages, background worker, distributed cache, queue, Slack channel, or real
+identity integration
 
 ## Constitution Check
 
@@ -75,8 +80,8 @@ queue, Slack channel, or real identity integration
 | **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals the three existing tools before passing only those tools to MAF. |
 | **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
-| **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, queue, cache, or background service. New code fits the existing Core/Web/Persistence boundaries. |
-| **Verification and operations** | PASS | Unit and integration coverage includes identity/conversation binding, schema failures, exact tool allowlisting, expiry, supersession, stale context, atomic/idempotent replay, cancellation/timeouts, and forbidden actions. Logs contain identifiers, timing, and outcomes, not prompts or transcripts. |
+| **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, distributed cache, queue, or background service. One bounded in-process MAF-session cache directly serves the approved multi-turn interaction and fits the existing Web boundary. |
+| **Verification and operations** | PASS | Unit and integration coverage includes identity/history isolation, cache loss and safe re-clarification, schema failures, exact tool allowlisting, expiry, supersession, stale context, atomic/idempotent replay, cancellation/timeouts, and forbidden actions. Logs contain identifiers, timing, and outcomes, not prompts or transcripts. |
 
 **Post-design re-check**: PASS. The data model, MAF proposal schema, Teams activity
 contract, and card contract keep model output outside readiness and authorization.
@@ -107,7 +112,6 @@ ProductionAccessRequestAssistant.sln
 src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
-│   │   ├── RequestClarificationContext.cs
 │   │   └── RequestIntakeSession.cs
 │   ├── Application/
 │   │   ├── RequestIntakeService.cs
@@ -121,6 +125,7 @@ src/
 └── GovernedAccess.Web/
     ├── Ai/
     │   ├── MafRequestPreparationInterpreter.cs
+    │   ├── MafConversationSessionCache.cs
     │   └── DeterministicChatClient.cs
     ├── Teams/
     │   ├── TeamsAccessRequestAgent.cs
@@ -166,23 +171,37 @@ only executable.
 - Actor ownership uses the authenticated channel actor binding in addition to the
   fixed synthetic requester ID. Mapping all users to `requester` must not allow one
   Teams user to confirm another user's snapshot.
-- `MafRequestPreparationInterpreter` constructs one bounded `ChatClientAgent` invocation
-  from the current compact candidate and latest message. MAF owns the model/tool loop,
-  but its session, response, and history are not authoritative application state.
+- `MafRequestPreparationInterpreter` restores one bounded process-local MAF session
+  for the active intake, supplies the canonical current candidate and latest
+  application validation feedback as run-scoped context, and invokes the
+  `ChatClientAgent` with the latest message. MAF owns conversational continuity and
+  the model/tool loop, but its response and history are not authoritative application
+  state.
+- `MafConversationSessionCache` keys sessions by the server-generated intake ID,
+  serializes mutation with one per-intake lock, applies an inactivity limit and
+  bounded turn count, and removes memory when the intake becomes ready, terminal, or
+  superseded. It is process-local by design; no distributed or durable cache is added.
+- On cache miss after restart, eviction, or expiry, the interpreter receives the
+  persisted current candidate plus an explicit `historyAvailable = false` signal.
+  Relative answers such as "the first one" must produce a repeated focused
+  clarification rather than an inferred selection.
 - The interpreter lists the loopback MCP catalog, requires exact equality with
   `get_production_environment`, `get_incident`, and `get_available_roles`, and passes
   only those `McpClientTool` instances to MAF. Missing or extra tools fail closed.
 - The model response must match
-  `contracts/request-intake-proposal.schema.json`. Candidate identifiers and
-  relationships are reloaded and checked by `RequestValidator`; only deterministic
-  validation can create a prepared snapshot.
-- The application persists only the compact current candidate and one bounded typed
-  clarification needed for the active conversation. It reloads and canonicalizes
-  every proposed option identifier and label before persistence, and clears that
-  content after submission, supersession, or expiry. Option ordering supports only
-  bounded references to the current choices; no transcript or general conversation
-  history is stored. Structured logs provide pre-submission observability; immutable
-  prepared/request evidence provides replay safety and durable audit.
+  `contracts/request-intake-proposal.schema.json`: a complete nullable candidate
+  snapshot and either one typed clarification target and bounded message or no
+  clarification. Candidate identifiers and relationships are reloaded and checked by
+  `RequestValidator`; only deterministic validation can create a prepared snapshot.
+- After deterministic canonicalization accepts a collecting proposal, its complete
+  candidate snapshot replaces the prior candidate. A `null` field means absent or
+  cleared; it is not an instruction to preserve an older value.
+- The application persists only the compact current candidate. It does not persist a
+  clarification prompt, ordered option set, transcript, or serialized MAF session.
+  The next model turn uses the active process-local history for references and the
+  durable candidate for canonical synchronization. Structured logs provide
+  pre-submission observability; immutable prepared/request evidence provides replay
+  safety and durable audit.
 - A ready snapshot is rendered only from persisted server fields. The card contains no
   inputs and its sole action carries only schema version and opaque preparation
   reference.

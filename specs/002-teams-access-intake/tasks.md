@@ -265,33 +265,34 @@ governance rules remain unchanged.
 
 ## Phase 6: User Story 2 - Clarify an Incomplete Request (Priority: P2)
 
-**Goal**: Carry compact candidate values and one bounded typed clarification context
-across focused turns, support natural references to its authoritative ordered
-options, and show the final card only after deterministic validation accepts every
-required field and relationship.
+**Goal**: Add history-first conversational continuity immediately after the Teams-only
+creation gate, while keeping only the complete typed candidate durable and treating
+bounded process-local MAF history as disposable presentation context.
 
 **Independent Test**: Start with at least two missing values, answer over multiple
 turns using both a direct choice and an ordinal reference such as "the first one",
-and verify retained candidate state, authoritative bounded options, focused
-questions, safe rejection of invalid candidates, and no final card until
-deterministic readiness.
+and verify active-history continuity, durable candidate replacement, actor/intake
+isolation, authoritative identifier validation, and no final card until deterministic
+readiness. Evict history before an ordinal reply and verify self-contained
+re-clarification without losing the durable candidate or guessing a selection.
 
 ### Vertical Implementation Sequence for User Story 2
 
-- [ ] T059 [US2] Merge each complete nullable proposal into compact state, preserve established values, require any selected target value to match the current typed clarification options when present, and defer readiness to `RequestValidator` in src/GovernedAccess.Core/Application/RequestIntakeService.cs
-- [ ] T060 [US2] Verify candidate merging, current-option membership enforcement, deterministic readiness precedence, supersession, and content disposal in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs
-- [ ] T061 [US2] Reconstruct each MAF turn from compact candidate, typed clarification context, and latest text; enforce closed proposal invariants; interpret direct and ordinal references such as "the first one" and "the other role" only against current bounded options; and exclude raw transcript persistence in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
-- [ ] T062 [US2] Persist only the compact candidate and one bounded typed clarification context per actor/conversation, render authoritative numbered choices and candidate-rejection guidance with clear provenance, and return a final card only for deterministic readiness in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [ ] T063 [P] [US2] Verify two missing values, direct and ordinal option selection, candidate carry-forward, actor/conversation isolation, no transcript storage, and final-card timing in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
-- [ ] T064 [P] [US2] Verify unknown and cross-client client/environment/role/incident proposals and clarification options plus false model-complete rejection without synthesized interpreter questions in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs
-- [ ] T065 [P] [US2] Verify available-role discovery and representative complete and incomplete utterances reach accurate preparation within five developer messages in tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs
-- [ ] T066 [US2] Supersede an unsubmitted ready snapshot on new request intent and clear active content while keeping the old card immutable in src/GovernedAccess.Core/Application/RequestIntakeService.cs and src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
-- [ ] T067 [US2] Verify start-over supersession, immutable old-card behavior, and absence of text-triggered submission in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
+- [ ] T059 [US2] Replace the persisted clarification-option contract with a complete nullable candidate snapshot, optional closed `{ target, message }` clarification proposal, run-scoped validation feedback, and `historyAvailable`; remove `RequestClarificationContext` from src/GovernedAccess.Core/Ports/RequestDrafting.cs, src/GovernedAccess.Core/Domain/RequestClarificationContext.cs, and specs/002-teams-access-intake/contracts/request-intake-proposal.schema.json
+- [ ] T060 [US2] Verify strict proposal invariants, complete-snapshot replacement including `null` clearing, deterministic readiness precedence, supersession, and terminal content disposal in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
+- [ ] T061 [US2] Implement a bounded process-local MAF `AgentSession` cache keyed by intake ID with per-intake mutation serialization, inactivity and turn-count eviction, history-availability reporting, and explicit ready/terminal cleanup in src/GovernedAccess.Web/Ai/MafConversationSessionCache.cs
+- [ ] T062 [US2] Refactor MAF intake to continue the cached session, supply current durable candidate and validation feedback on every run, enforce the strict candidate-plus-message response, and require self-contained re-clarification when relative text arrives without history in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs and src/GovernedAccess.Web/Ai/DeterministicChatClient.cs
+- [ ] T063 [US2] Replace accepted collecting state with the complete canonical candidate snapshot, remove clarification persistence and option membership logic, and retain deterministic readiness and supersession in src/GovernedAccess.Core/Application/RequestIntakeService.cs, src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs, and src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
+- [ ] T064 [US2] Register the process-local session cache, render the model clarification message without application-managed options, preserve candidate-rejection provenance, clear history on ready or terminal results, and never use history during confirmation in src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [ ] T065 [P] [US2] Verify two missing values, direct and ordinal replies through active MAF history, complete candidate carry-forward, actor/intake isolation, no option/transcript/session persistence, final-card timing, start-over supersession, immutable old-card behavior, and no text-triggered submission in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
+- [ ] T066 [P] [US2] Verify inactivity and turn-count eviction, process-restart-equivalent cache loss, no guessed relative selection, durable-candidate recovery, per-intake concurrent-turn serialization, and ready/superseded/terminal cleanup in tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheTests.cs
+- [ ] T067 [P] [US2] Verify unknown and cross-client identifiers, false model-complete rejection, available-role discovery, and representative complete and incomplete utterances reach accurate preparation within five developer messages in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs
 
 **Checkpoint**: User Stories 1 and 2 support complete and ambiguous intent, including
-bounded references to the current clarification choices, while keeping readiness,
-canonicalization, option validation, and state transitions deterministic and storing
-no transcript or general conversation history.
+natural references through active process-local history, while readiness,
+canonicalization, and state transitions remain deterministic. SQLite contains no
+clarification options, transcript, or serialized MAF session, and cache loss safely
+repeats clarification from the durable candidate.
 
 ---
 
@@ -308,7 +309,7 @@ operation, or grant.
 
 ### Vertical Implementation Sequence for User Story 3
 
-- [ ] T068 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs
+- [ ] T068 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in Core, then remove the matching process-local session when the Teams adapter observes those lifecycle outcomes in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Core/Application/RequestIntakeService.cs, src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs, and src/GovernedAccess.Web/Ai/MafConversationSessionCache.cs
 - [ ] T069 [US3] Verify lazy expiry, supersession, invalidation, owner/conversation binding, terminal transition rejection, and submitted replay identity in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs
 - [ ] T070 [US3] Add optimistic-concurrency recovery that clears tracking, reloads by intake session ID, and returns the stored request ID only for the same owner/conversation in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
 - [ ] T071 [US3] Complete compact confirmation-result handling for expiry, replay, supersession, invalidation, concealment, malformed action, stale authoritative context, and dependency failure in src/GovernedAccess.Core/Application/RequestIntakeService.cs
@@ -319,8 +320,8 @@ operation, or grant.
 - [ ] T076 [US3] Require exact MCP catalog equality, preserve model and MCP deadlines, propagate cancellation, and translate provider failures to safe outcomes in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
 - [ ] T077 [P] [US3] Verify malformed or unsupported proposals, prompt injection, model timeout/cancellation/unavailability, and no workflow state in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs
 - [ ] T078 [P] [US3] Verify exact three-tool allowlisting, missing/extra catalog failure, tool timeout/cancellation/unavailability, and no state-changing tools in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
-- [ ] T079 [US3] Extend direct `ILogger<TeamsAccessRequestAgent>` metadata for preparation and confirmation replay/rejection without adding Core logging dependencies or persisting a parallel intake history in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [ ] T080 [US3] Verify operation metadata is logged without tokens, prompts, transcripts, card bodies, model bodies, or complete MCP payloads in tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs
+- [ ] T079 [US3] Extend direct `ILogger<TeamsAccessRequestAgent>` metadata for preparation and confirmation replay/rejection without adding Core logging dependencies or logging/persisting a parallel intake or MAF-session history in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [ ] T080 [US3] Verify operation metadata is logged without tokens, prompts, transcripts, serialized MAF sessions, card bodies, model bodies, or complete MCP payloads in tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs
 
 **Checkpoint**: The Teams intake path meets the expiry, replay, concurrency, failure,
 privacy, and trust-boundary requirements and remains safe under transport retries.
@@ -355,8 +356,8 @@ scope, provisioning evidence, or retry authorization, and no browser intake rema
 **Purpose**: Complete operator guidance, packaging, whole-system verification, and
 the portfolio demo evidence.
 
-- [ ] T085 [P] Document the bounded MAF role, Teams trust boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
-- [ ] T086 [P] Document deterministic test seams, negative coverage, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md
+- [ ] T085 [P] Finalize documentation of bounded process-local MAF history, cache-loss recovery, Teams trust boundary, durable candidate boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
+- [ ] T086 [P] Finalize documentation of the history-sensitive deterministic fake, cache isolation/eviction/concurrency negatives, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md
 - [ ] T087 [P] Document E5 developer-tenant setup, Azure Bot registration, secret storage, stable HTTPS tunnel, manifest packaging, sideloading, and cleanup in docs/teams-demo.md and docs/local-development.md
 - [ ] T088 Validate the Teams app package contains only manifest.json, color.png, and outline.png at its ZIP root and record the packaging command in docs/teams-demo.md
 - [ ] T089 Run restore, warnings-as-errors build, .NET tests, Vitest tests, contract validation, and Scenarios 1-6 including Teams-only request creation, then record results and deterministic confirmation timing in specs/002-teams-access-intake/validation.md
@@ -378,10 +379,13 @@ the portfolio demo evidence.
 - **Phase 5 (US6 Teams-only creation)**: Depends on the simplified US5 complete
   prepare/confirm path. Contract tasks T049-T052 precede production deletion, and
   T058 is the removal gate.
-- **Phase 6 (US2)**: Depends on the Teams-only creation boundary and the simplified
-  US5 intake path but remains independently testable with incomplete conversations.
-- **Phase 7 (US3)**: Depends on the Teams-only creation gate. Its model/MCP failure
-  work can proceed independently of Web approval regression coverage.
+- **Phase 6 (US2 history-first clarification)**: Runs immediately after Phase 5 and
+  depends on the Teams-only creation boundary and simplified US5 intake path. It
+  remains independently testable with incomplete conversations and simulated cache
+  loss.
+- **Phase 7 (US3)**: Depends on Phase 6 because terminal failure handling also clears
+  the ephemeral session introduced there. Its model/MCP failure work can proceed
+  independently of Web approval regression coverage.
 - **Phase 8 (US4)**: Depends on the Teams-only creation gate and the confirmation
   behavior required to seed the governed approval/provisioning workflow.
 - **Phase 9 (Polish)**: Depends on all user stories selected for delivery.
@@ -391,8 +395,8 @@ the portfolio demo evidence.
 ```text
 Setup -> Foundational -> US1 Prepare/Confirm -> US5 Simplify Architecture
                                                    `-> US6 Teams-Only Creation
-                                                        |-> US2 Clarification
-                                                        |-> US3 Replay/Failure Safety
+                                                        |-> US2 History-First Clarification
+                                                        |        `-> US3 Replay/Failure Safety
                                                         `-> US4 Existing Workflow Proof
 
 US2 + US3 + US4 -> Polish and Demo Validation
@@ -443,11 +447,10 @@ deletions; documentation T057 and the full removal gate T058 finish the phase.
 
 ### User Story 2
 
-After the foundational typed clarification contract, candidate merging and its unit
-coverage proceed through T059-T060, followed by interpreter and persistence/Teams
-wiring in T061-T062. Integration tests T063-T065 target separate files and can run in
-parallel. Supersession implementation T066 then receives focused integration coverage
-in T067.
+Contract replacement and unit coverage T059-T060 precede the cache and interpreter
+work T061-T062. Durable-state and Teams wiring T063-T064 then establish cleanup
+boundaries. The history flow, cache failure/concurrency behavior, and validation
+quality tests T065-T067 target separate files and can run in parallel.
 
 ### User Story 3
 
@@ -488,7 +491,8 @@ submitted request.
    trust boundaries; it is mandatory before adding more behavior.
 3. **US6** removes the obsolete browser intake and makes Teams the only creation path
    without changing persisted requests or downstream governance.
-4. **US2** adds the genuine conversational value of multi-turn clarification.
+4. **US2** adds history-first multi-turn clarification using disposable process-local
+   MAF sessions and durable typed candidate state.
 5. **US3** makes the channel safe under retry, expiry, malformed input, and dependency
    failure.
 6. **US4** proves that Web approvals and provisioning stayed deterministic.
@@ -512,9 +516,9 @@ additional agents, services, queues, or workflow infrastructure.
   register, approval, retry, and audit surface.
 - A US5 task that needs a new production abstraction must stop and obtain explicit
   justification before adding it; deletion and consolidation are the default.
-- Structured clarification state is bounded to the current target and ordered
-  authoritative choices; it is not a transcript, autonomous memory, or generic
-  conversational workflow.
+- Bounded MAF history is isolated process-local presentation context, not durable
+  workflow state. Only the typed candidate and intake lifecycle are persisted; cache
+  loss triggers re-clarification rather than reconstructed or guessed choices.
 - Tests never call a live model, Teams tenant, Azure Bot, or production system.
 - No task adds Slack, group chat, proactive messages, Graph/SSO, a workflow engine,
   multiple agents, model-visible state changes, or a second executable.

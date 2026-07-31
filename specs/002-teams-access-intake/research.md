@@ -51,27 +51,39 @@ Sources: [MAF repository and fit guidance](https://github.com/microsoft/agent-fr
 
 ## 3. Conversation State Ownership
 
-**Decision**: Persist a compact application-owned candidate and one bounded typed
-clarification context per authenticated actor and personal conversation. The context
-contains one target, a bounded prompt, and at most ten ordered authoritative
-stable-ID/display-label options. Reconstruct each MAF turn from that state and the
-latest message. Do not persist raw Teams transcripts or treat a MAF thread/session as
-authoritative draft state.
+**Decision**: Persist only the compact application-owned candidate and intake
+lifecycle. Keep one bounded MAF `AgentSession` in process-local memory for each active
+authenticated intake, and use that history as the primary context for previous
+questions, tool exchanges, and references such as "the first one". Do not persist the
+MAF session, raw Teams transcript, clarification prompt, or ordered options.
 
-**Rationale**: The application must enforce one active preparation, content disposal,
-expiry, supersession, and deterministic readiness. Provider or transport session state
-cannot supply those guarantees and would duplicate persistence. Compact structured
-state is sufficient for focused clarification, including bounded references such as
-"the first one", while reducing privacy and logging risk. Interpreter-proposed option
-identifiers and labels are reloaded and canonicalized before persistence.
+Supply the durable canonical candidate and a `historyAvailable` signal as run-scoped
+context on every turn. If the session is absent after host restart, inactivity
+eviction, or cleanup, the model must not resolve a relative reply from newly queried
+ordering; it must repeat a focused clarification. Remove process-local history when
+the intake becomes ready, submitted, superseded, expired, or invalidated.
+
+**Rationale**: MAF-native history demonstrates genuine conversational continuity
+without creating a second durable representation of the same clarification. The
+typed candidate is the only restart-safe preparation state required for deterministic
+readiness and recovery. Losing best-effort history can cause a repeated question but
+cannot create a request or change authorization. A small in-process cache is
+proportionate to the single-host, short-conversation scope and avoids SDK-session
+serialization compatibility, transcript retention, and distributed-cache concerns.
 
 **Alternatives considered**:
 
-- Persist the complete MAF thread: retains unnecessary conversation content and
-  couples domain continuity to an SDK contract.
-- Use only in-memory SDK conversation state: cannot support restart-safe prepared
-  snapshots or reliable confirmation replay.
-- Add a transcript database: explicitly outside the feature's retention need.
+- Persist clarification targets and ordered choices alongside the candidate: creates
+  duplicate conversational memory and bypasses the MAF history capability the feature
+  is intended to demonstrate.
+- Persist or checkpoint the complete MAF session: provides seamless restart
+  continuity but retains raw conversation content, couples stored data to an SDK
+  serialization format, and is disproportionate when safe re-clarification is an
+  acceptable recovery.
+- Use only MAF history with no durable typed candidate: makes restart recovery and
+  deterministic readiness depend on best-effort process memory.
+- Add a transcript database or distributed cache: explicitly outside the
+  single-host feature need.
 
 Source: [Microsoft 365 Agents SDK application and state model](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/agent-application)
 
@@ -79,10 +91,10 @@ Source: [Microsoft 365 Agents SDK application and state model](https://learn.mic
 
 **Decision**: Require every MAF turn to produce the closed
 `request-intake-proposal.schema.json` contract: a complete nullable candidate snapshot
-and either a bounded typed clarification context or a candidate proposal. Deserialize
-strictly, reject extra fields, validate the kind/clarification pairing in the
-provider-neutral proposal constructor, authoritatively canonicalize any ordered
-option identifiers and labels, and let deterministic code decide readiness.
+and either one typed clarification target with a bounded user-facing message or a
+candidate proposal with no clarification. Deserialize strictly, reject extra fields,
+validate the kind/clarification pairing in the provider-neutral proposal constructor,
+and let deterministic code canonicalize candidate values and decide readiness.
 The schema intentionally avoids conditional JSON Schema keywords that are not
 uniformly supported by structured-output model providers.
 
@@ -95,6 +107,9 @@ can canonicalize and validate the proposed fields against authoritative data.
 - Free-form assistant responses: difficult to validate and unsafe as a readiness
   signal.
 - A model-produced readiness boolean: duplicates a deterministic business rule.
+- A model-produced or application-persisted clarification option array: duplicates
+  conversation history and still cannot prove that the model mapped an ordinal phrase
+  to the semantically intended choice.
 - Agent-generated Adaptive Cards: makes untrusted model content define the
   confirmation surface.
 
@@ -215,11 +230,12 @@ Sources: [universal Adaptive Card actions](https://learn.microsoft.com/en-us/ada
 ## 10. Local and Real Teams Validation
 
 **Decision**: Keep automated acceptance independent of Teams and a live model by
-using fake authenticated activity context and the deterministic chat client. Use
-Microsoft Agents Playground only for local transport/card UX. Validate the real Teams
-story separately with an authenticated Azure Bot registration, a stable HTTPS
-development tunnel, a personal-scope app manifest, and sideloading in a development
-tenant.
+using fake authenticated activity context and a deterministic history-sensitive chat
+client. Test process-local session continuity, isolation, eviction, and safe
+re-clarification without serializing MAF history. Use Microsoft Agents Playground
+only for local transport/card UX. Validate the real Teams story separately with an
+authenticated Azure Bot registration, a stable HTTPS development tunnel, a
+personal-scope app manifest, and sideloading in a development tenant.
 
 **Rationale**: Playground anonymous mode cannot prove the production authentication
 boundary. Real Teams requires public HTTPS and tenant policy, which should not make

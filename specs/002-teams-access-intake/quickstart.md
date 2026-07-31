@@ -98,15 +98,23 @@ as `the first one` or `the other role`.
 
 Verify after each turn:
 
-- established candidate values and at most one bounded typed clarification remain in
-  compact server state;
-- displayed option identifiers and labels were authoritatively canonicalized before
-  persistence, and ordinal references resolve only against the current choices;
+- the complete accepted candidate snapshot remains in durable compact server state;
+- prior questions and answers exist only in the bounded process-local MAF session;
+- ordinal references resolve from that active history, while the resulting identifier
+  is authoritatively canonicalized before persistence;
 - the model proposal is schema-valid but remains untrusted;
 - no final card appears while `RequestValidator` reports missing or invalid fields;
-- raw messages and model responses are not persisted as transcripts; and
+- no option list, raw message, model response, transcript, or serialized MAF session
+  is persisted; and
 - the final card appears only after all identifiers and relationships are
   authoritatively valid.
+
+Then remove or evict the process-local session before replying to a clarification
+with `the first one`.
+
+Verify that the accepted candidate is retained, the ambiguous reply is not guessed,
+and the application repeats a self-contained clarification in a fresh session.
+Repeat with two active intakes and verify their histories never cross.
 
 ## Scenario 3: Immutable Card and Start-over
 

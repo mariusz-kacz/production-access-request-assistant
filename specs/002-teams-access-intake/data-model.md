@@ -10,8 +10,9 @@
 - Confirmation stages the immutable request and request-created audit event and commits
   them with the intake transition in one shared `SaveChangesAsync`.
 - Existing request, approval, operation, grant, and audit schemas remain unchanged.
-- Raw activities, prompts, model messages, complete MCP payloads, and transcripts are
-  neither persisted nor logged.
+- Raw activities, prompts, model messages, complete MCP payloads, MAF sessions, and
+  transcripts are not persisted or logged. Bounded MAF history exists only in
+  process memory while one intake is collecting.
 
 ## Request Intake Session
 
@@ -32,7 +33,6 @@ conversation from collection through confirmation and old-card replay handling.
 | `RequestedRoleId` | nullable string | Compact candidate; canonical and immutable while ready |
 | `Justification` | nullable string | 10–2,000 characters when ready |
 | `IncidentId` | nullable string | Optional canonical incident |
-| `PendingClarification` | nullable typed context | One target, bounded prompt, and at most 10 ordered canonical options |
 | `ReservedRequestId` | nullable `Guid` | Assigned once when ready; unique future `AccessRequest.Id` |
 | `CreatedAt` | `DateTimeOffset` | UTC server time |
 | `LastUpdatedAt` | `DateTimeOffset` | UTC last accepted operation |
@@ -50,13 +50,17 @@ actors map to the same synthetic requester.
 
 ### Content lifecycle
 
-- `Collecting` stores only the compact candidate and one bounded typed clarification.
-- Interpreter-proposed clarification options are reloaded and canonicalized through
-  authoritative context before persistence.
+- `Collecting` stores only the compact canonical candidate and intake metadata.
+- Every schema-valid proposal contains the complete nullable candidate snapshot.
+  After deterministic canonicalization accepts the turn, that snapshot replaces the
+  previous collecting candidate; `null` means absent or explicitly cleared.
+- Process-local MAF history is not part of this aggregate or the database. It is
+  keyed by `RequestIntakeSession.Id`, isolated per intake, and may disappear without a
+  domain transition.
 - `Ready` fixes canonical scope, reserved request identity, and expiry.
 - `Submitted`, `Superseded`, `Expired`, and `Invalidated` retain binding, status,
   reserved request identity, timestamps, and correlation metadata but clear candidate
-  and clarification content.
+  content.
 
 ### Transitions
 
@@ -70,16 +74,36 @@ Ready ------stale context--------> Invalidated
 Submitted --duplicate confirm----> Submitted (same request ID, no new evidence)
 ```
 
-## Request Candidate and Clarification
+## Request Candidate and Clarification Proposal
 
 The provider-neutral candidate contains nullable `ClientId`, `EnvironmentId`,
 `RequestedRoleId`, `Justification`, and `IncidentId`. `RequestValidator` owns
 canonicalization, relationship checks, and readiness.
 
-The optional clarification contains one closed target (`ClientId`, `EnvironmentId`,
-`RequestedRoleId`, `Justification`, or `IncidentId`), a non-empty prompt of at most
-500 characters, and zero to ten unique ordered stable-ID/display-label options.
-Ordering supports bounded references such as “the first one”; it is not authorization.
+The optional clarification proposal contains one closed target (`ClientId`,
+`EnvironmentId`, `RequestedRoleId`, `Justification`, or `IncidentId`) and one
+non-empty user-facing message of at most 500 characters. It contains no structured
+option list. Any choices presented by the model remain part of the active MAF
+conversation history, while every identifier proposed on a later turn is still
+canonicalized against authoritative data.
+
+## Ephemeral MAF Conversation Memory
+
+Infrastructure owns a bounded process-local cache keyed by
+`RequestIntakeSession.Id`. Each entry contains only the MAF `AgentSession` needed to
+continue model context, a per-intake mutation lock, last-access metadata, and a turn
+count.
+
+- Entries are isolated by intake ID and are never shared across actors or
+  conversations.
+- Inactivity, turn-count limits, readiness, supersession, expiry, invalidation,
+  submission, and process termination remove an entry.
+- Cache loss causes no domain transition and loses no accepted candidate data.
+- A turn without history receives `historyAvailable = false` plus the current durable
+  candidate; the model must ask a self-contained clarification instead of resolving a
+  relative answer such as “the first one.”
+- Confirmation, approval, provisioning, revocation, authorization, and audit evidence
+  never depend on this memory.
 
 ## Existing Access Request
 

@@ -446,13 +446,25 @@ The model produces a typed draft such as:
 }
 ```
 
-The model may call the three read-only MCP tools to obtain request context. The result is either:
+The model may call the three read-only MCP tools to obtain request context. Each turn
+produces either:
 
-- a schema-valid draft,
-- an incomplete draft with nullable required values and correction guidance,
+- a schema-valid complete-shape candidate,
+- an incomplete candidate with one focused clarification message,
 - an unsupported or malformed result.
 
-Missing or invalid fields are corrected through the structured new-request page. A multi-turn clarification engine is not required.
+The assistant uses bounded process-local conversation history to interpret follow-up
+messages such as "the first one" from its prior questions. The durable intake stores
+the current typed candidate, not clarification options or a transcript. Conversation
+history is a best-effort interpretation aid: it is isolated to the authenticated
+personal conversation, is never authorization evidence, is not persisted or logged,
+and is cleared when the intake becomes ready or terminal.
+
+If process-local history is unavailable after restart, eviction, or expiry, the
+assistant continues from the persisted candidate but must repeat any clarification
+needed to understand a relative answer rather than guessing. Every resulting
+identifier and relationship is checked deterministically before the immutable final
+request is displayed.
 
 ### 7.3 Deterministic Validation
 
@@ -551,7 +563,11 @@ The MVP does not include audit administration or provisioning administration pag
 
 The Governed Access Host shall accept natural-language request intent only through an
 authenticated personal Teams conversation, transform it into a typed request
-candidate, and safely reject malformed model output.
+candidate, and safely reject malformed model output. It shall use isolated bounded
+process-local conversation history to interpret follow-up messages while retaining
+the typed candidate durably. Missing history shall cause safe re-clarification rather
+than inferred selection, and conversation history shall not be persisted, logged, or
+used by confirmation or downstream workflow actions.
 
 ### FR-02 Restricted MCP Context
 

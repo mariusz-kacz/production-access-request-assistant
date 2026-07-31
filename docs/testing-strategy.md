@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-07-30
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -104,7 +104,7 @@ Keep this layer deliberately small:
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Teams preparation | Authenticated personal activity, valid/incomplete/malformed/unavailable/timeout/cancellation outcomes, compact state, and final-card timing |
+| Teams preparation | Authenticated personal activity, valid/incomplete/malformed/unavailable/timeout/cancellation outcomes, complete durable candidate snapshots, active-history direct/ordinal replies, history isolation/eviction/recovery, and final-card timing |
 | Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
 | Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact three-tool advertisement, closed schemas, stable identifiers, forbidden capability absence, typed failures, and cancellation |
@@ -142,9 +142,19 @@ retained list/detail/business/DevOps controls.
 
 The production-shaped local host registers `Candidate`, whose response matches the
 current Teams proposal schema. Tests replace the `IChatClient` to exercise other
-outcomes through the real MAF interpreter. This validates strict schema parsing,
-deterministic identifier revalidation, timeout distinction, and safe failure
-translation without network or model nondeterminism.
+outcomes through the real MAF interpreter. The fake supports scripted,
+history-sensitive turns so a test can distinguish an ordinal answer with the prior
+question in its MAF session from the same answer after a cache miss. This validates
+strict schema parsing, deterministic identifier revalidation, timeout distinction,
+and safe failure translation without network or model nondeterminism.
+
+Focused cache tests verify intake isolation, per-intake concurrent-turn
+serialization, inactivity and turn-count eviction, ready/terminal cleanup, and
+process-restart-equivalent loss. Integration assertions inspect persistence to prove
+that only the complete typed candidate and lifecycle survive: no option list,
+transcript, raw prompt, model body, or serialized MAF session is stored. Cache-loss
+tests retain the candidate and require re-clarification instead of accepting a
+relative selection.
 
 ### MCP
 

@@ -1,7 +1,7 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-07-30
 - **Scope**: Local synthetic Governed Production Access Request Assistant MVP
 
 ## Purpose
@@ -112,6 +112,7 @@ for real client, incident, identity, credential, or production-access data.
 | MCP client and wire data | Untrusted protocol-boundary data until typed parsing and application validation succeed. |
 | MCP server adapter | Trusted only to translate typed read-only requests to the request-context port. It is not an authorization boundary. |
 | Application and domain services | Trusted enforcement boundary for validation, authority, state transitions, and exact scope. |
+| Process-local MAF session cache | Best-effort untrusted conversation context, isolated by server-generated intake ID and excluded from authorization and durable evidence. |
 | SQLite workflow store | Authoritative store under the current single-writer application assumption. |
 | Synthetic provisioner | Trusted to implement get-or-create for already authorized server-constructed scope; not trusted to decide eligibility. |
 
@@ -172,11 +173,33 @@ description, or provider adapter would not preserve this boundary.
 | Business approval binds exact scope | The decision references the immutable request ID and approved role. |
 | DevOps cannot change role or duration | The decision body contains no scope or duration; policy uses persisted role; grant lifetime is server-owned. |
 | Model output is not trusted | Closed JSON schema, strict parsing, known-role constraints, identifier revalidation, and full submission validation. |
+| Conversation history cannot authorize or establish candidate truth | Only the canonical typed candidate is durable; history is process-local, bounded, isolated per intake, and never read by confirmation or downstream workflow actions. |
+| Missing history cannot reinterpret a relative answer | Cache miss is passed explicitly to the interpreter; ambiguous references require self-contained re-clarification and cannot be reconstructed or guessed from persisted options. |
 | MCP cannot mutate workflow | The MCP project has only three read-only context tools and no workflow or provisioning dependency. |
 | Provisioning does not trust its caller | The protected service accepts a request ID and reloads request, operation, and both approvals. |
 | Retry cannot replace scope | Retry has no body and reuses the same request, operation, evidence checks, and provider idempotency identity. |
 | Duplicate work cannot create multiple logical grants | Request ID is the idempotency identity; operation and grant constraints are unique per request; concurrent completion is reloaded. |
 | UI action visibility is not authorization | Application services independently authenticate, authorize, and validate every action. |
+
+## Conversation-memory boundary
+
+History-first clarification uses one bounded in-process MAF session per collecting
+intake. It exists only to preserve conversational meaning across nearby turns. The
+cache key is the opaque server-generated intake ID, and the application verifies the
+authenticated actor/conversation binding through the durable intake before resolving
+that entry. Per-intake mutation is serialized so concurrent activities cannot corrupt
+or interleave one session.
+
+The cache is removed on inactivity or turn-count limits and when the intake becomes
+ready, submitted, superseded, expired, or invalidated. Process termination also loses
+it. This is safe because SQLite retains the complete accepted candidate snapshot. A
+fresh session receives that candidate and an explicit missing-history signal and must
+repeat a self-contained question before interpreting relative text.
+
+No raw activity, prompt, model response, option list, transcript, or serialized MAF
+session is persisted or logged by default. Neither cache presence nor its contents
+are authorization evidence, audit evidence, or an input to confirmation, approval,
+provisioning, retry, or revocation.
 
 ## Browser, identity, and session boundary
 

@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-07-29
+- **Last reviewed**: 2026-07-30
 - **Current baseline**:
   [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 
@@ -20,8 +20,8 @@ current exact three-tool MCP surface:
 - `get_available_roles`
 
 That feature should first demonstrate a bounded incident-to-environment-to-role tool
-chain, compact multi-turn clarification, deterministic validation, and safe failure
-handling.
+chain, history-first multi-turn clarification with durable typed candidate state,
+deterministic validation, and safe failure handling.
 
 The active product boundary is Teams-only request creation: an authenticated personal
 Teams preparation becomes a request only through deterministic confirmation. The Web
@@ -121,8 +121,10 @@ capabilities.
 - Search, lookup, and role tools remain read-only.
 - Search results are untrusted context until authoritative application services reload
   and validate the selected stable identifier.
-- Result ordering does not authorize an ordinal selection; the selected value must
-  match the current persisted bounded options.
+- Result ordering does not authorize an ordinal selection. Active process-local
+  history may give an ordinal reply conversational meaning, but the resulting stable
+  identifier must still pass authoritative validation; after history loss the
+  assistant must repeat the choices.
 - Client, environment, incident, and role relationships are revalidated before
   preparing a snapshot and again at confirmation.
 - MAF and MCP receive no submit, approval, provisioning, retry, revocation, workflow,
@@ -152,7 +154,8 @@ evaluation or shared-channel reuse provides no demonstrated value.
 - A developer can begin with a problem description and no incident ID.
 - Zero, one, and multiple-match searches produce distinct typed outcomes.
 - Multiple matches are capped and rendered as authoritative numbered choices.
-- A direct or ordinal selection is accepted only from the current option set.
+- A direct or ordinal selection is resolved only from the active conversation and its
+  stable identifier is authoritatively validated; cache loss repeats the choices.
 - The selected incident drives dependent environment and role lookups.
 - Representative requests reach a validated prepared candidate within five developer
   messages.

@@ -61,25 +61,36 @@ authorization claim, or validated scope.
 - SDK-authenticated actor/conversation binding.
 - Server correlation ID.
 
+Before model invocation, the application adds server-owned turn context:
+
+- Complete current durable candidate snapshot and latest deterministic validation
+  feedback.
+- Server-owned `historyAvailable` flag.
+
 ### Processing
 
 1. Load or create the one active preparation conversation for the binding.
 2. If a ready prepared request already exists, the new request-intent turn supersedes
    it; the old card remains visually immutable but can no longer be confirmed.
-3. Invoke the provider-neutral request-intake interpreter with the latest text,
-   compact current candidate, and one bounded typed clarification context when
-   present.
-4. Strictly validate the closed proposal schema.
-5. Revalidate candidate values with authoritative stored context.
-6. Authoritatively canonicalize any bounded ordered clarification options.
-7. Persist either the updated compact candidate/typed clarification or an immutable
-   prepared snapshot.
+3. Resolve or create the bounded process-local MAF session for the intake and
+   serialize mutation of that session.
+4. Invoke the provider-neutral request-intake interpreter with the latest text,
+   complete current candidate, latest validation feedback, and `historyAvailable`.
+   MAF supplies prior turns only while that session remains in memory.
+5. Strictly validate a complete nullable candidate snapshot plus either one
+   `{ target, message }` clarification proposal or `null`.
+6. Revalidate and canonicalize every proposed candidate value with authoritative
+   stored context.
+7. Replace the durable collecting candidate with the accepted complete snapshot or
+   persist an immutable prepared snapshot when deterministically ready.
+8. Retain process-local history only while collecting, subject to inactivity and
+   turn-count limits; clear it on ready or terminal lifecycle transitions.
 
 ### Outcomes
 
 | Outcome | Teams response | State effect |
 |---|---|---|
-| `ClarificationRequired` | One focused prompt with optional numbered choices | Update compact candidate and one bounded typed clarification |
+| `ClarificationRequired` | One focused model message, which may include choices grounded in approved context | Replace the durable candidate snapshot and retain only process-local MAF history |
 | `CandidateRejected` | Application-owned validation correction with clear provenance | No synthetic interpreter question and no prepared request |
 | `ReadyForConfirmation` | Server-rendered final Adaptive Card | Create immutable prepared snapshot and reserved request ID |
 | `MalformedModelOutput` | Safe retry/start-over guidance | No prepared request |
@@ -90,6 +101,12 @@ authorization claim, or validated scope.
 
 No message activity can submit a request, record approval, transition an existing
 access request, provision, revoke, or retry provisioning.
+
+An answer such as “the first one” is meaningful only when the active MAF session
+contains the question and ordering that gave it meaning. After process restart,
+eviction, or any other cache miss, the application explicitly reports unavailable
+history to the model and the `ClarificationRequired` path repeats a self-contained
+question. It never guesses from a reconstructed option list.
 
 ## Final prepared-request card
 
@@ -186,4 +203,5 @@ conversation identifier or safe derivative, activity type, operation, duration,
 preparation status transition, confirmation outcome, and submitted request ID.
 
 Do not log bot secrets, access tokens, raw prompts, complete activity/card bodies,
-conversation transcripts, model response bodies, or complete MCP payloads by default.
+conversation transcripts, serialized MAF sessions, model response bodies, or complete
+MCP payloads by default.

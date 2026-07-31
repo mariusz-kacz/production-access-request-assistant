@@ -54,9 +54,10 @@ requester.
 ### User Story 2 - Clarify an Incomplete Request (Priority: P2)
 
 An authenticated developer can begin with incomplete or ambiguous intent. The
-assistant asks focused follow-up questions and carries forward the current candidate
-values. A final request is not shown until authoritative, deterministic validation
-confirms that every required field is complete and valid.
+assistant asks focused follow-up questions, uses short-lived process-local
+conversation history to understand replies in context, and carries forward the
+current typed candidate values. A final request is not shown until authoritative,
+deterministic validation confirms that every required field is complete and valid.
 
 **Why this priority**: Conversational clarification is the principal user benefit over
 the existing one-shot draft experience.
@@ -68,22 +69,32 @@ appears until all required values pass deterministic validation.
 **Acceptance Scenarios**:
 
 1. **Given** a developer omits a required request value, **When** the assistant
-   processes the description, **Then** it asks a focused question with bounded
-   authoritative choices when applicable and does not display a final request.
+   processes the description, **Then** it asks one focused question, may present
+   choices grounded in the approved read-only context when applicable, and does not
+   display a final request.
 2. **Given** the assistant proposes an identifier that does not exist or conflicts
    with authoritative client, environment, role, or incident data, **When** the
    candidate is checked, **Then** the invalid value is not accepted and the developer
    receives safe correction guidance.
-3. **Given** a developer answers a clarification question, **When** the answer is
-   processed, **Then** previously established candidate values remain available
-   without being treated as authoritative until the complete candidate is validated.
+3. **Given** a developer answers a clarification question while the active
+   conversation history is available, **When** the answer is processed, **Then** the
+   assistant interprets it using that history and the latest typed candidate, while
+   every resulting value remains untrusted until deterministically validated.
 4. **Given** the assistant claims that preparation is complete while deterministic
    validation still finds an error, **When** the turn is evaluated, **Then** no final
    request is created or displayed.
-5. **Given** the current clarification contains ordered choices, **When** the
-   developer refers to a displayed choice as "the first one" or "the other role",
-   **Then** only that bounded current option context is used to interpret the reply,
-   and the selected identifier is still deterministically validated.
+5. **Given** the assistant previously presented ordered choices in the active
+   process-local conversation, **When** the developer refers to "the first one" or
+   "the other role", **Then** the assistant interprets the reference from that
+   conversation history and the resulting identifier is still deterministically
+   validated.
+6. **Given** process-local conversation history is unavailable after host restart,
+   cache eviction, or expiry, **When** the developer sends a reply that depends on an
+   earlier question, **Then** the assistant does not guess, continues from the
+   persisted typed candidate, and repeats a focused clarification.
+7. **Given** two authenticated developers or personal conversations are preparing
+   requests concurrently, **When** they exchange multiple messages, **Then** their
+   process-local histories and durable candidates remain isolated.
 
 ---
 
@@ -187,6 +198,9 @@ form, and session capability are absent while approval and retry endpoints remai
   incident association.
 - The approved context tool catalog contains a missing or unexpected tool.
 - The developer disconnects or cancels while a model or context operation is active.
+- Process-local conversation history is lost between a clarification question and a
+  relative answer such as "the first one".
+- Two activities for the same active conversation arrive concurrently.
 - A prepared request is valid when displayed but authoritative context validation
   fails when confirmation occurs.
 - A Teams-submitted request encounters the existing provisioning failure and retry
@@ -210,14 +224,14 @@ form, and session capability are absent while approval and retry endpoints remai
 - **FR-004**: The system MUST maintain at most one active request-preparation
   conversation for each authenticated developer and personal conversation.
 - **FR-005**: The assistant MUST interpret request intent, carry forward candidate
-  values and one bounded typed clarification context across turns, and ask focused
-  questions with authoritative ordered choices when applicable.
+  values across turns, use bounded process-local conversation history to interpret
+  follow-up answers, and ask one focused clarification at a time.
 - **FR-006**: The assistant MUST receive exactly the existing three approved
   read-only context capabilities for production environment, incident, and available
   role data and MUST receive no additional context or state-changing capability.
 - **FR-007**: Every assistant turn MUST produce a closed, schema-valid proposal to
-  either supply one bounded typed clarification target, prompt, and optional ordered
-  choices or propose a typed request candidate; arbitrary assistant prose MUST NOT
+  supply the complete nullable candidate snapshot and either one typed clarification
+  target and bounded message or no clarification; arbitrary assistant prose MUST NOT
   determine readiness or cause a state change.
 - **FR-008**: Every model-proposed client, environment, role, incident, and business
   value MUST be checked against authoritative stored data and existing request rules.
@@ -273,11 +287,19 @@ form, and session capability are absent while approval and retry endpoints remai
   confirmation, malformed model output, timeout, cancellation, and dependency
   unavailability.
 - **FR-025**: Active conversation content MUST be retained only as needed to continue
-  the preparation and MUST be discarded after submission, supersession, or expiry;
-  audit evidence MUST contain operation metadata rather than raw conversation
-  transcripts.
+  the preparation in bounded process-local memory, MUST NOT be persisted as a
+  transcript, and MUST be discarded after readiness, submission, supersession,
+  expiry, invalidation, or process termination; audit evidence MUST contain operation
+  metadata rather than raw conversation transcripts.
 - **FR-026**: Teams submission MUST NOT send later approval or provisioning status
   notifications in this feature.
+- **FR-027**: Loss or eviction of process-local conversation history MUST NOT alter
+  the durable candidate or any workflow state. A follow-up message that depends on
+  missing history MUST cause safe re-clarification rather than inferred selection.
+- **FR-028**: Process-local history MUST be isolated by the authenticated intake
+  binding, bounded by inactivity and conversation limits, protected from concurrent
+  mutation for one conversation, and never used by confirmation, approval, or
+  provisioning.
 
 ### Scope Boundaries
 
@@ -352,10 +374,13 @@ form, and session capability are absent while approval and retry endpoints remai
 ### Key Entities
 
 - **Request Preparation Conversation**: The short-lived state for one authenticated
-  developer in one personal Teams conversation, including the current candidate, one
-  bounded typed clarification with optional ordered authoritative choices, timestamps,
-  and correlation metadata. It is not approval or authorization evidence and does not
-  contain a transcript or general conversation history.
+  developer in one personal Teams conversation, including the durable typed candidate,
+  timestamps, and correlation metadata. It is not approval or authorization evidence
+  and does not persist a transcript or clarification options.
+- **Ephemeral Conversation Memory**: Bounded process-local assistant history keyed to
+  one active authenticated intake. It helps interpret follow-up messages but is not
+  authoritative request state, is not persisted or logged, may be lost at any time,
+  and is cleared when the intake becomes ready or terminal.
 - **Prepared Access Request**: A server-owned, immutable, time-limited snapshot ready
   for requester confirmation. It contains an opaque preparation reference, reserved
   request ID, requester and conversation binding, exact canonical request scope,
@@ -371,12 +396,13 @@ form, and session capability are absent while approval and retry endpoints remai
   reserved-request identity, and idempotent confirmation. Existing request,
   approval, immutable-scope, fixed-duration, and provisioning policies remain covered.
 - **Integration/contract coverage**: Verify authenticated personal-chat intake,
-  fixed synthetic requester mapping, multi-turn state isolation, bounded typed
-  clarification and ordinal option selection, exact final-request presentation,
-  opaque confirmation actions, persistence, repeated confirmation, stable request
-  links, and continued web behavior. Verify the exact three-tool read-only context
-  contract and model tool allowlist. No automated test may require a live model;
-  deterministic fake behavior must cover clarification and candidate proposals.
+  fixed synthetic requester mapping, history-backed multi-turn interpretation,
+  process-local history isolation and eviction recovery, durable candidate
+  carry-forward, exact final-request presentation, opaque confirmation actions,
+  persistence, repeated confirmation, stable request links, and continued web
+  behavior. Verify the exact three-tool read-only context contract and model tool
+  allowlist. No automated test may require a live model; deterministic fake behavior
+  must cover history-sensitive clarification and candidate proposals.
 - **Negative coverage**: Verify unauthenticated or non-personal activities, forged
   identity and scope fields, cross-developer confirmation, unknown/expired/superseded
   preparation references, conversation mismatch, stale authoritative context,
@@ -411,6 +437,9 @@ form, and session capability are absent while approval and retry endpoints remai
   submit** does not approve or grant production access.
 - **SC-008**: All automated acceptance scenarios run without a live model or real
   production identity, environment, or access provider.
+- **SC-009**: In 100% of tested restart, eviction, and missing-history scenarios, a
+  relative follow-up answer produces a repeated clarification and no unintended
+  request, approval, operation, or grant.
 
 ## Assumptions
 
@@ -422,6 +451,9 @@ form, and session capability are absent while approval and retry endpoints remai
   requested and confers no approval or provisioning authority.
 - One active preparation per authenticated developer and personal conversation is
   sufficient for the first version.
+- Process-local conversation history is a best-effort interpretation aid. A host
+  restart or cache eviction may cause the assistant to repeat a clarification, while
+  the persisted typed candidate remains available.
 - A ready prepared request expires after 30 minutes; an expired, superseded, or
   incorrect final request must be replaced by starting a new preparation.
 - The React application remains a request register and governed approval/retry
