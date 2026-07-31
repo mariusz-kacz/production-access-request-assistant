@@ -70,16 +70,15 @@ public sealed class RequestPreparationTests
                 "The environment was not found."),
         };
         var turn = new RequestPreparationTurn(
+            Guid.NewGuid(),
             "  use the first environment  ",
             EmptyCandidate(),
             feedback,
-            historyAvailable: true,
             "  correlation-001  ");
 
         feedback.Clear();
 
         Assert.Equal("use the first environment", turn.LatestMessage);
-        Assert.True(turn.HistoryAvailable);
         var capturedFeedback = Assert.Single(turn.ValidationFeedback);
         Assert.Equal("environmentId", capturedFeedback.Field);
         Assert.Equal("environment_not_found", capturedFeedback.Code);

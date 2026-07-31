@@ -103,10 +103,10 @@ public sealed class RequestIntakeService
 
         var interpretation = await interpreter.InterpretAsync(
             new RequestPreparationTurn(
+                session.Id,
                 command.LatestMessage,
                 ToCandidate(session),
                 validationFeedback: [],
-                historyAvailable: false,
                 command.CorrelationId),
             cancellationToken);
 

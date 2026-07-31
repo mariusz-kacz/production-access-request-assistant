@@ -2,6 +2,7 @@ using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Persistence;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Hosting.AspNetCore;
 using Microsoft.Agents.Storage;
@@ -42,8 +43,12 @@ public static class TeamsAgentRegistration
         AddActivityAuthentication(builder.Services, builder.Configuration);
 
         builder.Services.AddSingleton<IStorage, MemoryStorage>();
+        builder.Services.AddSingleton<InMemoryAgentSessionStore>();
+        builder.Services.AddSingleton<AgentSessionStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<InMemoryAgentSessionStore>());
+        builder.Services.AddSingleton<MafConversationTurnCoordinator>();
         builder.Services.AddScoped<IRequestIntakeStore, EfRequestIntakeStore>();
-        builder.Services.AddScoped<
+        builder.Services.AddSingleton<
             IRequestPreparationInterpreter,
             MafRequestPreparationInterpreter>();
         builder.Services.AddScoped<RequestIntakeService>();

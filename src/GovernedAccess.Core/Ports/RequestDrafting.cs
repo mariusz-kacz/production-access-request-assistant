@@ -9,12 +9,19 @@ namespace GovernedAccess.Core.Ports;
 public sealed record RequestPreparationTurn
 {
     public RequestPreparationTurn(
+        Guid intakeId,
         string latestMessage,
         RequestCandidate candidate,
         IEnumerable<RequestValidationFeedback> validationFeedback,
-        bool historyAvailable,
         string correlationId)
     {
+        if (intakeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "The intake identifier must not be empty.",
+                nameof(intakeId));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(latestMessage);
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(validationFeedback);
@@ -28,20 +35,20 @@ public sealed record RequestPreparationTurn
                 nameof(validationFeedback));
         }
 
+        IntakeId = intakeId;
         LatestMessage = latestMessage.Trim();
         Candidate = candidate;
         ValidationFeedback = Array.AsReadOnly(feedback);
-        HistoryAvailable = historyAvailable;
         CorrelationId = correlationId.Trim();
     }
+
+    public Guid IntakeId { get; }
 
     public string LatestMessage { get; }
 
     public RequestCandidate Candidate { get; }
 
     public IReadOnlyList<RequestValidationFeedback> ValidationFeedback { get; }
-
-    public bool HistoryAvailable { get; }
 
     public string CorrelationId { get; }
 }
