@@ -1,5 +1,3 @@
-using GovernedAccess.Core.Ports;
-
 namespace GovernedAccess.Core.Domain;
 
 public enum RequestIntakeStatus
@@ -84,8 +82,6 @@ public sealed class RequestIntakeSession
 
     public string? IncidentId { get; private set; }
 
-    public RequestClarificationProposal? PendingClarification { get; private set; }
-
     public Guid? ReservedRequestId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -123,7 +119,6 @@ public sealed class RequestIntakeSession
         string? requestedRoleId,
         string? justification,
         string? incidentId,
-        RequestClarificationProposal? pendingClarification,
         DateTimeOffset occurredAt,
         string correlationId)
     {
@@ -154,7 +149,6 @@ public sealed class RequestIntakeSession
         RequestedRoleId = requestedRoleId;
         Justification = justification;
         IncidentId = NormalizeOptional(incidentId);
-        PendingClarification = pendingClarification;
         Record(operation);
     }
 
@@ -186,7 +180,6 @@ public sealed class RequestIntakeSession
         var operation = PrepareRecord(occurredAt, correlationId);
         ReservedRequestId = reservedRequestId;
         Status = RequestIntakeStatus.Ready;
-        PendingClarification = null;
         Record(operation);
         ExpiresAt = LastUpdatedAt.Add(ConfirmationLifetime);
     }
@@ -289,7 +282,6 @@ public sealed class RequestIntakeSession
         RequestedRoleId = null;
         Justification = null;
         IncidentId = null;
-        PendingClarification = null;
     }
 
     private void EnsureStatus(RequestIntakeStatus expected)

@@ -147,11 +147,6 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
         }
         else if (latestMessage.Contains("the first one", StringComparison.OrdinalIgnoreCase))
         {
-            if (!turn.HistoryAvailable)
-            {
-                return RepeatSelfContainedClarification(candidate);
-            }
-
             var priorTarget = GetPriorClarificationTarget(messages);
             if (string.Equals(
                     priorTarget,
@@ -183,8 +178,7 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
         }
         else if (latestMessage.Contains("the other role", StringComparison.OrdinalIgnoreCase))
         {
-            if (!turn.HistoryAvailable
-                || !string.Equals(
+            if (!string.Equals(
                     GetPriorClarificationTarget(messages),
                     "requestedRoleId",
                     StringComparison.Ordinal))
@@ -289,8 +283,6 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
         public string? LatestMessage { get; init; }
 
         public HistorySensitiveCandidate? CurrentCandidate { get; init; }
-
-        public bool HistoryAvailable { get; init; }
     }
 
     private sealed class HistorySensitiveCandidate

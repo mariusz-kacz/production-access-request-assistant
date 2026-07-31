@@ -100,11 +100,11 @@ asynchronous gate per intake and serializes each load, run, and save sequence.
   deletion, or compaction in the current local baseline; process termination clears
   them.
 - Process restart causes no domain transition and loses no accepted candidate data.
-- The first successful turn stores a marker in the session state bag. Restoring that
-  marker makes `historyAvailable = true`; a newly created session has no marker.
+- Successfully restored sessions supply their prior conversation messages directly;
+  the application adds no history marker or history-availability field.
 - Failed or cancelled runs and malformed proposals do not overwrite the last
   successfully serialized session.
-- A turn without history receives `historyAvailable = false` plus the current durable
+- A turn without prior conversation messages still receives the current durable
   candidate; the model must ask a self-contained clarification instead of resolving a
   relative answer such as “the first one.”
 - Confirmation, approval, provisioning, revocation, authorization, and audit evidence

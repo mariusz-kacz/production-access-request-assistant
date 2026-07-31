@@ -178,7 +178,6 @@ public sealed class RequestIntakeService
             fields.RequestedRoleId,
             fields.Justification,
             fields.IncidentId,
-            pendingClarification: null,
             occurredAt,
             correlationId);
         session.MarkReady(
@@ -356,7 +355,6 @@ public sealed class RequestIntakeService
             candidate.RequestedRoleId,
             candidate.Justification,
             candidate.IncidentId,
-            clarification,
             clock.UtcNow,
             correlationId);
 

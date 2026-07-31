@@ -130,7 +130,6 @@ public sealed class TeamsRequestConfirmationTests
         Assert.Null(submittedSession.RequestedRoleId);
         Assert.Null(submittedSession.Justification);
         Assert.Null(submittedSession.IncidentId);
-        Assert.Null(submittedSession.PendingClarification);
 
         var request = await confirmationDbContext.AccessRequests
             .AsNoTracking()

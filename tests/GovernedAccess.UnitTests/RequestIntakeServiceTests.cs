@@ -168,7 +168,6 @@ public sealed class RequestIntakeServiceTests
             ProductionRoleIds.ReadOnly,
             "Investigate the active production incident.",
             "INC-1042",
-            pendingClarification: null,
             IntakeScenario.CurrentTime,
             "existing-candidate");
         var clarification = new RequestClarificationProposal(
@@ -191,6 +190,7 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal(
             RequestPreparationResultKind.ClarificationRequired,
             result.Kind);
+        Assert.Same(clarification, result.Clarification);
         Assert.Equal("client-alpha", session.ClientId);
         Assert.Null(session.EnvironmentId);
         Assert.Null(session.RequestedRoleId);
@@ -223,7 +223,6 @@ public sealed class RequestIntakeServiceTests
             RequestPreparationResultKind.ReadyForConfirmation,
             result.Kind);
         Assert.Equal(RequestIntakeStatus.Ready, result.Session!.Status);
-        Assert.Null(result.Session.PendingClarification);
         Assert.NotNull(result.Session.ReservedRequestId);
     }
 
@@ -262,7 +261,6 @@ public sealed class RequestIntakeServiceTests
             ProductionRoleIds.ReadOnly,
             "Investigate the active production incident.",
             "INC-1042",
-            pendingClarification: null,
             IntakeScenario.CurrentTime,
             "previous-candidate");
         var previousRequestId = Guid.NewGuid();
@@ -316,7 +314,6 @@ public sealed class RequestIntakeServiceTests
             ProductionRoleIds.ReadOnly,
             "Investigate the active production incident.",
             "INC-1042",
-            pendingClarification: null,
             occurredAt,
             "candidate");
         session.MarkReady(requestId, occurredAt, "ready");
@@ -511,7 +508,6 @@ public sealed class RequestIntakeServiceTests
                 ProductionRoleIds.Support,
                 "Replace the already prepared scope.",
                 incidentId: null,
-                pendingClarification: null,
                 CurrentTime.AddMinutes(1),
                 "forged-change");
         }

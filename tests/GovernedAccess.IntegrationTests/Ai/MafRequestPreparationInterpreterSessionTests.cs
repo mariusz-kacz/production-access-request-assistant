@@ -57,7 +57,7 @@ public sealed class MafRequestPreparationInterpreterSessionTests
         Assert.Equal(2, chatClient.Requests.Count);
 
         using var firstContext = ParseLatestTurnContext(chatClient.Requests[0]);
-        Assert.False(firstContext.RootElement.GetProperty("historyAvailable").GetBoolean());
+        Assert.False(firstContext.RootElement.TryGetProperty("historyAvailable", out _));
         Assert.Equal(
             "client-alpha",
             firstContext.RootElement
@@ -72,7 +72,7 @@ public sealed class MafRequestPreparationInterpreterSessionTests
                 .GetString());
 
         using var secondContext = ParseLatestTurnContext(chatClient.Requests[1]);
-        Assert.True(secondContext.RootElement.GetProperty("historyAvailable").GetBoolean());
+        Assert.False(secondContext.RootElement.TryGetProperty("historyAvailable", out _));
         Assert.Contains(
             chatClient.Requests[1],
             message => message.Role == ChatRole.User
@@ -123,7 +123,7 @@ public sealed class MafRequestPreparationInterpreterSessionTests
                 StringComparison.Ordinal) == true);
 
         using var thirdContext = ParseLatestTurnContext(thirdRequest);
-        Assert.True(thirdContext.RootElement.GetProperty("historyAvailable").GetBoolean());
+        Assert.False(thirdContext.RootElement.TryGetProperty("historyAvailable", out _));
     }
 
     [Fact]

@@ -189,17 +189,17 @@ only executable.
   and serializes the store/load, agent run, and store/save sequence. There is no
   custom session cache, inactivity eviction, turn-count limit, terminal cleanup, or
   stale-entry retry loop in the current baseline.
-- A successful first turn records an application marker in `AgentSession.StateBag`
-  before saving because MAF get-or-create returns a new session rather than a hit/miss
-  result. Later turns derive `historyAvailable` from that restored marker. Failed or
-  cancelled runs and malformed proposals are not saved.
+- Successfully saved MAF sessions supply their prior conversation messages directly
+  on later turns. No application marker or separate history-availability field is
+  added to the model context. Failed or cancelled runs and malformed proposals are
+  not saved.
 - MAF exposes explicit session deletion, but the current process-local baseline does
   not invoke it. A later durable-store requirement will define retention and terminal
   deletion policy before wiring that lifecycle operation.
 - On session loss after restart, the interpreter receives the persisted current
-  candidate plus an explicit `historyAvailable = false` signal.
-  Relative answers such as "the first one" must produce a repeated focused
-  clarification rather than an inferred selection.
+  candidate but no prior conversation messages. Relative answers such as "the first
+  one" must produce a repeated focused clarification unless the supplied conversation
+  itself contains the preceding question and ordering.
 - The interpreter lists the loopback MCP catalog, requires exact equality with
   `get_production_environment`, `get_incident`, and `get_available_roles`, and passes
   only those `McpClientTool` instances to MAF. Missing or extra tools fail closed.

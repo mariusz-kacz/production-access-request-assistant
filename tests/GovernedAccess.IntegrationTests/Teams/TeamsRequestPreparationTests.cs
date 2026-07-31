@@ -92,7 +92,7 @@ public sealed class TeamsRequestPreparationTests
     }
 
     [Fact]
-    public async Task PersonalChatClarificationPersistsTypedStateForFixedRequester()
+    public async Task PersonalChatClarificationPersistsCandidateForFixedRequester()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory(
@@ -145,14 +145,6 @@ public sealed class TeamsRequestPreparationTests
             GovernedAccessWebFactory.DefaultUtcNow,
             session.LastUpdatedAt);
 
-        var clarification = Assert.IsType<RequestClarificationProposal>(
-            session.PendingClarification);
-        Assert.Equal(
-            RequestClarificationTarget.Justification,
-            clarification.Target);
-        Assert.Equal(
-            "What operational justification should be recorded for this request?",
-            clarification.Message);
         Assert.Null(session.ReservedRequestId);
 
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);

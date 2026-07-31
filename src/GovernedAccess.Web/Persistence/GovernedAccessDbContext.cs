@@ -1,11 +1,7 @@
 using GovernedAccess.Core.Domain;
-using GovernedAccess.Core.Ports;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace GovernedAccess.Web.Persistence;
 
@@ -17,9 +13,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     private const int CorrelationIdLength = 128;
     private const int OutcomeCodeLength = 100;
 
-    private static readonly JsonSerializerOptions ClarificationJsonOptions =
-        CreateClarificationJsonOptions();
-
     private static readonly ValueConverter<DateTimeOffset, long> UtcTimestampConverter = new(
         value => value.UtcDateTime.Ticks,
         value => new DateTimeOffset(value, TimeSpan.Zero));
@@ -30,17 +23,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             value => value.HasValue
                 ? new DateTimeOffset(value.Value, TimeSpan.Zero)
                 : null);
-
-    private static readonly ValueConverter<RequestClarificationProposal?, string?>
-        ClarificationContextConverter = new(
-            value => value == null ? null : SerializeClarification(value),
-            value => value == null ? null : DeserializeClarification(value));
-
-    private static readonly ValueComparer<RequestClarificationProposal?>
-        ClarificationContextComparer = new(
-            (left, right) => ClarificationsEqual(left, right),
-            value => value == null ? 0 : GetClarificationHashCode(value),
-            value => value == null ? null : CloneClarification(value));
 
     public DbSet<Client> Clients => Set<Client>();
 
@@ -108,12 +90,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .HasMaxLength(AccessRequest.MaximumJustificationLength);
         entity.Property(session => session.IncidentId)
             .HasMaxLength(IdentifierLength);
-        entity.Property(session => session.PendingClarification)
-            .HasConversion(ClarificationContextConverter)
-            .Metadata.SetValueComparer(ClarificationContextComparer);
-        entity.Property(session => session.PendingClarification)
-            .HasColumnName("PendingClarificationJson")
-            .HasColumnType("TEXT");
         entity.Property(session => session.CorrelationId)
             .HasMaxLength(CorrelationIdLength);
         entity.Property(session => session.PersistenceVersion)
@@ -413,56 +389,4 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         property.HasConversion(NullableUtcTimestampConverter).HasColumnType("INTEGER");
     }
 
-    private static JsonSerializerOptions CreateClarificationJsonOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        };
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-        return options;
-    }
-
-    private static string SerializeClarification(
-        RequestClarificationProposal clarification) =>
-        JsonSerializer.Serialize(
-            new StoredClarification(
-                clarification.Target,
-                clarification.Message),
-            ClarificationJsonOptions);
-
-    private static RequestClarificationProposal DeserializeClarification(string json)
-    {
-        var stored = JsonSerializer.Deserialize<StoredClarification>(
-            json,
-            ClarificationJsonOptions)
-            ?? throw new InvalidOperationException(
-                "The stored clarification context is invalid.");
-        return new RequestClarificationProposal(
-            stored.Target,
-            stored.Message);
-    }
-
-    private static bool ClarificationsEqual(
-        RequestClarificationProposal? left,
-        RequestClarificationProposal? right) =>
-        ReferenceEquals(left, right)
-        || (left is not null
-            && right is not null
-            && string.Equals(
-                SerializeClarification(left),
-                SerializeClarification(right),
-                StringComparison.Ordinal));
-
-    private static int GetClarificationHashCode(
-        RequestClarificationProposal clarification) =>
-        StringComparer.Ordinal.GetHashCode(SerializeClarification(clarification));
-
-    private static RequestClarificationProposal CloneClarification(
-        RequestClarificationProposal clarification) =>
-        DeserializeClarification(SerializeClarification(clarification));
-
-    private sealed record StoredClarification(
-        RequestClarificationTarget Target,
-        string Message);
 }

@@ -198,7 +198,6 @@ public sealed class RequestIntakePersistenceTests
                 ProductionRoleIds.ReadOnly,
                 "Investigate the active production incident.",
                 "INC-1042",
-                pendingClarification: null,
                 PreparedAt,
                 "prepare-correlation");
             session.MarkReady(

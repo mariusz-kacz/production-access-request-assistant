@@ -210,11 +210,11 @@ sequenceDiagram
     Agent->>Intake: PrepareAsync(actor, latest message)
     Intake->>Draft: Intake ID + complete candidate + validation feedback + latest message
     Draft->>Memory: Resolve session and serialize this intake turn
-    Memory-->>Draft: AgentSession + historyAvailable
+    Memory-->>Draft: AgentSession with available prior messages
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly three read-only tools
-    Draft->>Chat: Current candidate, history status, latest text, strict schema, allowed tools
+    Draft->>Chat: Current candidate, latest text, strict schema, allowed tools
     opt Model requests stored context
         Chat->>McpClient: Invoke allowed tool
         McpClient->>McpServer: Typed tool call
@@ -250,9 +250,10 @@ MAF history is history-first but deliberately ephemeral. SQLite persists the acc
 complete candidate and intake lifecycle, not clarification options, prompts,
 transcripts, or serialized sessions. The cache is isolated by server-generated intake
 ID, bounded by inactivity and turn count, and guarded against concurrent mutation.
-After restart or eviction, the next run receives the durable candidate with
-`historyAvailable = false`; an ambiguous relative reply is re-clarified rather than
-guessed. Confirmation never reads this cache.
+After restart, the next run receives the durable candidate without prior conversation
+messages; an ambiguous relative reply is re-clarified rather than guessed unless the
+supplied conversation itself contains its preceding question and ordering.
+Confirmation never reads this memory.
 
 The adapter defaults to:
 

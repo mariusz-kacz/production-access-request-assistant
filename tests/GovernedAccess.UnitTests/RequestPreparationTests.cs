@@ -104,9 +104,6 @@ public sealed class RequestPreparationTests
             ProductionRoleIds.ReadOnly,
             "Investigate the active production incident.",
             "INC-1042",
-            new RequestClarificationProposal(
-                RequestClarificationTarget.IncidentId,
-                "Confirm the incident."),
             CreatedAt.AddMinutes(1),
             "candidate");
 
@@ -157,7 +154,6 @@ public sealed class RequestPreparationTests
         Assert.Null(session.RequestedRoleId);
         Assert.Null(session.Justification);
         Assert.Null(session.IncidentId);
-        Assert.Null(session.PendingClarification);
         Assert.Equal(
             terminalStatus == RequestIntakeStatus.Superseded
                 ? null

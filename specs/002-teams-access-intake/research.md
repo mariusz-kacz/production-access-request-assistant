@@ -57,15 +57,15 @@ by the server-generated intake ID, for process-local conversation continuity. Re
 its sessions for the process lifetime with no application-owned inactivity timeout,
 turn-count limit, terminal deletion, or conversation compaction in the current scope.
 
-Supply the durable canonical candidate and a `historyAvailable` signal as run-scoped
-context on every turn. A small coordinator retains one exact async gate per intake for
+Supply the durable canonical candidate as run-scoped context on every turn. A small
+coordinator retains one exact async gate per intake for
 the process lifetime and serializes the store/load, agent run, and store/save sequence;
-the session store itself is not the concurrency boundary. `AIHostAgent` get-or-create
-returns a new session on a miss rather than a hit/miss result, so the application sets
-a marker in `AgentSession.StateBag` only after a successful turn and derives
-`historyAvailable` from that restored marker. If the session is absent after host
-restart, the model must not resolve a relative reply from newly queried ordering and
-must repeat a focused clarification.
+the session store itself is not the concurrency boundary. The application does not
+add a history marker or availability field: a restored MAF session supplies its prior
+conversation messages directly. If the session is absent after host restart, the
+model must not resolve a relative reply from newly queried ordering and must repeat a
+focused clarification unless the supplied conversation contains the preceding
+question and ordering.
 
 **Rationale**: The native store demonstrates MAF-owned session serialization and
 restoration and creates a direct evolution path to a durable `AgentSessionStore`

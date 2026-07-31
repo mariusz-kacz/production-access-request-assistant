@@ -65,7 +65,6 @@ Before model invocation, the application adds server-owned turn context:
 
 - Complete current durable candidate snapshot and latest deterministic validation
   feedback.
-- Server-owned `historyAvailable` flag.
 
 ### Processing
 
@@ -75,8 +74,8 @@ Before model invocation, the application adds server-owned turn context:
 3. Acquire the process-lifetime gate for the intake, then use `AIHostAgent` to load or
    create its session through MAF's native singleton `InMemoryAgentSessionStore`.
 4. Invoke the provider-neutral request-intake interpreter with the latest text,
-   complete current candidate, latest validation feedback, and `historyAvailable`.
-   MAF supplies prior turns only while that process-local session remains available.
+   complete current candidate, and latest validation feedback. MAF supplies prior
+   turns only while that process-local session remains available.
 5. Strictly validate a complete nullable candidate snapshot plus either one
    `{ target, message }` clarification proposal or `null`.
 6. Revalidate and canonicalize every proposed candidate value with authoritative
@@ -86,9 +85,8 @@ Before model invocation, the application adds server-owned turn context:
 8. Save the successfully updated session through the native store. The current local
    baseline retains sessions and exact per-intake gates until process termination and
    applies no custom inactivity, turn-count, terminal-cleanup, or compaction policy.
-   The first successful save records a session-state marker used to report
-   `historyAvailable` on later turns; failed or cancelled runs and malformed
-   proposals are not saved.
+   Failed or cancelled runs and malformed proposals are not saved. The application
+   records no separate session-state history marker.
 
 ### Outcomes
 
