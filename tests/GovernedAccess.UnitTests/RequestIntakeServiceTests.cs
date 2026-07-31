@@ -159,6 +159,137 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
+    public async Task ClarificationReplacesTheCompleteCandidateIncludingNullClearing()
+    {
+        var session = CreateCollectingSession();
+        session.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            pendingClarification: null,
+            IntakeScenario.CurrentTime,
+            "existing-candidate");
+        var clarification = new RequestClarificationProposal(
+            RequestClarificationTarget.EnvironmentId,
+            "Which production environment should be used?");
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    "client-alpha",
+                    environmentId: null,
+                    requestedRoleId: null,
+                    "Investigate the active production incident.",
+                    incidentId: null),
+                clarification),
+            initialSession: session);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.ClarificationRequired,
+            result.Kind);
+        Assert.Equal("client-alpha", session.ClientId);
+        Assert.Null(session.EnvironmentId);
+        Assert.Null(session.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            session.Justification);
+        Assert.Null(session.IncidentId);
+        Assert.Equal(1, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task DeterministicReadinessOverridesACompleteClarificationProposal()
+    {
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.IncidentId,
+                    "Which incident is related to this request?")));
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.ReadyForConfirmation,
+            result.Kind);
+        Assert.Equal(RequestIntakeStatus.Ready, result.Session!.Status);
+        Assert.Null(result.Session.PendingClarification);
+        Assert.NotNull(result.Session.ReservedRequestId);
+    }
+
+    [Fact]
+    public async Task CandidateKindCannotOverrideDeterministicValidationRejection()
+    {
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Candidate,
+                new RequestCandidate(
+                    "client-alpha",
+                    "PROD-UNKNOWN",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    incidentId: null),
+                clarification: null));
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.CandidateRejected, result.Kind);
+        Assert.Contains(
+            result.ValidationErrors,
+            error => error.Code == "environment_not_found");
+        Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
+        Assert.Null(scenario.Session.ReservedRequestId);
+        Assert.Equal(0, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task NewPreparationSupersedesReadyScopeBeforeCreatingAnotherSnapshot()
+    {
+        var previous = CreateCollectingSession();
+        previous.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            pendingClarification: null,
+            IntakeScenario.CurrentTime,
+            "previous-candidate");
+        var previousRequestId = Guid.NewGuid();
+        previous.MarkReady(
+            previousRequestId,
+            IntakeScenario.CurrentTime,
+            "previous-ready");
+        var scenario = new IntakeScenario(initialSession: previous);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestIntakeStatus.Superseded, previous.Status);
+        Assert.Equal(previousRequestId, previous.ReservedRequestId);
+        Assert.Null(previous.ClientId);
+        Assert.Null(previous.EnvironmentId);
+        Assert.Null(previous.RequestedRoleId);
+        Assert.Null(previous.Justification);
+        Assert.Null(previous.IncidentId);
+        Assert.Equal(
+            RequestPreparationResultKind.ReadyForConfirmation,
+            result.Kind);
+        Assert.NotEqual(previous.Id, result.Session!.Id);
+        Assert.Equal(RequestIntakeStatus.Ready, result.Session.Status);
+        Assert.Equal(2, scenario.SaveCount);
+    }
+
+    [Fact]
     public void TerminalAggregateRetainsIdentityAndClearsSensitiveCandidate()
     {
         var occurredAt = new DateTimeOffset(
@@ -228,7 +359,7 @@ public sealed class RequestIntakeServiceTests
         IWorkflowStore,
         IClock
     {
-        private static readonly DateTimeOffset CurrentTime =
+        public static readonly DateTimeOffset CurrentTime =
             new(2026, 7, 27, 10, 5, 0, TimeSpan.Zero);
 
         private readonly RequestPreparationInterpretationOutcome interpretation;
@@ -236,21 +367,22 @@ public sealed class RequestIntakeServiceTests
         private RequestIntakeSession? session;
 
         public IntakeScenario(
-            RequestPreparationInterpretationOutcomeKind? interpretationFailure = null)
+            RequestPreparationInterpretationOutcomeKind? interpretationFailure = null,
+            RequestPreparationProposal? proposal = null,
+            RequestIntakeSession? initialSession = null)
         {
-            interpretation = interpretationFailure is null
+            if (interpretationFailure is not null && proposal is not null)
+            {
+                throw new ArgumentException(
+                    "A scenario cannot define both a proposal and an interpretation failure.");
+            }
+
+            interpretation = interpretationFailure is not null
                 ? new RequestPreparationInterpretationOutcome(
-                    new RequestPreparationProposal(
-                        RequestPreparationProposalKind.Candidate,
-                        new RequestCandidate(
-                            "client-alpha",
-                            "PROD-ALPHA-EU",
-                            ProductionRoleIds.ReadOnly,
-                            "Investigate the active production incident.",
-                            "INC-1042"),
-                        clarification: null))
+                    interpretationFailure.Value)
                 : new RequestPreparationInterpretationOutcome(
-                    interpretationFailure.Value);
+                    proposal ?? ValidCandidateProposal());
+            session = initialSession;
 
             var validator = new RequestValidator(this);
             var submissionService = new RequestSubmissionService(
@@ -260,7 +392,6 @@ public sealed class RequestIntakeServiceTests
             service = new RequestIntakeService(
                 this,
                 validator,
-                this,
                 this,
                 submissionService,
                 this);
@@ -288,17 +419,15 @@ public sealed class RequestIntakeServiceTests
 
         public List<AuditEvent> AuditEvents { get; } = [];
 
+        public RequestIntakeSession Session => session
+            ?? throw new InvalidOperationException("No intake session exists.");
+
         public DateTimeOffset UtcNow => CurrentTime;
 
         public async Task<PreparationObservation> PrepareAsync(
             CancellationToken? cancellationToken = null)
         {
-            var outcome = await service.PrepareAsync(
-                new PrepareAccessRequestCommand(
-                    Owner,
-                    "I need production access.",
-                    "prepare-correlation"),
-                cancellationToken ?? TestContext.Current.CancellationToken);
+            var outcome = await PrepareResultAsync(cancellationToken);
 
             return outcome.Kind switch
             {
@@ -328,6 +457,15 @@ public sealed class RequestIntakeServiceTests
                     "The scenario expected either readiness or a typed failure."),
             };
         }
+
+        public Task<RequestPreparationResult> PrepareResultAsync(
+            CancellationToken? cancellationToken = null) =>
+            service.PrepareAsync(
+                new PrepareAccessRequestCommand(
+                    Owner,
+                    "I need production access.",
+                    "prepare-correlation"),
+                cancellationToken ?? TestContext.Current.CancellationToken);
 
         public async Task<ConfirmationObservation> ConfirmAsync(
             AuthenticatedChannelActor actor)
@@ -592,5 +730,27 @@ public sealed class RequestIntakeServiceTests
                             "The authoritative record was not found."))
                     : ApplicationResult.Succeeded(value));
         }
+
+        private static RequestPreparationProposal ValidCandidateProposal() =>
+            new(
+                RequestPreparationProposalKind.Candidate,
+                new RequestCandidate(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
+                clarification: null);
     }
+
+    private static RequestIntakeSession CreateCollectingSession() =>
+        new(
+            Guid.NewGuid(),
+            RequestIntakeSession.TeamsChannel,
+            IntakeScenario.Owner.TenantId,
+            IntakeScenario.Owner.ChannelActorId,
+            IntakeScenario.Owner.ConversationId,
+            IntakeScenario.Owner.RequesterId,
+            IntakeScenario.CurrentTime,
+            "created");
 }

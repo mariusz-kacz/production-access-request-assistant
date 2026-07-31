@@ -35,7 +35,6 @@ public sealed class RequestIntakeService
 
     private readonly IRequestPreparationInterpreter interpreter;
     private readonly RequestValidator requestValidator;
-    private readonly IRequestContextReader requestContext;
     private readonly IRequestIntakeStore intakeStore;
     private readonly RequestSubmissionService submissionService;
     private readonly IClock clock;
@@ -43,21 +42,18 @@ public sealed class RequestIntakeService
     public RequestIntakeService(
         IRequestPreparationInterpreter interpreter,
         RequestValidator requestValidator,
-        IRequestContextReader requestContext,
         IRequestIntakeStore intakeStore,
         RequestSubmissionService submissionService,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(interpreter);
         ArgumentNullException.ThrowIfNull(requestValidator);
-        ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(intakeStore);
         ArgumentNullException.ThrowIfNull(submissionService);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.interpreter = interpreter;
         this.requestValidator = requestValidator;
-        this.requestContext = requestContext;
         this.intakeStore = intakeStore;
         this.submissionService = submissionService;
         this.clock = clock;
@@ -82,7 +78,22 @@ public sealed class RequestIntakeService
             ? sessionResult.Value
             : CreateSession(command);
 
-        if (session.Status != RequestIntakeStatus.Collecting)
+        if (session.Status == RequestIntakeStatus.Ready)
+        {
+            session.MarkSuperseded(
+                clock.UtcNow,
+                command.CorrelationId);
+            var supersessionSave = await intakeStore.SaveChangesAsync(
+                cancellationToken);
+            if (supersessionSave.IsFailure)
+            {
+                return RequestPreparationResult.Failed(
+                    supersessionSave.Failure!);
+            }
+
+            session = CreateSession(command);
+        }
+        else if (session.Status != RequestIntakeStatus.Collecting)
         {
             return Failed(
                 ApplicationFailureKind.InvalidTransition,
@@ -94,7 +105,8 @@ public sealed class RequestIntakeService
             new RequestPreparationTurn(
                 command.LatestMessage,
                 ToCandidate(session),
-                session.PendingClarification,
+                validationFeedback: [],
+                historyAvailable: false,
                 command.CorrelationId),
             cancellationToken);
 
@@ -106,26 +118,6 @@ public sealed class RequestIntakeService
         var proposal = interpretation.Proposal
             ?? throw new InvalidOperationException(
                 "A successful preparation interpretation must contain a proposal.");
-
-        if (proposal.Kind == RequestPreparationProposalKind.Clarification)
-        {
-            var clarificationResult = await CanonicalizeClarificationAsync(
-                proposal.Clarification!,
-                proposal.Candidate,
-                cancellationToken);
-            if (clarificationResult.IsFailure)
-            {
-                return RequestPreparationResult.Failed(
-                    clarificationResult.Failure!);
-            }
-
-            return await PersistClarificationAsync(
-                session,
-                proposal.Candidate,
-                clarificationResult.Value,
-                command.CorrelationId,
-                cancellationToken);
-        }
 
         var candidate = proposal.Candidate;
         var validation = await requestValidator.ValidateAsync(
@@ -142,22 +134,44 @@ public sealed class RequestIntakeService
             return RequestPreparationResult.Failed(validationFailed.Failure);
         }
 
+        if (validation is RequestValidationSucceeded validationSucceeded)
+        {
+            return await PersistReadyAsync(
+                session,
+                validationSucceeded.Fields,
+                command.CorrelationId,
+                cancellationToken);
+        }
+
+        if (proposal.Kind == RequestPreparationProposalKind.Clarification)
+        {
+            return await PersistClarificationAsync(
+                session,
+                candidate,
+                proposal.Clarification!,
+                command.CorrelationId,
+                cancellationToken);
+        }
+
         if (validation is RequestValidationRejected validationRejected)
         {
             return RequestPreparationResult.CandidateRejected(
                 validationRejected.Errors);
         }
 
-        if (validation is not RequestValidationSucceeded validationSucceeded)
-        {
-            throw new InvalidOperationException(
-                "The request validation outcome is unsupported.");
-        }
+        throw new InvalidOperationException(
+            "The request validation outcome is unsupported.");
+    }
 
+    private async Task<RequestPreparationResult> PersistReadyAsync(
+        RequestIntakeSession session,
+        ValidatedRequestFields fields,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
 
         var occurredAt = clock.UtcNow.ToUniversalTime();
-        var fields = validationSucceeded.Fields;
         session.UpdateCandidate(
             fields.ClientId,
             fields.EnvironmentId,
@@ -166,11 +180,11 @@ public sealed class RequestIntakeService
             fields.IncidentId,
             pendingClarification: null,
             occurredAt,
-            command.CorrelationId);
+            correlationId);
         session.MarkReady(
             Guid.NewGuid(),
             occurredAt,
-            command.CorrelationId);
+            correlationId);
 
         var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
         return saveResult.IsFailure
@@ -330,7 +344,7 @@ public sealed class RequestIntakeService
     private async Task<RequestPreparationResult> PersistClarificationAsync(
         RequestIntakeSession session,
         RequestCandidate candidate,
-        RequestClarificationContext clarification,
+        RequestClarificationProposal clarification,
         string correlationId,
         CancellationToken cancellationToken)
     {
@@ -350,134 +364,6 @@ public sealed class RequestIntakeService
         return saveResult.IsFailure
             ? RequestPreparationResult.Failed(saveResult.Failure!)
             : RequestPreparationResult.ClarificationRequired(clarification);
-    }
-
-    private async Task<ApplicationResult<RequestClarificationContext>>
-        CanonicalizeClarificationAsync(
-            RequestClarificationContext clarification,
-            RequestCandidate candidate,
-            CancellationToken cancellationToken)
-    {
-        var canonicalOptions = new List<RequestClarificationOption>(
-            clarification.Options.Count);
-        foreach (var option in clarification.Options)
-        {
-            var optionResult = await CanonicalizeOptionAsync(
-                clarification.Target,
-                option.Value,
-                candidate,
-                cancellationToken);
-            if (optionResult.IsFailure)
-            {
-                return ApplicationResult.Failed<RequestClarificationContext>(
-                    optionResult.Failure!);
-            }
-
-            canonicalOptions.Add(optionResult.Value);
-        }
-
-        return ApplicationResult.Succeeded(
-            new RequestClarificationContext(
-                clarification.Target,
-                clarification.Prompt,
-                canonicalOptions));
-    }
-
-    private async Task<ApplicationResult<RequestClarificationOption>>
-        CanonicalizeOptionAsync(
-            RequestClarificationTarget target,
-            string proposedValue,
-            RequestCandidate candidate,
-            CancellationToken cancellationToken)
-    {
-        switch (target)
-        {
-            case RequestClarificationTarget.ClientId:
-                {
-                    var result = await requestContext.GetClientAsync(
-                        proposedValue,
-                        cancellationToken);
-                    return result.IsFailure
-                        ? FailedOption(result.Failure!)
-                        : CanonicalOption(result.Value.Id, result.Value.DisplayName);
-                }
-
-            case RequestClarificationTarget.EnvironmentId:
-                {
-                    var result = await requestContext.GetProductionEnvironmentAsync(
-                        proposedValue,
-                        cancellationToken);
-                    if (result.IsFailure)
-                    {
-                        return FailedOption(result.Failure!);
-                    }
-
-                    var environment = result.Value;
-                    if (candidate.ClientId is not null
-                        && !string.Equals(
-                            environment.ClientId,
-                            candidate.ClientId,
-                            StringComparison.Ordinal))
-                    {
-                        return InvalidOption();
-                    }
-
-                    return CanonicalOption(environment.Id, environment.DisplayName);
-                }
-
-            case RequestClarificationTarget.RequestedRoleId:
-                {
-                    if (candidate.EnvironmentId is null)
-                    {
-                        return InvalidOption();
-                    }
-
-                    var result = await requestContext.GetEnvironmentRoleAsync(
-                        candidate.EnvironmentId,
-                        proposedValue,
-                        cancellationToken);
-                    return result.IsFailure
-                        ? FailedOption(result.Failure!)
-                        : CanonicalOption(
-                            result.Value.RoleId,
-                            GetRoleDisplayName(result.Value.RoleId));
-                }
-
-            case RequestClarificationTarget.IncidentId:
-                {
-                    var result = await requestContext.GetIncidentAsync(
-                        proposedValue,
-                        cancellationToken);
-                    if (result.IsFailure)
-                    {
-                        return FailedOption(result.Failure!);
-                    }
-
-                    var incident = result.Value;
-                    var matchesCandidate = incident.Status == IncidentStatus.Active
-                        && (candidate.ClientId is null
-                            || string.Equals(
-                                incident.ClientId,
-                                candidate.ClientId,
-                                StringComparison.Ordinal))
-                        && (candidate.EnvironmentId is null
-                            || incident.EnvironmentId is null
-                            || string.Equals(
-                                incident.EnvironmentId,
-                                candidate.EnvironmentId,
-                                StringComparison.Ordinal));
-                    return matchesCandidate
-                        ? CanonicalOption(incident.Id, incident.Title)
-                        : InvalidOption();
-                }
-
-            case RequestClarificationTarget.Justification:
-                return InvalidOption();
-
-            default:
-                throw new InvalidOperationException(
-                    "The clarification target is unsupported.");
-        }
     }
 
     private static RequestCandidate ToCandidate(
@@ -514,33 +400,6 @@ public sealed class RequestIntakeService
                     "A proposal is not an interpretation failure."),
             _ => throw new InvalidOperationException(
                 "The preparation interpretation outcome is unsupported."),
-        };
-
-    private static ApplicationResult<RequestClarificationOption> CanonicalOption(
-        string value,
-        string label) =>
-        ApplicationResult.Succeeded(new RequestClarificationOption(value, label));
-
-    private static ApplicationResult<RequestClarificationOption> FailedOption(
-        ApplicationFailure failure) =>
-        failure.Kind == ApplicationFailureKind.NotFound
-            ? InvalidOption()
-            : ApplicationResult.Failed<RequestClarificationOption>(failure);
-
-    private static ApplicationResult<RequestClarificationOption> InvalidOption() =>
-        ApplicationResult.Failed<RequestClarificationOption>(
-            new ApplicationFailure(
-                ApplicationFailureKind.DependencyFailure,
-                MalformedModelOutputCode,
-                "The request assistant proposed an invalid clarification option."));
-
-    private static string GetRoleDisplayName(string roleId) =>
-        roleId switch
-        {
-            ProductionRoleIds.ReadOnly => "Production read-only",
-            ProductionRoleIds.Support => "Production support",
-            _ => throw new InvalidOperationException(
-                "The authoritative role identifier is unsupported."),
         };
 
     private static bool MatchesScope(

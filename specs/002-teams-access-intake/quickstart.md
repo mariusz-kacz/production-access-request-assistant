@@ -99,22 +99,25 @@ as `the first one` or `the other role`.
 Verify after each turn:
 
 - the complete accepted candidate snapshot remains in durable compact server state;
-- prior questions and answers exist only in the bounded process-local MAF session;
+- prior questions and answers exist only in MAF's native process-local in-memory
+  session store;
 - ordinal references resolve from that active history, while the resulting identifier
   is authoritatively canonicalized before persistence;
 - the model proposal is schema-valid but remains untrusted;
 - no final card appears while `RequestValidator` reports missing or invalid fields;
 - no option list, raw message, model response, transcript, or serialized MAF session
-  is persisted; and
+  is written to SQLite; and
 - the final card appears only after all identifiers and relationships are
   authoritatively valid.
 
-Then remove or evict the process-local session before replying to a clarification
-with `the first one`.
+Then recreate the test host with a fresh in-memory session store while retaining the
+same SQLite test database before replying to a clarification with `the first one`.
 
 Verify that the accepted candidate is retained, the ambiguous reply is not guessed,
 and the application repeats a self-contained clarification in a fresh session.
-Repeat with two active intakes and verify their histories never cross.
+Repeat with two active intakes and verify their histories never cross. Deliver two
+turns concurrently for one intake and verify the complete load/run/save sequences are
+serialized, while different intake IDs retain independent gates and sessions.
 
 ## Scenario 3: Immutable Card and Start-over
 

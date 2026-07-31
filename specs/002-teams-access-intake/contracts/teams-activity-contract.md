@@ -72,19 +72,23 @@ Before model invocation, the application adds server-owned turn context:
 1. Load or create the one active preparation conversation for the binding.
 2. If a ready prepared request already exists, the new request-intent turn supersedes
    it; the old card remains visually immutable but can no longer be confirmed.
-3. Resolve or create the bounded process-local MAF session for the intake and
-   serialize mutation of that session.
+3. Acquire the process-lifetime gate for the intake, then use `AIHostAgent` to load or
+   create its session through MAF's native singleton `InMemoryAgentSessionStore`.
 4. Invoke the provider-neutral request-intake interpreter with the latest text,
    complete current candidate, latest validation feedback, and `historyAvailable`.
-   MAF supplies prior turns only while that session remains in memory.
+   MAF supplies prior turns only while that process-local session remains available.
 5. Strictly validate a complete nullable candidate snapshot plus either one
    `{ target, message }` clarification proposal or `null`.
 6. Revalidate and canonicalize every proposed candidate value with authoritative
    stored context.
 7. Replace the durable collecting candidate with the accepted complete snapshot or
    persist an immutable prepared snapshot when deterministically ready.
-8. Retain process-local history only while collecting, subject to inactivity and
-   turn-count limits; clear it on ready or terminal lifecycle transitions.
+8. Save the successfully updated session through the native store. The current local
+   baseline retains sessions and exact per-intake gates until process termination and
+   applies no custom inactivity, turn-count, terminal-cleanup, or compaction policy.
+   The first successful save records a session-state marker used to report
+   `historyAvailable` on later turns; failed or cancelled runs and malformed
+   proposals are not saved.
 
 ### Outcomes
 
@@ -103,10 +107,10 @@ No message activity can submit a request, record approval, transition an existin
 access request, provision, revoke, or retry provisioning.
 
 An answer such as “the first one” is meaningful only when the active MAF session
-contains the question and ordering that gave it meaning. After process restart,
-eviction, or any other cache miss, the application explicitly reports unavailable
-history to the model and the `ClarificationRequired` path repeats a self-contained
-question. It never guesses from a reconstructed option list.
+contains the question and ordering that gave it meaning. After process restart, the
+application explicitly reports unavailable history to the model and the
+`ClarificationRequired` path repeats a self-contained question. It never guesses
+from a reconstructed option list.
 
 ## Final prepared-request card
 

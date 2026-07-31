@@ -1,3 +1,5 @@
+using GovernedAccess.Core.Ports;
+
 namespace GovernedAccess.Core.Domain;
 
 public enum RequestIntakeStatus
@@ -82,7 +84,7 @@ public sealed class RequestIntakeSession
 
     public string? IncidentId { get; private set; }
 
-    public RequestClarificationContext? PendingClarification { get; private set; }
+    public RequestClarificationProposal? PendingClarification { get; private set; }
 
     public Guid? ReservedRequestId { get; private set; }
 
@@ -121,7 +123,7 @@ public sealed class RequestIntakeSession
         string? requestedRoleId,
         string? justification,
         string? incidentId,
-        RequestClarificationContext? pendingClarification,
+        RequestClarificationProposal? pendingClarification,
         DateTimeOffset occurredAt,
         string correlationId)
     {

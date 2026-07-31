@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -30,12 +31,12 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
                 ? new DateTimeOffset(value.Value, TimeSpan.Zero)
                 : null);
 
-    private static readonly ValueConverter<RequestClarificationContext?, string?>
+    private static readonly ValueConverter<RequestClarificationProposal?, string?>
         ClarificationContextConverter = new(
             value => value == null ? null : SerializeClarification(value),
             value => value == null ? null : DeserializeClarification(value));
 
-    private static readonly ValueComparer<RequestClarificationContext?>
+    private static readonly ValueComparer<RequestClarificationProposal?>
         ClarificationContextComparer = new(
             (left, right) => ClarificationsEqual(left, right),
             value => value == null ? 0 : GetClarificationHashCode(value),
@@ -423,30 +424,28 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     }
 
     private static string SerializeClarification(
-        RequestClarificationContext clarification) =>
+        RequestClarificationProposal clarification) =>
         JsonSerializer.Serialize(
             new StoredClarification(
                 clarification.Target,
-                clarification.Prompt,
-                clarification.Options.ToArray()),
+                clarification.Message),
             ClarificationJsonOptions);
 
-    private static RequestClarificationContext DeserializeClarification(string json)
+    private static RequestClarificationProposal DeserializeClarification(string json)
     {
         var stored = JsonSerializer.Deserialize<StoredClarification>(
             json,
             ClarificationJsonOptions)
             ?? throw new InvalidOperationException(
                 "The stored clarification context is invalid.");
-        return new RequestClarificationContext(
+        return new RequestClarificationProposal(
             stored.Target,
-            stored.Prompt,
-            stored.Options);
+            stored.Message);
     }
 
     private static bool ClarificationsEqual(
-        RequestClarificationContext? left,
-        RequestClarificationContext? right) =>
+        RequestClarificationProposal? left,
+        RequestClarificationProposal? right) =>
         ReferenceEquals(left, right)
         || (left is not null
             && right is not null
@@ -456,15 +455,14 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
                 StringComparison.Ordinal));
 
     private static int GetClarificationHashCode(
-        RequestClarificationContext clarification) =>
+        RequestClarificationProposal clarification) =>
         StringComparer.Ordinal.GetHashCode(SerializeClarification(clarification));
 
-    private static RequestClarificationContext CloneClarification(
-        RequestClarificationContext clarification) =>
+    private static RequestClarificationProposal CloneClarification(
+        RequestClarificationProposal clarification) =>
         DeserializeClarification(SerializeClarification(clarification));
 
     private sealed record StoredClarification(
         RequestClarificationTarget Target,
-        string Prompt,
-        RequestClarificationOption[] Options);
+        string Message);
 }

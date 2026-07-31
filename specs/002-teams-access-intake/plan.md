@@ -1,6 +1,6 @@
 # Implementation Plan: Teams Access Request Intake
 
-**Branch**: `evolution/maf-request-intake` | **Date**: 2026-07-27 | **Spec**: [spec.md](spec.md)
+**Branch**: `evolution/maf-request-intake` | **Date**: 2026-07-31 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/002-teams-access-intake/spec.md`
 
@@ -8,13 +8,14 @@
 
 Add one Teams personal-chat adapter to the existing ASP.NET Core executable. The
 Microsoft 365 Agents SDK authenticates and routes Teams activities; one Microsoft
-Agent Framework `ChatClientAgent` interprets each developer turn, retains bounded
-process-local history for the active intake, and can call only the existing three
-read-only MCP tools. Application-owned services persist the compact typed candidate,
-provide it to each turn as current state, determine readiness using the existing
-validator, and create an immutable 30-minute prepared snapshot with a reserved
-request ID. Clarification wording and conversational references live only in the
-ephemeral MAF session; clarification options and transcripts are not persisted.
+Agent Framework `ChatClientAgent` interprets each developer turn, uses MAF's native
+in-memory session store for process-local history, and can call only the existing
+three read-only MCP tools. Application-owned services persist the compact typed
+candidate, provide it to each turn as current state, determine readiness using the
+existing validator, and create an immutable 30-minute prepared snapshot with a
+reserved request ID. Clarification wording and conversational references live only
+in the in-memory MAF session; clarification options and transcripts are not written
+to the application database.
 
 The server renders that snapshot as an Adaptive Card with one **Confirm and submit**
 action. Confirmation is a deterministic authenticated channel command, not a
@@ -28,16 +29,18 @@ workflow remains unchanged.
 **Language/Version**: C# 14 on .NET 10; existing TypeScript and React 19.2 client remains unchanged
 
 **Primary Dependencies**: Existing ASP.NET Core 10, EF Core 10 SQLite,
-`Microsoft.Extensions.AI`, `ModelContextProtocol` 1.4, and `System.Text.Json`; add
-the current stable `Microsoft.Agents.AI` 1.15.0 and
+`Microsoft.Extensions.AI`, `ModelContextProtocol` 1.4, and `System.Text.Json`; retain
+the existing pinned `Microsoft.Agents.AI` 1.15.0 and add its matched preview
+`Microsoft.Agents.AI.Hosting` 1.15.0-preview.260722.1 for `AgentSessionStore`, and
 `Microsoft.Agents.Hosting.AspNetCore` 1.6.150 packages with exact pins. Use the
 existing Adaptive Card activity contract without adding a UI framework or a second
 agent-hosting protocol.
 
 **Storage**: Existing local SQLite database through EF Core; one
 `RequestIntakeSessions` table durably stores the typed candidate and shares the
-existing `DbContext` and save boundary with requests and audit events. Bounded MAF
-conversation sessions are process-local only and are never written to SQLite
+existing `DbContext` and save boundary with requests and audit events. MAF
+conversation sessions are retained by the native `InMemoryAgentSessionStore` for the
+process lifetime and are never written to SQLite
 
 **Testing**: Existing xUnit unit and integration projects, ASP.NET Core
 `WebApplicationFactory`, SQLite in-memory databases, deterministic fake
@@ -58,17 +61,19 @@ MCP deadlines; reach a final request within five developer messages for at least
 of representative test utterances
 
 **Constraints**: Personal Teams chat only; one fixed synthetic requester mapping;
-exactly three read-only model-visible MCP tools; no live model in tests; bounded
-process-local MAF history with no transcript persistence or logging; safe
-re-clarification after history loss; no model-visible submit, approval, workflow,
-retry, provisioning, or revocation action; fixed eight-hour grant; prepared snapshot
-expires after 30 minutes; cancellation crosses asynchronous boundaries
+exactly three read-only model-visible MCP tools; no live model in tests;
+process-local MAF history with no application-database transcript persistence or
+logging; safe re-clarification after restart-related history loss; no model-visible
+submit, approval, workflow, retry, provisioning, or revocation action; fixed
+eight-hour grant; prepared snapshot expires after 30 minutes; cancellation crosses
+asynchronous boundaries
 
-**Scale/Scope**: Portfolio-grade local demonstration, one active preparation and one
-bounded in-process MAF session per authenticated Teams actor and personal
-conversation, existing two clients/two environments/two roles, no proactive
-messages, background worker, distributed cache, queue, Slack channel, or real
-identity integration
+**Scale/Scope**: Portfolio-grade local demonstration, one active preparation per
+authenticated Teams actor and personal conversation, and one process-local MAF
+session per created intake retained until process termination; existing two
+clients/two environments/two roles; no proactive messages, background worker,
+distributed cache, queue, Slack channel, durable agent-session store, or real identity
+integration
 
 ## Constitution Check
 
@@ -80,8 +85,8 @@ identity integration
 | **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals the three existing tools before passing only those tools to MAF. |
 | **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
-| **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, distributed cache, queue, or background service. One bounded in-process MAF-session cache directly serves the approved multi-turn interaction and fits the existing Web boundary. |
-| **Verification and operations** | PASS | Unit and integration coverage includes identity/history isolation, cache loss and safe re-clarification, schema failures, exact tool allowlisting, expiry, supersession, stale context, atomic/idempotent replay, cancellation/timeouts, and forbidden actions. Logs contain identifiers, timing, and outcomes, not prompts or transcripts. |
+| **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, distributed cache, queue, or background service. The native in-memory MAF session store replaces the custom cache; one exact per-intake gate protects the mutable session without application-owned eviction machinery. |
+| **Verification and operations** | PASS | Unit and integration coverage includes identity/history isolation, restart-equivalent history loss and safe re-clarification, same-intake turn serialization, schema failures, exact tool allowlisting, expiry, supersession, stale context, atomic/idempotent replay, cancellation/timeouts, and forbidden actions. Logs contain identifiers, timing, and outcomes, not prompts or transcripts. |
 
 **Post-design re-check**: PASS. The data model, MAF proposal schema, Teams activity
 contract, and card contract keep model output outside readiness and authorization.
@@ -125,7 +130,7 @@ src/
 └── GovernedAccess.Web/
     ├── Ai/
     │   ├── MafRequestPreparationInterpreter.cs
-    │   ├── MafConversationSessionCache.cs
+    │   ├── MafConversationTurnCoordinator.cs
     │   └── DeterministicChatClient.cs
     ├── Teams/
     │   ├── TeamsAccessRequestAgent.cs
@@ -171,18 +176,28 @@ only executable.
 - Actor ownership uses the authenticated channel actor binding in addition to the
   fixed synthetic requester ID. Mapping all users to `requester` must not allow one
   Teams user to confirm another user's snapshot.
-- `MafRequestPreparationInterpreter` restores one bounded process-local MAF session
-  for the active intake, supplies the canonical current candidate and latest
+- `MafRequestPreparationInterpreter` uses an `AIHostAgent` backed by the native
+  `AgentSessionStore` to get or create one process-local MAF session for the active
+  intake, supplies the canonical current candidate and latest
   application validation feedback as run-scoped context, and invokes the
   `ChatClientAgent` with the latest message. MAF owns conversational continuity and
   the model/tool loop, but its response and history are not authoritative application
   state.
-- `MafConversationSessionCache` keys sessions by the server-generated intake ID,
-  serializes mutation with one per-intake lock, applies an inactivity limit and
-  bounded turn count, and removes memory when the intake becomes ready, terminal, or
-  superseded. It is process-local by design; no distributed or durable cache is added.
-- On cache miss after restart, eviction, or expiry, the interpreter receives the
-  persisted current candidate plus an explicit `historyAvailable = false` signal.
+- The singleton `InMemoryAgentSessionStore` keys sessions with the server-generated
+  intake ID and retains them until process termination. A small application
+  coordinator retains one exact async gate per intake for the same process lifetime
+  and serializes the store/load, agent run, and store/save sequence. There is no
+  custom session cache, inactivity eviction, turn-count limit, terminal cleanup, or
+  stale-entry retry loop in the current baseline.
+- A successful first turn records an application marker in `AgentSession.StateBag`
+  before saving because MAF get-or-create returns a new session rather than a hit/miss
+  result. Later turns derive `historyAvailable` from that restored marker. Failed or
+  cancelled runs and malformed proposals are not saved.
+- MAF exposes explicit session deletion, but the current process-local baseline does
+  not invoke it. A later durable-store requirement will define retention and terminal
+  deletion policy before wiring that lifecycle operation.
+- On session loss after restart, the interpreter receives the persisted current
+  candidate plus an explicit `historyAvailable = false` signal.
   Relative answers such as "the first one" must produce a repeated focused
   clarification rather than an inferred selection.
 - The interpreter lists the loopback MCP catalog, requires exact equality with
@@ -196,10 +211,11 @@ only executable.
 - After deterministic canonicalization accepts a collecting proposal, its complete
   candidate snapshot replaces the prior candidate. A `null` field means absent or
   cleared; it is not an instruction to preserve an older value.
-- The application persists only the compact current candidate. It does not persist a
-  clarification prompt, ordered option set, transcript, or serialized MAF session.
-  The next model turn uses the active process-local history for references and the
-  durable candidate for canonical synchronization. Structured logs provide
+- The application database persists only the compact current candidate. MAF's native
+  in-memory store retains the serialized session for the process lifetime; it is not
+  written to SQLite, logged, or treated as domain evidence. The next model turn uses
+  the active process-local history for references and the durable candidate for
+  canonical synchronization. Structured logs provide
   pre-submission observability; immutable prepared/request evidence provides replay
   safety and durable audit.
 - A ready snapshot is rendered only from persisted server fields. The card contains no
@@ -245,4 +261,8 @@ only executable.
 
 ## Complexity Tracking
 
-No constitution violations require justification.
+No constitution violations require justification. `Microsoft.Agents.AI.Hosting` is
+preview-only at the selected compatible MAF version, but it supplies the concrete
+native session-store boundary requested by the current design and replaces more
+complex custom cache, eviction, and cleanup code. No MAF workflow or additional
+hosting protocol is used.

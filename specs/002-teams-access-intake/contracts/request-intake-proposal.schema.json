@@ -19,6 +19,7 @@
       ]
     },
     "candidate": {
+      "description": "Complete nullable candidate snapshot for this turn. Null clears or leaves a field absent; it does not preserve an earlier value.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -71,6 +72,7 @@
       }
     },
     "clarification": {
+      "description": "One optional focused target/message proposal. Ordered choices remain only in process-local conversation history.",
       "type": [
         "object",
         "null"

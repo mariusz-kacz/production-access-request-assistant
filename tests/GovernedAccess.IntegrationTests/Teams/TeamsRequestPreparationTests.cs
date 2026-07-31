@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
@@ -144,15 +145,14 @@ public sealed class TeamsRequestPreparationTests
             GovernedAccessWebFactory.DefaultUtcNow,
             session.LastUpdatedAt);
 
-        var clarification = Assert.IsType<RequestClarificationContext>(
+        var clarification = Assert.IsType<RequestClarificationProposal>(
             session.PendingClarification);
         Assert.Equal(
             RequestClarificationTarget.Justification,
             clarification.Target);
         Assert.Equal(
             "What operational justification should be recorded for this request?",
-            clarification.Prompt);
-        Assert.Empty(clarification.Options);
+            clarification.Message);
         Assert.Null(session.ReservedRequestId);
 
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);

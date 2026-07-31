@@ -28,7 +28,7 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
 
     private const string ClarificationResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":null,"incidentId":"INC-1042"},"clarification":{"target":"justification","prompt":"What operational justification should be recorded for this request?","options":[]}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":null,"incidentId":"INC-1042"},"clarification":{"target":"justification","message":"What operational justification should be recorded for this request?"}}
         """;
 
     private const string PromptInjectionResponse =

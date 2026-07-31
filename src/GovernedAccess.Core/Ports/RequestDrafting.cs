@@ -11,16 +11,27 @@ public sealed record RequestPreparationTurn
     public RequestPreparationTurn(
         string latestMessage,
         RequestCandidate candidate,
-        RequestClarificationContext? pendingClarification,
+        IEnumerable<RequestValidationFeedback> validationFeedback,
+        bool historyAvailable,
         string correlationId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(latestMessage);
         ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(validationFeedback);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
+
+        var feedback = validationFeedback.ToArray();
+        if (feedback.Any(item => item is null))
+        {
+            throw new ArgumentException(
+                "Validation feedback cannot contain null values.",
+                nameof(validationFeedback));
+        }
 
         LatestMessage = latestMessage.Trim();
         Candidate = candidate;
-        PendingClarification = pendingClarification;
+        ValidationFeedback = Array.AsReadOnly(feedback);
+        HistoryAvailable = historyAvailable;
         CorrelationId = correlationId.Trim();
     }
 
@@ -28,9 +39,38 @@ public sealed record RequestPreparationTurn
 
     public RequestCandidate Candidate { get; }
 
-    public RequestClarificationContext? PendingClarification { get; }
+    public IReadOnlyList<RequestValidationFeedback> ValidationFeedback { get; }
+
+    public bool HistoryAvailable { get; }
 
     public string CorrelationId { get; }
+}
+
+/// <summary>
+/// Application-owned validation feedback supplied only for the current interpreter
+/// run. It is context for correction, not durable conversation or authorization
+/// evidence.
+/// </summary>
+public sealed record RequestValidationFeedback
+{
+    public RequestValidationFeedback(string field, string code, string message)
+    {
+        Field = NormalizeRequired(field, nameof(field));
+        Code = NormalizeRequired(code, nameof(code));
+        Message = NormalizeRequired(message, nameof(message));
+    }
+
+    public string Field { get; }
+
+    public string Code { get; }
+
+    public string Message { get; }
+
+    private static string NormalizeRequired(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        return value.Trim();
+    }
 }
 
 /// <summary>
@@ -103,6 +143,52 @@ public enum RequestPreparationProposalKind
     Candidate,
 }
 
+public enum RequestClarificationTarget
+{
+    ClientId,
+    EnvironmentId,
+    RequestedRoleId,
+    Justification,
+    IncidentId,
+}
+
+/// <summary>
+/// One closed, bounded clarification proposed by an untrusted interpreter. Choices
+/// remain in process-local model history and are deliberately absent from this
+/// application contract.
+/// </summary>
+public sealed record RequestClarificationProposal
+{
+    public const int MaximumMessageLength = 500;
+
+    public RequestClarificationProposal(
+        RequestClarificationTarget target,
+        string message)
+    {
+        if (!Enum.IsDefined(target))
+        {
+            throw new ArgumentOutOfRangeException(nameof(target));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        message = message.Trim();
+        if (message.Length > MaximumMessageLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(message),
+                message.Length,
+                $"A clarification message cannot exceed {MaximumMessageLength} characters.");
+        }
+
+        Target = target;
+        Message = message;
+    }
+
+    public RequestClarificationTarget Target { get; }
+
+    public string Message { get; }
+}
+
 /// <summary>
 /// A closed interpreter proposal. Every proposal carries the complete nullable
 /// candidate shape and either one bounded typed clarification or no clarification.
@@ -112,7 +198,7 @@ public sealed record RequestPreparationProposal
     public RequestPreparationProposal(
         RequestPreparationProposalKind kind,
         RequestCandidate candidate,
-        RequestClarificationContext? clarification)
+        RequestClarificationProposal? clarification)
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
@@ -127,7 +213,7 @@ public sealed record RequestPreparationProposal
                 && clarification is not null))
         {
             throw new ArgumentException(
-                "The proposal kind and clarification context do not form a valid closed proposal.",
+                "The proposal kind and clarification do not form a valid closed proposal.",
                 nameof(clarification));
         }
 
@@ -140,7 +226,7 @@ public sealed record RequestPreparationProposal
 
     public RequestCandidate Candidate { get; }
 
-    public RequestClarificationContext? Clarification { get; }
+    public RequestClarificationProposal? Clarification { get; }
 }
 
 public enum RequestPreparationInterpretationOutcomeKind

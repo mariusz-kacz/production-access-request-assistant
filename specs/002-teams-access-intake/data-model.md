@@ -11,8 +11,8 @@
   them with the intake transition in one shared `SaveChangesAsync`.
 - Existing request, approval, operation, grant, and audit schemas remain unchanged.
 - Raw activities, prompts, model messages, complete MCP payloads, MAF sessions, and
-  transcripts are not persisted or logged. Bounded MAF history exists only in
-  process memory while one intake is collecting.
+  transcripts are not written to the application database or logged. MAF history
+  exists only in the native in-memory session store for the process lifetime.
 
 ## Request Intake Session
 
@@ -54,9 +54,9 @@ actors map to the same synthetic requester.
 - Every schema-valid proposal contains the complete nullable candidate snapshot.
   After deterministic canonicalization accepts the turn, that snapshot replaces the
   previous collecting candidate; `null` means absent or explicitly cleared.
-- Process-local MAF history is not part of this aggregate or the database. It is
-  keyed by `RequestIntakeSession.Id`, isolated per intake, and may disappear without a
-  domain transition.
+- Process-local MAF history is not part of this aggregate or the database. The native
+  MAF session store keys it by `RequestIntakeSession.Id`, isolates it per intake, and
+  loses it on process termination without causing a domain transition.
 - `Ready` fixes canonical scope, reserved request identity, and expiry.
 - `Submitted`, `Superseded`, `Expired`, and `Invalidated` retain binding, status,
   reserved request identity, timestamps, and correlation metadata but clear candidate
@@ -87,23 +87,30 @@ option list. Any choices presented by the model remain part of the active MAF
 conversation history, while every identifier proposed on a later turn is still
 canonicalized against authoritative data.
 
-## Ephemeral MAF Conversation Memory
+## Process-Local MAF Session Store
 
-Infrastructure owns a bounded process-local cache keyed by
-`RequestIntakeSession.Id`. Each entry contains only the MAF `AgentSession` needed to
-continue model context, a per-intake mutation lock, last-access metadata, and a turn
-count.
+Infrastructure registers MAF's native `InMemoryAgentSessionStore` as a singleton and
+addresses sessions by `RequestIntakeSession.Id`. It serializes the agent-owned session
+state in process memory. A separate process-lifetime coordinator holds one exact
+asynchronous gate per intake and serializes each load, run, and save sequence.
 
-- Entries are isolated by intake ID and are never shared across actors or
+- Sessions and gates are isolated by intake ID and are never shared across actors or
   conversations.
-- Inactivity, turn-count limits, readiness, supersession, expiry, invalidation,
-  submission, and process termination remove an entry.
-- Cache loss causes no domain transition and loses no accepted candidate data.
+- Sessions have no application-owned inactivity timeout, turn-count limit, terminal
+  deletion, or compaction in the current local baseline; process termination clears
+  them.
+- Process restart causes no domain transition and loses no accepted candidate data.
+- The first successful turn stores a marker in the session state bag. Restoring that
+  marker makes `historyAvailable = true`; a newly created session has no marker.
+- Failed or cancelled runs and malformed proposals do not overwrite the last
+  successfully serialized session.
 - A turn without history receives `historyAvailable = false` plus the current durable
   candidate; the model must ask a self-contained clarification instead of resolving a
   relative answer such as “the first one.”
 - Confirmation, approval, provisioning, revocation, authorization, and audit evidence
   never depend on this memory.
+- Durable session rows, retention/deletion policy, multi-host coordination, and native
+  MAF compaction are deferred design concerns rather than current entities.
 
 ## Existing Access Request
 

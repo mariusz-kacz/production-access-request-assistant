@@ -281,32 +281,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     }
 
     private static string RenderClarification(
-        RequestClarificationContext clarification)
-    {
-        if (clarification.Options.Count == 0)
-        {
-            return clarification.Prompt;
-        }
-
-        var message = new StringBuilder(clarification.Prompt);
-        message.AppendLine();
-        message.AppendLine();
-        message.Append("Choose one of these authoritative options:");
-
-        for (var index = 0; index < clarification.Options.Count; index++)
-        {
-            var option = clarification.Options[index];
-            message.AppendLine();
-            message.Append(index + 1);
-            message.Append(". ");
-            message.Append(option.Label);
-            message.Append(" (");
-            message.Append(option.Value);
-            message.Append(')');
-        }
-
-        return message.ToString();
-    }
+        RequestClarificationProposal clarification) => clarification.Message;
 
     private static string RenderCandidateRejection(
         IReadOnlyList<FieldValidationError> validationErrors)

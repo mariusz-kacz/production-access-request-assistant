@@ -24,7 +24,7 @@
 - [x] Teams confirmation is explicitly the sole request-creation path
 - [x] Retained Web list/detail/decision/retry/audit behavior is distinguished from removed creation behavior
 - [x] Ephemeral conversation continuity and durable candidate state have an explicit boundary
-- [x] Restart or cache-loss behavior is safe and does not depend on reconstructing option state
+- [x] Restart-related history loss is safe and does not depend on reconstructing option state
 
 ## Feature Readiness
 
@@ -43,6 +43,6 @@
 - Browser request drafting/submission is explicitly excluded while the Web request
   register and governed human-action surface remain in scope.
 - History-first clarification is best-effort and process-local. Only the complete
-  typed candidate and intake lifecycle are durable; cache loss requires
+  typed candidate and intake lifecycle are durable; process restart requires
   self-contained re-clarification.
 - No clarification markers remain. The specification is ready for planning.

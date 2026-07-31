@@ -52,40 +52,59 @@ Sources: [MAF repository and fit guidance](https://github.com/microsoft/agent-fr
 ## 3. Conversation State Ownership
 
 **Decision**: Persist only the compact application-owned candidate and intake
-lifecycle. Keep one bounded MAF `AgentSession` in process-local memory for each active
-authenticated intake, and use that history as the primary context for previous
-questions, tool exchanges, and references such as "the first one". Do not persist the
-MAF session, raw Teams transcript, clarification prompt, or ordered options.
+lifecycle in SQLite. Use MAF's native singleton `InMemoryAgentSessionStore`, addressed
+by the server-generated intake ID, for process-local conversation continuity. Retain
+its sessions for the process lifetime with no application-owned inactivity timeout,
+turn-count limit, terminal deletion, or conversation compaction in the current scope.
 
 Supply the durable canonical candidate and a `historyAvailable` signal as run-scoped
-context on every turn. If the session is absent after host restart, inactivity
-eviction, or cleanup, the model must not resolve a relative reply from newly queried
-ordering; it must repeat a focused clarification. Remove process-local history when
-the intake becomes ready, submitted, superseded, expired, or invalidated.
+context on every turn. A small coordinator retains one exact async gate per intake for
+the process lifetime and serializes the store/load, agent run, and store/save sequence;
+the session store itself is not the concurrency boundary. `AIHostAgent` get-or-create
+returns a new session on a miss rather than a hit/miss result, so the application sets
+a marker in `AgentSession.StateBag` only after a successful turn and derives
+`historyAvailable` from that restored marker. If the session is absent after host
+restart, the model must not resolve a relative reply from newly queried ordering and
+must repeat a focused clarification.
 
-**Rationale**: MAF-native history demonstrates genuine conversational continuity
-without creating a second durable representation of the same clarification. The
-typed candidate is the only restart-safe preparation state required for deterministic
-readiness and recovery. Losing best-effort history can cause a repeated question but
-cannot create a request or change authorization. A small in-process cache is
-proportionate to the single-host, short-conversation scope and avoids SDK-session
-serialization compatibility, transcript retention, and distributed-cache concerns.
+**Rationale**: The native store demonstrates MAF-owned session serialization and
+restoration and creates a direct evolution path to a durable `AgentSessionStore`
+without maintaining a custom session cache. The typed candidate remains the only
+restart-safe and authoritative preparation state. Process-lifetime retention is
+acceptable for the local synthetic, low-volume baseline. Native MAF compaction and
+durable retention/deletion policy can be added later when a measured requirement
+exists. The native store already exposes explicit deletion, so that later lifecycle
+does not require inventing a parallel session-store abstraction.
 
 **Alternatives considered**:
 
 - Persist clarification targets and ordered choices alongside the candidate: creates
   duplicate conversational memory and bypasses the MAF history capability the feature
   is intended to demonstrate.
-- Persist or checkpoint the complete MAF session: provides seamless restart
-  continuity but retains raw conversation content, couples stored data to an SDK
-  serialization format, and is disproportionate when safe re-clarification is an
-  acceptable recovery.
+- Custom process-local cache with inactivity, turn-count eviction, terminal cleanup,
+  and per-entry lock removal: works, but reimplements native session storage and adds
+  lifecycle races without a current retention requirement.
+- Persist or checkpoint the complete MAF session now: provides seamless restart
+  continuity but retains conversation content and is disproportionate when safe
+  re-clarification is an acceptable recovery.
 - Use only MAF history with no durable typed candidate: makes restart recovery and
   deterministic readiness depend on best-effort process memory.
 - Add a transcript database or distributed cache: explicitly outside the
   single-host feature need.
 
-Source: [Microsoft 365 Agents SDK application and state model](https://learn.microsoft.com/en-us/microsoft-365/agents-sdk/agent-application)
+**Concurrency note**: The native store rehydrates an independent session snapshot on
+each get and provides no atomic get/run/save transaction or update merge. Concurrent
+turns for one intake could therefore branch from the same snapshot and overwrite one
+another without the application-owned exact per-intake gate.
+
+**Failure note**: Save only after agent execution and strict proposal validation
+succeed. A timeout, cancellation, dependency failure, or malformed proposal discards
+the rehydrated working session and leaves the last serialized snapshot unchanged.
+
+Sources: [MAF session model](https://learn.microsoft.com/en-us/agent-framework/agents/conversations/session),
+[MAF in-memory session store](https://learn.microsoft.com/en-us/dotnet/api/microsoft.agents.ai.hosting.inmemoryagentsessionstore?view=agent-framework-dotnet-latest),
+[MAF AIHostAgent source](https://github.com/microsoft/agent-framework/blob/main/dotnet/src/Microsoft.Agents.AI.Hosting/AIHostAgent.cs),
+[MAF compaction strategies](https://learn.microsoft.com/en-us/dotnet/api/microsoft.agents.ai.compaction?view=agent-framework-dotnet-latest)
 
 ## 4. Structured Agent Proposal
 
@@ -231,8 +250,9 @@ Sources: [universal Adaptive Card actions](https://learn.microsoft.com/en-us/ada
 
 **Decision**: Keep automated acceptance independent of Teams and a live model by
 using fake authenticated activity context and a deterministic history-sensitive chat
-client. Test process-local session continuity, isolation, eviction, and safe
-re-clarification without serializing MAF history. Use Microsoft Agents Playground
+client. Test native in-memory session continuity, isolation, same-intake turn
+serialization, process-restart-equivalent loss, and safe re-clarification without
+writing MAF history to SQLite. Use Microsoft Agents Playground
 only for local transport/card UX. Validate the real Teams story separately with an
 authenticated Azure Bot registration, a stable HTTPS development tunnel, a
 personal-scope app manifest, and sideloading in a development tenant.
@@ -253,14 +273,20 @@ Sources: [M365 Agents SDK quickstart and Playground](https://learn.microsoft.com
 
 ## 11. SDK Maturity and Version Policy
 
-**Decision**: Pin the current stable packages `Microsoft.Agents.AI` 1.15.0 and
-`Microsoft.Agents.Hosting.AspNetCore` 1.6.150, and make package compilation plus an
-authenticated message/card round trip an early implementation task. Exclude adjacent
-preview features such as DevUI, AG-UI, Foundry hosted agents, and durable workflows.
+**Decision**: Retain the existing pinned `Microsoft.Agents.AI` 1.15.0 and
+`Microsoft.Agents.Hosting.AspNetCore` 1.6.150 plus the compatible preview
+`Microsoft.Agents.AI.Hosting` 1.15.0-preview.260722.1 required for
+`AgentSessionStore` and
+`InMemoryAgentSessionStore`. Make package compilation, native session reuse, and an
+authenticated message/card round trip early implementation checks. Exclude adjacent
+preview features such as DevUI, AG-UI, Foundry hosted agents, durable workflows, and
+experimental compaction.
 
-**Rationale**: MAF core reached 1.0 in April 2026, while the Agents SDK remains actively
-developed. Exact pinning and a narrow adapter reduce churn; preview surfaces add no
-value to the approved feature.
+**Rationale**: MAF core reached 1.0 in April 2026, while the Agents SDK and MAF hosting
+store remain actively developed. Exact compatible pins and a narrow adapter reduce
+churn. The preview hosting dependency has one concrete purpose: it replaces custom
+session-storage lifecycle code and preserves a future durable-store seam; no hosting
+protocol or workflow API is adopted.
 
 **Alternatives considered**:
 
@@ -273,7 +299,8 @@ value to the approved feature.
 Sources: [MAF 1.0 announcement](https://devblogs.microsoft.com/agent-framework/microsoft-agent-framework-version-1-0/),
 [M365 Agents SDK .NET reference](https://learn.microsoft.com/en-us/dotnet/api/copilot-sdk-docs-dotnet/overview),
 [MAF NuGet package](https://www.nuget.org/packages/Microsoft.Agents.AI/),
-[M365 ASP.NET hosting NuGet package](https://www.nuget.org/packages/Microsoft.Agents.Hosting.AspNetCore/)
+[M365 ASP.NET hosting NuGet package](https://www.nuget.org/packages/Microsoft.Agents.Hosting.AspNetCore/),
+[MAF hosting/session-store NuGet package](https://www.nuget.org/packages/Microsoft.Agents.AI.Hosting/1.15.0-preview.260722.1)
 
 ## 12. Teams-Only Request Creation
 

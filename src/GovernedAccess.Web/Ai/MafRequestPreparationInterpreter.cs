@@ -85,7 +85,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
             "clarification": {
               "type": ["object", "null"],
               "additionalProperties": false,
-              "required": ["target", "prompt", "options"],
+              "required": ["target", "message"],
               "properties": {
                 "target": {
                   "type": "string",
@@ -97,31 +97,10 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                     "incidentId"
                   ]
                 },
-                "prompt": {
+                "message": {
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 500
-                },
-                "options": {
-                  "type": "array",
-                  "maxItems": 10,
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["value", "label"],
-                    "properties": {
-                      "value": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      },
-                      "label": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 200
-                      }
-                    }
-                  }
                 }
               }
             }
@@ -279,7 +258,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
             return new RequestPreparationProposal(
                 kind,
                 Candidate.ToCandidate(),
-                Clarification?.ToContext());
+                Clarification?.ToProposal());
         }
     }
 
@@ -314,17 +293,14 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         public string? Target { get; init; }
 
         [JsonRequired]
-        public string? Prompt { get; init; }
+        public string? Message { get; init; }
 
-        [JsonRequired]
-        public ClarificationOptionPayload?[]? Options { get; init; }
-
-        public RequestClarificationContext ToContext()
+        public RequestClarificationProposal ToProposal()
         {
-            if (Prompt is null || Options is null || Options.Any(option => option is null))
+            if (Message is null)
             {
                 throw new JsonException(
-                    "The clarification prompt and options must have valid values.");
+                    "The clarification message must have a valid value.");
             }
 
             var target = Target switch
@@ -338,31 +314,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                     "The clarification target is not supported."),
             };
 
-            var options = Options
-                .Select(option => option!.ToOption())
-                .ToArray();
-
-            return new RequestClarificationContext(target, Prompt, options);
-        }
-    }
-
-    private sealed class ClarificationOptionPayload
-    {
-        [JsonRequired]
-        public string? Value { get; init; }
-
-        [JsonRequired]
-        public string? Label { get; init; }
-
-        public RequestClarificationOption ToOption()
-        {
-            if (Value is null || Label is null)
-            {
-                throw new JsonException(
-                    "Clarification option values and labels cannot be null.");
-            }
-
-            return new RequestClarificationOption(Value, Label);
+            return new RequestClarificationProposal(target, Message);
         }
     }
 }

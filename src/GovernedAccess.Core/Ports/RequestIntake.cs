@@ -117,7 +117,7 @@ public sealed class RequestPreparationResult
 {
     private RequestPreparationResult(
         RequestPreparationResultKind kind,
-        RequestClarificationContext? clarification = null,
+        RequestClarificationProposal? clarification = null,
         RequestIntakeSession? session = null,
         IReadOnlyList<FieldValidationError>? validationErrors = null,
         ApplicationFailure? failure = null)
@@ -131,7 +131,7 @@ public sealed class RequestPreparationResult
 
     public RequestPreparationResultKind Kind { get; }
 
-    public RequestClarificationContext? Clarification { get; }
+    public RequestClarificationProposal? Clarification { get; }
 
     public RequestIntakeSession? Session { get; }
 
@@ -140,7 +140,7 @@ public sealed class RequestPreparationResult
     public ApplicationFailure? Failure { get; }
 
     public static RequestPreparationResult ClarificationRequired(
-        RequestClarificationContext clarification)
+        RequestClarificationProposal clarification)
     {
         ArgumentNullException.ThrowIfNull(clarification);
         return new(
