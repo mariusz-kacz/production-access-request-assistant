@@ -54,8 +54,10 @@ public static class TeamsAgentRegistration
         builder.Services.AddScoped<RequestIntakeService>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();
+        builder.Services.AddScoped<TeamsAccessRequestAgent>();
 
-        builder.AddAgent<TeamsAccessRequestAgent>();
+        builder.Services.AddAgentApplicationOptions(replaceExisting: false);
+        builder.AddAgent<ScopedTeamsAccessRequestAgentDispatcher>();
 
         return builder;
     }
@@ -66,7 +68,7 @@ public static class TeamsAgentRegistration
         ArgumentNullException.ThrowIfNull(app);
 
         var endpoint = app
-            .MapAgentEndpoints<TeamsAccessRequestAgent>(
+            .MapAgentEndpoints<ScopedTeamsAccessRequestAgentDispatcher>(
                 requireAuth: true,
                 path: MessagesPath)
             .DisableAntiforgery();
@@ -103,6 +105,7 @@ public static class TeamsAgentRegistration
                     options.TokenValidationParameters =
                         new TokenValidationParameters
                         {
+                            AuthenticationType = ActivityAuthenticationScheme,
                             ValidateIssuer = true,
                             ValidIssuer =
                                 AuthenticationConstants

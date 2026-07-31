@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
@@ -11,6 +12,8 @@ using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
+using Microsoft.Agents.Builder;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -65,6 +68,67 @@ public sealed class ProgramCompositionTests
     }
 
     [Fact]
+    public async Task TeamsBackgroundDispatcherIsRootSafeAndAgentsAreScopedPerTurn()
+    {
+        await using var factory = new GovernedAccessWebFactory();
+        var rootAgent = factory.Services.GetRequiredService<IAgent>();
+
+        Assert.IsType<ScopedTeamsAccessRequestAgentDispatcher>(rootAgent);
+
+        await using var firstScope = factory.Services.CreateAsyncScope();
+        await using var secondScope = factory.Services.CreateAsyncScope();
+        var firstAgent = firstScope.ServiceProvider
+            .GetRequiredService<TeamsAccessRequestAgent>();
+
+        Assert.Same(
+            firstAgent,
+            firstScope.ServiceProvider
+                .GetRequiredService<TeamsAccessRequestAgent>());
+        Assert.NotSame(
+            firstAgent,
+            secondScope.ServiceProvider
+                .GetRequiredService<TeamsAccessRequestAgent>());
+    }
+
+    [Fact]
+    public async Task TeamsActorResolverAcceptsOnlyTheValidatedActivityScheme()
+    {
+        await using var factory = new GovernedAccessWebFactory();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var resolver = scope.ServiceProvider
+            .GetRequiredService<TeamsActorResolver>();
+        var jwtOptions = scope.ServiceProvider
+            .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(TeamsAgentRegistration.ActivityAuthenticationScheme);
+        var activity = new FakeTeamsActivityBuilder().Build().Activity;
+        var audienceClaim = new Claim(
+            "aud",
+            FakeTeamsActivityBuilder.DefaultBotAppId);
+        var validatedIdentity = new ClaimsIdentity(
+            [audienceClaim],
+            TeamsAgentRegistration.ActivityAuthenticationScheme);
+        var unrelatedIdentity = new ClaimsIdentity(
+            [audienceClaim],
+            DemoAuthentication.Scheme);
+
+        Assert.Equal(
+            TeamsAgentRegistration.ActivityAuthenticationScheme,
+            jwtOptions.TokenValidationParameters.AuthenticationType);
+        Assert.True(
+            resolver.TryResolve(
+                activity,
+                validatedIdentity,
+                out var actor));
+        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, actor.TenantId);
+        Assert.Equal(FakeTeamsActivityBuilder.DefaultActorId, actor.ChannelActorId);
+        Assert.False(
+            resolver.TryResolve(
+                activity,
+                unrelatedIdentity,
+                out _));
+    }
+
+    [Fact]
     public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
     {
         await using var factory = new GovernedAccessWebFactory();
@@ -104,7 +168,7 @@ public sealed class ProgramCompositionTests
     }
 
     [Fact]
-    public void TeamsOptionsAcceptTheBoundedSingleTenantConfiguration()
+    public void TeamsOptionsAcceptTheBoundedTeamsManagedConfiguration()
     {
         var configuration = CreateTeamsConfiguration();
 
@@ -133,6 +197,7 @@ public sealed class ProgramCompositionTests
             ("TokenValidation:Enabled", "false", "TokenValidation:Enabled"),
             ("TokenValidation:TenantId", "33333333-3333-3333-3333-333333333333", "TokenValidation:TenantId"),
             ("Connections:BotServiceConnection:Settings:AuthType", "ManagedIdentity", "AuthType"),
+            ("Connections:BotServiceConnection:Settings:Authority", "https://login.microsoftonline.com/common", "Authority"),
             ("Connections:BotServiceConnection:Settings:ClientId", "", "Settings:ClientId"),
             ("Connections:BotServiceConnection:Settings:TenantId", "33333333-3333-3333-3333-333333333333", "Settings:TenantId"),
             ("Connections:BotServiceConnection:Settings:ClientSecret", "", "ClientSecret"),
@@ -188,6 +253,8 @@ public sealed class ProgramCompositionTests
                 FakeTeamsActivityBuilder.DefaultTenantId,
             [$"Connections:{BotConnectionName}:Settings:AuthType"] =
                 "ClientSecret",
+            [$"Connections:{BotConnectionName}:Settings:Authority"] =
+                "https://login.microsoftonline.com/botframework.com",
             [$"Connections:{BotConnectionName}:Settings:ClientId"] =
                 FakeTeamsActivityBuilder.DefaultBotAppId,
             [$"Connections:{BotConnectionName}:Settings:ClientSecret"] =

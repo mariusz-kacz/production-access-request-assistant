@@ -27,6 +27,8 @@ public sealed class TeamsAccessRequestOptionsValidator(IConfiguration configurat
     : IValidateOptions<TeamsAccessRequestOptions>
 {
     private const string ClientSecretAuthenticationType = "ClientSecret";
+    private const string BotFrameworkAuthority =
+        "https://login.microsoftonline.com/botframework.com";
     private const string BotFrameworkScope = "https://api.botframework.com/.default";
     private const string TokenValidationSectionName = "TokenValidation";
     private const string ConnectionsSectionName = "Connections";
@@ -121,6 +123,15 @@ public sealed class TeamsAccessRequestOptionsValidator(IConfiguration configurat
         {
             failures.Add(
                 $"{ConnectionsSectionName}:{connectionName}:Settings:AuthType must be {ClientSecretAuthenticationType}.");
+        }
+
+        if (!string.Equals(
+                connectionSettingsSection["Authority"],
+                BotFrameworkAuthority,
+                StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{ConnectionsSectionName}:{connectionName}:Settings:Authority must be the Bot Framework multitenant authority.");
         }
 
         var botClientIdIsValid = TryParseNonEmptyGuid(

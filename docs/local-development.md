@@ -114,6 +114,7 @@ The host uses standard ASP.NET Core configuration. The current settings are:
 | Key | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | SQLite connection string |
+| `Connections:BotServiceConnection:Settings:Authority` | `https://login.microsoftonline.com/botframework.com` | Multitenant Teams-managed bot token authority |
 | `TeamsAccessRequest:AllowedTenantId` | empty (fail closed) | Accepted Teams tenant |
 | `TeamsAccessRequest:BotConnectionName` | `BotServiceConnection` | Configured bot connection |
 | `TeamsAccessRequest:TrustedWebBaseUri` | empty (fail closed) | Trusted origin for request links |
@@ -125,6 +126,7 @@ For a temporary PowerShell override, replace `:` with `__`:
 
 ```powershell
 $env:ConnectionStrings__GovernedAccess = "Data Source=governed-access-dev.db"
+$env:Connections__BotServiceConnection__Settings__Authority = "https://login.microsoftonline.com/botframework.com"
 $env:TeamsAccessRequest__AllowedTenantId = "<development-tenant-guid>"
 $env:TeamsAccessRequest__TrustedWebBaseUri = "https://localhost:7251/"
 $env:TeamsAccessRequest__McpTimeout = "00:00:05"
@@ -317,6 +319,7 @@ SQLite connection. Do not point tests at `governed-access.db`.
 ## Related documentation
 
 - [README](../README.md)
+- [Microsoft Teams local integration](teams-local-integration.md)
 - [As-built architecture](architecture.md)
 - [Security and trust model](security-model.md)
 - [Testing strategy](testing-strategy.md)

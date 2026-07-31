@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace GovernedAccess.Web.Teams;
 
 /// <summary>
-/// Translates an SDK-authenticated Teams activity into the application-owned
+/// Translates an authenticated Teams activity into the application-owned
 /// channel actor binding. Activity payload values never select the synthetic
 /// requester or any authorization claim.
 /// </summary>
@@ -85,7 +85,11 @@ public sealed class TeamsActorResolver
     private static bool IsSdkAuthenticated(ClaimsIdentity? identity) =>
         identity?.IsAuthenticated == true
         && !AgentClaims.AllowAnonymous(identity)
-        && (AgentClaims.IsAgent(identity)
+        && (string.Equals(
+                identity.AuthenticationType,
+                TeamsAgentRegistration.ActivityAuthenticationScheme,
+                StringComparison.Ordinal)
+            || AgentClaims.IsAgent(identity)
             || AgentClaims.IsBotFramework(identity));
 
     private static bool TryParseTenantId(

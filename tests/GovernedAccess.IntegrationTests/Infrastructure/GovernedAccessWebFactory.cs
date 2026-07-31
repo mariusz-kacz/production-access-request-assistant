@@ -289,6 +289,8 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                 FakeTeamsActivityBuilder.DefaultTenantId,
             [$"Connections:{BotConnectionName}:Settings:AuthType"] =
                 "ClientSecret",
+            [$"Connections:{BotConnectionName}:Settings:Authority"] =
+                "https://login.microsoftonline.com/botframework.com",
             [$"Connections:{BotConnectionName}:Settings:ClientId"] =
                 FakeTeamsActivityBuilder.DefaultBotAppId,
             [$"Connections:{BotConnectionName}:Settings:ClientSecret"] =

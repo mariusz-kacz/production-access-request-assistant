@@ -121,6 +121,10 @@ npm run dev --prefix src/GovernedAccess.Web/ClientApp
 Open the Vite URL. Vite proxies `/api` to ASP.NET Core so the browser continues to use
 the same-origin application contract.
 
+For the real Microsoft Teams transport, Teams-managed bot registration, persistent
+Dev Tunnel, and repeatable two-terminal startup, follow the
+[Teams local integration guide](docs/teams-local-integration.md).
+
 ## Demonstrate the workflow
 
 1. Select **Demo Requester** and create a new request using:
