@@ -13,15 +13,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Requests;
 
-public sealed class RequestQueriesTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class RequestQueriesTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     private const string DevOpsDecisionAction = "decideDevOpsRequest";
     private const string RetryProvisioningAction = "retryProvisioning";
     [Fact]
     public async Task ListsAreParticipantFilteredAndMarkOnlyCurrentActions()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var alphaAwaitingBusiness = await CreateRequestAsync(
             factory,
@@ -110,7 +113,6 @@ public sealed class RequestQueriesTests
     public async Task ActiveDetailContainsCurrentValidationAndCompleteOrderedEvidence()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateActiveRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(
@@ -234,7 +236,6 @@ public sealed class RequestQueriesTests
     public async Task LaterStageActionsAreComputedFromActorAndStoredWorkflowState()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var awaitingDevOpsId = await CreateRequestAsync(
             factory,
@@ -282,7 +283,6 @@ public sealed class RequestQueriesTests
     public async Task ActiveRequestRemainsInvisibleToWrongClientNonparticipant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateActiveRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(

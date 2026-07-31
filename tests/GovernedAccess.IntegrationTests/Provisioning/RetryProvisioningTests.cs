@@ -13,8 +13,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
-public sealed class RetryProvisioningTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     private const string RetryNotAuthorizedCode =
         "provisioning_retry_not_authorized";
     private const string RetryInvalidTransitionCode =
@@ -24,7 +28,6 @@ public sealed class RetryProvisioningTests
     public async Task LostResponseRetryReturnsExistingGrantForSameOperation()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateRetryableFailedRequestAsync(
             factory,
@@ -98,7 +101,6 @@ public sealed class RetryProvisioningTests
         string principalKey)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateRetryableFailedRequestAsync(
             factory,
@@ -148,7 +150,6 @@ public sealed class RetryProvisioningTests
     public async Task DevOpsCannotRetryRequestOutsideProvisioningFailedState()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateBusinessApprovedRequestAsync(
             factory,
@@ -199,7 +200,6 @@ public sealed class RetryProvisioningTests
     public async Task RetryRejectsPersistedOperationScopeMismatchBeforeNewAttempt()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateRetryableFailedRequestAsync(
             factory,

@@ -127,7 +127,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestPreparationResultKind.ClarificationRequired:
                 await SendTextAsync(
                     turnContext,
-                    RenderClarification(outcome.Clarification!),
+                    outcome.Clarification!.Message,
                     InputHints.ExpectingInput,
                     cancellationToken);
                 return;
@@ -279,9 +279,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             InputHints.AcceptingInput,
             cancellationToken);
     }
-
-    private static string RenderClarification(
-        RequestClarificationProposal clarification) => clarification.Message;
 
     private static string RenderCandidateRejection(
         IReadOnlyList<FieldValidationError> validationErrors)

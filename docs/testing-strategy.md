@@ -111,7 +111,8 @@ Keep this layer deliberately small:
 | Business decisions | Configured approver, wrong-client rejection, duplicate/invalid transitions, audit evidence, and restricted payloads |
 | DevOps decisions | Actor authorization, exact role, no caller duration, fixed expiry, rejection, and safe provisioning failure |
 | Protected provisioning | Persisted evidence reload, missing/mismatched evidence rejection, operation scope, and grant finalization |
-| Retry and idempotency | Failed-state restriction, lost response, existing-grant recovery, and 100 concurrent attempts producing one grant |
+| Retry and idempotency | Failed-state restriction, lost response, and existing-grant recovery |
+| Explicit concurrency | 100 concurrent retry attempts producing one operation and one grant; intentionally outside the routine integration suite |
 | Queries | Participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
@@ -243,6 +244,15 @@ Run build first when using `--no-build`.
 ```powershell
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
 dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build
+```
+
+### Explicit concurrency suite
+
+The high-contention suite is not included in `ProductionAccessRequestAssistant.sln`
+and therefore does not run as part of routine unit and integration validation:
+
+```powershell
+dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
 ```
 
 ### Focused integration area

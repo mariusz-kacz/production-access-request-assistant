@@ -14,8 +14,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Security;
 
-public sealed class ApiSecurityTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     private static readonly Guid UnknownRequestId =
         Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
@@ -23,7 +27,7 @@ public sealed class ApiSecurityTests
     public async Task EveryProtectedApiSurfaceRejectsUnauthenticatedAccess()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = CreateHttpsClient(factory);
 
         var requests = new[]
@@ -64,7 +68,6 @@ public sealed class ApiSecurityTests
     public async Task EveryUnsafeApiEndpointRejectsRequestsWithoutAntiforgery()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         AssertUnsafeApiEndpointInventory(factory);
 
@@ -128,7 +131,6 @@ public sealed class ApiSecurityTests
     public async Task BrowserDecisionClaimsCannotOverrideActorsApprovedScopeOrGrantLifetime()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
 
         var requestId = (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
@@ -231,7 +233,7 @@ public sealed class ApiSecurityTests
     public async Task ApiAndMcpPathsNeverUseTheSpaFallback()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = CreateHttpsClient(factory);
 
         foreach (var path in new[] { "/api/security-probe", "/mcp/security-probe" })

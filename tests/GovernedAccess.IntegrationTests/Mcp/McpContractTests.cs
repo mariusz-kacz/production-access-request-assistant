@@ -17,9 +17,10 @@ public sealed class McpContractTests
     [Fact]
     public async Task ServerAdvertisesOnlyTheThreeClosedReadOnlyToolContracts()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
 
         var tools = await client.ListToolsAsync(
@@ -62,9 +63,10 @@ public sealed class McpContractTests
     [Fact]
     public async Task ToolsReturnTypedStableAuthoritativeContext()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
         var tool = await GetToolAsync(client, "get_production_environment");
 
@@ -142,9 +144,10 @@ public sealed class McpContractTests
     [Fact]
     public async Task InvalidAndMissingStoredValuesReturnTypedFailureEnvelopes()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
         var tool = await GetToolAsync(client, "get_production_environment");
 
@@ -163,37 +166,6 @@ public sealed class McpContractTests
 
         AssertTypedFailure(invalidInput, "InvalidInput");
         AssertTypedFailure(notFound, "NotFound");
-    }
-
-    private static async Task<McpClient> CreateMcpClientAsync(
-        GovernedAccessWebFactory factory,
-        CancellationToken cancellationToken)
-    {
-        var httpClient = factory.CreateClient(new()
-        {
-            BaseAddress = new Uri("https://localhost"),
-        });
-        var transport = new HttpClientTransport(
-            new HttpClientTransportOptions
-            {
-                Endpoint = new Uri("https://localhost/mcp"),
-                Name = "governed-access-contract-tests",
-                TransportMode = HttpTransportMode.StreamableHttp,
-            },
-            httpClient,
-            ownsHttpClient: true);
-
-        try
-        {
-            return await McpClient.CreateAsync(
-                transport,
-                cancellationToken: cancellationToken);
-        }
-        catch
-        {
-            await transport.DisposeAsync();
-            throw;
-        }
     }
 
     private static async Task<McpClientTool> GetToolAsync(McpClient client, string name)

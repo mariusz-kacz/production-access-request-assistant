@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
+[Collection(IntegrationTestCollections.FullApplication)]
 public sealed class TeamsRequestConfirmationTests
 {
     private const string CompleteRequest =
@@ -27,8 +28,10 @@ public sealed class TeamsRequestConfirmationTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var trustedWebBaseUri = new Uri(
             "https://trusted.governed-access.test/");
+        var chatClient = new DeterministicChatClient(
+            DeterministicChatMode.Candidate);
         await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate,
+            chatClient,
             trustedWebBaseUri);
         using var client = factory.CreateTeamsClient();
 
@@ -46,6 +49,7 @@ public sealed class TeamsRequestConfirmationTests
                 $"Expected 200 but received {(int)preparationResponse.StatusCode}: "
                 + preparationBody);
         }
+        Assert.Equal(1, chatClient.RequestCount);
 
         RequestIntakeSession sessionBeforeConfirmation;
         await using (var preparationScope = factory.Services.CreateAsyncScope())
@@ -107,6 +111,7 @@ public sealed class TeamsRequestConfirmationTests
             "smba.trafficmanager.net",
             confirmationBody,
             StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, chatClient.RequestCount);
 
         await using var confirmationScope = factory.Services.CreateAsyncScope();
         var confirmationDbContext = confirmationScope.ServiceProvider
@@ -312,4 +317,5 @@ public sealed class TeamsRequestConfirmationTests
             .Build()
             .Activity;
     }
+
 }

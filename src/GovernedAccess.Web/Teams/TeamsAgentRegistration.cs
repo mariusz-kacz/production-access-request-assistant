@@ -44,7 +44,7 @@ public static class TeamsAgentRegistration
 
         builder.Services.AddSingleton<IStorage, MemoryStorage>();
         builder.Services.AddSingleton<InMemoryAgentSessionStore>();
-        builder.Services.AddSingleton<AgentSessionStore>(serviceProvider =>
+        builder.Services.AddSingleton<AgentSessionStore>(static serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryAgentSessionStore>());
         builder.Services.AddSingleton<MafConversationTurnCoordinator>();
         builder.Services.AddScoped<IRequestIntakeStore, EfRequestIntakeStore>();

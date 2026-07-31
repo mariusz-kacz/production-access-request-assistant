@@ -17,13 +17,16 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-public sealed class DevOpsDecisionTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     [Fact]
     public async Task AuthenticatedDevOpsApprovalIgnoresCraftedScopeAndDuration()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
         using var client = await CreateAuthenticatedClientAsync(
@@ -92,7 +95,6 @@ public sealed class DevOpsDecisionTests
         string principalKey)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
         using var client = await CreateAuthenticatedClientAsync(
@@ -126,7 +128,6 @@ public sealed class DevOpsDecisionTests
     public async Task DevOpsRejectionCreatesNoProvisioningOperationOrGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
         using var client = await CreateAuthenticatedClientAsync(
@@ -173,7 +174,6 @@ public sealed class DevOpsDecisionTests
     public async Task TypedProvisioningFailureReturnsSafeProblemAndPersistsRetryableState()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
         var provisioner = new FailingAccessProvisioner();

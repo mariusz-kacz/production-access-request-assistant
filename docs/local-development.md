@@ -274,6 +274,7 @@ production hosting target or deployment procedure.
 | React application | `src/GovernedAccess.Web/ClientApp/src` |
 | Unit tests | `tests/GovernedAccess.UnitTests` |
 | Integration tests | `tests/GovernedAccess.IntegrationTests` |
+| Explicit concurrency tests | `tests/GovernedAccess.ConcurrencyTests` |
 
 ## Troubleshooting
 

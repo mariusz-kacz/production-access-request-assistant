@@ -3,10 +3,6 @@ using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -17,36 +13,51 @@ public sealed class McpFailureTests
     [Fact]
     public async Task ExpectedReaderFailuresReturnTypedMcpFailureEnvelopes()
     {
-        (ApplicationFailureKind Kind, string Outcome, string Code)[] failures =
+        (
+            string EnvironmentId,
+            ApplicationFailureKind Kind,
+            string Outcome,
+            string Code)[] failures =
         [
-            (ApplicationFailureKind.NotFound, "NotFound", "environment-not-found"),
-            (ApplicationFailureKind.DependencyUnavailable, "Unavailable", "request-context-unavailable"),
-            (ApplicationFailureKind.Timeout, "Timeout", "request-context-timeout"),
-            (ApplicationFailureKind.Cancelled, "Cancelled", "request-context-cancelled"),
+            ("PROD-NOT-FOUND", ApplicationFailureKind.NotFound, "NotFound", "environment-not-found"),
+            ("PROD-UNAVAILABLE", ApplicationFailureKind.DependencyUnavailable, "Unavailable", "request-context-unavailable"),
+            ("PROD-TIMEOUT", ApplicationFailureKind.Timeout, "Timeout", "request-context-timeout"),
+            ("PROD-CANCELLED", ApplicationFailureKind.Cancelled, "Cancelled", "request-context-cancelled"),
         ];
-
-        foreach (var (failureKind, expectedOutcome, expectedCode) in failures)
+        var failuresByEnvironmentId = failures.ToDictionary(
+            failure => failure.EnvironmentId,
+            StringComparer.Ordinal);
+        var reader = new StubRequestContextReader
         {
-            var reader = new StubRequestContextReader
+            GetProductionEnvironment = (environmentId, _) =>
             {
-                GetProductionEnvironment = (_, _) => Task.FromResult(
+                var failure = failuresByEnvironmentId[environmentId];
+                return Task.FromResult(
                     ApplicationResult.Failed<ProductionEnvironment>(
                         new ApplicationFailure(
-                            failureKind,
-                            expectedCode,
-                            "The environment lookup did not complete successfully."))),
-            };
+                            failure.Kind,
+                            failure.Code,
+                            "The environment lookup did not complete successfully.")));
+            },
+        };
+        await using var host = await McpTestHost.CreateAsync(
+            reader,
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-failure-tests",
+            TestContext.Current.CancellationToken);
+        var tool = await GetToolAsync(client, "get_production_environment");
 
-            await using var rootFactory = new GovernedAccessWebFactory();
-            await using var factory = CreateFactory(rootFactory, reader);
-            await using var client = await CreateMcpClientAsync(
-                factory,
-                TestContext.Current.CancellationToken);
-            var tool = await GetToolAsync(client, "get_production_environment");
+        foreach (var (
+                     environmentId,
+                     _,
+                     expectedOutcome,
+                     expectedCode) in failures)
+        {
             var result = await tool.CallAsync(
                 new Dictionary<string, object?>
                 {
-                    ["environmentId"] = "PROD-UNKNOWN",
+                    ["environmentId"] = environmentId,
                 },
                 cancellationToken: TestContext.Current.CancellationToken);
 
@@ -82,10 +93,11 @@ public sealed class McpFailureTests
             },
         };
 
-        await using var rootFactory = new GovernedAccessWebFactory();
-        await using var factory = CreateFactory(rootFactory, reader);
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateAsync(
+            reader,
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-cancellation-tests",
             TestContext.Current.CancellationToken);
         var tool = await GetToolAsync(client, "get_production_environment");
         using var callerCancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -107,49 +119,6 @@ public sealed class McpFailureTests
         await cancellationObserved.Task.WaitAsync(
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
-    }
-
-    private static WebApplicationFactory<Program> CreateFactory(
-        GovernedAccessWebFactory rootFactory,
-        IRequestContextReader reader)
-    {
-        return rootFactory.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IRequestContextReader>();
-                services.AddSingleton(reader);
-            }));
-    }
-
-    private static async Task<McpClient> CreateMcpClientAsync(
-        WebApplicationFactory<Program> factory,
-        CancellationToken cancellationToken)
-    {
-        var httpClient = factory.CreateClient(new WebApplicationFactoryClientOptions
-        {
-            BaseAddress = new Uri("https://localhost"),
-        });
-        var transport = new HttpClientTransport(
-            new HttpClientTransportOptions
-            {
-                Endpoint = new Uri("https://localhost/mcp"),
-                Name = "governed-access-failure-tests",
-                TransportMode = HttpTransportMode.StreamableHttp,
-            },
-            httpClient,
-            ownsHttpClient: true);
-
-        try
-        {
-            return await McpClient.CreateAsync(
-                transport,
-                cancellationToken: cancellationToken);
-        }
-        catch
-        {
-            await transport.DisposeAsync();
-            throw;
-        }
     }
 
     private static async Task<McpClientTool> GetToolAsync(McpClient client, string name)

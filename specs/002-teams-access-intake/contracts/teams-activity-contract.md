@@ -106,9 +106,8 @@ access request, provision, revoke, or retry provisioning.
 
 An answer such as “the first one” is meaningful only when the active MAF session
 contains the question and ordering that gave it meaning. After process restart, the
-application explicitly reports unavailable history to the model and the
-`ClarificationRequired` path repeats a self-contained question. It never guesses
-from a reconstructed option list.
+model receives no prior conversation messages, and the `ClarificationRequired` path
+repeats a self-contained question. It never guesses from a reconstructed option list.
 
 ## Final prepared-request card
 

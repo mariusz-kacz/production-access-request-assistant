@@ -5,9 +5,11 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Authentication;
+using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -60,6 +62,45 @@ public sealed class ProgramCompositionTests
         Assert.Contains(
             GetPrivateDependencies(workflowStore),
             dependency => ReferenceEquals(dependency, dbContext));
+    }
+
+    [Fact]
+    public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
+    {
+        await using var factory = new GovernedAccessWebFactory();
+        var services = factory.Services;
+        var concreteStore = services.GetRequiredService<InMemoryAgentSessionStore>();
+        var sessionStore = services.GetRequiredService<AgentSessionStore>();
+        var coordinator = services.GetRequiredService<MafConversationTurnCoordinator>();
+        var interpreter = services.GetRequiredService<IRequestPreparationInterpreter>();
+
+        Assert.Same(concreteStore, sessionStore);
+
+        await using var firstScope = services.CreateAsyncScope();
+        await using var secondScope = services.CreateAsyncScope();
+
+        Assert.Same(
+            concreteStore,
+            firstScope.ServiceProvider.GetRequiredService<AgentSessionStore>());
+        Assert.Same(
+            concreteStore,
+            secondScope.ServiceProvider.GetRequiredService<AgentSessionStore>());
+        Assert.Same(
+            coordinator,
+            firstScope.ServiceProvider
+                .GetRequiredService<MafConversationTurnCoordinator>());
+        Assert.Same(
+            coordinator,
+            secondScope.ServiceProvider
+                .GetRequiredService<MafConversationTurnCoordinator>());
+        Assert.Same(
+            interpreter,
+            firstScope.ServiceProvider
+                .GetRequiredService<IRequestPreparationInterpreter>());
+        Assert.Same(
+            interpreter,
+            secondScope.ServiceProvider
+                .GetRequiredService<IRequestPreparationInterpreter>());
     }
 
     [Fact]

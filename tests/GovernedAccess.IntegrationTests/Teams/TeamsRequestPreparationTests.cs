@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
@@ -15,7 +16,9 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TeamsRequestPreparationTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixture)
+    : IClassFixture<ConfigurableTeamsFixture>
 {
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "
@@ -25,7 +28,10 @@ public sealed class TeamsRequestPreparationTests
     public async Task DefaultChatClientProducesCurrentCandidateContract()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        await fixture.ResetAsync(
+            DeterministicChatMode.Candidate,
+            cancellationToken);
+        var factory = fixture.Factory;
         using var client = factory.CreateTeamsClient();
 
         using var response = await client.PostAsJsonAsync(
@@ -58,8 +64,10 @@ public sealed class TeamsRequestPreparationTests
     public async Task MessagesRouteRequiresAuthenticationBeforeApiAndSpaFallbacks()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate);
+        await fixture.ResetAsync(
+            DeterministicChatMode.Candidate,
+            cancellationToken);
+        var factory = fixture.Factory;
         using var client = factory.CreateTeamsClient(authenticated: false);
         var activity = CreateExpectRepliesActivity(CompleteRequest);
         var routeEndpoints = factory.Services
@@ -95,8 +103,10 @@ public sealed class TeamsRequestPreparationTests
     public async Task PersonalChatClarificationPersistsCandidateForFixedRequester()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Clarification);
+        await fixture.ResetAsync(
+            DeterministicChatMode.Clarification,
+            cancellationToken);
+        var factory = fixture.Factory;
         using var client = factory.CreateTeamsClient();
         var activity = CreateExpectRepliesActivity(
             "I need read-only access to PROD-ALPHA-EU for INC-1042.");
@@ -150,6 +160,46 @@ public sealed class TeamsRequestPreparationTests
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
 
+    [Fact]
+    public async Task CandidateRejectionIdentifiesApplicationValidationProvenance()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetAsync(
+            DeterministicChatMode.InvalidCandidate,
+            cancellationToken);
+        var factory = fixture.Factory;
+        using var client = factory.CreateTeamsClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity("Use PROD-UNKNOWN."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var responseJson = JsonDocument.Parse(responseBody);
+        var responseText = responseJson.RootElement
+            .GetProperty("activities")[0]
+            .GetProperty("text")
+            .GetString()
+            ?? string.Empty;
+        Assert.Contains(
+            "Deterministic application validation rejected the assistant's candidate.",
+            responseText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "The selected production environment does not exist.",
+            responseText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Nothing has been submitted.",
+            responseText,
+            StringComparison.Ordinal);
+
+        await AssertNoWorkflowStateAsync(factory, cancellationToken);
+    }
+
     private static Activity CreateExpectRepliesActivity(string text)
     {
         var activity = new FakeTeamsActivityBuilder()
@@ -195,4 +245,5 @@ public sealed class TeamsRequestPreparationTests
                 .AsNoTracking()
                 .ToListAsync(cancellationToken));
     }
+
 }

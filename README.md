@@ -156,7 +156,14 @@ dotnet test ProductionAccessRequestAssistant.sln --no-build
 
 The suites require no live LLM. They cover domain rules, authorization, immutable
 scope, malformed model output, MCP contracts and failures, provisioning evidence,
-idempotency, concurrency, API security, UI session wiring, and workflow presentation.
+idempotency, API security, UI session wiring, and workflow presentation.
+
+The heavier 100-way provisioning concurrency scenario is intentionally excluded from
+the solution test run. Run it explicitly when concurrency behavior is under test:
+
+```powershell
+dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
+```
 
 At the time of this README update, the repository passes:
 
@@ -174,6 +181,7 @@ src/
 tests/
   GovernedAccess.UnitTests/
   GovernedAccess.IntegrationTests/
+  GovernedAccess.ConcurrencyTests/  Explicit high-contention scenarios
 docs/
   adr/                       Architecture decision records
 specs/

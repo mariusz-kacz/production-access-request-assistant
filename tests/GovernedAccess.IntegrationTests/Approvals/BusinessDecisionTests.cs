@@ -12,13 +12,16 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-public sealed class BusinessDecisionTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class BusinessDecisionTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     [Fact]
     public async Task ConfiguredApproverApprovalIgnoresOverpostedActorAndScope()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(
@@ -87,7 +90,6 @@ public sealed class BusinessDecisionTests
     public async Task WrongClientApproverIsRejectedAndAuditedWithoutChangingState()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(
@@ -140,7 +142,6 @@ public sealed class BusinessDecisionTests
     public async Task ConfiguredApproverRejectionRecordsAuthenticatedDecisionWithoutApprovedScope()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(
@@ -194,7 +195,6 @@ public sealed class BusinessDecisionTests
     public async Task DuplicateDecisionIsRejectedAndAuditedWithoutChangingAppliedDecision()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(

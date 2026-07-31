@@ -8,6 +8,7 @@ using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Authentication;
@@ -74,12 +75,16 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
 
     public async Task ResetDatabaseAsync(CancellationToken cancellationToken = default)
     {
+        Clock.SetUtcNow(DefaultUtcNow);
         await databaseResetLock.WaitAsync(cancellationToken);
 
         try
         {
             await using var scope = Services.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+            scope.ServiceProvider
+                .GetRequiredService<SyntheticAccessProvisionerControl>()
+                .Reset();
 
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
             await ClearDatabaseAsync(dbContext, cancellationToken);

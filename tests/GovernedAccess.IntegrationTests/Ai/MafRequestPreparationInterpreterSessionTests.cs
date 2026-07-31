@@ -15,7 +15,7 @@ public sealed class MafRequestPreparationInterpreterSessionTests
 {
     private const string ValidClarificationResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-US."}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-UK."}}
         """;
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class MafRequestPreparationInterpreterSessionTests
             outcome.Proposal.Clarification!.Message,
             StringComparison.Ordinal);
         Assert.Contains(
-            "PROD-BETA-US",
+            "PROD-BETA-UK",
             outcome.Proposal.Clarification.Message,
             StringComparison.Ordinal);
     }

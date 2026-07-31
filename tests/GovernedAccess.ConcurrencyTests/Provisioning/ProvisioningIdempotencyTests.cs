@@ -11,7 +11,7 @@ using GovernedAccess.Web.Provisioning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace GovernedAccess.IntegrationTests.Provisioning;
+namespace GovernedAccess.ConcurrencyTests.Provisioning;
 
 public sealed class ProvisioningIdempotencyTests
 {
