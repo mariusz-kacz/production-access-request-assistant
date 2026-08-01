@@ -56,22 +56,33 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal(AuditEventType.RequestCreated, auditEvent.EventType);
     }
 
-    [Fact]
-    public async Task ConfirmationRequiresTheAuthenticatedPreparationOwner()
+    [Theory]
+    [InlineData("other-channel", "tenant-001", "actor-001", "conversation-001", "requester")]
+    [InlineData("msteams", "other-tenant", "actor-001", "conversation-001", "requester")]
+    [InlineData("msteams", "tenant-001", "other-actor", "conversation-001", "requester")]
+    [InlineData("msteams", "tenant-001", "actor-001", "other-conversation", "requester")]
+    [InlineData("msteams", "tenant-001", "actor-001", "conversation-001", "other-requester")]
+    public async Task ConfirmationRequiresTheExactAuthenticatedPreparationBinding(
+        string channel,
+        string tenantId,
+        string channelActorId,
+        string conversationId,
+        string requesterId)
     {
         var scenario = new IntakeScenario();
         _ = await scenario.PrepareAsync();
         var otherActor = new AuthenticatedChannelActor(
-            IntakeScenario.Owner.Channel,
-            IntakeScenario.Owner.TenantId,
-            "other-actor",
-            IntakeScenario.Owner.ConversationId,
-            IntakeScenario.Owner.RequesterId);
+            channel,
+            tenantId,
+            channelActorId,
+            conversationId,
+            requesterId);
 
-        var result = await scenario.ConfirmAsync(otherActor);
+        var result = await scenario.ConfirmResultAsync(otherActor);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ApplicationFailureKind.Unauthorized, result.FailureKind);
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.Unauthorized, result.Failure!.Kind);
+        Assert.Equal(RequestIntakeService.ForbiddenCode, result.Failure.Code);
         Assert.Equal("Ready", scenario.IntakeStatus);
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
@@ -85,11 +96,18 @@ public sealed class RequestIntakeServiceTests
         _ = await scenario.PrepareAsync();
         scenario.RoleIsAvailable = false;
 
-        var result = await scenario.ConfirmAsync(IntakeScenario.Owner);
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal(ApplicationFailureKind.InvalidTransition, result.FailureKind);
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.InvalidTransition, result.Failure!.Kind);
+        Assert.Equal(RequestIntakeService.InvalidatedCode, result.Failure.Code);
         Assert.Equal("Invalidated", scenario.IntakeStatus);
+        Assert.NotNull(scenario.Session.ReservedRequestId);
+        Assert.Null(scenario.Session.ClientId);
+        Assert.Null(scenario.Session.EnvironmentId);
+        Assert.Null(scenario.Session.RequestedRoleId);
+        Assert.Null(scenario.Session.Justification);
+        Assert.Null(scenario.Session.IncidentId);
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
         Assert.Equal(2, scenario.SaveCount);
@@ -288,6 +306,205 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
+    public async Task ConfirmationLazilyExpiresReadySessionAtTheExactDeadline()
+    {
+        var readyAt = IntakeScenario.CurrentTime
+            .Subtract(RequestIntakeSession.ConfirmationLifetime);
+        var session = CreateReadySession(readyAt);
+        var reservedRequestId = session.ReservedRequestId;
+        var scenario = new IntakeScenario(initialSession: session);
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.InvalidTransition, result.Failure!.Kind);
+        Assert.Equal(RequestIntakeService.ExpiredCode, result.Failure.Code);
+        Assert.Equal(RequestIntakeStatus.Expired, session.Status);
+        Assert.Equal(reservedRequestId, session.ReservedRequestId);
+        Assert.Null(session.ClientId);
+        Assert.Null(session.EnvironmentId);
+        Assert.Null(session.RequestedRoleId);
+        Assert.Null(session.Justification);
+        Assert.Null(session.IncidentId);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task NewPreparationLazilyExpiresOldReadySessionBeforeStartingOver()
+    {
+        var previous = CreateReadySession(
+            IntakeScenario.CurrentTime
+                .Subtract(RequestIntakeSession.ConfirmationLifetime));
+        var previousRequestId = previous.ReservedRequestId;
+        var scenario = new IntakeScenario(initialSession: previous);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestIntakeStatus.Expired, previous.Status);
+        Assert.Equal(previousRequestId, previous.ReservedRequestId);
+        Assert.Null(previous.ClientId);
+        Assert.Equal(
+            RequestPreparationResultKind.ReadyForConfirmation,
+            result.Kind);
+        Assert.NotEqual(previous.Id, result.Session!.Id);
+        Assert.Equal(RequestIntakeStatus.Ready, result.Session.Status);
+        Assert.Equal(2, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task SubmittedConfirmationReplayReturnsTheReservedRequestIdentity()
+    {
+        var scenario = new IntakeScenario();
+        var ready = await scenario.PrepareAsync();
+
+        var first = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+        var saveCountAfterFirstConfirmation = scenario.SaveCount;
+        var replay = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Submitted, first.Kind);
+        Assert.Equal(ready.ReservedRequestId, first.RequestId);
+        Assert.Equal(RequestConfirmationResultKind.AlreadySubmitted, replay.Kind);
+        Assert.True(replay.WasAlreadySubmitted);
+        Assert.Equal(ready.ReservedRequestId, replay.RequestId);
+        Assert.Equal(saveCountAfterFirstConfirmation, scenario.SaveCount);
+        Assert.Single(scenario.Requests);
+        Assert.Single(scenario.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(false, RequestIntakeStatus.Superseded)]
+    [InlineData(true, RequestIntakeStatus.Expired)]
+    public async Task StartOverReturnsPersistenceFailureForTerminalLifecycleSave(
+        bool expired,
+        RequestIntakeStatus expectedStatus)
+    {
+        var readyAt = expired
+            ? IntakeScenario.CurrentTime
+                .Subtract(RequestIntakeSession.ConfirmationLifetime)
+            : IntakeScenario.CurrentTime;
+        var session = CreateReadySession(readyAt);
+        var scenario = new IntakeScenario(initialSession: session)
+        {
+            SaveFailure = ForcedSaveFailure(),
+        };
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(expectedStatus, session.Status);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Same(session, scenario.Session);
+    }
+
+    [Fact]
+    public async Task LazyExpiryReturnsPersistenceFailureWhenStatusCannotBeSaved()
+    {
+        var session = CreateReadySession(
+            IntakeScenario.CurrentTime
+                .Subtract(RequestIntakeSession.ConfirmationLifetime));
+        var scenario = new IntakeScenario(initialSession: session)
+        {
+            SaveFailure = ForcedSaveFailure(),
+        };
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Expired, session.Status);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task InvalidationReturnsPersistenceFailureWhenStatusCannotBeSaved()
+    {
+        var scenario = new IntakeScenario();
+        _ = await scenario.PrepareAsync();
+        scenario.RoleIsAvailable = false;
+        scenario.SaveFailure = ForcedSaveFailure();
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Invalidated, scenario.Session.Status);
+        Assert.Equal(2, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task SubmissionReturnsPersistenceFailureWhenAtomicSaveFails()
+    {
+        var scenario = new IntakeScenario();
+        _ = await scenario.PrepareAsync();
+        scenario.SaveFailure = ForcedSaveFailure();
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Submitted, scenario.Session.Status);
+        Assert.Equal(2, scenario.SaveCount);
+        Assert.Equal(0, scenario.RecoveryCount);
+        Assert.Single(scenario.Requests);
+        Assert.Single(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task ConcurrentConfirmationReturnsRecoveredSubmittedIdentity()
+    {
+        var scenario = new IntakeScenario();
+        var ready = await scenario.PrepareAsync();
+        scenario.SaveFailure = new ApplicationFailure(
+            ApplicationFailureKind.ConcurrencyConflict,
+            "request_intake_concurrency_conflict",
+            "The request intake changed while it was being saved.");
+        scenario.RecoveredRequestId = ready.ReservedRequestId;
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.AlreadySubmitted, result.Kind);
+        Assert.True(result.WasAlreadySubmitted);
+        Assert.Equal(ready.ReservedRequestId, result.RequestId);
+        Assert.Equal(1, scenario.RecoveryCount);
+        Assert.Equal(ready.PreparationId, scenario.RecoverySessionId);
+        Assert.Same(IntakeScenario.Owner, scenario.RecoveryActor);
+    }
+
+    [Fact]
+    public async Task ConcurrentConfirmationReturnsClosedRecoveryFailure()
+    {
+        var scenario = new IntakeScenario();
+        _ = await scenario.PrepareAsync();
+        scenario.SaveFailure = new ApplicationFailure(
+            ApplicationFailureKind.ConcurrencyConflict,
+            "request_intake_concurrency_conflict",
+            "The request intake changed while it was being saved.");
+        scenario.RecoveryFailure = new ApplicationFailure(
+            ApplicationFailureKind.NotFound,
+            "request_intake_not_found",
+            "The request intake was not found.");
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.NotFound, result.Failure!.Kind);
+        Assert.Equal("request_intake_not_found", result.Failure.Code);
+        Assert.Equal(1, scenario.RecoveryCount);
+        Assert.Equal(Guid.Empty, result.RequestId);
+    }
+
+    [Fact]
     public void TerminalAggregateRetainsIdentityAndClearsSensitiveCandidate()
     {
         var occurredAt = new DateTimeOffset(
@@ -410,7 +627,17 @@ public sealed class RequestIntakeServiceTests
 
         public int SaveCount { get; private set; }
 
-        public ApplicationFailure? SaveFailure { get; init; }
+        public ApplicationFailure? SaveFailure { get; set; }
+
+        public Guid? RecoveredRequestId { get; set; }
+
+        public ApplicationFailure? RecoveryFailure { get; set; }
+
+        public int RecoveryCount { get; private set; }
+
+        public Guid? RecoverySessionId { get; private set; }
+
+        public AuthenticatedChannelActor? RecoveryActor { get; private set; }
 
         public List<AccessRequest> Requests { get; } = [];
 
@@ -467,18 +694,7 @@ public sealed class RequestIntakeServiceTests
         public async Task<ConfirmationObservation> ConfirmAsync(
             AuthenticatedChannelActor actor)
         {
-            if (session is null)
-            {
-                throw new InvalidOperationException(
-                    "The scenario must be prepared before confirmation.");
-            }
-
-            var outcome = await service.ConfirmAsync(
-                new ConfirmRequestIntakeCommand(
-                    actor,
-                    session.Id,
-                    "confirm-correlation"),
-                TestContext.Current.CancellationToken);
+            var outcome = await ConfirmResultAsync(actor);
 
             return outcome.Kind switch
             {
@@ -496,6 +712,23 @@ public sealed class RequestIntakeServiceTests
                 _ => throw new InvalidOperationException(
                     "The scenario received an unsupported confirmation outcome."),
             };
+        }
+
+        public Task<RequestConfirmationResult> ConfirmResultAsync(
+            AuthenticatedChannelActor actor)
+        {
+            if (session is null)
+            {
+                throw new InvalidOperationException(
+                    "The scenario must be prepared before confirmation.");
+            }
+
+            return service.ConfirmAsync(
+                new ConfirmRequestIntakeCommand(
+                    actor,
+                    session.Id,
+                    "confirm-correlation"),
+                TestContext.Current.CancellationToken);
         }
 
         public void AttemptReadyScopeChange()
@@ -545,6 +778,31 @@ public sealed class RequestIntakeServiceTests
                 session?.Id == sessionId ? session : null,
                 "intake_not_found",
                 cancellationToken);
+
+        public Task<ApplicationResult<Guid>> RecoverSubmittedRequestAsync(
+            Guid sessionId,
+            AuthenticatedChannelActor actor,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RecoveryCount++;
+            RecoverySessionId = sessionId;
+            RecoveryActor = actor;
+
+            if (RecoveryFailure is not null)
+            {
+                return Task.FromResult(
+                    ApplicationResult.Failed<Guid>(RecoveryFailure));
+            }
+
+            if (RecoveredRequestId is not { } requestId)
+            {
+                throw new InvalidOperationException(
+                    "The test scenario did not configure concurrency recovery.");
+            }
+
+            return Task.FromResult(ApplicationResult.Succeeded(requestId));
+        }
 
         public Task<ApplicationResult> SaveChangesAsync(
             CancellationToken cancellationToken)
@@ -749,4 +1007,34 @@ public sealed class RequestIntakeServiceTests
             IntakeScenario.Owner.RequesterId,
             IntakeScenario.CurrentTime,
             "created");
+
+    private static RequestIntakeSession CreateReadySession(
+        DateTimeOffset readyAt)
+    {
+        var session = new RequestIntakeSession(
+            Guid.NewGuid(),
+            RequestIntakeSession.TeamsChannel,
+            IntakeScenario.Owner.TenantId,
+            IntakeScenario.Owner.ChannelActorId,
+            IntakeScenario.Owner.ConversationId,
+            IntakeScenario.Owner.RequesterId,
+            readyAt,
+            "created");
+        session.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            readyAt,
+            "candidate");
+        session.MarkReady(Guid.NewGuid(), readyAt, "ready");
+        return session;
+    }
+
+    private static ApplicationFailure ForcedSaveFailure() =>
+        new(
+            ApplicationFailureKind.DependencyFailure,
+            "forced_save_failure",
+            "The test save failed.");
 }

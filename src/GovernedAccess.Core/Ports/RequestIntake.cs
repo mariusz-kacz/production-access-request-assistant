@@ -256,5 +256,15 @@ public interface IRequestIntakeStore
         Guid sessionId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Clears stale persistence state after an optimistic-concurrency conflict and
+    /// returns the already-submitted request identity only when the persisted intake
+    /// still belongs to the exact authenticated actor and conversation binding.
+    /// </summary>
+    Task<ApplicationResult<Guid>> RecoverSubmittedRequestAsync(
+        Guid sessionId,
+        AuthenticatedChannelActor actor,
+        CancellationToken cancellationToken);
+
     Task<ApplicationResult> SaveChangesAsync(CancellationToken cancellationToken);
 }

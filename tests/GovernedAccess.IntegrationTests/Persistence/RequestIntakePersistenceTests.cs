@@ -170,6 +170,73 @@ public sealed class RequestIntakePersistenceTests
             secondSave.Failure!.Kind);
     }
 
+    [Fact]
+    public async Task ConcurrencyRecoveryReturnsStoredRequestIdOnlyForExactBinding()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var saveCounter = new SaveCounter();
+        await using var connection = await CreateReadyDatabaseAsync(
+            saveCounter,
+            cancellationToken);
+        var options = CreateOptions(connection, saveCounter);
+
+        await using var winnerContext = new GovernedAccessDbContext(options);
+        await using var loserContext = new GovernedAccessDbContext(options);
+        var winnerStore = new EfRequestIntakeStore(winnerContext);
+        var loserStore = new EfRequestIntakeStore(loserContext);
+        var winner = await winnerStore.GetAsync(SessionId, cancellationToken);
+        var loser = await loserStore.GetAsync(SessionId, cancellationToken);
+        winner.Value.MarkSubmitted(ConfirmedAt, "winner-confirmation");
+        loser.Value.MarkSubmitted(ConfirmedAt, "loser-confirmation");
+
+        var winnerSave = await winnerStore.SaveChangesAsync(cancellationToken);
+        var loserSave = await loserStore.SaveChangesAsync(cancellationToken);
+        var recovered = await loserStore.RecoverSubmittedRequestAsync(
+            SessionId,
+            ConfirmationCommand().Actor,
+            cancellationToken);
+
+        Assert.True(winnerSave.IsSuccess);
+        Assert.Equal(
+            ApplicationFailureKind.ConcurrencyConflict,
+            loserSave.Failure!.Kind);
+        Assert.True(recovered.IsSuccess);
+        Assert.Equal(ReservedRequestId, recovered.Value);
+        Assert.All(
+            loserContext.ChangeTracker.Entries(),
+            entry => Assert.Equal(EntityState.Unchanged, entry.State));
+
+        AuthenticatedChannelActor[] foreignBindings =
+        [
+            new(
+                RequestIntakeSession.TeamsChannel,
+                FakeTeamsActivityBuilder.DefaultTenantId,
+                "foreign-actor",
+                FakeTeamsActivityBuilder.DefaultConversationId,
+                DemoPrincipalKeys.Requester),
+            new(
+                RequestIntakeSession.TeamsChannel,
+                FakeTeamsActivityBuilder.DefaultTenantId,
+                FakeTeamsActivityBuilder.DefaultActorId,
+                "foreign-conversation",
+                DemoPrincipalKeys.Requester),
+        ];
+
+        foreach (var foreignBinding in foreignBindings)
+        {
+            var concealed = await loserStore.RecoverSubmittedRequestAsync(
+                SessionId,
+                foreignBinding,
+                cancellationToken);
+
+            Assert.True(concealed.IsFailure);
+            Assert.Equal(
+                ApplicationFailureKind.NotFound,
+                concealed.Failure!.Kind);
+            Assert.False(concealed.TryGetValue(out _));
+        }
+    }
+
     private static async Task<SqliteConnection> CreateReadyDatabaseAsync(
         SaveCounter saveCounter,
         CancellationToken cancellationToken)

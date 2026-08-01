@@ -310,9 +310,23 @@ public sealed class RequestIntakeService
 
         session.MarkSubmitted(occurredAt, command.CorrelationId);
         var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? ConfirmationFailed(saveResult.Failure!)
-            : RequestConfirmationResult.Submitted(submitted.Request.Id);
+        if (saveResult.IsSuccess)
+        {
+            return RequestConfirmationResult.Submitted(submitted.Request.Id);
+        }
+
+        if (saveResult.Failure!.Kind != ApplicationFailureKind.ConcurrencyConflict)
+        {
+            return ConfirmationFailed(saveResult.Failure);
+        }
+
+        var recovery = await intakeStore.RecoverSubmittedRequestAsync(
+            command.PreparationId,
+            command.Actor,
+            cancellationToken);
+        return recovery.IsSuccess
+            ? RequestConfirmationResult.AlreadySubmitted(recovery.Value)
+            : ConfirmationFailed(recovery.Failure!);
     }
 
     private static RequestConfirmationResult? GetStatusResult(

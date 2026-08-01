@@ -59,6 +59,53 @@ internal sealed class EfRequestIntakeStore(
         }
     }
 
+    public async Task<ApplicationResult<Guid>> RecoverSubmittedRequestAsync(
+        Guid sessionId,
+        AuthenticatedChannelActor actor,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+
+        dbContext.ChangeTracker.Clear();
+        var reload = await FindAsync(
+            dbContext.RequestIntakeSessions.Where(
+                session => session.Id == sessionId),
+            cancellationToken);
+        if (reload.IsFailure)
+        {
+            return ApplicationResult.Failed<Guid>(reload.Failure!);
+        }
+
+        var session = reload.Value;
+        if (!session.IsOwnedBy(
+                actor.Channel,
+                actor.TenantId,
+                actor.ChannelActorId,
+                actor.ConversationId,
+                actor.RequesterId))
+        {
+            return ApplicationResult.Failed<Guid>(NotFoundFailure());
+        }
+
+        if (session.Status != RequestIntakeStatus.Submitted)
+        {
+            return RecoveryFailed(
+                ApplicationFailureKind.ConcurrencyConflict,
+                "request_intake_concurrency_unresolved",
+                "The concurrent request-intake change did not submit this intake.");
+        }
+
+        if (session.ReservedRequestId is not { } requestId)
+        {
+            return RecoveryFailed(
+                ApplicationFailureKind.DependencyFailure,
+                "request_intake_submission_evidence_invalid",
+                "The submitted intake does not contain its reserved request identifier.");
+        }
+
+        return ApplicationResult.Succeeded(requestId);
+    }
+
     public async Task<ApplicationResult> SaveChangesAsync(
         CancellationToken cancellationToken)
     {
@@ -108,10 +155,20 @@ internal sealed class EfRequestIntakeStore(
 
     private static ApplicationResult<RequestIntakeSession> NotFound() =>
         ApplicationResult.Failed<RequestIntakeSession>(
-            new ApplicationFailure(
-                ApplicationFailureKind.NotFound,
-                "request_intake_not_found",
-                "The request intake was not found."));
+            NotFoundFailure());
+
+    private static ApplicationFailure NotFoundFailure() =>
+        new(
+            ApplicationFailureKind.NotFound,
+            "request_intake_not_found",
+            "The request intake was not found.");
+
+    private static ApplicationResult<Guid> RecoveryFailed(
+        ApplicationFailureKind kind,
+        string code,
+        string message) =>
+        ApplicationResult.Failed<Guid>(
+            new ApplicationFailure(kind, code, message));
 
     private static ApplicationResult<T> Unavailable<T>()
         where T : notnull =>

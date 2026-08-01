@@ -178,6 +178,108 @@ public sealed class TeamsRequestConfirmationTests
                 .ToListAsync(cancellationToken));
     }
 
+    [Fact]
+    public async Task ConfirmationBoundaryRejectsMalformedAndConcealsForeignActions()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var chatClient = new DeterministicChatClient(
+            DeterministicChatMode.Candidate);
+        await using var factory = new GovernedAccessWebFactory(chatClient);
+        using var client = factory.CreateTeamsClient();
+        var session = await SeedReadySessionAsync(factory, cancellationToken);
+        var concealedMessage =
+            "The prepared request could not be found for this authenticated conversation. No request was submitted.";
+
+        var malformedCases = new object[]
+        {
+            new
+            {
+                schemaVersion = 2,
+                preparedRequestId = session.Id.ToString("D"),
+            },
+            new
+            {
+                schemaVersion = 1,
+                preparedRequestId = "not-a-guid",
+            },
+            new
+            {
+                schemaVersion = 1,
+                preparedRequestId = session.Id.ToString("D"),
+                requestedRoleId = ProductionRoleIds.Support,
+            },
+        };
+
+        foreach (var malformedData in malformedCases)
+        {
+            using var response = await client.PostAsJsonAsync(
+                "/api/messages",
+                CreateConfirmationActivity(malformedData),
+                ProtocolJsonSerializer.SerializationOptions,
+                cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.DoesNotContain(
+                session.ReservedRequestId!.Value.ToString("D"),
+                body,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                session.ClientId!,
+                body,
+                StringComparison.Ordinal);
+        }
+
+        var concealedCases = new[]
+        {
+            CreateConfirmationActivity(
+                ValidConfirmationData(Guid.NewGuid())),
+            CreateConfirmationActivity(
+                ValidConfirmationData(session.Id),
+                actorId: "foreign-actor"),
+            CreateConfirmationActivity(
+                ValidConfirmationData(session.Id),
+                conversationId: "foreign-conversation"),
+        };
+
+        foreach (var activity in concealedCases)
+        {
+            using var response = await client.PostAsJsonAsync(
+                "/api/messages",
+                activity,
+                ProtocolJsonSerializer.SerializationOptions,
+                cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains(concealedMessage, body, StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                session.ReservedRequestId!.Value.ToString("D"),
+                body,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                session.ClientId!,
+                body,
+                StringComparison.Ordinal);
+        }
+
+        Assert.Equal(0, chatClient.RequestCount);
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var dbContext = verificationScope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var persisted = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.Equal(RequestIntakeStatus.Ready, persisted.Status);
+        Assert.Empty(await dbContext.AccessRequests.ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AuditEvents.ToListAsync(cancellationToken));
+        Assert.Empty(
+            await dbContext.ApprovalDecisions.ToListAsync(cancellationToken));
+        Assert.Empty(
+            await dbContext.ProvisioningOperations.ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
+    }
+
     private static Activity CreateExpectRepliesMessage(string text)
     {
         var activity = new FakeTeamsActivityBuilder()
@@ -319,6 +421,78 @@ public sealed class TeamsRequestConfirmationTests
             })
             .Build()
             .Activity;
+    }
+
+    private static Activity CreateConfirmationActivity(
+        object actionData,
+        string? actorId = null,
+        string? conversationId = null)
+    {
+        var builder = new FakeTeamsActivityBuilder()
+            .WithText(null)
+            .WithActivityId($"teams-confirmation-{Guid.NewGuid():N}")
+            .WithInvokeData(new
+            {
+                action = new
+                {
+                    type = "Action.Execute",
+                    title = "Confirm and submit",
+                    verb = PreparedRequestCardFactory.ConfirmationVerb,
+                    associatedInputs = "none",
+                    data = actionData,
+                },
+            });
+        if (actorId is not null)
+        {
+            builder.WithActor(actorId);
+        }
+
+        if (conversationId is not null)
+        {
+            builder.WithConversation(conversationId);
+        }
+
+        return builder.Build().Activity;
+    }
+
+    private static object ValidConfirmationData(Guid preparationId) =>
+        new
+        {
+            schemaVersion = PreparedRequestCardFactory.ContractSchemaVersion,
+            preparedRequestId = preparationId.ToString("D"),
+        };
+
+    private static async Task<RequestIntakeSession> SeedReadySessionAsync(
+        GovernedAccessWebFactory factory,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var session = new RequestIntakeSession(
+            Guid.NewGuid(),
+            RequestIntakeSession.TeamsChannel,
+            FakeTeamsActivityBuilder.DefaultTenantId,
+            FakeTeamsActivityBuilder.DefaultActorId,
+            FakeTeamsActivityBuilder.DefaultConversationId,
+            DemoPrincipalKeys.Requester,
+            factory.Clock.UtcNow,
+            "hosted-boundary-preparation");
+        session.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            factory.Clock.UtcNow,
+            "hosted-boundary-candidate");
+        session.MarkReady(
+            Guid.NewGuid(),
+            factory.Clock.UtcNow,
+            "hosted-boundary-ready");
+        dbContext.RequestIntakeSessions.Add(session);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return session;
     }
 
 }
