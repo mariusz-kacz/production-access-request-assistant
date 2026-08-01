@@ -116,6 +116,37 @@ public sealed class TeamsRequestConfirmationTests
             StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, chatClient.RequestCount);
 
+        using var replayResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateConfirmationActivity(
+                confirmationAction,
+                "teams-confirmation-replay"),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var replayBody = await replayResponse.Content
+            .ReadAsStringAsync(cancellationToken);
+        Assert.True(
+            replayResponse.StatusCode == HttpStatusCode.OK,
+            $"Expected 200 but received {(int)replayResponse.StatusCode}: "
+            + replayBody);
+        Assert.Contains(
+            sessionBeforeConfirmation.ReservedRequestId.Value.ToString("D"),
+            replayBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            expectedRequestLink.AbsoluteUri,
+            replayBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "was already submitted",
+            replayBody,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "not yet approved or granted",
+            replayBody,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, chatClient.RequestCount);
+
         await using var confirmationScope = factory.Services.CreateAsyncScope();
         var confirmationDbContext = confirmationScope.ServiceProvider
             .GetRequiredService<GovernedAccessDbContext>();
@@ -410,11 +441,13 @@ public sealed class TeamsRequestConfirmationTests
         Assert.Equal(expectedValue, fact.GetProperty("value").GetString());
     }
 
-    private static Activity CreateConfirmationActivity(JsonElement action)
+    private static Activity CreateConfirmationActivity(
+        JsonElement action,
+        string activityId = "teams-confirmation-activity")
     {
         return new FakeTeamsActivityBuilder()
             .WithText(null)
-            .WithActivityId("teams-confirmation-activity")
+            .WithActivityId(activityId)
             .WithInvokeData(new
             {
                 action,

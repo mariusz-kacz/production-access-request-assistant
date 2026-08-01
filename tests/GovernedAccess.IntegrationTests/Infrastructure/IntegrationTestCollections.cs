@@ -1,3 +1,5 @@
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace GovernedAccess.IntegrationTests.Infrastructure;
 
 public static class IntegrationTestCollections
@@ -7,9 +9,7 @@ public static class IntegrationTestCollections
     public const string FullHostLevel = "FullHost";
 }
 
-[CollectionDefinition(
-    IntegrationTestCollections.FullApplication,
-    DisableParallelization = true)]
+[CollectionDefinition(IntegrationTestCollections.FullApplication)]
 public sealed class FullApplicationIntegrationGroup
     : ICollectionFixture<DefaultWebApplicationFixture>,
       ICollectionFixture<ConfigurableTeamsFixture>,

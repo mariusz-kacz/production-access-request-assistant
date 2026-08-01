@@ -23,7 +23,9 @@ namespace GovernedAccess.IntegrationTests.Hosting;
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
-public sealed class ProgramCompositionTests
+[Collection(IntegrationTestCollections.FullApplication)]
+public sealed class ProgramCompositionTests(
+    DefaultWebApplicationFixture applicationFixture)
 {
     private const string BotConnectionName = "BotServiceConnection";
 
@@ -31,7 +33,7 @@ public sealed class ProgramCompositionTests
     public async Task StartupCreatesAndSeedsTheConfiguredDatabase()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        var factory = applicationFixture.Factory;
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
 
@@ -46,8 +48,8 @@ public sealed class ProgramCompositionTests
     [Fact]
     public async Task IntakeComponentsUseOneScopedServiceStoreAndDbContext()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var scope = factory.Services.CreateAsyncScope();
+        await using var scope = applicationFixture.Factory.Services
+            .CreateAsyncScope();
         var services = scope.ServiceProvider;
         var dbContext = services.GetRequiredService<GovernedAccessDbContext>();
         var intakeStore = services.GetRequiredService<IRequestIntakeStore>();
@@ -71,13 +73,13 @@ public sealed class ProgramCompositionTests
     [Fact]
     public async Task TeamsBackgroundDispatcherIsRootSafeAndAgentsAreScopedPerTurn()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        var rootAgent = factory.Services.GetRequiredService<IAgent>();
+        var services = applicationFixture.Factory.Services;
+        var rootAgent = services.GetRequiredService<IAgent>();
 
         Assert.IsType<ScopedTeamsAccessRequestAgentDispatcher>(rootAgent);
 
-        await using var firstScope = factory.Services.CreateAsyncScope();
-        await using var secondScope = factory.Services.CreateAsyncScope();
+        await using var firstScope = services.CreateAsyncScope();
+        await using var secondScope = services.CreateAsyncScope();
         var firstAgent = firstScope.ServiceProvider
             .GetRequiredService<TeamsAccessRequestAgent>();
 
@@ -94,8 +96,7 @@ public sealed class ProgramCompositionTests
     [Fact]
     public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        var services = factory.Services;
+        var services = applicationFixture.Factory.Services;
         var concreteStore = services.GetRequiredService<InMemoryAgentSessionStore>();
         var sessionStore = services.GetRequiredService<AgentSessionStore>();
         var coordinator = services.GetRequiredService<MafConversationTurnCoordinator>();

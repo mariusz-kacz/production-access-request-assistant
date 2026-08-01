@@ -315,18 +315,26 @@ public sealed class RequestIntakeService
             return RequestConfirmationResult.Submitted(submitted.Request.Id);
         }
 
-        if (saveResult.Failure!.Kind != ApplicationFailureKind.ConcurrencyConflict)
+        var saveFailure = saveResult.Failure!;
+        if (saveFailure.Kind is not (
+                ApplicationFailureKind.ConcurrencyConflict
+                or ApplicationFailureKind.DependencyFailure))
         {
-            return ConfirmationFailed(saveResult.Failure);
+            return ConfirmationFailed(saveFailure);
         }
 
         var recovery = await intakeStore.RecoverSubmittedRequestAsync(
             command.PreparationId,
             command.Actor,
             cancellationToken);
-        return recovery.IsSuccess
-            ? RequestConfirmationResult.AlreadySubmitted(recovery.Value)
-            : ConfirmationFailed(recovery.Failure!);
+        if (recovery.IsSuccess)
+        {
+            return RequestConfirmationResult.AlreadySubmitted(recovery.Value);
+        }
+
+        return saveFailure.Kind == ApplicationFailureKind.ConcurrencyConflict
+            ? ConfirmationFailed(recovery.Failure!)
+            : ConfirmationFailed(saveFailure);
     }
 
     private static RequestConfirmationResult? GetStatusResult(

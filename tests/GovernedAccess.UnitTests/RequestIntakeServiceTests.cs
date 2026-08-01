@@ -447,6 +447,10 @@ public sealed class RequestIntakeServiceTests
         var scenario = new IntakeScenario();
         _ = await scenario.PrepareAsync();
         scenario.SaveFailure = ForcedSaveFailure();
+        scenario.RecoveryFailure = new ApplicationFailure(
+            ApplicationFailureKind.ConcurrencyConflict,
+            "request_intake_concurrency_unresolved",
+            "No competing confirmation was committed.");
 
         var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
 
@@ -455,9 +459,24 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal("forced_save_failure", result.Failure!.Code);
         Assert.Equal(RequestIntakeStatus.Submitted, scenario.Session.Status);
         Assert.Equal(2, scenario.SaveCount);
-        Assert.Equal(0, scenario.RecoveryCount);
+        Assert.Equal(1, scenario.RecoveryCount);
         Assert.Single(scenario.Requests);
         Assert.Single(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task DependencyFailureReturnsRecoveredSubmittedIdentity()
+    {
+        var scenario = new IntakeScenario();
+        var ready = await scenario.PrepareAsync();
+        scenario.SaveFailure = ForcedSaveFailure();
+        scenario.RecoveredRequestId = ready.ReservedRequestId;
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.AlreadySubmitted, result.Kind);
+        Assert.Equal(ready.ReservedRequestId, result.RequestId);
+        Assert.Equal(1, scenario.RecoveryCount);
     }
 
     [Fact]
