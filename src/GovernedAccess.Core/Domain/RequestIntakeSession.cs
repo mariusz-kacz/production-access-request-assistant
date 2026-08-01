@@ -207,6 +207,13 @@ public sealed class RequestIntakeSession
         }
 
         var operation = PrepareRecord(occurredAt, correlationId);
+        if (Status == RequestIntakeStatus.Ready
+            && IsExpired(operation.OccurredAt))
+        {
+            throw new InvalidOperationException(
+                "An expired intake session cannot be superseded.");
+        }
+
         Status = RequestIntakeStatus.Superseded;
         ClearCandidate();
         Record(operation);
@@ -233,8 +240,8 @@ public sealed class RequestIntakeSession
         DateTimeOffset occurredAt,
         string correlationId)
     {
-        EnsureStatus(RequestIntakeStatus.Ready);
         var operation = PrepareRecord(occurredAt, correlationId);
+        EnsureReadyBeforeExpiry(operation.OccurredAt);
         Status = RequestIntakeStatus.Invalidated;
         ClearCandidate();
         Record(operation);

@@ -14,8 +14,9 @@ using Microsoft.Extensions.Options;
 namespace GovernedAccess.Web.Teams;
 
 /// <summary>
-/// Authenticated Teams transport adapter for request preparation. This agent can
-/// update preparation state and display a ready snapshot.
+/// Authenticated Teams transport adapter for request preparation and deterministic
+/// confirmation. Durable lifecycle transitions belong to Core; this adapter does
+/// not couple them to the process-lifetime MAF session store.
 /// </summary>
 public sealed partial class TeamsAccessRequestAgent : AgentApplication
 {

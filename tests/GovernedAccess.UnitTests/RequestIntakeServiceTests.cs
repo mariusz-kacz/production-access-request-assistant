@@ -89,10 +89,10 @@ public sealed class RequestIntakeServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(ApplicationFailureKind.InvalidTransition, result.FailureKind);
-        Assert.Equal("Ready", scenario.IntakeStatus);
+        Assert.Equal("Invalidated", scenario.IntakeStatus);
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
-        Assert.Equal(1, scenario.SaveCount);
+        Assert.Equal(2, scenario.SaveCount);
     }
 
     [Theory]

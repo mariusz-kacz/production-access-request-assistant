@@ -80,15 +80,22 @@ public sealed class RequestIntakeService
 
         if (session.Status == RequestIntakeStatus.Ready)
         {
-            session.MarkSuperseded(
-                clock.UtcNow,
-                command.CorrelationId);
-            var supersessionSave = await intakeStore.SaveChangesAsync(
+            var occurredAt = clock.UtcNow.ToUniversalTime();
+            if (session.IsExpired(occurredAt))
+            {
+                session.MarkExpired(occurredAt, command.CorrelationId);
+            }
+            else
+            {
+                session.MarkSuperseded(occurredAt, command.CorrelationId);
+            }
+
+            var lifecycleSave = await intakeStore.SaveChangesAsync(
                 cancellationToken);
-            if (supersessionSave.IsFailure)
+            if (lifecycleSave.IsFailure)
             {
                 return RequestPreparationResult.Failed(
-                    supersessionSave.Failure!);
+                    lifecycleSave.Failure!);
             }
 
             session = CreateSession(command);
@@ -228,6 +235,13 @@ public sealed class RequestIntakeService
         var occurredAt = clock.UtcNow.ToUniversalTime();
         if (session.IsExpired(occurredAt))
         {
+            session.MarkExpired(occurredAt, command.CorrelationId);
+            var expirySave = await intakeStore.SaveChangesAsync(cancellationToken);
+            if (expirySave.IsFailure)
+            {
+                return ConfirmationFailed(expirySave.Failure!);
+            }
+
             return ConfirmationFailed(
                 ApplicationFailureKind.InvalidTransition,
                 ExpiredCode,
@@ -261,6 +275,14 @@ public sealed class RequestIntakeService
 
         if (submission is RequestSubmissionValidationRejected)
         {
+            session.MarkInvalidated(occurredAt, command.CorrelationId);
+            var invalidationSave = await intakeStore.SaveChangesAsync(
+                cancellationToken);
+            if (invalidationSave.IsFailure)
+            {
+                return ConfirmationFailed(invalidationSave.Failure!);
+            }
+
             return ConfirmationFailed(
                 ApplicationFailureKind.InvalidTransition,
                 InvalidatedCode,

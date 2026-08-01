@@ -309,7 +309,7 @@ operation, or grant.
 
 ### Vertical Implementation Sequence for User Story 3
 
-- [ ] T068 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in Core without coupling those durable lifecycle outcomes to the process-lifetime MAF session store in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Core/Application/RequestIntakeService.cs, and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T068 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in Core without coupling those durable lifecycle outcomes to the process-lifetime MAF session store in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Core/Application/RequestIntakeService.cs, and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 - [ ] T069 [US3] Verify lazy expiry, supersession, invalidation, owner/conversation binding, terminal transition rejection, and submitted replay identity in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs
 - [ ] T070 [US3] Add optimistic-concurrency recovery that clears tracking, reloads by intake session ID, and returns the stored request ID only for the same owner/conversation in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
 - [ ] T071 [US3] Complete compact confirmation-result handling for expiry, replay, supersession, invalidation, concealment, malformed action, stale authoritative context, and dependency failure in src/GovernedAccess.Core/Application/RequestIntakeService.cs
