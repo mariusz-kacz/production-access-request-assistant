@@ -106,6 +106,44 @@ public sealed class MafConversationSessionStoreTests
     }
 
     [Fact]
+    public async Task IndependentIntakesNeverShareQuestionOrdering()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var interpreter = CreateInterpreter(
+            new DeterministicChatClient(DeterministicChatMode.HistorySensitive),
+            new InMemoryAgentSessionStore(),
+            new MafConversationTurnCoordinator());
+        var intakeA = Guid.NewGuid();
+        var intakeB = Guid.NewGuid();
+
+        var firstA = await interpreter.InterpretAsync(
+            CreateTurn(intakeA, "I need temporary production access."),
+            cancellationToken);
+        var firstB = await interpreter.InterpretAsync(
+            CreateTurn(intakeB, "Use PROD-ALPHA-EU."),
+            cancellationToken);
+        var secondA = await interpreter.InterpretAsync(
+            CreateTurn(intakeA, "the first one", firstA.Proposal!.Candidate),
+            cancellationToken);
+        var secondB = await interpreter.InterpretAsync(
+            CreateTurn(intakeB, "the first one", firstB.Proposal!.Candidate),
+            cancellationToken);
+
+        Assert.Equal(
+            RequestClarificationTarget.EnvironmentId,
+            firstA.Proposal!.Clarification!.Target);
+        Assert.Equal(
+            RequestClarificationTarget.RequestedRoleId,
+            firstB.Proposal!.Clarification!.Target);
+        Assert.Equal("PROD-ALPHA-EU", secondA.Proposal!.Candidate.EnvironmentId);
+        Assert.Null(secondA.Proposal.Candidate.RequestedRoleId);
+        Assert.Equal("PROD-ALPHA-EU", secondB.Proposal!.Candidate.EnvironmentId);
+        Assert.Equal(
+            ProductionRoleIds.ReadOnly,
+            secondB.Proposal.Candidate.RequestedRoleId);
+    }
+
+    [Fact]
     public async Task ExactPerIntakeGateSerializesTurnsWithoutBlockingOtherIntakes()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

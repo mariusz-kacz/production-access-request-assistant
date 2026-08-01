@@ -241,13 +241,18 @@ useful for diagnosing which toolchain failed but is not required for every edit.
 ### Test
 
 ```powershell
-npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-Run restore and build first when using `--no-build`.
+The first two commands are the fast unit/component loop. The third command starts the
+retained complete ASP.NET Core host scenarios. Together, the three sequential .NET
+commands are the complete backend suite. Run restore and build first when using
+`--no-build`.
 
-The complete suite and focused-test commands are in the
+The complete suite and additional focused-test commands are in the
 [testing strategy](testing-strategy.md).
 
 ### Publish

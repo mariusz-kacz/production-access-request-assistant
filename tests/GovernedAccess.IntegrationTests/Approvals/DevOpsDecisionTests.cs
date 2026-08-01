@@ -18,8 +18,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace GovernedAccess.IntegrationTests.Approvals;
 
 [Collection(IntegrationTestCollections.FullApplication)]
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
 public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
-    : IClassFixture<DefaultWebApplicationFixture>
 {
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
 
@@ -86,88 +88,6 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(ProductionRoleIds.ReadOnly, grant.RoleId);
         Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
         Assert.Equal(grant.ActivatedAt.AddHours(8), grant.ExpiresAt);
-    }
-
-    [Theory]
-    [InlineData(DemoPrincipalKeys.Requester)]
-    [InlineData(DemoPrincipalKeys.ClientAlphaApprover)]
-    public async Task NonDevOpsPrincipalCannotDecideBusinessApprovedRequest(
-        string principalKey)
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
-        using var client = await CreateAuthenticatedClientAsync(
-            factory,
-            principalKey,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        await AssertNoDevOpsSideEffectsAsync(factory, requestId, cancellationToken);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var auditEvent = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.EventType == AuditEventType.AuthorizationRejected,
-                cancellationToken);
-        Assert.Equal(principalKey, auditEvent.ActorId);
-    }
-
-    [Fact]
-    public async Task DevOpsRejectionCreatesNoProvisioningOperationOrGrant()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
-        using var client = await CreateAuthenticatedClientAsync(
-            factory,
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Reject", " Current operational risk is too high. "));
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal("Rejected", responseBody.RootElement.GetProperty("status").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var devOpsDecision = await dbContext.ApprovalDecisions
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.Stage == ApprovalStage.DevOps,
-                cancellationToken);
-
-        Assert.Equal(RequestStatus.Rejected, storedRequest.Status);
-        Assert.Equal(ApprovalOutcome.Rejected, devOpsDecision.Decision);
-        Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, devOpsDecision.ApproverId);
-        Assert.Null(devOpsDecision.ApprovedRoleId);
-        Assert.Equal("Current operational risk is too high.", devOpsDecision.Comment);
-        Assert.Empty(await dbContext.ProvisioningOperations.AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
     }
 
     [Fact]
@@ -302,29 +222,6 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
             client.Dispose();
             throw;
         }
-    }
-
-    private static async Task AssertNoDevOpsSideEffectsAsync(
-        GovernedAccessWebFactory factory,
-        Guid requestId,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.ApprovalDecisions
-            .AsNoTracking()
-            .Where(item => item.RequestId == requestId)
-            .ToListAsync(cancellationToken);
-
-        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, storedRequest.Status);
-        Assert.DoesNotContain(decisions, item => item.Stage == ApprovalStage.DevOps);
-        Assert.Empty(await dbContext.ProvisioningOperations.AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
     }
 
     private static async Task<JsonDocument> ReadJsonAsync(

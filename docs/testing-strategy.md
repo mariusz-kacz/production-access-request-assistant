@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-30
+- **Last reviewed**: 2026-08-01
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -37,12 +37,15 @@ flowchart TB
 ```
 
 The diagram represents breadth, not desired test count. Most security and workflow
-evidence belongs in fast Core tests or realistic host integration tests.
+evidence belongs in fast Core tests or realistic component tests. A complete host is
+reserved for behavior that depends on authentication, middleware, routing,
+serialization, SDK ingress, or Web-boundary logging.
 
 | Layer | Main responsibility | Real components | Replaced or controlled components |
 |---|---|---|---|
 | Core unit | Domain policies, validation, immutable scope, evidence rules, fixed expiry | Core domain and application objects | Ports use small fakes where required |
-| Host integration | HTTP security, persistence, MCP transport, workflow coordination, provisioning, queries, observability | ASP.NET Core pipeline, controllers, Core services, EF Core mappings, SQLite, MCP server/client | In-memory SQLite, deterministic clock/chat, controllable provisioner |
+| Component | EF constraints, application coordination, MAF sessions, MCP transport, provisioning evidence, and query policy | Core services plus the minimum real adapter (SQLite, MAF, or MCP) | Deterministic clock/chat/provisioner |
+| Full host | Authentication, antiforgery, route availability, Activity Protocol/card translation, HTTP contracts, and Web-boundary logging | Complete ASP.NET Core `Program` composition | In-memory SQLite, deterministic clock/chat, controllable provisioner |
 | React component | Session bootstrap, typed client wiring, route/action presentation, accessible labels | React components, router, client contracts | Network calls are mocked |
 | Manual | Published bundle, keyboard use, zoom, narrow layout, understandable workflow | Running single host and browser | Synthetic identities, data, chat, and provider |
 
@@ -68,9 +71,10 @@ Representative coverage:
 Use a unit test when the behavior can be proved without ASP.NET Core, EF Core, MCP, or
 serialization. Domain rules should not require a host fixture.
 
-## Integration-test architecture
+## Component and full-host architecture
 
-`GovernedAccessWebFactory` hosts the real `Program` composition with:
+Only tests explicitly marked `TestLevel=FullHost` may create
+`GovernedAccessWebFactory` and start the real `Program` composition with:
 
 - ASP.NET Core authentication, authorization, antiforgery, routing, and middleware;
 - MVC controllers and Problem Details;
@@ -84,7 +88,7 @@ serialization. Domain rules should not require a host fixture.
 Each test can reset its database to known seed state. Tests never depend on execution
 order or the developer's `governed-access.db`.
 
-Keep this layer deliberately small:
+Keep the full-host layer deliberately small:
 
 - exercise a real boundary: hosted HTTP/authentication, SQLite persistence, MCP
   transport, provider coordination, or SDK translation;
@@ -97,23 +101,28 @@ Keep this layer deliberately small:
 - retain separate tests only when they prove a distinct security boundary,
   transaction boundary, concurrency rule, or external contract.
 
-### Integration coverage
+The remaining tests in `GovernedAccess.IntegrationTests` are component tests. They
+may use Web-owned EF, MAF, MCP, or SDK adapter types directly, but they do not start
+the complete application. This project name is historical and does not define the
+test level.
+
+### Coverage placement
 
 | Area | Evidence |
 |---|---|
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Teams preparation | Authenticated personal activity, valid/incomplete/malformed/unavailable/timeout/cancellation outcomes, complete durable candidate snapshots, active-history direct/ordinal replies, history isolation/eviction/recovery, and final-card timing |
+| Teams preparation | Full host: authenticated personal activity and representative complete/multi-turn card wiring. Component: utterance matrix, candidate validation, active-history direct/ordinal replies, history isolation/restart recovery, and failure outcomes |
 | Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
 | Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact three-tool advertisement, closed schemas, stable identifiers, forbidden capability absence, typed failures, and cancellation |
-| Business decisions | Configured approver, wrong-client rejection, duplicate/invalid transitions, audit evidence, and restricted payloads |
-| DevOps decisions | Actor authorization, exact role, no caller duration, fixed expiry, rejection, and safe provisioning failure |
+| Business decisions | Unit/component: approver, duplicate/invalid transitions, and audit state. Full host: authenticated overposting/response contract |
+| DevOps decisions | Unit/component: authorization, exact role, fixed scope, rejection, and provisioning state. Full host: authenticated overposting/failure response contract |
 | Protected provisioning | Persisted evidence reload, missing/mismatched evidence rejection, operation scope, and grant finalization |
-| Retry and idempotency | Failed-state restriction, lost response, and existing-grant recovery |
+| Retry and idempotency | Component: failed-state restriction, lost response, scope mismatch, and existing-grant recovery. Full host: representative actor rejection |
 | Explicit concurrency | 100 concurrent retry attempts producing one operation and one grant; intentionally outside the routine integration suite |
-| Queries | Participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry |
+| Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
 
@@ -149,13 +158,14 @@ question in its MAF session from the same answer after a cache miss. This valida
 strict schema parsing, deterministic identifier revalidation, timeout distinction,
 and safe failure translation without network or model nondeterminism.
 
-Focused cache tests verify intake isolation, per-intake concurrent-turn
-serialization, inactivity and turn-count eviction, ready/terminal cleanup, and
-process-restart-equivalent loss. Integration assertions inspect persistence to prove
-that only the complete typed candidate and lifecycle survive: no option list,
-transcript, raw prompt, model body, or serialized MAF session is stored. Cache-loss
-tests retain the candidate and require re-clarification instead of accepting a
-relative selection.
+Focused native-store component tests verify intake isolation, per-intake concurrent
+turn serialization, last-successful-session preservation, and
+process-restart-equivalent loss. The current process-lifetime store has no
+application-owned eviction or terminal cleanup. Persistence assertions prove that
+only the complete typed candidate and lifecycle survive: no option list, transcript,
+raw prompt, model body, or serialized MAF session is stored. Restart-loss tests
+retain the candidate and require re-clarification instead of accepting a relative
+selection.
 
 ### MCP
 
@@ -234,17 +244,43 @@ dotnet build ProductionAccessRequestAssistant.sln --no-restore
 
 ```powershell
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
 ```
 
 Run build first when using `--no-build`.
 
-### Individual .NET layers
+### Fast unit and component layers
 
 ```powershell
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
 ```
+
+The component command includes real-SQLite, direct MAF/session, and lightweight MCP
+or TestServer tests, but excludes every complete `WebApplicationFactory` startup.
+
+### Retained full-host layer
+
+```powershell
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+```
+
+Every class that starts the complete application is marked explicitly with the
+`TestLevel=FullHost` trait. A new test must choose `unit`, `component`, or `full-host`
+in its task description and use the lowest level that faithfully proves the behavior.
+
+### Complete .NET suite
+
+```powershell
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+```
+
+Run the three projects/levels sequentially. This also makes a failure's architectural
+level explicit and avoids cross-project test-runner interference.
 
 ### Explicit concurrency suite
 
@@ -277,16 +313,19 @@ npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 
 ## Current test baseline
 
-After the integration-suite consolidation on 2026-07-29, the repository contains:
+After the test-level migration on 2026-08-01, the repository contains:
 
-- 53 .NET unit tests;
-- 56 integration-test methods producing 59 cases across 21 files; and
-- 5 frontend tests in 2 files.
+- 54 .NET unit cases;
+- 52 integration-project component cases;
+- 23 explicitly tagged full-host cases;
+- 1 explicit high-contention component case outside the solution; and
+- 6 frontend component cases in 2 files.
 
-The integration baseline was reduced from 107 methods and 151 cases across 27 files.
-The removed coverage duplicated another hosted scenario or tested helpers and pure
-functions without crossing an integration boundary. Counts remain a diagnostic, not
-an acceptance criterion; required rules and negative scenarios must remain covered.
+Three warm no-build integration-project runs completed in 23.901, 23.625, and
+23.939 seconds (23.901-second median), down from the recorded 78-case/39-second
+baseline. Counts remain a diagnostic, not an acceptance criterion; the exhaustive
+inventory, coverage map, retained-host rationale, and timing evidence are recorded in
+[the feature test-simplification report](../specs/002-teams-access-intake/test-simplification.md).
 
 ## Recommended validation order
 

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Security.Claims;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
@@ -13,7 +12,6 @@ using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Builder;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +20,9 @@ using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
 public sealed class ProgramCompositionTests
 {
     private const string BotConnectionName = "BotServiceConnection";
@@ -88,44 +89,6 @@ public sealed class ProgramCompositionTests
             firstAgent,
             secondScope.ServiceProvider
                 .GetRequiredService<TeamsAccessRequestAgent>());
-    }
-
-    [Fact]
-    public async Task TeamsActorResolverAcceptsOnlyTheValidatedActivityScheme()
-    {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var scope = factory.Services.CreateAsyncScope();
-        var resolver = scope.ServiceProvider
-            .GetRequiredService<TeamsActorResolver>();
-        var jwtOptions = scope.ServiceProvider
-            .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
-            .Get(TeamsAgentRegistration.ActivityAuthenticationScheme);
-        var activity = new FakeTeamsActivityBuilder().Build().Activity;
-        var audienceClaim = new Claim(
-            "aud",
-            FakeTeamsActivityBuilder.DefaultBotAppId);
-        var validatedIdentity = new ClaimsIdentity(
-            [audienceClaim],
-            TeamsAgentRegistration.ActivityAuthenticationScheme);
-        var unrelatedIdentity = new ClaimsIdentity(
-            [audienceClaim],
-            DemoAuthentication.Scheme);
-
-        Assert.Equal(
-            TeamsAgentRegistration.ActivityAuthenticationScheme,
-            jwtOptions.TokenValidationParameters.AuthenticationType);
-        Assert.True(
-            resolver.TryResolve(
-                activity,
-                validatedIdentity,
-                out var actor));
-        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, actor.TenantId);
-        Assert.Equal(FakeTeamsActivityBuilder.DefaultActorId, actor.ChannelActorId);
-        Assert.False(
-            resolver.TryResolve(
-                activity,
-                unrelatedIdentity,
-                out _));
     }
 
     [Fact]

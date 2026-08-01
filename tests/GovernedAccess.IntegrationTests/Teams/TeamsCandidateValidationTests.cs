@@ -1,22 +1,22 @@
-using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
+using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
-using Microsoft.Agents.Core.Models;
-using Microsoft.Agents.Core.Serialization;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Collection(IntegrationTestCollections.FullApplication)]
-public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixture)
-    : IClassFixture<ConfigurableTeamsFixture>
+public sealed class TeamsCandidateValidationTests
 {
     [Theory]
     [InlineData(
@@ -36,42 +36,22 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
         string expectedValidationMessage)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(chatMode, cancellationToken);
-        var factory = fixture.Factory;
-        using var client = factory.CreateTeamsClient();
-
-        var responseBody = await SendMessageAsync(
-            client,
-            "Prepare the candidate proposed by the deterministic model.",
-            "candidate-validation",
-            FakeTeamsActivityBuilder.DefaultConversationId,
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        var responseText = ExtractResponseText(responseBody);
+        await using var dbContext = fixture.CreateDbContext();
+        var service = CreateService(dbContext, fixture.Clock, chatMode);
 
-        Assert.Contains(
-            "Deterministic application validation rejected the assistant's candidate.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            expectedValidationMessage,
-            responseText,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Nothing has been submitted.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            PreparedRequestCardFactory.AdaptiveCardContentType,
-            responseBody,
-            StringComparison.Ordinal);
+        var result = await service.PrepareAsync(
+            CreateCommand("Prepare the deterministic candidate."),
+            cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        Assert.Empty(
-            await dbContext.RequestIntakeSessions
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
+        Assert.Equal(RequestPreparationResultKind.CandidateRejected, result.Kind);
+        Assert.Contains(
+            result.ValidationErrors,
+            error => error.Message == expectedValidationMessage);
+        Assert.Empty(await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
 
@@ -79,45 +59,28 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
     public async Task CandidateKindCannotOverrideDeterministicMissingFieldValidation()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(
-            DeterministicChatMode.FalseCompleteCandidate,
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        var factory = fixture.Factory;
-        using var client = factory.CreateTeamsClient();
+        await using var dbContext = fixture.CreateDbContext();
+        var service = CreateService(
+            dbContext,
+            fixture.Clock,
+            DeterministicChatMode.FalseCompleteCandidate);
 
-        var responseBody = await SendMessageAsync(
-            client,
-            "The model says this candidate is complete.",
-            "false-complete-candidate",
-            FakeTeamsActivityBuilder.DefaultConversationId,
+        var result = await service.PrepareAsync(
+            CreateCommand("The model says this candidate is complete."),
             cancellationToken);
-        var responseText = ExtractResponseText(responseBody);
 
+        Assert.Equal(RequestPreparationResultKind.CandidateRejected, result.Kind);
         Assert.Contains(
-            "Deterministic application validation rejected the assistant's candidate.",
-            responseText,
-            StringComparison.Ordinal);
+            result.ValidationErrors,
+            error => error.Message == "A production environment is required.");
         Assert.Contains(
-            "A production environment is required.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "A requested role is required.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            PreparedRequestCardFactory.AdaptiveCardContentType,
-            responseBody,
-            StringComparison.Ordinal);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        Assert.Empty(
-            await dbContext.RequestIntakeSessions
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+            result.ValidationErrors,
+            error => error.Message == "A requested role is required.");
+        Assert.Empty(await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
     }
 
     [Fact]
@@ -127,17 +90,11 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
         const string betaEnvironment = "PROD-BETA-UK";
 
         var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(
-            DeterministicChatMode.HistorySensitive,
-            cancellationToken);
-        var factory = fixture.Factory;
-        using var teamsClient = factory.CreateTeamsClient();
         await using var mcpHost = await McpTestHost.CreateSeededAsync(
             cancellationToken);
         await using var mcpClient = await mcpHost.CreateClientAsync(
             "teams-role-discovery-tests",
             cancellationToken);
-
         var alphaRoles = await DiscoverRolesAsync(
             mcpClient,
             alphaEnvironment,
@@ -146,66 +103,89 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
             mcpClient,
             betaEnvironment,
             cancellationToken);
+        var interpreter = CreateInterpreter(DeterministicChatMode.HistorySensitive);
+
+        var alpha = await interpreter.InterpretAsync(
+            CreateTurn(Guid.NewGuid(), $"Use {alphaEnvironment}."),
+            cancellationToken);
+        var beta = await interpreter.InterpretAsync(
+            CreateTurn(Guid.NewGuid(), $"Use {betaEnvironment}."),
+            cancellationToken);
 
         Assert.Equal(
             [ProductionRoleIds.ReadOnly, ProductionRoleIds.Support],
             alphaRoles);
         Assert.Equal([ProductionRoleIds.ReadOnly], betaRoles);
-
-        var alphaBody = await SendMessageAsync(
-            teamsClient,
-            $"Use {alphaEnvironment}.",
-            "alpha-role-discovery",
-            "alpha-role-discovery",
-            cancellationToken);
-        var betaBody = await SendMessageAsync(
-            teamsClient,
-            $"Use {betaEnvironment}.",
-            "beta-role-discovery",
-            "beta-role-discovery",
-            cancellationToken);
-
         Assert.All(
             alphaRoles,
-            role => Assert.Contains(role, alphaBody, StringComparison.Ordinal));
+            role => Assert.Contains(
+                role,
+                alpha.Proposal!.Clarification!.Message,
+                StringComparison.Ordinal));
         Assert.All(
             betaRoles,
-            role => Assert.Contains(role, betaBody, StringComparison.Ordinal));
+            role => Assert.Contains(
+                role,
+                beta.Proposal!.Clarification!.Message,
+                StringComparison.Ordinal));
         Assert.DoesNotContain(
             ProductionRoleIds.Support,
-            betaBody,
+            beta.Proposal!.Clarification!.Message,
             StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            PreparedRequestCardFactory.AdaptiveCardContentType,
-            alphaBody,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            PreparedRequestCardFactory.AdaptiveCardContentType,
-            betaBody,
-            StringComparison.Ordinal);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        var sessions = await dbContext.RequestIntakeSessions
-            .AsNoTracking()
-            .OrderBy(session => session.ConversationId)
-            .ToArrayAsync(cancellationToken);
-
-        Assert.Equal(2, sessions.Length);
-        Assert.All(
-            sessions,
-            session => Assert.Equal(
-                RequestIntakeStatus.Collecting,
-                session.Status));
-        Assert.Contains(
-            sessions,
-            session => session.EnvironmentId == alphaEnvironment);
-        Assert.Contains(
-            sessions,
-            session => session.EnvironmentId == betaEnvironment);
-        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
+
+    private static RequestIntakeService CreateService(
+        GovernedAccessDbContext dbContext,
+        IClock clock,
+        DeterministicChatMode mode)
+    {
+        var requestContext = new EfRequestContextReader(dbContext);
+        var workflowStore = new EfWorkflowStore(dbContext);
+        var validator = new RequestValidator(requestContext);
+        return new RequestIntakeService(
+            CreateInterpreter(mode),
+            validator,
+            new EfRequestIntakeStore(dbContext),
+            new RequestSubmissionService(
+                validator,
+                requestContext,
+                workflowStore),
+            clock);
+    }
+
+    private static MafRequestPreparationInterpreter CreateInterpreter(
+        DeterministicChatMode mode) =>
+        new(
+            new DeterministicChatClient(mode),
+            Options.Create(
+                new TeamsAccessRequestOptions
+                {
+                    ModelTimeout = TimeSpan.FromSeconds(5),
+                }),
+            NullLoggerFactory.Instance,
+            new InMemoryAgentSessionStore(),
+            new MafConversationTurnCoordinator());
+
+    private static PrepareAccessRequestCommand CreateCommand(string message) =>
+        new(
+            new AuthenticatedChannelActor(
+                RequestIntakeSession.TeamsChannel,
+                FakeTeamsActivityBuilder.DefaultTenantId,
+                FakeTeamsActivityBuilder.DefaultActorId,
+                FakeTeamsActivityBuilder.DefaultConversationId,
+                DemoDataIds.RequesterPrincipalId),
+            message,
+            Guid.NewGuid().ToString("N"));
+
+    private static RequestPreparationTurn CreateTurn(
+        Guid intakeId,
+        string message) =>
+        new(
+            intakeId,
+            message,
+            new RequestCandidate(null, null, null, null, null),
+            validationFeedback: [],
+            Guid.NewGuid().ToString("N"));
 
     private static async Task<string[]> DiscoverRolesAsync(
         McpClient mcpClient,
@@ -226,8 +206,7 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
 
         Assert.NotEqual(true, result.IsError);
         Assert.NotNull(result.StructuredContent);
-        var content = JsonSerializer.SerializeToElement(
-            result.StructuredContent);
+        var content = JsonSerializer.SerializeToElement(result.StructuredContent);
         Assert.Equal(environmentId, content.GetProperty("environmentId").GetString());
         return content
             .GetProperty("roles")
@@ -237,68 +216,24 @@ public sealed class TeamsCandidateValidationTests(ConfigurableTeamsFixture fixtu
             .ToArray();
     }
 
-    private static async Task<string> SendMessageAsync(
-        HttpClient client,
-        string text,
-        string activityId,
-        string conversationId,
-        CancellationToken cancellationToken)
-    {
-        var activity = new FakeTeamsActivityBuilder()
-            .WithText(text)
-            .WithActivityId(activityId)
-            .WithConversation(conversationId)
-            .Build()
-            .Activity;
-        activity.DeliveryMode = DeliveryModes.ExpectReplies;
-
-        using var response = await client.PostAsJsonAsync(
-            "/api/messages",
-            activity,
-            ProtocolJsonSerializer.SerializationOptions,
-            cancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(
-            cancellationToken);
-        Assert.True(
-            response.StatusCode == HttpStatusCode.OK,
-            $"Expected 200 but received {(int)response.StatusCode}: {responseBody}");
-        return responseBody;
-    }
-
-    private static string ExtractResponseText(string responseBody)
-    {
-        using var document = JsonDocument.Parse(responseBody);
-        var activity = Assert.Single(
-            document.RootElement
-                .GetProperty("activities")
-                .EnumerateArray()
-                .ToArray());
-        return activity.GetProperty("text").GetString() ?? string.Empty;
-    }
-
     private static async Task AssertNoWorkflowStateAsync(
         GovernedAccessDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        Assert.Empty(
-            await dbContext.AccessRequests
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        Assert.Empty(
-            await dbContext.ApprovalDecisions
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        Assert.Empty(
-            await dbContext.ProvisioningOperations
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        Assert.Empty(
-            await dbContext.AccessGrants
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        Assert.Empty(
-            await dbContext.AuditEvents
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AccessRequests
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.ApprovalDecisions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.ProvisioningOperations
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AccessGrants
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AuditEvents
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
     }
 }

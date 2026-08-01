@@ -91,3 +91,29 @@ npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 
 `git diff --check` reports no whitespace errors. The feature checklist remains fully
 complete: 18 of 18 items checked.
+
+## Test-suite simplification gate (T091-T095)
+
+**Validated**: 2026-08-01
+
+The suite now uses explicit levels:
+
+- 54 Core unit cases;
+- 52 direct component cases in the integration project;
+- 23 retained cases marked `TestLevel=FullHost`; and
+- 6 Vitest component cases.
+
+Warnings-as-errors build, unit, component, full-host, and Vitest gates all pass with
+no failures. Three uncontended warm no-build integration-project runs each executed
+75 cases and completed in 23.901, 23.625, and 23.939 seconds. The 23.901-second median
+meets the 25-second gate and improves the recorded 39-second baseline by about 39%.
+
+Workflow decisions, retry-state rules, visibility/action capabilities, candidate
+validation, utterance quality, and MAF history permutations now execute at their
+lowest faithful unit or component boundary. Hosted coverage remains for
+authentication, antiforgery, route availability, Problem Details/response contracts,
+Activity Protocol and Adaptive Card translation, trusted-link rendering, production
+composition, and Web-boundary logging. The feature
+[test-simplification report](test-simplification.md) records the exhaustive baseline
+inventory, trust-boundary mapping, per-run evidence, slowest cases, and justification
+for all ten remaining complete-host instances.

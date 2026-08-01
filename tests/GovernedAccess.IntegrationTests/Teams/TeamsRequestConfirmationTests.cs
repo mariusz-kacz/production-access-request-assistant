@@ -16,6 +16,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace GovernedAccess.IntegrationTests.Teams;
 
 [Collection(IntegrationTestCollections.FullApplication)]
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsRequestConfirmationTests
 {
     private const string CompleteRequest =

@@ -1,169 +1,86 @@
-using System.Net;
-using System.Net.Http.Json;
 using GovernedAccess.Core.Domain;
-using GovernedAccess.IntegrationTests.Infrastructure;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Core.Ports;
+using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Teams;
-using Microsoft.Agents.Core.Models;
-using Microsoft.Agents.Core.Serialization;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Collection(IntegrationTestCollections.FullApplication)]
-public sealed class TeamsConversationQualityTests(HistorySensitiveTeamsFixture fixture)
-    : IClassFixture<HistorySensitiveTeamsFixture>
+public sealed class TeamsConversationQualityTests
 {
-    [Fact]
-    public Task CompleteReadOnlyRequestReachesAccurateCard() =>
-        VerifyConversationAsync(
-            "complete-read-only",
-            "Use PROD-ALPHA-EU with read-only access.",
-            secondMessage: null,
-            thirdMessage: null,
-            expectedRoleId: ProductionRoleIds.ReadOnly);
-
-    [Fact]
-    public Task CompleteSupportRequestReachesAccurateCard() =>
-        VerifyConversationAsync(
-            "complete-support",
-            "Use PROD-ALPHA-EU with support access.",
-            secondMessage: null,
-            thirdMessage: null,
-            expectedRoleId: ProductionRoleIds.Support);
-
-    [Fact]
-    public Task EnvironmentThenDirectRoleReachesAccurateCard() =>
-        VerifyConversationAsync(
-            "environment-then-direct-support",
-            "Use PROD-ALPHA-EU.",
-            "support",
-            thirdMessage: null,
-            expectedRoleId: ProductionRoleIds.Support);
-
-    [Fact]
-    public Task DirectEnvironmentThenOrdinalRoleReachesAccurateCard() =>
-        VerifyConversationAsync(
-            "two-missing-direct-and-ordinal",
-            "I need temporary production access.",
-            "PROD-ALPHA-EU",
-            "the first one",
-            ProductionRoleIds.ReadOnly);
-
-    [Fact]
-    public Task OrdinalEnvironmentThenOtherRoleReachesAccurateCard() =>
-        VerifyConversationAsync(
-            "ordinal-environment-other-role",
-            "I need temporary production access.",
-            "the first one",
-            "the other role",
-            ProductionRoleIds.Support);
-
-    private async Task VerifyConversationAsync(
-        string scenarioName,
-        string firstMessage,
-        string? secondMessage,
-        string? thirdMessage,
+    [Theory]
+    [MemberData(nameof(RepresentativeUtterances))]
+    public async Task RepresentativeUtteranceReachesAccurateCandidateWithinFiveTurns(
+        string[] messages,
         string expectedRoleId)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var requestCountBefore = await fixture.ResetAsync(cancellationToken);
-        string?[] suppliedMessages =
-            [firstMessage, secondMessage, thirdMessage];
-        var messages = suppliedMessages
-            .Where(message => message is not null)
-            .Select(message => message!)
-            .ToArray();
+        var interpreter = new MafRequestPreparationInterpreter(
+            new DeterministicChatClient(DeterministicChatMode.HistorySensitive),
+            Options.Create(
+                new TeamsAccessRequestOptions
+                {
+                    ModelTimeout = TimeSpan.FromSeconds(5),
+                }),
+            NullLoggerFactory.Instance,
+            new InMemoryAgentSessionStore(),
+            new MafConversationTurnCoordinator());
+        var intakeId = Guid.NewGuid();
+        var candidate = new RequestCandidate(null, null, null, null, null);
+        RequestPreparationInterpretationOutcome? final = null;
+
         Assert.InRange(messages.Length, 1, 5);
-
-        var chatClient = fixture.ChatClient;
-        var factory = fixture.Factory;
-        using var client = factory.CreateTeamsClient();
-        string? finalResponseBody = null;
-
-        for (var index = 0; index < messages.Length; index++)
+        foreach (var message in messages)
         {
-            var responseBody = await SendMessageAsync(
-                client,
-                messages[index],
-                $"{scenarioName}-{index + 1}",
-                scenarioName,
+            final = await interpreter.InterpretAsync(
+                new RequestPreparationTurn(
+                    intakeId,
+                    message,
+                    candidate,
+                    validationFeedback: [],
+                    Guid.NewGuid().ToString("N")),
                 cancellationToken);
-            var isFinalTurn = index == messages.Length - 1;
-            if (!isFinalTurn)
-            {
-                Assert.DoesNotContain(
-                    PreparedRequestCardFactory.AdaptiveCardContentType,
-                    responseBody,
-                    StringComparison.Ordinal);
-            }
-
-            finalResponseBody = responseBody;
+            Assert.Equal(
+                RequestPreparationInterpretationOutcomeKind.Proposal,
+                final.Kind);
+            candidate = final.Proposal!.Candidate;
         }
 
-        Assert.Contains(
-            PreparedRequestCardFactory.AdaptiveCardContentType,
-            finalResponseBody,
-            StringComparison.Ordinal);
-        Assert.Equal(
-            requestCountBefore + messages.Length,
-            chatClient.RequestCount);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        var session = await dbContext.RequestIntakeSessions
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-
-        Assert.Equal(scenarioName, session.ConversationId);
-        Assert.Equal(RequestIntakeStatus.Ready, session.Status);
-        Assert.Equal("client-alpha", session.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", session.EnvironmentId);
-        Assert.Equal(expectedRoleId, session.RequestedRoleId);
+        Assert.NotNull(final);
+        Assert.Equal(RequestPreparationProposalKind.Candidate, final.Proposal!.Kind);
+        Assert.Equal("client-alpha", candidate.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", candidate.EnvironmentId);
+        Assert.Equal(expectedRoleId, candidate.RequestedRoleId);
         Assert.Equal(
             "Investigate the active production incident.",
-            session.Justification);
-        Assert.Equal("INC-1042", session.IncidentId);
-        Assert.NotNull(session.ReservedRequestId);
-        Assert.Empty(
-            await dbContext.AccessRequests
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
-        Assert.Empty(
-            await dbContext.AuditEvents
-                .AsNoTracking()
-                .ToListAsync(cancellationToken));
+            candidate.Justification);
+        Assert.Equal("INC-1042", candidate.IncidentId);
     }
 
-    private static async Task<string> SendMessageAsync(
-        HttpClient client,
-        string text,
-        string activityId,
-        string conversationId,
-        CancellationToken cancellationToken)
-    {
-        var activity = new FakeTeamsActivityBuilder()
-            .WithText(text)
-            .WithActivityId(activityId)
-            .WithConversation(conversationId)
-            .Build()
-            .Activity;
-        activity.DeliveryMode = DeliveryModes.ExpectReplies;
-
-        using var response = await client
-            .PostAsJsonAsync(
-                "/api/messages",
-                activity,
-                ProtocolJsonSerializer.SerializationOptions,
-                cancellationToken)
-            .WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
-        var responseBody = await response.Content.ReadAsStringAsync(
-            cancellationToken);
-        Assert.True(
-            response.StatusCode == HttpStatusCode.OK,
-            $"Expected 200 but received {(int)response.StatusCode}: {responseBody}");
-        return responseBody;
-    }
+    public static TheoryData<string[], string> RepresentativeUtterances =>
+        new()
+        {
+            {
+                ["Use PROD-ALPHA-EU with read-only access."],
+                ProductionRoleIds.ReadOnly
+            },
+            {
+                ["Use PROD-ALPHA-EU with support access."],
+                ProductionRoleIds.Support
+            },
+            {
+                ["Use PROD-ALPHA-EU.", "support"],
+                ProductionRoleIds.Support
+            },
+            {
+                ["I need temporary production access.", "PROD-ALPHA-EU", "the first one"],
+                ProductionRoleIds.ReadOnly
+            },
+            {
+                ["I need temporary production access.", "the first one", "the other role"],
+                ProductionRoleIds.Support
+            },
+        };
 }
