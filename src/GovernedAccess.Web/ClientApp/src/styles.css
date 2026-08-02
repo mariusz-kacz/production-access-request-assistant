@@ -577,8 +577,6 @@ summary:hover {
 /* Feedback surfaces */
 
 .problem-summary,
-.preparation-status,
-.submission-success,
 .grant-status,
 .loading-message,
 .empty-state {
@@ -602,22 +600,9 @@ summary:hover {
   color: var(--color-critical);
 }
 
-.preparation-status {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-  color: var(--color-accent-hover);
-  font-size: var(--text-sm);
-  font-weight: 650;
-}
-
-.submission-success,
 .grant-status--active {
   border-color: var(--color-positive);
   background: var(--color-positive-soft);
-}
-
-.submission-success h2 {
-  color: var(--color-positive);
 }
 
 .grant-status--expired {
@@ -630,145 +615,6 @@ summary:hover {
   border-left-color: var(--color-accent);
   background: var(--color-surface-muted);
   color: var(--color-text-muted);
-}
-
-/* New request */
-
-.new-request-page {
-  max-width: 64rem;
-}
-
-.new-request-page > :not(header):not(.request-steps) {
-  max-width: 50rem;
-}
-
-.request-steps {
-  display: grid;
-  max-width: 50rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
-  margin-top: var(--space-5);
-  padding: 0;
-  border-bottom: 1px solid var(--color-border);
-  list-style: none;
-}
-
-.request-steps__item {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-1);
-  align-items: baseline;
-  padding-bottom: var(--space-3);
-  color: var(--color-text-muted);
-}
-
-.request-steps__item > span {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.025em;
-}
-
-.request-steps__item strong {
-  font-size: var(--text-base);
-  font-weight: 650;
-}
-
-.request-steps__item--current {
-  margin-bottom: -1px;
-  border-bottom: 0.2rem solid var(--color-accent);
-  color: var(--color-text);
-}
-
-.request-steps__item--current > span {
-  color: var(--color-accent);
-}
-
-.request-steps__item--complete {
-  color: var(--color-text);
-}
-
-.request-step {
-  width: 100%;
-  max-width: 50rem;
-  margin-top: var(--space-6);
-}
-
-.request-step__header {
-  display: grid;
-  gap: var(--space-3);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--color-border-strong);
-}
-
-.request-step__header > p:first-child,
-.request-step__number {
-  color: var(--color-accent);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.request-intent-form,
-.draft-review-form {
-  max-width: 50rem;
-}
-
-.request-step-completion {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--color-border-strong);
-}
-
-.request-step-completion__status {
-  color: var(--color-positive);
-  font-size: var(--text-xs);
-  font-weight: 700;
-}
-
-.request-step-completion__content {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.request-step-completion__content p {
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-}
-
-.new-request-page > .problem-summary,
-.new-request-page > .preparation-status,
-.new-request-page > .submission-success {
-  max-width: 50rem;
-  margin-top: var(--space-5);
-}
-
-.request-submit-action {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-5);
-  padding: var(--space-5);
-  border: 1px solid var(--color-border-strong);
-  border-left-width: 0.25rem;
-  background: var(--color-surface-muted);
-}
-
-.request-submit-action button {
-  margin-top: var(--space-2);
-}
-
-.submission-success {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.submission-success .identifier {
-  font-weight: 650;
 }
 
 /* Request list */
@@ -1584,8 +1430,6 @@ summary:hover {
   }
 
   .problem-summary,
-  .preparation-status,
-  .submission-success,
   .grant-status,
   .loading-message,
   .empty-state {

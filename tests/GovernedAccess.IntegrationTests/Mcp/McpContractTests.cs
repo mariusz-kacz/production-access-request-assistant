@@ -15,11 +15,12 @@ public sealed class McpContractTests
     ];
 
     [Fact]
-    public async Task ServerAdvertisesExactlyTheThreeReadOnlyContextTools()
+    public async Task ServerAdvertisesOnlyTheThreeClosedReadOnlyToolContracts()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
 
         var tools = await client.ListToolsAsync(
@@ -32,19 +33,6 @@ public sealed class McpContractTests
         Assert.NotNull(client.ServerCapabilities.Tools);
         Assert.Null(client.ServerCapabilities.Prompts);
         Assert.Null(client.ServerCapabilities.Resources);
-    }
-
-    [Fact]
-    public async Task AdvertisedToolsExposeTheExactClosedInputSchemas()
-    {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-
-        var tools = await client.ListToolsAsync(
-            cancellationToken: TestContext.Current.CancellationToken);
-
         AssertInputSchema(
             Assert.Single(tools, tool => tool.Name == "get_production_environment"),
             "environmentId");
@@ -54,14 +42,31 @@ public sealed class McpContractTests
         AssertInputSchema(
             Assert.Single(tools, tool => tool.Name == "get_available_roles"),
             "environmentId");
+
+        string[] forbiddenTerms =
+        [
+            "approve",
+            "decision",
+            "provision",
+            "revoke",
+            "transition",
+            "workflow",
+            "database",
+            "query",
+        ];
+        Assert.DoesNotContain(
+            tools.Select(tool => tool.Name),
+            name => forbiddenTerms.Any(term =>
+                name.Contains(term, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]
-    public async Task ProductionEnvironmentReturnsTypedStableIdentifiers()
+    public async Task ToolsReturnTypedStableAuthoritativeContext()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
         var tool = await GetToolAsync(client, "get_production_environment");
 
@@ -85,25 +90,16 @@ public sealed class McpContractTests
         Assert.Equal(
             "client-alpha-business-approver",
             content.GetProperty("businessApproverResponsibilityId").GetString());
-    }
 
-    [Fact]
-    public async Task IncidentReturnsTypedStableIdentifiers()
-    {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-        var tool = await GetToolAsync(client, "get_incident");
-
-        var result = await tool.CallAsync(
+        tool = await GetToolAsync(client, "get_incident");
+        result = await tool.CallAsync(
             new Dictionary<string, object?>
             {
                 ["incidentId"] = "INC-1042",
             },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        var content = AssertSuccessfulStructuredContent(result);
+        content = AssertSuccessfulStructuredContent(result);
         AssertExactProperties(
             content,
             "incidentId",
@@ -116,25 +112,16 @@ public sealed class McpContractTests
         Assert.Equal("Active", content.GetProperty("status").GetString());
         Assert.Equal("client-alpha", content.GetProperty("clientId").GetString());
         Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
-    }
 
-    [Fact]
-    public async Task AvailableRolesReturnTypedStableIdentifiersWithoutPrivilegeOrdering()
-    {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-        var tool = await GetToolAsync(client, "get_available_roles");
-
-        var result = await tool.CallAsync(
+        tool = await GetToolAsync(client, "get_available_roles");
+        result = await tool.CallAsync(
             new Dictionary<string, object?>
             {
                 ["environmentId"] = "PROD-ALPHA-EU",
             },
             cancellationToken: TestContext.Current.CancellationToken);
 
-        var content = AssertSuccessfulStructuredContent(result);
+        content = AssertSuccessfulStructuredContent(result);
         AssertExactProperties(content, "environmentId", "roles");
         Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
 
@@ -157,9 +144,10 @@ public sealed class McpContractTests
     [Fact]
     public async Task InvalidAndMissingStoredValuesReturnTypedFailureEnvelopes()
     {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
+        await using var host = await McpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-contract-tests",
             TestContext.Current.CancellationToken);
         var tool = await GetToolAsync(client, "get_production_environment");
 
@@ -178,66 +166,6 @@ public sealed class McpContractTests
 
         AssertTypedFailure(invalidInput, "InvalidInput");
         AssertTypedFailure(notFound, "NotFound");
-    }
-
-    [Fact]
-    public async Task AdvertisementContainsNoForbiddenStateChangingOrGenericCapabilities()
-    {
-        await using var factory = new GovernedAccessWebFactory();
-        await using var client = await CreateMcpClientAsync(
-            factory,
-            TestContext.Current.CancellationToken);
-
-        var tools = await client.ListToolsAsync(
-            cancellationToken: TestContext.Current.CancellationToken);
-        var advertisedNames = tools.Select(tool => tool.Name).ToArray();
-        string[] forbiddenTerms =
-        [
-            "approve",
-            "decision",
-            "provision",
-            "revoke",
-            "transition",
-            "workflow",
-            "database",
-            "query",
-        ];
-
-        Assert.Equal(ExpectedToolNames, advertisedNames.Order());
-        Assert.DoesNotContain(
-            advertisedNames,
-            name => forbiddenTerms.Any(term => name.Contains(term, StringComparison.OrdinalIgnoreCase)));
-    }
-
-    private static async Task<McpClient> CreateMcpClientAsync(
-        GovernedAccessWebFactory factory,
-        CancellationToken cancellationToken)
-    {
-        var httpClient = factory.CreateClient(new()
-        {
-            BaseAddress = new Uri("https://localhost"),
-        });
-        var transport = new HttpClientTransport(
-            new HttpClientTransportOptions
-            {
-                Endpoint = new Uri("https://localhost/mcp"),
-                Name = "governed-access-contract-tests",
-                TransportMode = HttpTransportMode.StreamableHttp,
-            },
-            httpClient,
-            ownsHttpClient: true);
-
-        try
-        {
-            return await McpClient.CreateAsync(
-                transport,
-                cancellationToken: cancellationToken);
-        }
-        catch
-        {
-            await transport.DisposeAsync();
-            throw;
-        }
     }
 
     private static async Task<McpClientTool> GetToolAsync(McpClient client, string name)

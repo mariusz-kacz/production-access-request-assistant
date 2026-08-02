@@ -12,13 +12,18 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-public sealed class BusinessDecisionTests
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
+public sealed class BusinessDecisionTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     [Fact]
     public async Task ConfiguredApproverApprovalIgnoresOverpostedActorAndScope()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
         using var client = await factory.CreateAuthenticatedClientAsync(
@@ -83,216 +88,6 @@ public sealed class BusinessDecisionTests
             actionCorrelationId);
     }
 
-    [Fact]
-    public async Task WrongClientApproverIsRejectedAndAuditedWithoutChangingState()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.ClientBetaApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        var outcomeCode = problem.RootElement.GetProperty("code").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(outcomeCode));
-        var actionCorrelationId = ReadCorrelationId(response);
-        Assert.Equal(
-            actionCorrelationId,
-            problem.RootElement.GetProperty("correlationId").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.EventType == AuditEventType.AuthorizationRejected,
-                cancellationToken);
-
-        Assert.Equal(RequestStatus.AwaitingBusinessApproval, storedRequest.Status);
-        Assert.Equal(1, storedRequest.PersistenceVersion);
-        Assert.Empty(await dbContext.ApprovalDecisions.AsNoTracking().ToListAsync(
-            cancellationToken));
-        AssertAuditEvidence(
-            auditEvent,
-            requestId,
-            AuditEventType.AuthorizationRejected,
-            DemoDataIds.ClientBetaApproverPrincipalId,
-            actionCorrelationId);
-        Assert.Equal(outcomeCode, auditEvent.OutcomeCode);
-    }
-
-    [Fact]
-    public async Task ConfiguredApproverRejectionRecordsAuthenticatedDecisionWithoutApprovedScope()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.ClientAlphaApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Reject", " Request is not justified. "));
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal("Rejected", responseBody.RootElement.GetProperty("status").GetString());
-        var actionCorrelationId = ReadCorrelationId(response);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decision = await dbContext.ApprovalDecisions
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.EventType == AuditEventType.BusinessDecision,
-                cancellationToken);
-
-        Assert.Equal(RequestStatus.Rejected, storedRequest.Status);
-        Assert.Equal(2, storedRequest.PersistenceVersion);
-        Assert.Equal(ApprovalOutcome.Rejected, decision.Decision);
-        Assert.Equal(DemoDataIds.ClientAlphaApproverPrincipalId, decision.ApproverId);
-        Assert.Null(decision.ApprovedRoleId);
-        Assert.Equal("Request is not justified.", decision.Comment);
-        Assert.Equal(actionCorrelationId, decision.CorrelationId);
-        AssertAuditEvidence(
-            auditEvent,
-            requestId,
-            AuditEventType.BusinessDecision,
-            DemoDataIds.ClientAlphaApproverPrincipalId,
-            actionCorrelationId);
-    }
-
-    [Fact]
-    public async Task DuplicateDecisionIsRejectedAndAuditedWithoutChangingAppliedDecision()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.ClientAlphaApprover,
-            cancellationToken);
-        using (var firstRequest = CreateDecisionMessage(
-                   requestId,
-                   ValidDecisionBody("Approve", "Original decision.")))
-        using (var firstResponse = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-                   client,
-                   firstRequest,
-                   cancellationToken))
-        {
-            Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
-        }
-
-        using var duplicateRequest = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Reject", "Duplicate decision."));
-        using var duplicateResponse = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            duplicateRequest,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Conflict, duplicateResponse.StatusCode);
-        using var problem = await ReadJsonAsync(duplicateResponse, cancellationToken);
-        var outcomeCode = problem.RootElement.GetProperty("code").GetString();
-        Assert.False(string.IsNullOrWhiteSpace(outcomeCode));
-        var actionCorrelationId = ReadCorrelationId(duplicateResponse);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.ApprovalDecisions
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.EventType == AuditEventType.InvalidTransitionRejected,
-                cancellationToken);
-
-        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, storedRequest.Status);
-        Assert.Equal(2, storedRequest.PersistenceVersion);
-        var appliedDecision = Assert.Single(decisions);
-        Assert.Equal(ApprovalOutcome.Approved, appliedDecision.Decision);
-        Assert.Equal("Original decision.", appliedDecision.Comment);
-        AssertAuditEvidence(
-            auditEvent,
-            requestId,
-            AuditEventType.InvalidTransitionRejected,
-            DemoDataIds.ClientAlphaApproverPrincipalId,
-            actionCorrelationId);
-        Assert.Equal(outcomeCode, auditEvent.OutcomeCode);
-    }
-
-    [Fact]
-    public async Task BusinessDecisionWithoutAntiforgeryIsRejectedWithoutWorkflowSideEffects()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateSubmittedRequestAsync(factory, cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.ClientAlphaApprover,
-            cancellationToken);
-        using var request = CreateDecisionMessage(
-            requestId,
-            ValidDecisionBody("Approve", null));
-
-        using var response = await client.SendAsync(request, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            "antiforgery_validation_failed",
-            problem.RootElement.GetProperty("code").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-
-        Assert.Equal(RequestStatus.AwaitingBusinessApproval, storedRequest.Status);
-        Assert.Equal(1, storedRequest.PersistenceVersion);
-        Assert.Empty(await dbContext.ApprovalDecisions.AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.DoesNotContain(
-            await dbContext.AuditEvents.AsNoTracking().ToListAsync(cancellationToken),
-            item => item.EventType is AuditEventType.BusinessDecision
-                or AuditEventType.AuthorizationRejected
-                or AuditEventType.InvalidTransitionRejected);
-    }
-
     private static Dictionary<string, object?> ValidDecisionBody(
         string decision,
         string? comment)
@@ -318,28 +113,7 @@ public sealed class BusinessDecisionTests
         GovernedAccessWebFactory factory,
         CancellationToken cancellationToken)
     {
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/requests")
-        {
-            Content = JsonContent.Create(new
-            {
-                clientId = DemoDataIds.ClientAlphaId,
-                environmentId = DemoDataIds.ClientAlphaEnvironmentId,
-                requestedRole = ProductionRoleIds.ReadOnly,
-                justification = "Investigate the active production incident.",
-                incidentId = DemoDataIds.PrimaryIncidentId,
-            }),
-        };
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        response.EnsureSuccessStatusCode();
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        return responseBody.RootElement.GetProperty("requestId").GetGuid();
+        return (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
     }
 
     private static void AssertAuditEvidence(

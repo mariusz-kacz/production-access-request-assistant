@@ -15,16 +15,15 @@ public sealed class AccessRequestWorkflowServiceTests
     public async Task ApprovalIsDurableBeforeProvisioningStarts()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
         var (request, _) = await SeedBusinessApprovedRequestAsync(
             dbContext,
-            factory.Clock.UtcNow,
+            fixture.Clock.UtcNow,
             cancellationToken);
         var provisioner = new PersistenceInspectingProvisioner(dbContext);
-        var service = CreateService(dbContext, provisioner, factory.Clock);
+        var service = CreateService(dbContext, provisioner, fixture.Clock);
 
         var outcome = await service.DecideDevOpsAsync(
             request.Id,
@@ -43,119 +42,155 @@ public sealed class AccessRequestWorkflowServiceTests
     }
 
     [Fact]
-    public async Task ProviderFailurePersistsRetryableWorkflowAndAuditState()
+    public async Task WrongClientBusinessApproverIsRejectedWithoutChangingTheRequest()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var (request, _) = await SeedBusinessApprovedRequestAsync(
-            dbContext,
-            factory.Clock.UtcNow,
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        var provisioner = new FailingProvisioner();
-        var service = CreateService(dbContext, provisioner, factory.Clock);
+        await using var dbContext = fixture.CreateDbContext();
+        var request = await SeedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+        var service = CreateService(
+            dbContext,
+            new PersistenceInspectingProvisioner(dbContext),
+            fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideBusinessAsync(
             request.Id,
-            DemoDataIds.DevOpsApproverPrincipalId,
+            DemoDataIds.ClientBetaApproverPrincipalId,
             ApprovalOutcome.Approved,
             null,
-            "devops-failure-correlation",
+            "wrong-client-correlation",
             cancellationToken);
 
         Assert.True(outcome.IsFailure);
-        Assert.Equal(FailingProvisioner.FailureCode, outcome.Failure!.Code);
+        Assert.Equal(
+            AccessRequestWorkflowService.BusinessApproverNotResponsibleCode,
+            outcome.Failure!.Code);
+        Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
+        Assert.Empty(await dbContext.ApprovalDecisions.ToListAsync(cancellationToken));
+        Assert.Single(
+            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            item => item.EventType == AuditEventType.AuthorizationRejected);
+    }
 
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == request.Id, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == request.Id, cancellationToken);
-        var auditTypes = await dbContext.AuditEvents
-            .AsNoTracking()
-            .Where(item => item.RequestId == request.Id)
-            .Select(item => item.EventType)
-            .ToListAsync(cancellationToken);
+    [Fact]
+    public async Task DuplicateBusinessDecisionIsRejectedWithoutReplacingEvidence()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var request = await SeedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+        var service = CreateService(
+            dbContext,
+            new PersistenceInspectingProvisioner(dbContext),
+            fixture.Clock);
 
-        Assert.Equal(RequestStatus.ProvisioningFailed, storedRequest.Status);
-        Assert.Equal(ProvisioningOperationStatus.Failed, operation.Status);
-        Assert.Equal(FailingProvisioner.FailureCode, operation.LastOutcomeCode);
-        Assert.Contains(AuditEventType.DevOpsDecision, auditTypes);
-        Assert.Contains(AuditEventType.ProvisioningAttempted, auditTypes);
-        Assert.Contains(AuditEventType.ProvisioningFailed, auditTypes);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
+        var first = await service.DecideBusinessAsync(
+            request.Id,
+            DemoDataIds.ClientAlphaApproverPrincipalId,
+            ApprovalOutcome.Approved,
+            "Original decision.",
+            "first-correlation",
+            cancellationToken);
+        var duplicate = await service.DecideBusinessAsync(
+            request.Id,
+            DemoDataIds.ClientAlphaApproverPrincipalId,
+            ApprovalOutcome.Rejected,
+            "Duplicate decision.",
+            "duplicate-correlation",
+            cancellationToken);
+
+        Assert.True(first.IsSuccess);
+        Assert.True(duplicate.IsFailure);
+        Assert.Equal(
+            AccessRequestWorkflowService.BusinessDuplicateDecisionCode,
+            duplicate.Failure!.Code);
+        var decision = Assert.Single(
+            await dbContext.ApprovalDecisions.ToListAsync(cancellationToken));
+        Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
+        Assert.Equal("Original decision.", decision.Comment);
+        Assert.Single(
+            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            item => item.EventType == AuditEventType.InvalidTransitionRejected);
+    }
+
+    [Theory]
+    [InlineData(DemoDataIds.RequesterPrincipalId)]
+    [InlineData(DemoDataIds.ClientAlphaApproverPrincipalId)]
+    public async Task NonDevOpsPrincipalCannotDecideBusinessApprovedRequest(
+        string principalId)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var (request, _) = await SeedBusinessApprovedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+        var service = CreateService(
+            dbContext,
+            new PersistenceInspectingProvisioner(dbContext),
+            fixture.Clock);
+
+        var outcome = await service.DecideDevOpsAsync(
+            request.Id,
+            principalId,
+            ApprovalOutcome.Approved,
+            null,
+            "non-devops-correlation",
+            cancellationToken);
+
+        Assert.True(outcome.IsFailure);
+        Assert.Equal(
+            AccessRequestWorkflowService.DevOpsApproverNotAuthorizedCode,
+            outcome.Failure!.Code);
+        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
+        Assert.DoesNotContain(
+            await dbContext.ApprovalDecisions.ToListAsync(cancellationToken),
+            item => item.Stage == ApprovalStage.DevOps);
+        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
             cancellationToken));
     }
 
     [Fact]
-    public async Task RetryRejectsActiveRequestAndAuditsWithoutChangingProtectedState()
+    public async Task DevOpsRejectionCreatesNoProvisioningOperationOrGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
         var (request, _) = await SeedBusinessApprovedRequestAsync(
             dbContext,
-            factory.Clock.UtcNow,
+            fixture.Clock.UtcNow,
             cancellationToken);
-        var provisioner = new PersistenceInspectingProvisioner(dbContext);
-        var service = CreateService(dbContext, provisioner, factory.Clock);
+        var service = CreateService(
+            dbContext,
+            new PersistenceInspectingProvisioner(dbContext),
+            fixture.Clock);
 
-        var approvalOutcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideDevOpsAsync(
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
-            ApprovalOutcome.Approved,
-            null,
-            "devops-service-correlation",
-            cancellationToken);
-        Assert.True(approvalOutcome.IsSuccess);
-        Assert.Equal(RequestStatus.Active, approvalOutcome.Value.Request.Status);
-
-        var retryOutcome = await service.RetryProvisioningAsync(
-            request.Id,
-            DemoDataIds.DevOpsApproverPrincipalId,
-            "active-retry-correlation",
+            ApprovalOutcome.Rejected,
+            "Current operational risk is too high.",
+            "devops-rejection-correlation",
             cancellationToken);
 
-        Assert.True(retryOutcome.IsFailure);
-        Assert.Equal(
-            ApplicationFailureKind.InvalidTransition,
-            retryOutcome.Failure!.Kind);
-        Assert.Equal(
-            AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
-            retryOutcome.Failure.Code);
-
-        dbContext.ChangeTracker.Clear();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == request.Id, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == request.Id, cancellationToken);
-        var grantCount = await dbContext.AccessGrants
-            .AsNoTracking()
-            .CountAsync(item => item.RequestId == request.Id, cancellationToken);
-        var rejection = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == request.Id
-                    && item.EventType == AuditEventType.InvalidTransitionRejected
-                    && item.CorrelationId == "active-retry-correlation",
-                cancellationToken);
-
-        Assert.Equal(RequestStatus.Active, storedRequest.Status);
-        Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
-        Assert.Equal(1, operation.AttemptCount);
-        Assert.Equal(1, grantCount);
-        Assert.Equal(1, provisioner.InvocationCount);
-        Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, rejection.ActorId);
-        Assert.Equal(
-            AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
-            rejection.OutcomeCode);
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(RequestStatus.Rejected, request.Status);
+        Assert.Null(outcome.Value.Operation);
+        Assert.Null(outcome.Value.Grant);
+        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
+            cancellationToken));
+        Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
     }
 
     private static AccessRequestWorkflowService CreateService(
@@ -207,6 +242,26 @@ public sealed class AccessRequestWorkflowServiceTests
         return (request, applied.Decision);
     }
 
+    private static async Task<AccessRequest> SeedRequestAsync(
+        GovernedAccessDbContext dbContext,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var request = new AccessRequest(
+            Guid.NewGuid(),
+            DemoDataIds.RequesterPrincipalId,
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            DemoDataIds.PrimaryIncidentId,
+            occurredAt,
+            "request-correlation");
+        dbContext.AccessRequests.Add(request);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return request;
+    }
+
     private sealed class PersistenceInspectingProvisioner(
         GovernedAccessDbContext dbContext) : IAccessProvisioner
     {
@@ -239,21 +294,4 @@ public sealed class AccessRequestWorkflowServiceTests
         }
     }
 
-    private sealed class FailingProvisioner : IAccessProvisioner
-    {
-        public const string FailureCode = "synthetic_provisioning_failed";
-
-        public Task<AccessProvisioningOutcome> GetOrCreateAsync(
-            AccessProvisioningRequest request,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult<AccessProvisioningOutcome>(
-                new AccessProvisioningFailed(
-                    new ApplicationFailure(
-                        ApplicationFailureKind.DependencyFailure,
-                        FailureCode,
-                        "Synthetic provisioning failed safely.")));
-        }
-    }
 }

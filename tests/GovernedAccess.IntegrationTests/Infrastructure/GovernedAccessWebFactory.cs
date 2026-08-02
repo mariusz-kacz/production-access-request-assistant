@@ -1,39 +1,92 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text.Encodings.Web;
+using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.IntegrationTests.Teams;
+using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
+using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
+using GovernedAccess.Web.Teams;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Agents.Authentication;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Infrastructure;
 
 public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
 {
+    public const string TeamsAuthenticationScheme =
+        "GovernedAccess.TestTeamsAuthentication";
+    public const string TeamsAuthenticationHeaderName =
+        "X-Governed-Access-Test-Teams-Authentication";
+
+    private const string TeamsAuthenticationHeaderValue = "authenticated";
+    private const string BotConnectionName = "BotServiceConnection";
+
     public static readonly DateTimeOffset DefaultUtcNow =
         new(2026, 7, 13, 10, 0, 0, TimeSpan.Zero);
+    public static readonly Uri DefaultTrustedWebBaseUri =
+        new("https://governed-access.test/");
 
     private readonly string databaseConnectionString =
         $"Data Source=governed-access-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SemaphoreSlim databaseResetLock = new(1, 1);
+    private readonly IChatClient? replacementChatClient;
+    private readonly ILoggerProvider? loggerProvider;
+
+    public GovernedAccessWebFactory(
+        IChatClient? chatClient = null,
+        Uri? trustedWebBaseUri = null,
+        ILoggerProvider? loggerProvider = null)
+    {
+        replacementChatClient = chatClient;
+        this.loggerProvider = loggerProvider;
+        TrustedWebBaseUri = trustedWebBaseUri ?? DefaultTrustedWebBaseUri;
+    }
+
+    public GovernedAccessWebFactory(
+        DeterministicChatMode chatMode,
+        Uri? trustedWebBaseUri = null,
+        ILoggerProvider? loggerProvider = null)
+        : this(
+            new DeterministicChatClient(chatMode),
+            trustedWebBaseUri,
+            loggerProvider)
+    {
+    }
 
     public DeterministicClock Clock { get; } = new(DefaultUtcNow);
 
+    public Uri TrustedWebBaseUri { get; }
+
     public async Task ResetDatabaseAsync(CancellationToken cancellationToken = default)
     {
+        Clock.SetUtcNow(DefaultUtcNow);
         await databaseResetLock.WaitAsync(cancellationToken);
 
         try
         {
             await using var scope = Services.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+            scope.ServiceProvider
+                .GetRequiredService<SyntheticAccessProvisionerControl>()
+                .Reset();
 
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
             await ClearDatabaseAsync(dbContext, cancellationToken);
@@ -43,6 +96,61 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         {
             databaseResetLock.Release();
         }
+    }
+
+    public Task<AccessRequest> CreateRequestFixtureAsync(
+        CancellationToken cancellationToken = default) =>
+        CreateRequestFixtureAsync(
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            DemoDataIds.PrimaryIncidentId,
+            cancellationToken);
+
+    public async Task<AccessRequest> CreateRequestFixtureAsync(
+        string clientId,
+        string environmentId,
+        string? incidentId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var request = new AccessRequest(
+            Guid.NewGuid(),
+            DemoPrincipalKeys.Requester,
+            clientId,
+            environmentId,
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            incidentId,
+            Clock.UtcNow,
+            $"fixture-{Guid.NewGuid():N}");
+        var auditEvent = AuditEvent.CreateRequestCreated(
+            Guid.NewGuid(),
+            request,
+            new RequestCreatedAuditDetails(request.Status));
+
+        dbContext.AccessRequests.Add(request);
+        dbContext.AuditEvents.Add(auditEvent);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return request;
+    }
+
+    public HttpClient CreateTeamsClient(bool authenticated = true)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost"),
+            HandleCookies = false,
+        });
+
+        if (authenticated)
+        {
+            client.DefaultRequestHeaders.Add(
+                TeamsAuthenticationHeaderName,
+                TeamsAuthenticationHeaderValue);
+        }
+
+        return client;
     }
 
     public static ClaimsPrincipal ResolvePrincipal(string principalKey)
@@ -109,13 +217,50 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.UseEnvironment("Testing");
-        builder.ConfigureLogging(logging => logging.ClearProviders());
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            if (loggerProvider is not null)
+            {
+                logging.AddProvider(loggerProvider);
+            }
+        });
+        builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(CreateTeamsConfiguration()));
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<GovernedAccessDbContext>();
             services.RemoveAll<DbContextOptions<GovernedAccessDbContext>>();
             services.RemoveAll<SqliteConnection>();
             services.RemoveAll<IClock>();
+
+            if (replacementChatClient is not null)
+            {
+                services.RemoveAll<IChatClient>();
+                services
+                    .AddChatClient(replacementChatClient)
+                    .UseFunctionInvocation(configure: static client =>
+                    {
+                        client.AllowConcurrentInvocation = false;
+                        client.IncludeDetailedErrors = false;
+                        client.MaximumIterationsPerRequest = 6;
+                        client.TerminateOnUnknownCalls = true;
+                    });
+            }
+
+            // Full-host tests retain only transport-to-interpreter wiring. Exact MCP
+            // catalog and timeout behavior is covered by the lightweight MCP
+            // component boundary, so this host uses the internal model-only seam.
+            services.RemoveAll<IRequestPreparationInterpreter>();
+            services.AddSingleton<IRequestPreparationInterpreter>(serviceProvider =>
+                new MafRequestPreparationInterpreter(
+                    serviceProvider.GetRequiredService<IChatClient>(),
+                    serviceProvider.GetRequiredService<
+                        IOptions<TeamsAccessRequestOptions>>(),
+                    serviceProvider.GetRequiredService<ILoggerFactory>(),
+                    serviceProvider.GetRequiredService<AgentSessionStore>(),
+                    serviceProvider.GetRequiredService<
+                        MafConversationTurnCoordinator>()));
 
             services.AddSingleton(_ =>
             {
@@ -130,23 +275,102 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             });
             services.AddSingleton<IClock>(Clock);
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
+            services
+                .AddAuthentication()
+                .AddScheme<
+                    AuthenticationSchemeOptions,
+                    TestTeamsAuthenticationHandler>(
+                    TeamsAuthenticationScheme,
+                    _ => { });
+            services.AddAuthorization(options =>
+            {
+                options.DefaultPolicy = new AuthorizationPolicyBuilder(
+                        options.DefaultPolicy)
+                    .AddAuthenticationSchemes(
+                        DemoAuthentication.Scheme,
+                        TeamsAuthenticationScheme)
+                    .Build();
+            });
         });
+    }
+
+    private Dictionary<string, string?> CreateTeamsConfiguration()
+    {
+        return new Dictionary<string, string?>
+        {
+            ["TokenValidation:Enabled"] = bool.TrueString,
+            ["TokenValidation:Audiences:0"] =
+                FakeTeamsActivityBuilder.DefaultBotAppId,
+            ["TokenValidation:TenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            [$"Connections:{BotConnectionName}:Settings:AuthType"] =
+                "ClientSecret",
+            [$"Connections:{BotConnectionName}:Settings:Authority"] =
+                "https://login.microsoftonline.com/botframework.com",
+            [$"Connections:{BotConnectionName}:Settings:ClientId"] =
+                FakeTeamsActivityBuilder.DefaultBotAppId,
+            [$"Connections:{BotConnectionName}:Settings:ClientSecret"] =
+                "integration-test-only",
+            [$"Connections:{BotConnectionName}:Settings:TenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            [$"Connections:{BotConnectionName}:Settings:Scopes:0"] =
+                AuthenticationConstants.BotFrameworkDefaultScope,
+            ["ConnectionsMap:0:ServiceUrl"] = "*",
+            ["ConnectionsMap:0:Connection"] = BotConnectionName,
+            ["TeamsAccessRequest:AllowedTenantId"] =
+                FakeTeamsActivityBuilder.DefaultTenantId,
+            ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,
+            ["TeamsAccessRequest:TrustedWebBaseUri"] =
+                TrustedWebBaseUri.AbsoluteUri,
+            ["TeamsAccessRequest:RequestTimeout"] = "00:01:40",
+            ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
+        };
     }
 
     private static async Task ClearDatabaseAsync(
         GovernedAccessDbContext dbContext,
         CancellationToken cancellationToken)
     {
-        _ = await dbContext.AuditEvents.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.AccessGrants.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.ProvisioningOperations.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.ApprovalDecisions.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.AccessRequests.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.Incidents.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.EnvironmentRoles.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.ProductionEnvironments.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.AuthenticatedPrincipals.ExecuteDeleteAsync(cancellationToken);
-        _ = await dbContext.Clients.ExecuteDeleteAsync(cancellationToken);
+        await dbContext.Database.OpenConnectionAsync(cancellationToken);
+        var connection = dbContext.Database.GetDbConnection();
+
+        try
+        {
+            await using (var disableForeignKeys = connection.CreateCommand())
+            {
+                disableForeignKeys.CommandText = "PRAGMA foreign_keys = OFF;";
+                _ = await disableForeignKeys.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await using var transaction =
+                await connection.BeginTransactionAsync(cancellationToken);
+            var tableNames = dbContext.Model
+                .GetEntityTypes()
+                .Select(entityType => entityType.GetTableName())
+                .Where(tableName => tableName is not null)
+                .Select(tableName => tableName!)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal);
+
+            foreach (var tableName in tableNames)
+            {
+                await using var deleteCommand = connection.CreateCommand();
+                deleteCommand.Transaction = transaction;
+                deleteCommand.CommandText =
+                    $"DELETE FROM \"{tableName.Replace("\"", "\"\"", StringComparison.Ordinal)}\";";
+                _ = await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            dbContext.ChangeTracker.Clear();
+        }
+        finally
+        {
+            await using var enableForeignKeys = connection.CreateCommand();
+            enableForeignKeys.CommandText = "PRAGMA foreign_keys = ON;";
+            _ = await enableForeignKeys.ExecuteNonQueryAsync(cancellationToken);
+            await dbContext.Database.CloseConnectionAsync();
+        }
     }
 
     private static async Task<string> GetAntiforgeryTokenAsync(
@@ -181,6 +405,52 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
 
         throw new InvalidOperationException(
             "The antiforgery endpoint did not issue a request-token cookie.");
+    }
+
+    private sealed class TestTeamsAuthenticationHandler(
+        IOptionsMonitor<AuthenticationSchemeOptions> options,
+        ILoggerFactory logger,
+        UrlEncoder encoder)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(
+            options,
+            logger,
+            encoder)
+    {
+        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            if (!Request.Headers.TryGetValue(
+                    TeamsAuthenticationHeaderName,
+                    out var headerValue))
+            {
+                return Task.FromResult(AuthenticateResult.NoResult());
+            }
+
+            if (!string.Equals(
+                    headerValue.ToString(),
+                    TeamsAuthenticationHeaderValue,
+                    StringComparison.Ordinal))
+            {
+                return Task.FromResult(
+                    AuthenticateResult.Fail(
+                        "The test Teams authentication marker is invalid."));
+            }
+
+            var sdkIdentity = AgentClaims.CreateIdentity(
+                FakeTeamsActivityBuilder.DefaultBotAppId,
+                anonymous: false,
+                FakeTeamsActivityBuilder.DefaultChannelAppId);
+            var authenticatedIdentity = new ClaimsIdentity(
+                sdkIdentity.Claims,
+                TeamsAuthenticationScheme,
+                sdkIdentity.NameClaimType,
+                sdkIdentity.RoleClaimType);
+            var principal = new ClaimsPrincipal(authenticatedIdentity);
+            var ticket = new AuthenticationTicket(
+                principal,
+                TeamsAuthenticationScheme);
+
+            return Task.FromResult(AuthenticateResult.Success(ticket));
+        }
     }
 }
 

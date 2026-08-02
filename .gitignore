@@ -54,6 +54,7 @@ build/
 appsettings.Local.json
 appsettings.*.Local.json
 secrets.json
+.teams-dev.local.json
 
 # Local databases and generated persistence files
 *.db
@@ -61,6 +62,7 @@ secrets.json
 *.db-wal
 *.sqlite
 *.sqlite3
+db-backup-*/
 
 # Logs and diagnostic output
 *.log
@@ -84,5 +86,4 @@ Desktop.ini
 # AI assisted engineering workflow related folders
 .codex/
 .agents/
-.specify/
 /docs/demo-guide.md

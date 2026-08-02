@@ -7,8 +7,8 @@ import { apiRequest } from "../api/client";
 import type { RequestDetailResponse } from "../api/contracts";
 import { BUSINESS_DECISION_ACTION } from "../components/BusinessDecisionPanel";
 import { DEVOPS_DECISION_ACTION } from "../components/DevOpsDecisionPanel";
-import { NewRequestPage } from "../pages/NewRequestPage";
 import { RequestDetailPage } from "../pages/RequestDetailPage";
+import { RequestListPage } from "../pages/RequestListPage";
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -215,89 +215,29 @@ describe("thin UI wiring", () => {
     expect(screen.getByText("correlation-devops-ui-smoke")).toBeTruthy();
   });
 
-  it("replaces drafting controls after an immutable request is submitted", async () => {
-    mockedApiRequest.mockImplementation(async (path) => {
-      if (path === "/api/request-drafts/prepare") {
-        return {
-          outcome: "Prepared",
-          draft: {
-            clientId: requestDetail.clientId,
-            environmentId: requestDetail.environmentId,
-            requestedRole: requestDetail.requestedRoleId,
-            justification: requestDetail.justification,
-            incidentId: requestDetail.incidentId,
-          },
-        } as never;
-      }
-
-      if (path === "/api/requests") {
-        return {
-          requestId,
-          status: "AwaitingBusinessApproval",
-          correlationId: "correlation-request-created",
-        } as never;
-      }
-
-      throw new Error(`Unexpected API request: ${path}`);
-    });
-    const user = userEvent.setup();
+  it("keeps the requester register without browser creation controls", async () => {
+    mockedApiRequest.mockResolvedValue({ items: [] } as never);
     render(
       <MemoryRouter>
-        <NewRequestPage />
+        <RequestListPage />
       </MemoryRouter>,
     );
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Access request description" }),
-      "Investigate the active Client Alpha production incident.",
+    expect(
+      await screen.findByRole("heading", { name: "Access requests" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "New request" })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(mockedApiRequest).toHaveBeenCalledWith(
+      "/api/requests",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    await user.click(screen.getByRole("button", { name: "Prepare draft" }));
-    const submitButton = await screen.findByRole("button", {
-      name: "Validate and submit request",
-    });
     expect(
-      screen.getByRole("heading", { name: "Description captured" }),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("textbox", { name: "Access request description" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Prepare draft" }),
-    ).toBeNull();
-    expect(
-      mockedApiRequest.mock.calls.filter(
-        ([path]) => path === "/api/request-drafts/prepare",
+      mockedApiRequest.mock.calls.every(
+        ([path, options]) =>
+          path !== "/api/request-drafts/prepare" &&
+          !(path === "/api/requests" && options?.method === "POST"),
       ),
-    ).toHaveLength(1);
-
-    await user.click(submitButton);
-
-    expect(
-      await screen.findByRole("heading", { name: "Request submitted" }),
-    ).toBeTruthy();
-    const completedProgress = screen.getByRole("list", {
-      name: "Request preparation steps",
-    });
-    expect(within(completedProgress).getAllByRole("listitem")).toHaveLength(2);
-    expect(
-      within(completedProgress).getByText("Review and submit"),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("textbox", { name: "Access request description" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Prepare draft" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", {
-        name: "Validate and submit request",
-      }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Prepare another request" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "View request details" }),
-    ).toBeTruthy();
+    ).toBe(true);
   });
 });

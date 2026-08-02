@@ -157,7 +157,7 @@
 ### Tests for User Story 4
 
 - [X] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and persisted-evidence validation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
-- [X] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.IntegrationTests/Provisioning/ProvisioningIdempotencyTests.cs`
+- [X] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.ConcurrencyTests/Provisioning/ProvisioningIdempotencyTests.cs`
 - [X] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
 
 ### Implementation for User Story 4

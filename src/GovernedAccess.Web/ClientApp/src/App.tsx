@@ -10,7 +10,6 @@ import {
 
 import type { SessionView } from "./api/contracts";
 import { DemoIdentitySelector } from "./components/DemoIdentitySelector";
-import { NewRequestPage } from "./pages/NewRequestPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
 import { RequestListPage } from "./pages/RequestListPage";
 
@@ -24,9 +23,6 @@ export function App() {
 
 function ApplicationShell() {
   const [session, setSession] = useState<SessionView | null>(null);
-  const canCreateRequest =
-    session?.authenticated === true &&
-    session.capabilities.includes("createRequest");
 
   return (
     <div className="app-shell">
@@ -49,18 +45,6 @@ function ApplicationShell() {
               >
                 Requests
               </NavLink>
-              {canCreateRequest && (
-                <NavLink
-                  to="/requests/new"
-                  className={({ isActive }) =>
-                    isActive
-                      ? "navigation-link navigation-link--active"
-                      : "navigation-link"
-                  }
-                >
-                  New request
-                </NavLink>
-              )}
             </nav>
           </div>
 
@@ -72,10 +56,7 @@ function ApplicationShell() {
         {session === null ? (
           <SessionLoadingPage />
         ) : session.authenticated ? (
-          <AuthenticatedRoutes
-            key={session.principal.id}
-            canCreateRequest={canCreateRequest}
-          />
+          <AuthenticatedRoutes key={session.principal.id} />
         ) : (
           <SignInRequiredPage />
         )}
@@ -84,27 +65,13 @@ function ApplicationShell() {
   );
 }
 
-function AuthenticatedRoutes({
-  canCreateRequest,
-}: {
-  canCreateRequest: boolean;
-}) {
+function AuthenticatedRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/requests" replace />} />
       <Route
         path="/requests"
-        element={<RequestListPage canCreateRequest={canCreateRequest} />}
-      />
-      <Route
-        path="/requests/new"
-        element={
-          canCreateRequest ? (
-            <NewRequestPage />
-          ) : (
-            <Navigate to="/requests" replace />
-          )
-        }
+        element={<RequestListPage />}
       />
       <Route path="/requests/:requestId" element={<RequestDetailPage />} />
       <Route path="*" element={<NotFoundPage />} />

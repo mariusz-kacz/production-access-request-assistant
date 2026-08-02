@@ -1,7 +1,7 @@
 # Local Development Guide
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-08-03
 - **Audience**: Developers running or changing the local MVP
 
 ## Prerequisites
@@ -40,9 +40,9 @@ dotnet run --project src/GovernedAccess.Web --launch-profile https
 
 Open `https://localhost:7251`.
 
-The HTTPS launch profile also binds `http://localhost:5136`. The server-side draft
-interpreter uses that HTTP address for its loopback MCP client by default. Use HTTPS
-for the browser because authentication and antiforgery cookies are always Secure.
+The HTTPS launch profile also binds `http://localhost:5136` for local host/MCP
+inspection. Use HTTPS for the browser because authentication and antiforgery cookies
+are always Secure.
 
 The .NET build invokes the frontend build when its inputs have changed. Vite writes
 the generated bundle to `src/GovernedAccess.Web/wwwroot`, and ASP.NET Core serves it
@@ -50,6 +50,11 @@ from the same origin.
 
 No model credentials, external APIs, containers, or infrastructure provisioning are
 required.
+
+The optional real Teams demonstration adds a Microsoft 365 developer tenant, bot
+registration, and public development tunnel. It is deliberately separate from the
+normal local and automated-test loop; follow the [Microsoft Teams Demo Guide](teams-demo.md)
+when that transport is needed.
 
 ## Development modes
 
@@ -62,6 +67,32 @@ dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
 ASP.NET Core serves the API, MCP endpoint, and compiled React assets.
+
+Request creation is exercised through the authenticated Teams `/api/messages` path
+or its fake-authenticated integration-test boundary. The browser exposes only
+request list/detail, business and DevOps decisions, protected retry, session, and
+audit presentation. It has no `/requests/new`, draft endpoint, request-creation POST,
+form, navigation item, or creation capability.
+
+### Real Microsoft Teams transport
+
+Use this mode only to demonstrate messages arriving from a real personal Teams chat.
+It requires an eligible Microsoft 365 developer tenant with custom-app upload enabled,
+Teams Developer CLI 3.x, and Dev Tunnels CLI. The E5 developer sandbox does not supply
+an Azure subscription, so the repository helper uses a Teams-managed bot registration
+by default.
+
+Create the integration once:
+
+```powershell
+.\scripts\teams-local.ps1 Fresh -ExpectedTenantId "<e5-sandbox-tenant-guid>" -AppName "governed-access-dev"
+```
+
+On later runs, start `Tunnel` and `Run` in separate terminals. The ignored local state
+file contains identifiers only; the generated bot credential remains outside the
+repository under `%LOCALAPPDATA%\GovernedAccess`. Do not add it to ASP.NET settings or
+source control. Setup, packaging, sideloading, security boundaries, and teardown are
+covered in the [Microsoft Teams Demo Guide](teams-demo.md).
 
 ### React hot-module replacement
 
@@ -78,8 +109,8 @@ npm run dev --prefix src/GovernedAccess.Web/ClientApp
 ```
 
 Open the URL printed by Vite. It proxies `/api` to
-`https://localhost:7251`. The browser never calls `/mcp`; draft interpretation remains
-a server-side operation.
+`https://localhost:7251`. The browser is a request register and approval/retry surface;
+it never creates requests or calls `/mcp`.
 
 Set `VITE_API_PROXY_TARGET` before starting Vite if the ASP.NET Core HTTPS address is
 different:
@@ -108,41 +139,61 @@ The host uses standard ASP.NET Core configuration. The current settings are:
 | Key | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | SQLite connection string |
-| `DraftInterpretation:McpEndpoint` | `http://localhost:5136/mcp` | Server-side loopback MCP URL |
-| `DraftInterpretation:McpTimeout` | `00:00:05` | MCP connection and call timeout |
-| `DraftInterpretation:ModelTimeout` | `00:00:30` | Overall draft interpretation deadline |
+| `TokenValidation:TenantId` | empty | Expected Microsoft 365 developer-tenant ID for Teams bearer tokens |
+| `TokenValidation:Audiences:0` | empty | Registered bot client ID accepted as the token audience |
+| `Connections:BotServiceConnection:Settings:ClientId` | empty | Registered bot client ID used for outbound Teams replies |
+| `Connections:BotServiceConnection:Settings:ClientSecret` | empty | Bot client secret; supply only through a local secret source or process environment |
+| `Connections:BotServiceConnection:Settings:TenantId` | empty | Tenant used by the bot connection |
+| `Connections:BotServiceConnection:Settings:Authority` | `https://login.microsoftonline.com/botframework.com` | Multitenant Teams-managed bot token authority |
+| `TeamsAccessRequest:AllowedTenantId` | empty (fail closed) | Accepted Teams tenant |
+| `TeamsAccessRequest:BotConnectionName` | `BotServiceConnection` | Configured bot connection |
+| `TeamsAccessRequest:TrustedWebBaseUri` | empty (fail closed) | Trusted origin for request links |
+| `TeamsAccessRequest:RequestTimeout` | `00:01:40` | Teams endpoint resource-safety deadline, including MCP and model work |
+| `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Immutable confirmation window |
 
 For a temporary PowerShell override, replace `:` with `__`:
 
 ```powershell
 $env:ConnectionStrings__GovernedAccess = "Data Source=governed-access-dev.db"
-$env:DraftInterpretation__McpEndpoint = "http://localhost:5136/mcp"
-$env:DraftInterpretation__McpTimeout = "00:00:05"
-$env:DraftInterpretation__ModelTimeout = "00:00:30"
+$env:Connections__BotServiceConnection__Settings__Authority = "https://login.microsoftonline.com/botframework.com"
+$env:TeamsAccessRequest__AllowedTenantId = "<development-tenant-guid>"
+$env:TeamsAccessRequest__TrustedWebBaseUri = "https://localhost:7251/"
+$env:TeamsAccessRequest__RequestTimeout = "00:01:40"
 dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
-Timeout values must parse as positive .NET `TimeSpan` values. The MCP endpoint must be
-an absolute HTTP or HTTPS URI.
+Timeout and lifetime values must parse as positive .NET `TimeSpan` values. The trusted
+Web base URI must be an absolute HTTPS URI.
 
 Do not commit machine-specific connection strings or local secrets to
 `appsettings*.json`.
+
+For the real Teams transport, prefer `teams-local.ps1 Run`; it reads the credential
+file without printing it and supplies the token-validation and bot-connection values
+to the child process. The table documents the configuration boundary, not an
+instruction to persist a client secret in configuration files.
 
 ## Deterministic AI behavior
 
 The shipped host registers:
 
 ```text
-DeterministicChatClient(DeterministicChatMode.Valid)
+DeterministicChatClient(DeterministicChatMode.Candidate)
 ```
 
-It returns a fixed Client Alpha read-only incident draft. There is no runtime
-configuration key or browser control for changing chat mode.
+It returns a fixed Client Alpha read-only incident candidate for Teams preparation.
+There is no runtime configuration key or browser control for changing chat mode.
 
-The other deterministic modes—`Incomplete`, `Malformed`, `Unsupported`, `Timeout`,
-`Cancellation`, and `Unavailable`—are test seams. Integration tests replace the
-registered `IChatClient` in a test host to prove safe behavior without adding a
-failure-control surface to the application.
+The other deterministic modes—`Clarification`, `Malformed`, `Timeout`,
+`Cancellation`, `Unavailable`, and `PromptInjection`—are test seams. Integration
+tests replace the registered `IChatClient` in a test host to prove safe behavior
+without adding a failure-control surface to the application.
+
+Multi-turn clarification keeps its MAF session only in the running host process.
+Restarting the host intentionally loses conversation history but preserves the
+accepted typed candidate in SQLite. A relative reply after restart is not guessed;
+the assistant repeats a self-contained clarification. No option list, transcript, or
+serialized MAF session is written to the local database.
 
 If runtime-selectable demonstration modes are added later, they must remain
 development-only and must not expose provider credentials, raw prompts, or a way to
@@ -171,6 +222,11 @@ At startup, the host calls EF Core `EnsureCreatedAsync`, then:
 - fails startup on conflicting or unexpected reference records.
 
 Workflow records are preserved between runs when the same SQLite file is used.
+
+This reference implementation uses `EnsureCreatedAsync` rather than migrations.
+After changing the EF model—including the request-intake table simplification—delete
+and recreate the disposable local synthetic database before starting the updated
+host. Existing local schema files are not upgraded in place.
 
 The default relative connection string creates `governed-access.db` in the host
 process working directory. When location matters, use an explicit connection string
@@ -218,13 +274,18 @@ useful for diagnosing which toolchain failed but is not required for every edit.
 ### Test
 
 ```powershell
-npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-Run restore and build first when using `--no-build`.
+The first two commands are the fast unit/component loop. The third command starts the
+retained complete ASP.NET Core host scenarios. Together, the three sequential .NET
+commands are the complete backend suite. Run restore and build first when using
+`--no-build`.
 
-The complete suite and focused-test commands are in the
+The complete suite and additional focused-test commands are in the
 [testing strategy](testing-strategy.md).
 
 ### Publish
@@ -253,6 +314,7 @@ production hosting target or deployment procedure.
 | React application | `src/GovernedAccess.Web/ClientApp/src` |
 | Unit tests | `tests/GovernedAccess.UnitTests` |
 | Integration tests | `tests/GovernedAccess.IntegrationTests` |
+| Explicit concurrency tests | `tests/GovernedAccess.ConcurrencyTests` |
 
 ## Troubleshooting
 
@@ -270,18 +332,6 @@ dotnet dev-certs https --trust
 ```
 
 Then restart the host and browser.
-
-### Draft preparation reports MCP unavailable
-
-Check that:
-
-- the host is bound to `http://localhost:5136`;
-- `DraftInterpretation:McpEndpoint` points to that host's `/mcp` path;
-- another process has not occupied the HTTP port; and
-- the configured MCP timeout is positive.
-
-The default HTTPS launch profile deliberately binds both HTTPS for the browser and
-HTTP for the loopback MCP client.
 
 ### Vite cannot reach the API
 
@@ -307,9 +357,11 @@ SQLite connection. Do not point tests at `governed-access.db`.
 ## Related documentation
 
 - [README](../README.md)
+- [Microsoft Teams demo setup and cleanup](teams-demo.md)
+- [Microsoft Teams local-integration helper reference](teams-local-integration.md)
 - [As-built architecture](architecture.md)
 - [Security and trust model](security-model.md)
 - [Testing strategy](testing-strategy.md)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
+- [Teams access-intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
 - [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)

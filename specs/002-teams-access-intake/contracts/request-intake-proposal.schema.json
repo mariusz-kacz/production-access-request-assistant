@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/contracts/request-intake-proposal.schema.json",
+  "title": "Request Intake Proposal",
+  "description": "Untrusted structured output from one MAF request-intake turn.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "candidate",
+    "clarification"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "clarification",
+        "candidate"
+      ]
+    },
+    "candidate": {
+      "description": "Complete nullable candidate snapshot for this turn. Null clears or leaves a field absent; it does not preserve an earlier value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "environmentId",
+        "requestedRoleId",
+        "justification",
+        "incidentId"
+      ],
+      "properties": {
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "environmentId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "requestedRoleId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "ProductionReadOnly",
+            "ProductionSupport",
+            null
+          ]
+        },
+        "justification": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        },
+        "incidentId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "clarification": {
+      "description": "One optional focused target/message proposal. Ordered choices remain only in process-local conversation history.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "message"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": [
+            "clientId",
+            "environmentId",
+            "requestedRoleId",
+            "justification",
+            "incidentId"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    }
+  }
+}

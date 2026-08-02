@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-08-03
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -22,27 +22,38 @@ The suites run without:
 Negative scenarios are first-class tests because most important product guarantees
 describe actions the system must reject.
 
+Automated acceptance for the Teams intake is intentionally model-independent. It
+uses the production MAF/session and MCP boundaries with deterministic chat clients
+and fake authenticated activities. A real Teams walkthrough or future live-model
+evaluation is separate deployment, quality, and UX evidence; neither is required to
+establish the application rules below.
+
 ## Test layers
 
 ```mermaid
 flowchart TB
     Manual[Bounded manual demo, responsive, and accessibility checks]
     UI[Vitest and React Testing Library]
-    Integration[xUnit ASP.NET Core integration tests]
+    FullHost[xUnit full ASP.NET Core host tests]
+    Component[xUnit SQLite, MAF, MCP, and adapter component tests]
     Unit[xUnit Core unit tests]
 
     Manual --> UI
-    UI --> Integration
-    Integration --> Unit
+    UI --> FullHost
+    FullHost --> Component
+    Component --> Unit
 ```
 
 The diagram represents breadth, not desired test count. Most security and workflow
-evidence belongs in fast Core tests or realistic host integration tests.
+evidence belongs in fast Core tests or realistic component tests. A complete host is
+reserved for behavior that depends on authentication, middleware, routing,
+serialization, SDK ingress, or Web-boundary logging.
 
 | Layer | Main responsibility | Real components | Replaced or controlled components |
 |---|---|---|---|
 | Core unit | Domain policies, validation, immutable scope, evidence rules, fixed expiry | Core domain and application objects | Ports use small fakes where required |
-| Host integration | HTTP security, persistence, MCP transport, workflow coordination, provisioning, queries, observability | ASP.NET Core pipeline, controllers, Core services, EF Core mappings, SQLite, MCP server/client | In-memory SQLite, deterministic clock/chat, controllable provisioner |
+| Component | EF constraints, application coordination, MAF sessions, MCP transport, provisioning evidence, and query policy | Core services plus the minimum real adapter (SQLite, MAF, or MCP) | Deterministic clock/chat/provisioner |
+| Full host | Authentication, antiforgery, route availability, Activity Protocol/card translation, HTTP contracts, and Web-boundary logging | Complete ASP.NET Core `Program` composition | In-memory SQLite, deterministic clock/chat, controllable provisioner |
 | React component | Session bootstrap, typed client wiring, route/action presentation, accessible labels | React components, router, client contracts | Network calls are mocked |
 | Manual | Published bundle, keyboard use, zoom, narrow layout, understandable workflow | Running single host and browser | Synthetic identities, data, chat, and provider |
 
@@ -54,8 +65,9 @@ Representative coverage:
 
 - `RequestValidationTests`: client/environment relationship, allowed role,
   justification, and incident rules;
-- `RequestSubmissionServiceTests`: authenticated requester binding, normalized
-  immutable scope, and typed submission outcomes;
+- `RequestIntakeServiceTests`: authenticated ownership, deterministic readiness,
+  reserved identity, confirmation revalidation, exact immutable scope, and one-save
+  staging outcomes;
 - `BusinessDecisionPolicyTests`: state, exact-role binding, rejection, and duplicate
   business decisions;
 - `DevOpsDecisionPolicyTests`: prior approval, exact role, fixed scope, rejection, and
@@ -67,9 +79,10 @@ Representative coverage:
 Use a unit test when the behavior can be proved without ASP.NET Core, EF Core, MCP, or
 serialization. Domain rules should not require a host fixture.
 
-## Integration-test architecture
+## Component and full-host architecture
 
-`GovernedAccessWebFactory` hosts the real `Program` composition with:
+Only tests explicitly marked `TestLevel=FullHost` may create
+`GovernedAccessWebFactory` and start the real `Program` composition with:
 
 - ASP.NET Core authentication, authorization, antiforgery, routing, and middleware;
 - MVC controllers and Problem Details;
@@ -83,21 +96,41 @@ serialization. Domain rules should not require a host fixture.
 Each test can reset its database to known seed state. Tests never depend on execution
 order or the developer's `governed-access.db`.
 
-### Integration coverage
+Keep the full-host layer deliberately small:
+
+- exercise a real boundary: hosted HTTP/authentication, SQLite persistence, MCP
+  transport, provider coordination, or SDK translation;
+- use one cohesive scenario to assert its response, persisted state, and audit
+  evidence instead of repeating the same workflow at service and HTTP levels;
+- keep variant matrices inside one test when setup and expected behavior are the
+  same;
+- do not integration-test deterministic test fakes, factory helpers, pure mapping
+  methods, or middleware by direct construction; and
+- retain separate tests only when they prove a distinct security boundary,
+  transaction boundary, concurrency rule, or external contract.
+
+The remaining tests in `GovernedAccess.IntegrationTests` are component tests. They
+may use Web-owned EF, MAF, MCP, or SDK adapter types directly, but they do not start
+the complete application. This project name is historical and does not define the
+test level.
+
+### Coverage placement
 
 | Area | Evidence |
 |---|---|
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Request preparation | Valid, incomplete, malformed, unsupported, unavailable, timeout, and cancellation outcomes |
-| Submission | Current-data revalidation, identity over-posting resistance, immutable request creation, and no premature approval/grant |
+| Teams preparation | Full host: authenticated personal activity and representative complete/multi-turn card wiring. Component: utterance matrix, candidate validation, active-history direct/ordinal replies, history isolation/restart recovery, and failure outcomes |
+| Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
+| Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact three-tool advertisement, closed schemas, stable identifiers, forbidden capability absence, typed failures, and cancellation |
-| Business decisions | Configured approver, wrong-client rejection, duplicate/invalid transitions, audit evidence, and restricted payloads |
-| DevOps decisions | Actor authorization, exact role, no caller duration, fixed expiry, rejection, and safe provisioning failure |
+| Business decisions | Unit/component: approver, duplicate/invalid transitions, and audit state. Full host: authenticated overposting/response contract |
+| DevOps decisions | Unit/component: authorization, exact role, fixed scope, rejection, and provisioning state. Full host: authenticated overposting/failure response contract |
 | Protected provisioning | Persisted evidence reload, missing/mismatched evidence rejection, operation scope, and grant finalization |
-| Retry and idempotency | Failed-state restriction, lost response, existing-grant recovery, and 100 concurrent attempts producing one grant |
-| Queries | Participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry |
+| Retry and idempotency | Component: failed-state restriction, lost response, scope mismatch, and existing-grant recovery. Full host: representative actor rejection |
+| Explicit concurrency | 100 concurrent retry attempts producing one operation and one grant; intentionally outside the routine integration suite |
+| Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
 
@@ -106,24 +139,69 @@ rejected action is not safe merely because it returned an error; tests also veri
 that requests, decisions, operations, grants, and audit evidence changed only as
 intended.
 
+`TeamsOnlyRequestCreationTests` plus `ApiSecurityTests` pin the server boundary.
+`AppSession.test.tsx` and `UiWiringSmoke.test.tsx` pin the removed creation navigation,
+route behavior, form/submission absence, empty requester creation capabilities, and
+retained list/detail/business/DevOps controls.
+
+### Teams intake acceptance evidence
+
+| Concern | Primary automated evidence | Required negative assertion |
+|---|---|---|
+| History-sensitive interpretation | [`MafRequestPreparationInterpreterSessionTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs) and direct conversation-quality components | A relative reply without its preceding MAF question cannot select an environment or role. |
+| Native session lifecycle | [`MafConversationSessionStoreTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs) and [`MafConversationSessionStoreSmokeTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheSmokeTests.cs) | Fresh-store restart simulation preserves the supplied durable candidate, isolates intake histories, serializes same-intake turns, permits different-intake progress, and excludes failed turns from the last saved session. |
+| Model failure boundary | [`MafRequestPreparationFailureTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs) | Malformed, unsupported, and injected proposals fail closed; caller cancellation propagates; malformed or unavailable turns do not replace the last good session. |
+| MCP capability boundary | [`MafToolBoundaryTests`](../tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs) and MCP contract components | A missing or additional tool, unavailable call, or caller cancellation fails without exposing a state-changing tool. |
+| Teams-only creation | [`TeamsOnlyRequestCreationTests`](../tests/GovernedAccess.IntegrationTests/Requests/TeamsOnlyRequestCreationTests.cs), [`AppSession.test.tsx`](../src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx), and [`UiWiringSmoke.test.tsx`](../src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx) | Former browser endpoints create no request/audit state, and the UI exposes no creation route, navigation, form, DTO call, or capability. |
+| Existing governed workflow | [`TeamsGovernedWorkflowTests`](../tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs) | A Teams-created request cannot bypass client isolation, either human decision, exact scope, persisted evidence, or the fixed grant lifetime. |
+
 ## Deterministic dependency testing
 
 ### Chat client
 
 `DeterministicChatClient` supports:
 
-- `Valid`;
-- `Incomplete`;
+- `Candidate`;
+- `Clarification`;
+- `InvalidCandidate`;
+- `UnknownIncidentCandidate`;
+- `CrossClientEnvironmentCandidate`;
+- `CrossClientIncidentCandidate`;
+- `FalseCompleteCandidate`;
 - `Malformed`;
-- `Unsupported`;
 - `Timeout`;
-- `Cancellation`; and
-- `Unavailable`.
+- `Cancellation`;
+- `Unavailable`; and
+- `PromptInjection`; and
+- `HistorySensitive`.
 
-The production-shaped local host registers `Valid`. Tests replace the `IChatClient`
-to exercise other outcomes through the real draft interpreter. This validates strict
-schema parsing, identifier revalidation, timeout distinction, and safe failure
-translation without network or model nondeterminism.
+The production-shaped local host registers `Candidate`, whose response matches the
+current Teams proposal schema. Tests replace the `IChatClient` to exercise other
+outcomes through the real MAF interpreter. `HistorySensitive` parses the same
+server-owned latest-message/current-candidate envelope used by production, then
+examines assistant messages restored by the active MAF session. It resolves `the
+first one` or `the other role` only when the prior clarification target and ordering
+are present. With a fresh native store, it emits a self-contained clarification and
+leaves the unresolved candidate field empty. Its output still uses the strict
+proposal schema and still passes through authoritative application validation; the
+fake is a deterministic test oracle, not an authorization or readiness boundary.
+
+Focused native-store component tests use a real `InMemoryAgentSessionStore` and
+`MafConversationTurnCoordinator` to verify:
+
+- same-intake session reuse restores prior user and assistant messages;
+- a fresh store models process restart and cannot interpret missing ordering;
+- separate intake IDs never share question ordering;
+- the exact per-intake gate serializes load/run/save for one intake while another
+  intake can progress concurrently; and
+- malformed or unavailable work cannot replace the last successfully saved session,
+  while cancellation is propagated before a save can complete.
+
+The current process-lifetime store has no application-owned eviction, terminal
+cleanup, or compaction. Persistence assertions prove that only the complete typed
+candidate and lifecycle survive: no option list, transcript, raw prompt, model body,
+or serialized MAF session is stored. Restart-loss tests retain that durable candidate
+and require re-clarification instead of accepting a relative selection.
 
 ### MCP
 
@@ -171,6 +249,36 @@ The frontend suite intentionally avoids:
 - asserting internal component implementation details; and
 - treating hidden UI actions as a security guarantee.
 
+## No-live-model acceptance workflow
+
+The repeatable acceptance path is fully local and credential-free:
+
+1. Restore dependencies and build the solution with warnings treated as errors.
+2. Run Core unit tests for deterministic intake, authorization, immutable-scope, and
+   workflow rules.
+3. Run the non-full-host component slice. This executes real SQLite, native MAF
+   sessions, the exact per-intake coordinator, strict proposal translation, and the
+   lightweight real MCP transport while every chat response remains deterministic.
+4. Run the retained full-host slice. Fake SDK-authenticated activities exercise
+   Activity Protocol routing, card/response serialization, Teams-only creation,
+   authentication, middleware, logging, and one complete governed workflow.
+5. Run Vitest to prove browser creation remains absent while the register,
+   approval, retry, and audit presentation remains wired.
+6. Reconcile the results with Scenarios 1-6 in the
+   [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md), including
+   restart-equivalent history loss, same-intake concurrency, failure cases, replay,
+   and the downstream approval/provisioning journey.
+
+No step calls a live LLM, Teams tenant, Azure Bot, corporate identity provider,
+production environment, or real provisioner. The deterministic chat client is
+injected behind the same `IChatClient` boundary that a future live provider will use.
+A later live-model evaluation should add quality, latency, cost, and provider-safety
+evidence without replacing this deterministic regression suite.
+
+The optional Playground or real personal-chat walkthrough validates transport,
+tenant authentication, packaging, and presentation. It cannot replace the automated
+negative assertions because it is neither exhaustive nor deterministic.
+
 ## Manual verification
 
 Automated tests do not fully establish presentation quality. Before a portfolio
@@ -184,8 +292,10 @@ demonstration or release:
 5. repeat at 360px width or 200% browser zoom; and
 6. confirm long identifiers and timestamps remain complete and readable.
 
-The detailed checklist is in the
-[quickstart validation guide](../specs/001-governed-production-access/quickstart.md).
+The Teams-specific automated scenarios and optional real-chat walkthrough are in the
+[Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md). The original
+[governed workflow quickstart](../specs/001-governed-production-access/quickstart.md)
+remains useful for detailed browser approval and provisioning presentation checks.
 
 ## Commands
 
@@ -202,16 +312,51 @@ dotnet build ProductionAccessRequestAssistant.sln --no-restore
 
 ```powershell
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
 ```
 
 Run build first when using `--no-build`.
 
-### Individual .NET layers
+### Fast unit and component layers
 
 ```powershell
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+```
+
+The component command includes real-SQLite, direct MAF/session, and lightweight MCP
+or TestServer tests, but excludes every complete `WebApplicationFactory` startup.
+
+### Retained full-host layer
+
+```powershell
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+```
+
+Every class that starts the complete application is marked explicitly with the
+`TestLevel=FullHost` trait. A new test must choose `unit`, `component`, or `full-host`
+in its task description and use the lowest level that faithfully proves the behavior.
+
+### Complete .NET suite
+
+```powershell
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+```
+
+Run the three projects/levels sequentially. This also makes a failure's architectural
+level explicit and avoids cross-project test-runner interference.
+
+### Explicit concurrency suite
+
+The high-contention suite is not included in `ProductionAccessRequestAssistant.sln`
+and therefore does not run as part of routine unit and integration validation:
+
+```powershell
+dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
 ```
 
 ### Focused integration area
@@ -234,17 +379,26 @@ npm test --prefix src/GovernedAccess.Web/ClientApp
 npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-## Current test baseline
+## Measured test-level migration baseline
 
-At the last documentation review, the repository passed:
+At the T072 test-level migration checkpoint on 2026-08-01, the repository contained:
 
-- 42 .NET unit tests;
-- 126 .NET integration tests; and
-- 5 frontend tests in 2 files.
+- 54 .NET unit cases;
+- 52 integration-project component cases;
+- 23 explicitly tagged full-host cases;
+- 1 explicit high-contention component case outside the solution; and
+- 6 frontend component cases in 2 files.
 
-These counts are a useful snapshot, not an acceptance criterion. A change may
-legitimately alter the count, but the required rule and negative-scenario coverage
-must remain.
+Three warm no-build integration-project runs completed in 23.901, 23.625, and
+23.939 seconds (23.901-second median), down from the recorded 78-case/39-second
+baseline. Counts remain a diagnostic, not an acceptance criterion; the exhaustive
+inventory, coverage map, retained-host rationale, and timing evidence are recorded in
+[the feature test-simplification report](../specs/002-teams-access-intake/test-simplification.md).
+
+Those numbers are checkpoint evidence, not a claim about current discovery counts:
+the later replay/failure and governed-workflow tasks added cases after T072. T090 owns
+the final whole-suite run and records the resulting counts and timings in the feature
+validation report.
 
 ## Recommended validation order
 
@@ -253,8 +407,10 @@ For normal development:
 1. run the focused unit or integration test area while editing;
 2. run the frontend suite when UI contracts or presentation change;
 3. build the full solution with warnings treated as errors;
-4. run all .NET and frontend tests; and
-5. perform the bounded manual check for UI or workflow changes.
+4. run all .NET and frontend tests;
+5. reconcile Teams-intake changes with the six deterministic quickstart scenarios;
+   and
+6. perform the bounded manual check for UI or workflow changes.
 
 For a documentation-only change, validate Markdown links and run `git diff --check`.
 Run code suites when the documentation exposes a suspected code/contract mismatch or
@@ -299,5 +455,8 @@ corresponding integration or deployment becomes real.
 - [Local development guide](local-development.md)
 - [As-built architecture](architecture.md)
 - [Security and trust model](security-model.md)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
-- [Completed task list](../specs/001-governed-production-access/tasks.md)
+- [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
+- [Teams intake test-simplification report](../specs/002-teams-access-intake/test-simplification.md)
+- [Teams intake validation](../specs/002-teams-access-intake/validation.md)
+- [Teams intake task list](../specs/002-teams-access-intake/tasks.md)
+- [Governed workflow quickstart](../specs/001-governed-production-access/quickstart.md)

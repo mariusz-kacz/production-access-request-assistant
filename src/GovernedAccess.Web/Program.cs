@@ -7,6 +7,7 @@ using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
+using GovernedAccess.Web.Teams;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
@@ -46,7 +47,7 @@ builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
     serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
 builder.Services
-    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Valid))
+    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Candidate))
     .UseFunctionInvocation(configure: static client =>
     {
         client.AllowConcurrentInvocation = false;
@@ -54,24 +55,26 @@ builder.Services
         client.MaximumIterationsPerRequest = 6;
         client.TerminateOnUnknownCalls = true;
     });
-builder.Services.AddScoped<IRequestDraftInterpreter, ChatRequestDraftInterpreter>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();
 builder.Services.AddAuthorization();
 builder.Services.AddGovernedAccessAntiforgery();
 builder.Services.AddGovernedAccessMcp();
+builder.AddGovernedAccessTeams();
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseMiddleware<CorrelationMiddleware>();
+app.UseRequestTimeouts();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.MapGovernedAccessTeams();
 app.MapControllers();
 app.MapGovernedAccessMcp();
 

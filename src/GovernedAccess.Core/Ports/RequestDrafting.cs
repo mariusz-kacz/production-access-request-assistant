@@ -3,49 +3,109 @@ using GovernedAccess.Core.Domain;
 namespace GovernedAccess.Core.Ports;
 
 /// <summary>
-/// Provider-neutral input for one stateless draft-interpretation operation.
+/// Provider-neutral input for one conversational request-preparation turn. It contains
+/// only the compact application-owned state needed to interpret the latest message.
 /// </summary>
-public sealed record DraftInterpretationRequest
+public sealed record RequestPreparationTurn
 {
-    public DraftInterpretationRequest(string intent, string correlationId)
+    public RequestPreparationTurn(
+        Guid intakeId,
+        string latestMessage,
+        RequestCandidate candidate,
+        IEnumerable<RequestValidationFeedback> validationFeedback,
+        string correlationId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(intent);
+        if (intakeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "The intake identifier must not be empty.",
+                nameof(intakeId));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(latestMessage);
+        ArgumentNullException.ThrowIfNull(candidate);
+        ArgumentNullException.ThrowIfNull(validationFeedback);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
 
-        Intent = intent.Trim();
+        var feedback = validationFeedback.ToArray();
+        if (feedback.Any(item => item is null))
+        {
+            throw new ArgumentException(
+                "Validation feedback cannot contain null values.",
+                nameof(validationFeedback));
+        }
+
+        IntakeId = intakeId;
+        LatestMessage = latestMessage.Trim();
+        Candidate = candidate;
+        ValidationFeedback = Array.AsReadOnly(feedback);
         CorrelationId = correlationId.Trim();
     }
 
-    public string Intent { get; }
+    public Guid IntakeId { get; }
+
+    public string LatestMessage { get; }
+
+    public RequestCandidate Candidate { get; }
+
+    public IReadOnlyList<RequestValidationFeedback> ValidationFeedback { get; }
 
     public string CorrelationId { get; }
 }
 
 /// <summary>
-/// An untrusted structured draft proposed during model-assisted preparation.
-/// Structural completeness does not replace server-side validation before request
-/// submission.
+/// Application-owned validation feedback supplied only for the current interpreter
+/// run. It is context for correction, not durable conversation or authorization
+/// evidence.
 /// </summary>
-public sealed record AccessRequestDraft
+public sealed record RequestValidationFeedback
 {
-    public AccessRequestDraft(
+    public RequestValidationFeedback(string field, string code, string message)
+    {
+        Field = NormalizeRequired(field, nameof(field));
+        Code = NormalizeRequired(code, nameof(code));
+        Message = NormalizeRequired(message, nameof(message));
+    }
+
+    public string Field { get; }
+
+    public string Code { get; }
+
+    public string Message { get; }
+
+    private static string NormalizeRequired(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        return value.Trim();
+    }
+}
+
+/// <summary>
+/// A complete-shape, nullable candidate proposed by an untrusted interpreter.
+/// Deterministic application validation remains responsible for readiness,
+/// canonicalization, and authoritative relationship checks.
+/// </summary>
+public sealed record RequestCandidate
+{
+    public RequestCandidate(
         string? clientId,
         string? environmentId,
-        string? requestedRole,
+        string? requestedRoleId,
         string? justification,
         string? incidentId)
     {
         clientId = NormalizeOptional(clientId);
         environmentId = NormalizeOptional(environmentId);
-        requestedRole = NormalizeOptional(requestedRole);
+        requestedRoleId = NormalizeOptional(requestedRoleId);
         justification = NormalizeOptional(justification);
         incidentId = NormalizeOptional(incidentId);
 
-        if (requestedRole is not null && !ProductionRoleIds.IsSupported(requestedRole))
+        if (requestedRoleId is not null
+            && !ProductionRoleIds.IsSupported(requestedRoleId))
         {
             throw new ArgumentOutOfRangeException(
-                nameof(requestedRole),
-                requestedRole,
+                nameof(requestedRoleId),
+                requestedRoleId,
                 "The proposed role is not supported by this feature.");
         }
 
@@ -59,7 +119,7 @@ public sealed record AccessRequestDraft
 
         ClientId = clientId;
         EnvironmentId = environmentId;
-        RequestedRole = requestedRole;
+        RequestedRoleId = requestedRoleId;
         Justification = justification;
         IncidentId = incidentId;
     }
@@ -68,28 +128,117 @@ public sealed record AccessRequestDraft
 
     public string? EnvironmentId { get; }
 
-    public string? RequestedRole { get; }
+    public string? RequestedRoleId { get; }
 
     public string? Justification { get; }
 
     public string? IncidentId { get; }
 
-    public bool IsComplete =>
+    public bool IsStructurallyComplete =>
         ClientId is not null
         && EnvironmentId is not null
-        && RequestedRole is not null
+        && RequestedRoleId is not null
         && Justification is not null;
 
-    private static string? NormalizeOptional(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    private static string? NormalizeOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-public enum DraftInterpretationOutcomeKind
+public enum RequestPreparationProposalKind
 {
-    Prepared,
-    Incomplete,
+    Clarification,
+    Candidate,
+}
+
+public enum RequestClarificationTarget
+{
+    ClientId,
+    EnvironmentId,
+    RequestedRoleId,
+    Justification,
+    IncidentId,
+}
+
+/// <summary>
+/// One closed, bounded clarification proposed by an untrusted interpreter. Choices
+/// remain in process-local model history and are deliberately absent from this
+/// application contract.
+/// </summary>
+public sealed record RequestClarificationProposal
+{
+    public const int MaximumMessageLength = 500;
+
+    public RequestClarificationProposal(
+        RequestClarificationTarget target,
+        string message)
+    {
+        if (!Enum.IsDefined(target))
+        {
+            throw new ArgumentOutOfRangeException(nameof(target));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        message = message.Trim();
+        if (message.Length > MaximumMessageLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(message),
+                message.Length,
+                $"A clarification message cannot exceed {MaximumMessageLength} characters.");
+        }
+
+        Target = target;
+        Message = message;
+    }
+
+    public RequestClarificationTarget Target { get; }
+
+    public string Message { get; }
+}
+
+/// <summary>
+/// A closed interpreter proposal. Every proposal carries the complete nullable
+/// candidate shape and either one bounded typed clarification or no clarification.
+/// </summary>
+public sealed record RequestPreparationProposal
+{
+    public RequestPreparationProposal(
+        RequestPreparationProposalKind kind,
+        RequestCandidate candidate,
+        RequestClarificationProposal? clarification)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (!Enum.IsDefined(kind))
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+
+        if ((kind == RequestPreparationProposalKind.Clarification
+                && clarification is null)
+            || (kind == RequestPreparationProposalKind.Candidate
+                && clarification is not null))
+        {
+            throw new ArgumentException(
+                "The proposal kind and clarification do not form a valid closed proposal.",
+                nameof(clarification));
+        }
+
+        Kind = kind;
+        Candidate = candidate;
+        Clarification = clarification;
+    }
+
+    public RequestPreparationProposalKind Kind { get; }
+
+    public RequestCandidate Candidate { get; }
+
+    public RequestClarificationProposal? Clarification { get; }
+}
+
+public enum RequestPreparationInterpretationOutcomeKind
+{
+    Proposal,
     MalformedModelOutput,
     Timeout,
     Cancelled,
@@ -97,25 +246,25 @@ public enum DraftInterpretationOutcomeKind
 }
 
 /// <summary>
-/// A closed, safe-to-present result from draft interpretation.
+/// A typed interpreter result that keeps provider failures and untrusted proposals
+/// outside deterministic preparation decisions.
 /// </summary>
-public sealed record DraftInterpretationOutcome
+public sealed record RequestPreparationInterpretationOutcome
 {
-    public DraftInterpretationOutcome(AccessRequestDraft draft)
+    public RequestPreparationInterpretationOutcome(
+        RequestPreparationProposal proposal)
     {
-        ArgumentNullException.ThrowIfNull(draft);
+        ArgumentNullException.ThrowIfNull(proposal);
 
-        Draft = draft;
-        Kind = draft.IsComplete
-            ? DraftInterpretationOutcomeKind.Prepared
-            : DraftInterpretationOutcomeKind.Incomplete;
+        Kind = RequestPreparationInterpretationOutcomeKind.Proposal;
+        Proposal = proposal;
     }
 
-    public DraftInterpretationOutcome(DraftInterpretationOutcomeKind failureKind)
+    public RequestPreparationInterpretationOutcome(
+        RequestPreparationInterpretationOutcomeKind failureKind)
     {
-        if (failureKind is
-            DraftInterpretationOutcomeKind.Prepared or
-            DraftInterpretationOutcomeKind.Incomplete)
+        if (!Enum.IsDefined(failureKind)
+            || failureKind == RequestPreparationInterpretationOutcomeKind.Proposal)
         {
             throw new ArgumentOutOfRangeException(nameof(failureKind));
         }
@@ -123,18 +272,18 @@ public sealed record DraftInterpretationOutcome
         Kind = failureKind;
     }
 
-    public DraftInterpretationOutcomeKind Kind { get; }
+    public RequestPreparationInterpretationOutcomeKind Kind { get; }
 
-    public AccessRequestDraft? Draft { get; }
+    public RequestPreparationProposal? Proposal { get; }
 }
 
 /// <summary>
-/// Interprets request intent as an untrusted typed draft without exposing an AI or
-/// MCP SDK contract to the application core.
+/// Interprets one conversational turn without exposing AI-provider or MCP SDK
+/// contracts to the application core.
 /// </summary>
-public interface IRequestDraftInterpreter
+public interface IRequestPreparationInterpreter
 {
-    Task<DraftInterpretationOutcome> InterpretAsync(
-        DraftInterpretationRequest request,
+    Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+        RequestPreparationTurn turn,
         CancellationToken cancellationToken);
 }

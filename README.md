@@ -121,6 +121,10 @@ npm run dev --prefix src/GovernedAccess.Web/ClientApp
 Open the Vite URL. Vite proxies `/api` to ASP.NET Core so the browser continues to use
 the same-origin application contract.
 
+For the real Microsoft Teams transport, Teams-managed bot registration, persistent
+Dev Tunnel, and repeatable two-terminal startup, follow the
+[Teams local integration guide](docs/teams-local-integration.md).
+
 ## Demonstrate the workflow
 
 1. Select **Demo Requester** and create a new request using:
@@ -151,12 +155,20 @@ npm ci --prefix src/GovernedAccess.Web/ClientApp
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 npm run build --prefix src/GovernedAccess.Web/ClientApp
 dotnet build ProductionAccessRequestAssistant.sln --no-restore
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build
 ```
 
 The suites require no live LLM. They cover domain rules, authorization, immutable
 scope, malformed model output, MCP contracts and failures, provisioning evidence,
-idempotency, concurrency, API security, UI session wiring, and workflow presentation.
+idempotency, API security, UI session wiring, and workflow presentation.
+
+The heavier 100-way provisioning concurrency scenario is intentionally excluded from
+the solution test run. Run it explicitly when concurrency behavior is under test:
+
+```powershell
+dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
+```
 
 At the time of this README update, the repository passes:
 
@@ -174,6 +186,7 @@ src/
 tests/
   GovernedAccess.UnitTests/
   GovernedAccess.IntegrationTests/
+  GovernedAccess.ConcurrencyTests/  Explicit high-contention scenarios
 docs/
   adr/                       Architecture decision records
 specs/
@@ -184,6 +197,7 @@ specs/
 ## Documentation
 
 - [Product baseline](docs/governed-production-access-product-baseline.md)
+- [Product roadmap](docs/roadmap.md)
 - [As-built architecture](docs/architecture.md)
 - [Security and trust model](docs/security-model.md)
 - [Local development guide](docs/local-development.md)

@@ -17,6 +17,13 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         value => value.UtcDateTime.Ticks,
         value => new DateTimeOffset(value, TimeSpan.Zero));
 
+    private static readonly ValueConverter<DateTimeOffset?, long?>
+        NullableUtcTimestampConverter = new(
+            value => value.HasValue ? value.Value.UtcDateTime.Ticks : null,
+            value => value.HasValue
+                ? new DateTimeOffset(value.Value, TimeSpan.Zero)
+                : null);
+
     public DbSet<Client> Clients => Set<Client>();
 
     public DbSet<ProductionEnvironment> ProductionEnvironments => Set<ProductionEnvironment>();
@@ -37,6 +44,9 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
+    public DbSet<RequestIntakeSession> RequestIntakeSessions =>
+        Set<RequestIntakeSession>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -51,6 +61,64 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         ConfigureProvisioningOperation(modelBuilder.Entity<ProvisioningOperation>());
         ConfigureAccessGrant(modelBuilder.Entity<AccessGrant>());
         ConfigureAuditEvent(modelBuilder.Entity<AuditEvent>());
+        ConfigureRequestIntakeSession(modelBuilder.Entity<RequestIntakeSession>());
+    }
+
+    private static void ConfigureRequestIntakeSession(
+        EntityTypeBuilder<RequestIntakeSession> entity)
+    {
+        entity.ToTable("RequestIntakeSessions");
+        entity.HasKey(session => session.Id);
+        entity.Property(session => session.Channel).HasMaxLength(32);
+        entity.Property(session => session.TenantId).HasMaxLength(IdentifierLength);
+        entity.Property(session => session.ChannelActorId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.ConversationId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.RequesterId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.Status)
+            .HasConversion<string>()
+            .HasMaxLength(16);
+        entity.Property(session => session.ClientId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.EnvironmentId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.RequestedRoleId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.Justification)
+            .HasMaxLength(AccessRequest.MaximumJustificationLength);
+        entity.Property(session => session.IncidentId)
+            .HasMaxLength(IdentifierLength);
+        entity.Property(session => session.CorrelationId)
+            .HasMaxLength(CorrelationIdLength);
+        entity.Property(session => session.PersistenceVersion)
+            .IsConcurrencyToken()
+            .ValueGeneratedNever();
+
+        ConfigureUtcTimestamp(entity.Property(session => session.CreatedAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.LastUpdatedAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.ExpiresAt));
+        ConfigureUtcTimestamp(entity.Property(session => session.SubmittedAt));
+
+        entity.HasIndex(session => new
+        {
+            session.Channel,
+            session.TenantId,
+            session.ChannelActorId,
+            session.ConversationId,
+        })
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('Collecting', 'Ready')");
+        entity.HasIndex(session => session.ReservedRequestId).IsUnique();
+
+        entity.HasOne<AuthenticatedPrincipal>()
+            .WithMany()
+            .HasForeignKey(session => session.RequesterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Candidate identifiers are untrusted until readiness and become null in
+        // terminal rows, so authoritative relationships are validated in services.
     }
 
     private static void ConfigureClient(EntityTypeBuilder<Client> entity)
@@ -314,4 +382,11 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     {
         property.HasConversion(UtcTimestampConverter).HasColumnType("INTEGER");
     }
+
+    private static void ConfigureUtcTimestamp(
+        PropertyBuilder<DateTimeOffset?> property)
+    {
+        property.HasConversion(NullableUtcTimestampConverter).HasColumnType("INTEGER");
+    }
+
 }

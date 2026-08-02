@@ -5,59 +5,6 @@ export const productionRoles = [
 
 export type ProductionRole = (typeof productionRoles)[number];
 
-export interface AccessRequestDraft {
-  clientId: string | null;
-  environmentId: string | null;
-  requestedRole: ProductionRole | null;
-  justification: string | null;
-  incidentId: string | null;
-}
-
-export interface CompleteAccessRequestDraft extends AccessRequestDraft {
-  clientId: string;
-  environmentId: string;
-  requestedRole: ProductionRole;
-  justification: string;
-}
-
-export type DraftPreparationFailureOutcome =
-  | "MalformedModelOutput"
-  | "Timeout"
-  | "Cancelled"
-  | "Unavailable";
-
-export interface PrepareRequestDraftRequest {
-  intent: string;
-}
-
-export type PrepareRequestDraftResponse =
-  | {
-      outcome: "Prepared";
-      draft: CompleteAccessRequestDraft;
-    }
-  | {
-      outcome: "Incomplete";
-      draft: AccessRequestDraft;
-    }
-  | {
-      outcome: DraftPreparationFailureOutcome;
-      draft: null;
-    };
-
-export interface CreateAccessRequestRequest {
-  clientId: string;
-  environmentId: string;
-  requestedRole: ProductionRole;
-  justification: string;
-  incidentId?: string | null;
-}
-
-export interface CreateAccessRequestResponse {
-  requestId: string;
-  status: "AwaitingBusinessApproval";
-  correlationId: string;
-}
-
 export type RequestStatus =
   | "AwaitingBusinessApproval"
   | "AwaitingDevOpsApproval"
@@ -190,7 +137,6 @@ export type PrincipalKind =
   | "DevOpsApprover";
 
 export type SessionCapability =
-  | "createRequest"
   | "decideBusinessRequests"
   | "decideDevOpsRequests"
   | "retryProvisioning";

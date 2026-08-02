@@ -38,7 +38,7 @@ const requesterSession: SessionView = {
     kind: "Requester",
     clientId: null,
   },
-  capabilities: ["createRequest"],
+  capabilities: [],
 };
 
 const alphaApproverSession: SessionView = {
@@ -78,7 +78,7 @@ describe("application session wiring", () => {
   beforeEach(() => {
     mockedApiRequest.mockReset();
     activePrincipalKey = undefined;
-    window.history.pushState({}, "", "/requests/new");
+    window.history.pushState({}, "", "/requests");
 
     mockedApiRequest.mockImplementation(async (path, options = {}) => {
       if (path === "/api/session" && (options.method ?? "GET") === "GET") {
@@ -149,13 +149,12 @@ describe("application session wiring", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "New access request",
+        level: 1,
+        name: "Access requests",
       }),
     ).toBeTruthy();
     expect(await screen.findByText("Signed in as Demo Requester")).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: "New request" }),
-    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "New request" })).toBeNull();
     expect(mockedApiRequest).toHaveBeenCalledWith(
       "/api/demo/session",
       expect.objectContaining({
@@ -209,6 +208,39 @@ describe("application session wiring", () => {
       "/api/demo/session",
       expect.objectContaining({ method: "DELETE" }),
     );
+  });
+
+  it("does not expose browser request creation or a new-request route", async () => {
+    window.history.pushState({}, "", "/requests/new");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Sign in to continue" });
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Demo identity" }),
+      demoPrincipalKeys.requester,
+    );
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Request details unavailable",
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "New request" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Prepare draft" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /submit request/i }),
+    ).toBeNull();
+    expect(
+      mockedApiRequest.mock.calls.some(
+        ([path, options]) =>
+          path === "/api/request-drafts/prepare" ||
+          (path === "/api/requests" && options?.method === "POST"),
+      ),
+    ).toBe(false);
   });
 
   it("opens a request URL and refreshes server-computed actions after identity switching", async () => {

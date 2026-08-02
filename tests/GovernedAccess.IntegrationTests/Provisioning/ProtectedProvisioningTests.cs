@@ -5,7 +5,6 @@ using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
@@ -18,33 +17,32 @@ public sealed class ProtectedProvisioningTests
         Guid.Parse("90e1c586-b379-45f4-ad6f-b265c06e728c");
 
     private static readonly DateTimeOffset RequestCreatedAt =
-        GovernedAccessWebFactory.DefaultUtcNow.AddHours(-2);
+        ProvisioningTestFixture.DefaultUtcNow.AddHours(-2);
 
     private static readonly DateTimeOffset BusinessApprovedAt =
-        GovernedAccessWebFactory.DefaultUtcNow.AddHours(-1);
+        ProvisioningTestFixture.DefaultUtcNow.AddHours(-1);
 
     private static readonly DateTimeOffset DevOpsApprovedAt =
-        GovernedAccessWebFactory.DefaultUtcNow.AddMinutes(-15);
+        ProvisioningTestFixture.DefaultUtcNow.AddMinutes(-15);
 
     private static readonly DateTimeOffset ActivatedAt =
-        GovernedAccessWebFactory.DefaultUtcNow.AddMinutes(1);
+        ProvisioningTestFixture.DefaultUtcNow.AddMinutes(1);
 
     [Fact]
     public async Task ProvisionAsyncReloadsPersistedWorkflowAndUsesStoredScope()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await SeedAwaitingProvisioningAsync(factory, cancellationToken: cancellationToken);
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await SeedAwaitingProvisioningAsync(fixture, cancellationToken: cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var dbContext = fixture.CreateDbContext();
         var workflowStore = new RecordingWorkflowStore(new EfWorkflowStore(dbContext));
         var provisioner = new RecordingAccessProvisioner(ActivatedAt);
         var service = new ProtectedProvisioningService(
             workflowStore,
             provisioner,
-            factory.Clock);
+            fixture.Clock);
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
@@ -72,21 +70,20 @@ public sealed class ProtectedProvisioningTests
         ApprovalStage omittedStage)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
         await SeedAwaitingProvisioningAsync(
-            factory,
+            fixture,
             includeBusinessApproval: omittedStage != ApprovalStage.Business,
             includeDevOpsApproval: omittedStage != ApprovalStage.DevOps,
             cancellationToken: cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var dbContext = fixture.CreateDbContext();
         var provisioner = new RecordingAccessProvisioner(ActivatedAt);
         var service = new ProtectedProvisioningService(
             new EfWorkflowStore(dbContext),
             provisioner,
-            factory.Clock);
+            fixture.Clock);
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
@@ -100,20 +97,19 @@ public sealed class ProtectedProvisioningTests
     public async Task ProvisionAsyncRejectsOperationScopeThatDoesNotMatchRequest()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
         await SeedAwaitingProvisioningAsync(
-            factory,
+            fixture,
             operationRoleId: ProductionRoleIds.Support,
             cancellationToken: cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var dbContext = fixture.CreateDbContext();
         var provisioner = new RecordingAccessProvisioner(ActivatedAt);
         var service = new ProtectedProvisioningService(
             new EfWorkflowStore(dbContext),
             provisioner,
-            factory.Clock);
+            fixture.Clock);
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
@@ -130,16 +126,15 @@ public sealed class ProtectedProvisioningTests
     public async Task SuccessfulProvisioningPersistsExactlyEightHourGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await SeedAwaitingProvisioningAsync(factory, cancellationToken: cancellationToken);
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await SeedAwaitingProvisioningAsync(fixture, cancellationToken: cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var dbContext = fixture.CreateDbContext();
         var service = new ProtectedProvisioningService(
             new EfWorkflowStore(dbContext),
             new RecordingAccessProvisioner(ActivatedAt),
-            factory.Clock);
+            fixture.Clock);
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
@@ -165,107 +160,14 @@ public sealed class ProtectedProvisioningTests
         Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
     }
 
-    [Fact]
-    public async Task RetryAsyncValidatesStoredEvidenceBeforeAdvancingAttempt()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await SeedFailedProvisioningAsync(factory, cancellationToken: cancellationToken);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
-        var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
-            provisioner,
-            factory.Clock);
-
-        var outcome = await service.RetryAsync(RequestId, cancellationToken);
-
-        var completed = Assert.IsType<ProtectedProvisioningCompleted>(outcome);
-        Assert.Equal(2, completed.Operation.AttemptCount);
-        Assert.Equal(RequestStatus.Active, completed.Request.Status);
-        Assert.Equal(ProviderGrantId, completed.Grant.Id);
-        var providerRequest = Assert.Single(provisioner.Requests);
-        Assert.Equal(RequestId, providerRequest.RequestId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, providerRequest.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, providerRequest.RoleId);
-    }
-
-    [Fact]
-    public async Task RetryAsyncRejectsStoredScopeMismatchWithoutAdvancingAttempt()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        await SeedFailedProvisioningAsync(
-            factory,
-            operationRoleId: ProductionRoleIds.Support,
-            cancellationToken: cancellationToken);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
-        var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
-            provisioner,
-            factory.Clock);
-
-        var outcome = await service.RetryAsync(RequestId, cancellationToken);
-
-        var failed = Assert.IsType<ProtectedProvisioningFailed>(outcome);
-        Assert.Equal(
-            ProtectedProvisioningService.OperationScopeMismatchCode,
-            failed.Failure.Code);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
-        Assert.Equal(1, operation.AttemptCount);
-        Assert.Empty(provisioner.Requests);
-    }
-
-    private static async Task SeedFailedProvisioningAsync(
-        GovernedAccessWebFactory factory,
-        string? operationRoleId = null,
-        CancellationToken cancellationToken = default)
-    {
-        await SeedAwaitingProvisioningAsync(
-            factory,
-            operationRoleId: operationRoleId,
-            cancellationToken: cancellationToken);
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        _ = await dbContext.AccessRequests
-            .Where(item => item.Id == RequestId)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    item => item.Status,
-                    RequestStatus.ProvisioningFailed),
-                cancellationToken);
-        _ = await dbContext.ProvisioningOperations
-            .Where(item => item.RequestId == RequestId)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(
-                        item => item.Status,
-                        ProvisioningOperationStatus.Failed)
-                    .SetProperty(
-                        item => item.LastOutcomeCode,
-                        "synthetic_provisioning_failed"),
-                cancellationToken);
-    }
-
     private static async Task SeedAwaitingProvisioningAsync(
-        GovernedAccessWebFactory factory,
+        ProvisioningTestFixture fixture,
         bool includeBusinessApproval = true,
         bool includeDevOpsApproval = true,
         string? operationRoleId = null,
         CancellationToken cancellationToken = default)
     {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        await using var dbContext = fixture.CreateDbContext();
         var request = new AccessRequest(
             RequestId,
             DemoDataIds.RequesterPrincipalId,

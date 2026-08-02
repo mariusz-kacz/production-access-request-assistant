@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
@@ -13,92 +14,21 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
-public sealed class RetryProvisioningTests
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
+public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     private const string RetryNotAuthorizedCode =
         "provisioning_retry_not_authorized";
-    private const string RetryInvalidTransitionCode =
-        "provisioning_retry_invalid_transition";
-
     [Fact]
-    public async Task LostResponseRetryReturnsExistingGrantForSameOperation()
+    public async Task NonDevOpsPrincipalCannotRetryFailedProvisioning()
     {
+        const string principalKey = DemoPrincipalKeys.Requester;
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateRetryableFailedRequestAsync(
-            factory,
-            SyntheticAccessProvisioningBehavior.LoseResponseAfterCreate,
-            cancellationToken);
-        factory.Clock.Advance(TimeSpan.FromMinutes(5));
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        using var retryRequest = CreateRetryMessage(requestId);
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            retryRequest,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(requestId, responseBody.RootElement.GetProperty("requestId").GetGuid());
-        Assert.Equal("Active", responseBody.RootElement.GetProperty("status").GetString());
-        var responseGrant = responseBody.RootElement.GetProperty("grant");
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var grant = await dbContext.AccessGrants
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var auditEvents = await dbContext.AuditEvents
-            .AsNoTracking()
-            .Where(item => item.RequestId == requestId)
-            .ToListAsync(cancellationToken);
-
-        Assert.Equal(RequestStatus.Active, storedRequest.Status);
-        Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
-        Assert.Equal(2, operation.AttemptCount);
-        Assert.Equal(requestId, operation.RequestId);
-        Assert.Equal(ProtectedProvisioningService.SuccessCode, operation.LastOutcomeCode);
-        Assert.Equal(GovernedAccessWebFactory.DefaultUtcNow, grant.ActivatedAt);
-        Assert.Equal(
-            GovernedAccessWebFactory.DefaultUtcNow.Add(AccessGrant.FixedLifetime),
-            grant.ExpiresAt);
-        Assert.Equal(grant.Id, responseGrant.GetProperty("grantId").GetGuid());
-        Assert.Equal(
-            grant.ActivatedAt,
-            responseGrant.GetProperty("activatedAt").GetDateTimeOffset());
-        Assert.Equal(
-            grant.ExpiresAt,
-            responseGrant.GetProperty("expiresAt").GetDateTimeOffset());
-        Assert.Equal(
-            2,
-            auditEvents.Count(item =>
-                item.EventType == AuditEventType.ProvisioningAttempted));
-        Assert.Single(
-            auditEvents,
-            item => item.EventType == AuditEventType.ProvisioningFailed);
-        Assert.Single(
-            auditEvents,
-            item => item.EventType == AuditEventType.ProvisioningSucceeded);
-    }
-
-    [Theory]
-    [InlineData(DemoPrincipalKeys.Requester)]
-    [InlineData(DemoPrincipalKeys.ClientAlphaApprover)]
-    public async Task NonDevOpsPrincipalCannotRetryFailedProvisioning(
-        string principalKey)
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         var requestId = await CreateRetryableFailedRequestAsync(
             factory,
@@ -139,113 +69,6 @@ public sealed class RetryProvisioningTests
         Assert.Equal(principalKey, auditEvent.ActorId);
         Assert.Equal(RequestStatus.ProvisioningFailed, storedRequest.Status);
         Assert.Equal(ProvisioningOperationStatus.Failed, operation.Status);
-        Assert.Equal(1, operation.AttemptCount);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
-    }
-
-    [Fact]
-    public async Task DevOpsCannotRetryRequestOutsideProvisioningFailedState()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(
-            factory,
-            cancellationToken);
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        using var retryRequest = CreateRetryMessage(requestId);
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            retryRequest,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            RetryInvalidTransitionCode,
-            problem.RootElement.GetProperty("code").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.ApprovalDecisions
-            .AsNoTracking()
-            .Where(item => item.RequestId == requestId)
-            .ToListAsync(cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
-            .AsNoTracking()
-            .SingleAsync(
-                item => item.RequestId == requestId
-                    && item.EventType == AuditEventType.InvalidTransitionRejected
-                    && item.OutcomeCode == RetryInvalidTransitionCode,
-                cancellationToken);
-
-        Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, auditEvent.ActorId);
-        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, storedRequest.Status);
-        Assert.DoesNotContain(decisions, item => item.Stage == ApprovalStage.DevOps);
-        Assert.Empty(await dbContext.ProvisioningOperations.AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
-    }
-
-    [Fact]
-    public async Task RetryRejectsPersistedOperationScopeMismatchBeforeNewAttempt()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateRetryableFailedRequestAsync(
-            factory,
-            SyntheticAccessProvisioningBehavior.Fail,
-            cancellationToken);
-        await using (var mutationScope = factory.Services.CreateAsyncScope())
-        {
-            var mutationContext = mutationScope.ServiceProvider
-                .GetRequiredService<GovernedAccessDbContext>();
-            _ = await mutationContext.ProvisioningOperations
-                .Where(item => item.RequestId == requestId)
-                .ExecuteUpdateAsync(
-                    setters => setters.SetProperty(
-                        item => item.RoleId,
-                        ProductionRoleIds.Support),
-                    cancellationToken);
-        }
-
-        using var client = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        using var retryRequest = CreateRetryMessage(requestId);
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            retryRequest,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        using var problem = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal(
-            ProtectedProvisioningService.OperationScopeMismatchCode,
-            problem.RootElement.GetProperty("code").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-
-        Assert.Equal(RequestStatus.ProvisioningFailed, storedRequest.Status);
-        Assert.Equal(ProvisioningOperationStatus.Failed, operation.Status);
-        Assert.Equal(ProductionRoleIds.Support, operation.RoleId);
         Assert.Equal(1, operation.AttemptCount);
         Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
             cancellationToken));
@@ -316,27 +139,7 @@ public sealed class RetryProvisioningTests
         GovernedAccessWebFactory factory,
         CancellationToken cancellationToken)
     {
-        using var requester = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/requests")
-        {
-            Content = JsonContent.Create(new
-            {
-                clientId = DemoDataIds.ClientAlphaId,
-                environmentId = DemoDataIds.ClientAlphaEnvironmentId,
-                requestedRole = ProductionRoleIds.ReadOnly,
-                justification = "Investigate the active production incident.",
-                incidentId = DemoDataIds.PrimaryIncidentId,
-            }),
-        };
-        using var createResponse = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            requester,
-            createRequest,
-            cancellationToken);
-        createResponse.EnsureSuccessStatusCode();
-        using var createBody = await ReadJsonAsync(createResponse, cancellationToken);
-        var requestId = createBody.RootElement.GetProperty("requestId").GetGuid();
+        var requestId = (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
 
         using var approver = await factory.CreateAuthenticatedClientAsync(
             DemoPrincipalKeys.ClientAlphaApprover,
@@ -370,5 +173,229 @@ public sealed class RetryProvisioningTests
         return await JsonDocument.ParseAsync(
             stream,
             cancellationToken: cancellationToken);
+    }
+}
+
+public sealed class RetryProvisioningComponentTests
+{
+    [Fact]
+    public async Task LostResponseRetryReturnsExistingGrantForSameOperation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var provisioner = new LostResponseProvisioner(fixture.Clock);
+        var service = CreateService(dbContext, provisioner, fixture.Clock);
+        var request = await SeedBusinessApprovedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+
+        var initial = await service.DecideDevOpsAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            ApprovalOutcome.Approved,
+            null,
+            "initial-provisioning",
+            cancellationToken);
+        Assert.True(initial.IsFailure);
+        Assert.Equal(LostResponseProvisioner.FailureCode, initial.Failure!.Code);
+
+        fixture.Clock.Advance(TimeSpan.FromMinutes(5));
+        var retry = await service.RetryProvisioningAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            "retry-correlation",
+            cancellationToken);
+
+        Assert.True(retry.IsSuccess);
+        Assert.Equal(RequestStatus.Active, retry.Value.Request.Status);
+        Assert.Equal(request.Id, retry.Value.Operation.RequestId);
+        Assert.Equal(2, retry.Value.Operation.AttemptCount);
+        Assert.Equal(
+            ProtectedProvisioningService.SuccessCode,
+            retry.Value.Operation.LastOutcomeCode);
+        Assert.Equal(provisioner.GrantId, retry.Value.Grant.Id);
+        Assert.Equal(
+            provisioner.ActivatedAt.Add(AccessGrant.FixedLifetime),
+            retry.Value.Grant.ExpiresAt);
+
+        var auditEvents = await dbContext.AuditEvents
+            .Where(item => item.RequestId == request.Id)
+            .ToListAsync(cancellationToken);
+        Assert.Equal(
+            2,
+            auditEvents.Count(item =>
+                item.EventType == AuditEventType.ProvisioningAttempted));
+        Assert.Single(
+            auditEvents,
+            item => item.EventType == AuditEventType.ProvisioningFailed);
+        Assert.Single(
+            auditEvents,
+            item => item.EventType == AuditEventType.ProvisioningSucceeded);
+    }
+
+    [Fact]
+    public async Task DevOpsCannotRetryRequestOutsideProvisioningFailedState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var request = await SeedBusinessApprovedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+        var service = CreateService(
+            dbContext,
+            new LostResponseProvisioner(fixture.Clock),
+            fixture.Clock);
+
+        var outcome = await service.RetryProvisioningAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            "invalid-state-retry",
+            cancellationToken);
+
+        Assert.True(outcome.IsFailure);
+        Assert.Equal(
+            AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
+            outcome.Failure!.Code);
+        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
+        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
+            cancellationToken));
+        Assert.Single(
+            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            item => item.EventType == AuditEventType.InvalidTransitionRejected);
+    }
+
+    [Fact]
+    public async Task RetryRejectsPersistedOperationScopeMismatchBeforeNewAttempt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var provisioner = new LostResponseProvisioner(fixture.Clock);
+        var service = CreateService(dbContext, provisioner, fixture.Clock);
+        var request = await SeedBusinessApprovedRequestAsync(
+            dbContext,
+            fixture.Clock.UtcNow,
+            cancellationToken);
+        var initial = await service.DecideDevOpsAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            ApprovalOutcome.Approved,
+            null,
+            "initial-provisioning",
+            cancellationToken);
+        Assert.True(initial.IsFailure);
+
+        dbContext.ChangeTracker.Clear();
+        _ = await dbContext.ProvisioningOperations
+            .Where(item => item.RequestId == request.Id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    item => item.RoleId,
+                    ProductionRoleIds.Support),
+                cancellationToken);
+
+        var retry = await service.RetryProvisioningAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            "mismatched-scope-retry",
+            cancellationToken);
+
+        Assert.True(retry.IsFailure);
+        Assert.Equal(
+            ProtectedProvisioningService.OperationScopeMismatchCode,
+            retry.Failure!.Code);
+        var operation = await dbContext.ProvisioningOperations
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.Equal(ProductionRoleIds.Support, operation.RoleId);
+        Assert.Equal(1, operation.AttemptCount);
+        Assert.Equal(1, provisioner.InvocationCount);
+        Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
+    }
+
+    private static AccessRequestWorkflowService CreateService(
+        GovernedAccessDbContext dbContext,
+        IAccessProvisioner provisioner,
+        DeterministicClock clock)
+    {
+        var requestContext = new EfRequestContextReader(dbContext);
+        var workflowStore = new EfWorkflowStore(dbContext);
+        return new AccessRequestWorkflowService(
+            requestContext,
+            workflowStore,
+            new RequestValidator(requestContext),
+            new ProtectedProvisioningService(workflowStore, provisioner, clock),
+            clock);
+    }
+
+    private static async Task<AccessRequest> SeedBusinessApprovedRequestAsync(
+        GovernedAccessDbContext dbContext,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        var request = new AccessRequest(
+            Guid.NewGuid(),
+            DemoDataIds.RequesterPrincipalId,
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            DemoDataIds.PrimaryIncidentId,
+            occurredAt,
+            "request-correlation");
+        var applied = Assert.IsType<BusinessDecisionApplied>(
+            BusinessDecisionPolicy.Apply(
+                request,
+                new BusinessDecisionCommand(
+                    Guid.NewGuid(),
+                    ApprovalOutcome.Approved,
+                    DemoDataIds.ClientAlphaApproverPrincipalId,
+                    null,
+                    occurredAt,
+                    "business-correlation"),
+                hasExistingBusinessDecision: false));
+        dbContext.AccessRequests.Add(request);
+        dbContext.ApprovalDecisions.Add(applied.Decision);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return request;
+    }
+
+    private sealed class LostResponseProvisioner(IClock clock) : IAccessProvisioner
+    {
+        public const string FailureCode = "synthetic_provisioning_response_lost";
+
+        public Guid GrantId { get; } = Guid.NewGuid();
+
+        public DateTimeOffset ActivatedAt { get; private set; }
+
+        public int InvocationCount { get; private set; }
+
+        public Task<AccessProvisioningOutcome> GetOrCreateAsync(
+            AccessProvisioningRequest request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            InvocationCount++;
+            if (InvocationCount == 1)
+            {
+                ActivatedAt = clock.UtcNow;
+                return Task.FromResult<AccessProvisioningOutcome>(
+                    new AccessProvisioningFailed(
+                        new ApplicationFailure(
+                            ApplicationFailureKind.DependencyFailure,
+                            FailureCode,
+                            "The provider created the grant but its response was lost.")));
+            }
+
+            return Task.FromResult<AccessProvisioningOutcome>(
+                new AccessProvisioningSucceeded(GrantId, ActivatedAt));
+        }
     }
 }

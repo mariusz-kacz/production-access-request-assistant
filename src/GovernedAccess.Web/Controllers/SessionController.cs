@@ -101,10 +101,7 @@ public sealed class SessionController(IAntiforgery antiforgery) : ControllerBase
     {
         return kind switch
         {
-            PrincipalKind.Requester =>
-            [
-                "createRequest",
-            ],
+            PrincipalKind.Requester => [],
             PrincipalKind.BusinessApprover =>
             [
                 "decideBusinessRequests",

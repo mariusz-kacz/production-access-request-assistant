@@ -14,8 +14,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Security;
 
-public sealed class ApiSecurityTests
+[Trait(
+    IntegrationTestCollections.TestLevelTrait,
+    IntegrationTestCollections.FullHostLevel)]
+public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
+    private readonly GovernedAccessWebFactory factory = fixture.Factory;
+
     private static readonly Guid UnknownRequestId =
         Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
@@ -23,7 +29,7 @@ public sealed class ApiSecurityTests
     public async Task EveryProtectedApiSurfaceRejectsUnauthenticatedAccess()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = CreateHttpsClient(factory);
 
         var requests = new[]
@@ -34,16 +40,6 @@ public sealed class ApiSecurityTests
                 () => new HttpRequestMessage(
                     HttpMethod.Get,
                     $"/api/requests/{UnknownRequestId:D}")),
-            new Func<HttpRequestMessage>(
-                () => JsonRequest(
-                    HttpMethod.Post,
-                    "/api/request-drafts/prepare",
-                    new { intent = "Investigate the active production incident." })),
-            new Func<HttpRequestMessage>(
-                () => JsonRequest(
-                    HttpMethod.Post,
-                    "/api/requests",
-                    ValidCreateRequestBody())),
             new Func<HttpRequestMessage>(
                 () => JsonRequest(
                     HttpMethod.Post,
@@ -74,7 +70,6 @@ public sealed class ApiSecurityTests
     public async Task EveryUnsafeApiEndpointRejectsRequestsWithoutAntiforgery()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
         AssertUnsafeApiEndpointInventory(factory);
 
@@ -99,20 +94,6 @@ public sealed class ApiSecurityTests
         await AssertAntiforgeryRejectedAsync(
             requesterClient,
             new HttpRequestMessage(HttpMethod.Delete, "/api/demo/session"),
-            cancellationToken);
-        await AssertAntiforgeryRejectedAsync(
-            requesterClient,
-            JsonRequest(
-                HttpMethod.Post,
-                "/api/request-drafts/prepare",
-                new { intent = "Investigate the active production incident." }),
-            cancellationToken);
-        await AssertAntiforgeryRejectedAsync(
-            requesterClient,
-            JsonRequest(
-                HttpMethod.Post,
-                "/api/requests",
-                ValidCreateRequestBody()),
             cancellationToken);
         await AssertAntiforgeryRejectedAsync(
             businessApproverClient,
@@ -149,32 +130,12 @@ public sealed class ApiSecurityTests
     }
 
     [Fact]
-    public async Task BrowserClaimsCannotOverrideActorsApprovedScopeOrGrantLifetime()
+    public async Task BrowserDecisionClaimsCannotOverrideActorsApprovedScopeOrGrantLifetime()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
         await factory.ResetDatabaseAsync(cancellationToken);
 
-        using var requesterClient = await factory.CreateAuthenticatedClientAsync(
-            DemoPrincipalKeys.Requester,
-            cancellationToken);
-        var createBody = ValidCreateRequestBody();
-        AddOverpostedAuthority(
-            createBody,
-            actorId: DemoDataIds.DevOpsApproverPrincipalId,
-            approverId: DemoDataIds.ClientBetaApproverPrincipalId);
-        createBody["requesterId"] = DemoDataIds.DevOpsApproverPrincipalId;
-        createBody["businessApproverId"] = DemoDataIds.ClientBetaApproverPrincipalId;
-        createBody["approvedRoleId"] = ProductionRoleIds.Support;
-        createBody["durationHours"] = 72;
-
-        using var createResponse = await SendWithAntiforgeryAsync(
-            requesterClient,
-            JsonRequest(HttpMethod.Post, "/api/requests", createBody),
-            cancellationToken);
-        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
-        using var createJson = await ReadJsonAsync(createResponse, cancellationToken);
-        var requestId = createJson.RootElement.GetProperty("requestId").GetGuid();
+        var requestId = (await factory.CreateRequestFixtureAsync(cancellationToken)).Id;
 
         using var businessApproverClient = await factory.CreateAuthenticatedClientAsync(
             DemoPrincipalKeys.ClientAlphaApprover,
@@ -274,7 +235,7 @@ public sealed class ApiSecurityTests
     public async Task ApiAndMcpPathsNeverUseTheSpaFallback()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var factory = new GovernedAccessWebFactory();
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = CreateHttpsClient(factory);
 
         foreach (var path in new[] { "/api/security-probe", "/mcp/security-probe" })
@@ -295,8 +256,6 @@ public sealed class ApiSecurityTests
         [
             "DELETE /api/demo/session",
             "POST /api/demo/session",
-            "POST /api/request-drafts/prepare",
-            "POST /api/requests",
             "POST /api/requests/{requestId:guid}/business-decisions",
             "POST /api/requests/{requestId:guid}/devops-decisions",
             "POST /api/requests/{requestId:guid}/retry-provisioning",
@@ -320,18 +279,6 @@ public sealed class ApiSecurityTests
             .ToArray();
 
         Assert.Equal(expected, actual);
-    }
-
-    private static Dictionary<string, object?> ValidCreateRequestBody()
-    {
-        return new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["clientId"] = DemoDataIds.ClientAlphaId,
-            ["environmentId"] = DemoDataIds.ClientAlphaEnvironmentId,
-            ["requestedRole"] = ProductionRoleIds.ReadOnly,
-            ["justification"] = "Investigate the active production incident.",
-            ["incidentId"] = DemoDataIds.PrimaryIncidentId,
-        };
     }
 
     private static Dictionary<string, object?> DecisionBody()
