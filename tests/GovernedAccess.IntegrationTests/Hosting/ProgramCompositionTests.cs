@@ -23,9 +23,9 @@ namespace GovernedAccess.IntegrationTests.Hosting;
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
-[Collection(IntegrationTestCollections.FullApplication)]
 public sealed class ProgramCompositionTests(
     DefaultWebApplicationFixture applicationFixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
     private const string BotConnectionName = "BotServiceConnection";
 

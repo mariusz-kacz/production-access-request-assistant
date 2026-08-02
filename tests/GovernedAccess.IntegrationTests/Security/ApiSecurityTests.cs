@@ -14,11 +14,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Security;
 
-[Collection(IntegrationTestCollections.FullApplication)]
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
 public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
 

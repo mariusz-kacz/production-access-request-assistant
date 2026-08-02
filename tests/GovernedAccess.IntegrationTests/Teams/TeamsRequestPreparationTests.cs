@@ -16,11 +16,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Collection(IntegrationTestCollections.FullApplication)]
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixture)
+    : IClassFixture<ConfigurableTeamsFixture>
 {
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "

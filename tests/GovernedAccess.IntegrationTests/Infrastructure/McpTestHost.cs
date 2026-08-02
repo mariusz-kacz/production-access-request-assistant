@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -109,6 +110,7 @@ public sealed class McpTestHost : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
         configureServices(builder.Services);
         builder.Services.AddGovernedAccessMcp();

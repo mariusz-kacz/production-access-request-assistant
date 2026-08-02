@@ -17,11 +17,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-[Collection(IntegrationTestCollections.FullApplication)]
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
 public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
 

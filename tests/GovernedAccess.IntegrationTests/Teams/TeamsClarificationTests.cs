@@ -12,11 +12,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Collection(IntegrationTestCollections.FullApplication)]
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture)
+    : IClassFixture<HistorySensitiveTeamsFixture>
 {
     [Fact]
     public async Task DirectAndOrdinalRepliesCarryCandidateUntilItIsReady()

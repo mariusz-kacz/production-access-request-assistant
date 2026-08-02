@@ -14,11 +14,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
-[Collection(IntegrationTestCollections.FullApplication)]
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
 public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
+    : IClassFixture<DefaultWebApplicationFixture>
 {
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
 

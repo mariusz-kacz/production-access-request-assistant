@@ -155,7 +155,8 @@ npm ci --prefix src/GovernedAccess.Web/ClientApp
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 npm run build --prefix src/GovernedAccess.Web/ClientApp
 dotnet build ProductionAccessRequestAssistant.sln --no-restore
-dotnet test ProductionAccessRequestAssistant.sln --no-build
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build
 ```
 
 The suites require no live LLM. They cover domain rules, authorization, immutable
