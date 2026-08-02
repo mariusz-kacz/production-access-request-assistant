@@ -131,8 +131,6 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
     private readonly IHttpClientFactory? httpClientFactory;
     private readonly MafConversationTurnCoordinator turnCoordinator;
     private readonly Uri? mcpEndpoint;
-    private readonly TimeSpan mcpTimeout;
-    private readonly TimeSpan modelTimeout;
 
     public MafRequestPreparationInterpreter(
         IChatClient chatClient,
@@ -184,30 +182,9 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         ArgumentNullException.ThrowIfNull(sessionStore);
         ArgumentNullException.ThrowIfNull(turnCoordinator);
 
-        modelTimeout = options.Value.ModelTimeout;
-        if (modelTimeout <= TimeSpan.Zero
-            || modelTimeout > TeamsAccessRequestOptions.MaximumModelTimeout)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(options),
-                modelTimeout,
-                "The model timeout must be positive and no greater than 30 seconds.");
-        }
-
         if (requireMcp)
         {
             ArgumentNullException.ThrowIfNull(httpClientFactory);
-            mcpTimeout = options.Value.McpTimeout;
-            if (mcpTimeout <= TimeSpan.Zero
-                || mcpTimeout > TeamsAccessRequestOptions.MaximumMcpTimeout
-                || mcpTimeout > modelTimeout)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(options),
-                    mcpTimeout,
-                    "The MCP timeout must be positive, no greater than 5 seconds, and no greater than the model timeout.");
-            }
-
             var trustedWebBaseUri = options.Value.TrustedWebBaseUri
                 ?? throw new ArgumentException(
                     "A trusted Web base URI is required for the loopback MCP endpoint.",
@@ -241,11 +218,6 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
     {
         ArgumentNullException.ThrowIfNull(turn);
 
-        using var modelDeadline = new CancellationTokenSource(modelTimeout);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            modelDeadline.Token);
-
         try
         {
             if (httpClientFactory is null)
@@ -253,18 +225,18 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                 return await ExecuteTurnAsync(
                     turn,
                     tools: [],
-                    linkedCancellation.Token);
+                    cancellationToken);
             }
 
             await using var mcpClient = await CreateMcpClientAsync(
-                linkedCancellation.Token);
+                cancellationToken);
             var tools = await GetAllowedMcpToolsAsync(
                 mcpClient,
-                linkedCancellation.Token);
+                cancellationToken);
             return await ExecuteTurnAsync(
                 turn,
                 tools,
-                linkedCancellation.Token);
+                cancellationToken);
         }
         catch (MalformedModelOutputException)
         {
@@ -273,11 +245,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return Failure(RequestPreparationInterpretationOutcomeKind.Cancelled);
-        }
-        catch (OperationCanceledException) when (modelDeadline.IsCancellationRequested)
-        {
-            return Failure(RequestPreparationInterpretationOutcomeKind.Timeout);
+            throw;
         }
         catch (OperationCanceledException)
         {
@@ -358,19 +326,13 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
     private async Task<McpClient> CreateMcpClientAsync(
         CancellationToken cancellationToken)
     {
-        using var mcpDeadline = new CancellationTokenSource(mcpTimeout);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            mcpDeadline.Token);
         var httpClient = httpClientFactory!.CreateClient(McpHttpClientName);
-        httpClient.Timeout = mcpTimeout;
         var transport = new HttpClientTransport(
             new HttpClientTransportOptions
             {
                 Endpoint = mcpEndpoint!,
                 Name = "governed-access-request-preparation",
                 TransportMode = HttpTransportMode.StreamableHttp,
-                ConnectionTimeout = mcpTimeout,
             },
             httpClient,
             ownsHttpClient: true);
@@ -379,7 +341,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         {
             return await McpClient.CreateAsync(
                 transport,
-                cancellationToken: linkedCancellation.Token);
+                cancellationToken: cancellationToken);
         }
         catch
         {
@@ -388,16 +350,12 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         }
     }
 
-    private async Task<IReadOnlyList<McpClientTool>> GetAllowedMcpToolsAsync(
+    private static async Task<IReadOnlyList<McpClientTool>> GetAllowedMcpToolsAsync(
         McpClient mcpClient,
         CancellationToken cancellationToken)
     {
-        using var mcpDeadline = new CancellationTokenSource(mcpTimeout);
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            mcpDeadline.Token);
         var tools = await mcpClient.ListToolsAsync(
-            cancellationToken: linkedCancellation.Token);
+            cancellationToken: cancellationToken);
         var discoveredNames = tools
             .Select(tool => tool.Name)
             .Order(StringComparer.Ordinal)

@@ -144,8 +144,9 @@ public sealed class ProgramCompositionTests(
         Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, options.AllowedTenantId);
         Assert.Equal(BotConnectionName, options.BotConnectionName);
         Assert.Equal(GovernedAccessWebFactory.DefaultTrustedWebBaseUri, options.TrustedWebBaseUri);
-        Assert.Equal(TeamsAccessRequestOptions.MaximumModelTimeout, options.ModelTimeout);
-        Assert.Equal(TeamsAccessRequestOptions.MaximumMcpTimeout, options.McpTimeout);
+        Assert.Equal(
+            TeamsAccessRequestOptions.MaximumRequestTimeout,
+            options.RequestTimeout);
         Assert.Equal(
             TeamsAccessRequestOptions.RequiredPreparationLifetime,
             options.PreparationLifetime);
@@ -169,8 +170,7 @@ public sealed class ProgramCompositionTests(
             ("TokenValidation:Audiences:0", "44444444-4444-4444-4444-444444444444", "TokenValidation:Audiences"),
             ("ConnectionsMap:0:ServiceUrl", "https://smba.trafficmanager.net/emea/", "ConnectionsMap"),
             ("TeamsAccessRequest:TrustedWebBaseUri", "http://governed-access.test/", "TrustedWebBaseUri"),
-            ("TeamsAccessRequest:ModelTimeout", "00:00:31", "ModelTimeout"),
-            ("TeamsAccessRequest:McpTimeout", "00:00:06", "McpTimeout"),
+            ("TeamsAccessRequest:RequestTimeout", "00:01:41", "RequestTimeout"),
             ("TeamsAccessRequest:PreparationLifetime", "00:29:59", "PreparationLifetime"),
         ];
 
@@ -234,8 +234,7 @@ public sealed class ProgramCompositionTests(
             ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,
             ["TeamsAccessRequest:TrustedWebBaseUri"] =
                 GovernedAccessWebFactory.DefaultTrustedWebBaseUri.AbsoluteUri,
-            ["TeamsAccessRequest:ModelTimeout"] = "00:00:30",
-            ["TeamsAccessRequest:McpTimeout"] = "00:00:05",
+            ["TeamsAccessRequest:RequestTimeout"] = "00:01:40",
             ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
         };
 

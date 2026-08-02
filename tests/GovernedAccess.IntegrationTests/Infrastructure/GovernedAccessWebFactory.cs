@@ -322,8 +322,7 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,
             ["TeamsAccessRequest:TrustedWebBaseUri"] =
                 TrustedWebBaseUri.AbsoluteUri,
-            ["TeamsAccessRequest:ModelTimeout"] = "00:00:30",
-            ["TeamsAccessRequest:McpTimeout"] = "00:00:05",
+            ["TeamsAccessRequest:RequestTimeout"] = "00:01:40",
             ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
         };
     }

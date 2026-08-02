@@ -263,7 +263,6 @@ public sealed class MafConversationSessionStoreTests
             Options.Create(
                 new TeamsAccessRequestOptions
                 {
-                    ModelTimeout = TimeSpan.FromSeconds(5),
                 }),
             NullLoggerFactory.Instance,
             sessionStore,

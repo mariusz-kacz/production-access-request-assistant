@@ -257,8 +257,8 @@ Confirmation never reads this memory.
 
 The adapter defaults to:
 
-- a 30-second overall model deadline;
-- a 5-second MCP connection and call timeout;
+- one 100-second ASP.NET Core request-safety deadline on the Teams activity
+  endpoint, propagated through MCP and model work;
 - at most six model/tool iterations;
 - no concurrent tool invocation; and
 - termination on unknown tool calls.
@@ -488,8 +488,7 @@ Timeout defaults are:
 
 | Boundary | Default |
 |---|---:|
-| Draft interpretation/model operation | 30 seconds |
-| MCP connection and calls | 5 seconds |
+| Teams activity HTTP request, including MCP and model work | 100 seconds |
 | Synthetic provisioning operation | 10 seconds |
 
 Caller cancellation is linked through asynchronous boundaries. Cancellation does not

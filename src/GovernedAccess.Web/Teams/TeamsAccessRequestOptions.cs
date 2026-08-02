@@ -6,8 +6,7 @@ public sealed class TeamsAccessRequestOptions
 {
     public const string SectionName = "TeamsAccessRequest";
 
-    public static readonly TimeSpan MaximumModelTimeout = TimeSpan.FromSeconds(30);
-    public static readonly TimeSpan MaximumMcpTimeout = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan MaximumRequestTimeout = TimeSpan.FromSeconds(100);
     public static readonly TimeSpan RequiredPreparationLifetime = TimeSpan.FromMinutes(30);
 
     public string AllowedTenantId { get; init; } = string.Empty;
@@ -16,9 +15,7 @@ public sealed class TeamsAccessRequestOptions
 
     public Uri? TrustedWebBaseUri { get; init; }
 
-    public TimeSpan ModelTimeout { get; init; }
-
-    public TimeSpan McpTimeout { get; init; }
+    public TimeSpan RequestTimeout { get; init; }
 
     public TimeSpan PreparationLifetime { get; init; }
 }
@@ -224,19 +221,11 @@ public sealed class TeamsAccessRequestOptionsValidator(IConfiguration configurat
         TeamsAccessRequestOptions options,
         List<string> failures)
     {
-        if (options.ModelTimeout <= TimeSpan.Zero
-            || options.ModelTimeout > TeamsAccessRequestOptions.MaximumModelTimeout)
+        if (options.RequestTimeout <= TimeSpan.Zero
+            || options.RequestTimeout > TeamsAccessRequestOptions.MaximumRequestTimeout)
         {
             failures.Add(
-                $"{TeamsAccessRequestOptions.SectionName}:ModelTimeout must be positive and no greater than 30 seconds.");
-        }
-
-        if (options.McpTimeout <= TimeSpan.Zero
-            || options.McpTimeout > TeamsAccessRequestOptions.MaximumMcpTimeout
-            || options.McpTimeout > options.ModelTimeout)
-        {
-            failures.Add(
-                $"{TeamsAccessRequestOptions.SectionName}:McpTimeout must be positive, no greater than 5 seconds, and no greater than ModelTimeout.");
+                $"{TeamsAccessRequestOptions.SectionName}:RequestTimeout must be positive and no greater than 100 seconds.");
         }
 
         if (options.PreparationLifetime

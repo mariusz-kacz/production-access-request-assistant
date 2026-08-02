@@ -118,8 +118,7 @@ The host uses standard ASP.NET Core configuration. The current settings are:
 | `TeamsAccessRequest:AllowedTenantId` | empty (fail closed) | Accepted Teams tenant |
 | `TeamsAccessRequest:BotConnectionName` | `BotServiceConnection` | Configured bot connection |
 | `TeamsAccessRequest:TrustedWebBaseUri` | empty (fail closed) | Trusted origin for request links |
-| `TeamsAccessRequest:McpTimeout` | `00:00:05` | MCP deadline |
-| `TeamsAccessRequest:ModelTimeout` | `00:00:30` | Overall Teams interpretation deadline |
+| `TeamsAccessRequest:RequestTimeout` | `00:01:40` | Teams endpoint resource-safety deadline, including MCP and model work |
 | `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Immutable confirmation window |
 
 For a temporary PowerShell override, replace `:` with `__`:
@@ -129,8 +128,7 @@ $env:ConnectionStrings__GovernedAccess = "Data Source=governed-access-dev.db"
 $env:Connections__BotServiceConnection__Settings__Authority = "https://login.microsoftonline.com/botframework.com"
 $env:TeamsAccessRequest__AllowedTenantId = "<development-tenant-guid>"
 $env:TeamsAccessRequest__TrustedWebBaseUri = "https://localhost:7251/"
-$env:TeamsAccessRequest__McpTimeout = "00:00:05"
-$env:TeamsAccessRequest__ModelTimeout = "00:00:30"
+$env:TeamsAccessRequest__RequestTimeout = "00:01:40"
 dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 

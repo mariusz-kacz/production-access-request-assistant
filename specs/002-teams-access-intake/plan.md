@@ -56,8 +56,9 @@ while the host continues serving `/api`, `/mcp`, and the React bundle
 as the sole request-creation adapter and Web as the retained register/decision surface
 
 **Performance Goals**: Complete deterministic confirmation within the Teams invoke
-response window (target under 5 seconds); preserve the 30-second model and 5-second
-MCP deadlines; reach a final request within five developer messages for at least 90%
+response window (target under 5 seconds); preserve one 100-second request-safety
+deadline on the Teams endpoint covering MCP and model work; reach a final request within
+five developer messages for at least 90%
 of representative test utterances
 
 **Constraints**: Personal Teams chat only; one fixed synthetic requester mapping;

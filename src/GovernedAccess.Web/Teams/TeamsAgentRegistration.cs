@@ -39,6 +39,7 @@ public static class TeamsAgentRegistration
         builder.Services.AddSingleton<
             IValidateOptions<TeamsAccessRequestOptions>,
             TeamsAccessRequestOptionsValidator>();
+        builder.Services.AddRequestTimeouts();
 
         AddActivityAuthentication(builder.Services, builder.Configuration);
 
@@ -71,7 +72,12 @@ public static class TeamsAgentRegistration
             .MapAgentEndpoints<ScopedTeamsAccessRequestAgentDispatcher>(
                 requireAuth: true,
                 path: MessagesPath)
-            .DisableAntiforgery();
+            .DisableAntiforgery()
+            .WithRequestTimeout(
+                app.Services
+                    .GetRequiredService<IOptions<TeamsAccessRequestOptions>>()
+                    .Value
+                    .RequestTimeout);
 
         // The dedicated integration host supplies an authenticated SDK-shaped
         // identity through its test scheme. Every other environment requires

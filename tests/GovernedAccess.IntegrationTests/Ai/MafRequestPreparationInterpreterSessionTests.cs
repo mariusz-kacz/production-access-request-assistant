@@ -209,7 +209,6 @@ public sealed class MafRequestPreparationInterpreterSessionTests
             Options.Create(
                 new TeamsAccessRequestOptions
                 {
-                    ModelTimeout = TimeSpan.FromSeconds(5),
                 }),
             NullLoggerFactory.Instance,
             new InMemoryAgentSessionStore(),

@@ -160,7 +160,6 @@ public sealed class TeamsCandidateValidationTests
             Options.Create(
                 new TeamsAccessRequestOptions
                 {
-                    ModelTimeout = TimeSpan.FromSeconds(5),
                 }),
             NullLoggerFactory.Instance,
             new InMemoryAgentSessionStore(),

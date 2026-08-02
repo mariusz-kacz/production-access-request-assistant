@@ -67,6 +67,7 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseMiddleware<CorrelationMiddleware>();
+app.UseRequestTimeouts();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
