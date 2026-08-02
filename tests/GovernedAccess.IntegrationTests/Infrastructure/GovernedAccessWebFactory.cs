@@ -10,6 +10,8 @@ using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
+using GovernedAccess.Web.Teams;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
@@ -245,6 +247,20 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                         client.TerminateOnUnknownCalls = true;
                     });
             }
+
+            // Full-host tests retain only transport-to-interpreter wiring. Exact MCP
+            // catalog and timeout behavior is covered by the lightweight MCP
+            // component boundary, so this host uses the internal model-only seam.
+            services.RemoveAll<IRequestPreparationInterpreter>();
+            services.AddSingleton<IRequestPreparationInterpreter>(serviceProvider =>
+                new MafRequestPreparationInterpreter(
+                    serviceProvider.GetRequiredService<IChatClient>(),
+                    serviceProvider.GetRequiredService<
+                        IOptions<TeamsAccessRequestOptions>>(),
+                    serviceProvider.GetRequiredService<ILoggerFactory>(),
+                    serviceProvider.GetRequiredService<AgentSessionStore>(),
+                    serviceProvider.GetRequiredService<
+                        MafConversationTurnCoordinator>()));
 
             services.AddSingleton(_ =>
             {

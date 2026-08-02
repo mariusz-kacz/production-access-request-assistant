@@ -98,6 +98,16 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         Assert.True(
             response.StatusCode == HttpStatusCode.Unauthorized,
             $"Expected 401 but received {(int)response.StatusCode}: {responseBody}");
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider
+                .GetRequiredService<GovernedAccessDbContext>();
+            Assert.Empty(
+                await dbContext.RequestIntakeSessions
+                    .AsNoTracking()
+                    .ToListAsync(cancellationToken));
+        }
+
         await AssertNoWorkflowStateAsync(factory, cancellationToken);
     }
 

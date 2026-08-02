@@ -257,7 +257,29 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         ApplicationFailure failure,
         CancellationToken cancellationToken)
     {
-        var message = failure.Kind switch
+        var message = failure.Code switch
+        {
+            RequestIntakeService.MalformedModelOutputCode =>
+                "The assistant response could not be validated. No request was submitted; please try again.",
+            RequestIntakeService.ModelTimeoutCode =>
+                "Request preparation timed out before any request was submitted. Please try again.",
+            RequestIntakeService.ModelCancelledCode =>
+                "Request preparation was cancelled before any request was submitted. Send the request again when you are ready.",
+            RequestIntakeService.ModelUnavailableCode =>
+                "Request preparation is temporarily unavailable. No request was submitted; please try again later.",
+            _ => CreateGenericPreparationFailureMessage(failure.Kind),
+        };
+
+        return SendTextAsync(
+            turnContext,
+            message,
+            InputHints.AcceptingInput,
+            cancellationToken);
+    }
+
+    private static string CreateGenericPreparationFailureMessage(
+        ApplicationFailureKind failureKind) =>
+        failureKind switch
         {
             ApplicationFailureKind.Timeout =>
                 "Request preparation timed out before any request was submitted. Please try again.",
@@ -273,13 +295,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             _ =>
                 "The request could not be prepared safely. No request was submitted; please try again.",
         };
-
-        return SendTextAsync(
-            turnContext,
-            message,
-            InputHints.AcceptingInput,
-            cancellationToken);
-    }
 
     private static string RenderCandidateRejection(
         IReadOnlyList<FieldValidationError> validationErrors)
@@ -317,11 +332,32 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     private static string CreateConfirmationFailureMessage(
         ApplicationFailure failure)
     {
-        return failure.Kind switch
+        return failure.Code switch
+        {
+            RequestIntakeService.ForbiddenCode =>
+                CreateConcealedConfirmationMessage(),
+            RequestIntakeService.ExpiredCode =>
+                "This prepared request has expired. No request was submitted; start a new request in this chat.",
+            RequestIntakeService.SupersededCode =>
+                "This prepared request was replaced by a newer preparation. No request was submitted; use the latest card or start a new request.",
+            RequestIntakeService.InvalidatedCode =>
+                "This prepared request is no longer valid against current production context. No request was submitted; start a new request in this chat.",
+            RequestIntakeService.NotReadyCode =>
+                "This preparation is not ready for confirmation. No request was submitted; continue the request in this chat.",
+            RequestIntakeService.ScopeMismatchCode
+                or RequestIntakeService.SubmissionEvidenceInvalidCode =>
+                "The request could not be confirmed safely. No request was submitted; start a new request in this chat.",
+            _ => CreateGenericConfirmationFailureMessage(failure.Kind),
+        };
+    }
+
+    private static string CreateGenericConfirmationFailureMessage(
+        ApplicationFailureKind failureKind) =>
+        failureKind switch
         {
             ApplicationFailureKind.Unauthorized
                 or ApplicationFailureKind.NotFound =>
-                "The prepared request could not be found for this authenticated conversation. No request was submitted.",
+                CreateConcealedConfirmationMessage(),
             ApplicationFailureKind.InvalidTransition =>
                 "This prepared request can no longer be submitted. Start a new request in this chat.",
             ApplicationFailureKind.ConcurrencyConflict =>
@@ -332,7 +368,9 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             _ =>
                 "The request could not be confirmed safely. No request was submitted.",
         };
-    }
+
+    private static string CreateConcealedConfirmationMessage() =>
+        "The prepared request could not be found for this authenticated conversation. No request was submitted.";
 
     private static bool TryReadConfirmationData(
         object? data,

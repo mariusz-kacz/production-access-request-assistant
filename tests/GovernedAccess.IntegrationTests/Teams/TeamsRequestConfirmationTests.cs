@@ -220,36 +220,50 @@ public sealed class TeamsRequestConfirmationTests
         var concealedMessage =
             "The prepared request could not be found for this authenticated conversation. No request was submitted.";
 
-        var malformedCases = new object[]
+        var malformedCases = new (Activity Activity, HttpStatusCode Status)[]
         {
-            new
-            {
-                schemaVersion = 2,
-                preparedRequestId = session.Id.ToString("D"),
-            },
-            new
-            {
-                schemaVersion = 1,
-                preparedRequestId = "not-a-guid",
-            },
-            new
-            {
-                schemaVersion = 1,
-                preparedRequestId = session.Id.ToString("D"),
-                requestedRoleId = ProductionRoleIds.Support,
-            },
+            (
+                CreateConfirmationActivity(
+                    new
+                    {
+                        schemaVersion = 2,
+                        preparedRequestId = session.Id.ToString("D"),
+                    }),
+                HttpStatusCode.BadRequest),
+            (
+                CreateConfirmationActivity(
+                    ValidConfirmationData(session.Id),
+                    verb: "unknownVerb"),
+                HttpStatusCode.NotImplemented),
+            (
+                CreateConfirmationActivity(
+                    new
+                    {
+                        schemaVersion = 1,
+                        preparedRequestId = "not-a-guid",
+                    }),
+                HttpStatusCode.BadRequest),
+            (
+                CreateConfirmationActivity(
+                    new
+                    {
+                        schemaVersion = 1,
+                        preparedRequestId = session.Id.ToString("D"),
+                        requestedRoleId = ProductionRoleIds.Support,
+                    }),
+                HttpStatusCode.BadRequest),
         };
 
-        foreach (var malformedData in malformedCases)
+        foreach (var malformedCase in malformedCases)
         {
             using var response = await client.PostAsJsonAsync(
                 "/api/messages",
-                CreateConfirmationActivity(malformedData),
+                malformedCase.Activity,
                 ProtocolJsonSerializer.SerializationOptions,
                 cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(malformedCase.Status, response.StatusCode);
             Assert.DoesNotContain(
                 session.ReservedRequestId!.Value.ToString("D"),
                 body,
@@ -458,7 +472,8 @@ public sealed class TeamsRequestConfirmationTests
     private static Activity CreateConfirmationActivity(
         object actionData,
         string? actorId = null,
-        string? conversationId = null)
+        string? conversationId = null,
+        string verb = PreparedRequestCardFactory.ConfirmationVerb)
     {
         var builder = new FakeTeamsActivityBuilder()
             .WithText(null)
@@ -469,7 +484,7 @@ public sealed class TeamsRequestConfirmationTests
                 {
                     type = "Action.Execute",
                     title = "Confirm and submit",
-                    verb = PreparedRequestCardFactory.ConfirmationVerb,
+                    verb,
                     associatedInputs = "none",
                     data = actionData,
                 },

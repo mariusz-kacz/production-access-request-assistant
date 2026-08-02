@@ -8,6 +8,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol;
+using ModelContextProtocol.Client;
 
 namespace GovernedAccess.Web.Ai;
 
@@ -17,6 +19,15 @@ namespace GovernedAccess.Web.Ai;
 /// </summary>
 public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterpreter
 {
+    internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
+
+    private static readonly string[] AllowedMcpToolNames =
+    [
+        "get_available_roles",
+        "get_incident",
+        "get_production_environment",
+    ];
+
     private const string AgentInstructions =
         """
         Interpret one temporary production-access request turn. Each user message is a server-owned
@@ -117,7 +128,10 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         """).RootElement.Clone();
 
     private readonly AIHostAgent agent;
+    private readonly IHttpClientFactory? httpClientFactory;
     private readonly MafConversationTurnCoordinator turnCoordinator;
+    private readonly Uri? mcpEndpoint;
+    private readonly TimeSpan mcpTimeout;
     private readonly TimeSpan modelTimeout;
 
     public MafRequestPreparationInterpreter(
@@ -125,7 +139,44 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         IOptions<TeamsAccessRequestOptions> options,
         ILoggerFactory loggerFactory,
         AgentSessionStore sessionStore,
+        MafConversationTurnCoordinator turnCoordinator,
+        IHttpClientFactory httpClientFactory)
+        : this(
+            chatClient,
+            options,
+            loggerFactory,
+            sessionStore,
+            turnCoordinator,
+            httpClientFactory,
+            requireMcp: true)
+    {
+    }
+
+    internal MafRequestPreparationInterpreter(
+        IChatClient chatClient,
+        IOptions<TeamsAccessRequestOptions> options,
+        ILoggerFactory loggerFactory,
+        AgentSessionStore sessionStore,
         MafConversationTurnCoordinator turnCoordinator)
+        : this(
+            chatClient,
+            options,
+            loggerFactory,
+            sessionStore,
+            turnCoordinator,
+            httpClientFactory: null,
+            requireMcp: false)
+    {
+    }
+
+    private MafRequestPreparationInterpreter(
+        IChatClient chatClient,
+        IOptions<TeamsAccessRequestOptions> options,
+        ILoggerFactory loggerFactory,
+        AgentSessionStore sessionStore,
+        MafConversationTurnCoordinator turnCoordinator,
+        IHttpClientFactory? httpClientFactory,
+        bool requireMcp)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentNullException.ThrowIfNull(options);
@@ -141,6 +192,28 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                 nameof(options),
                 modelTimeout,
                 "The model timeout must be positive and no greater than 30 seconds.");
+        }
+
+        if (requireMcp)
+        {
+            ArgumentNullException.ThrowIfNull(httpClientFactory);
+            mcpTimeout = options.Value.McpTimeout;
+            if (mcpTimeout <= TimeSpan.Zero
+                || mcpTimeout > TeamsAccessRequestOptions.MaximumMcpTimeout
+                || mcpTimeout > modelTimeout)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(options),
+                    mcpTimeout,
+                    "The MCP timeout must be positive, no greater than 5 seconds, and no greater than the model timeout.");
+            }
+
+            var trustedWebBaseUri = options.Value.TrustedWebBaseUri
+                ?? throw new ArgumentException(
+                    "A trusted Web base URI is required for the loopback MCP endpoint.",
+                    nameof(options));
+            mcpEndpoint = new Uri(trustedWebBaseUri, "mcp");
+            this.httpClientFactory = httpClientFactory;
         }
 
         var chatAgent = new ChatClientAgent(
@@ -175,38 +248,22 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
 
         try
         {
-            var runOptions = new ChatClientAgentRunOptions(
-                new ChatOptions
-                {
-                    AllowMultipleToolCalls = false,
-                    ResponseFormat = ChatResponseFormat.ForJsonSchema(
-                        ProposalSchema,
-                        schemaName: "request_intake_proposal",
-                        schemaDescription:
-                            "An untrusted structured proposal for one access-request preparation turn."),
-                    Temperature = 0,
-                });
+            if (httpClientFactory is null)
+            {
+                return await ExecuteTurnAsync(
+                    turn,
+                    tools: [],
+                    linkedCancellation.Token);
+            }
 
-            return await turnCoordinator.ExecuteTurnAsync(
-                turn.IntakeId,
-                agent,
-                async (session, operationCancellationToken) =>
-                {
-                    var response = await agent.RunAsync(
-                        CreateTurnContext(turn),
-                        session,
-                        runOptions,
-                        operationCancellationToken);
-
-                    var outcome = ParseResponse(response.Text);
-                    if (outcome.Kind
-                        != RequestPreparationInterpretationOutcomeKind.Proposal)
-                    {
-                        throw new MalformedModelOutputException();
-                    }
-
-                    return outcome;
-                },
+            await using var mcpClient = await CreateMcpClientAsync(
+                linkedCancellation.Token);
+            var tools = await GetAllowedMcpToolsAsync(
+                mcpClient,
+                linkedCancellation.Token);
+            return await ExecuteTurnAsync(
+                turn,
+                tools,
                 linkedCancellation.Token);
         }
         catch (MalformedModelOutputException)
@@ -238,6 +295,123 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                 ? RequestPreparationInterpretationOutcomeKind.Cancelled
                 : RequestPreparationInterpretationOutcomeKind.Unavailable);
         }
+        catch (McpException)
+        {
+            return Failure(cancellationToken.IsCancellationRequested
+                ? RequestPreparationInterpretationOutcomeKind.Cancelled
+                : RequestPreparationInterpretationOutcomeKind.Unavailable);
+        }
+        catch (IOException)
+        {
+            return Failure(cancellationToken.IsCancellationRequested
+                ? RequestPreparationInterpretationOutcomeKind.Cancelled
+                : RequestPreparationInterpretationOutcomeKind.Unavailable);
+        }
+        catch (McpCatalogException)
+        {
+            return Failure(
+                RequestPreparationInterpretationOutcomeKind.Unavailable);
+        }
+    }
+
+    private async Task<RequestPreparationInterpretationOutcome> ExecuteTurnAsync(
+        RequestPreparationTurn turn,
+        IReadOnlyList<McpClientTool> tools,
+        CancellationToken cancellationToken)
+    {
+        var runOptions = new ChatClientAgentRunOptions(
+            new ChatOptions
+            {
+                AllowMultipleToolCalls = false,
+                ResponseFormat = ChatResponseFormat.ForJsonSchema(
+                    ProposalSchema,
+                    schemaName: "request_intake_proposal",
+                    schemaDescription:
+                        "An untrusted structured proposal for one access-request preparation turn."),
+                Temperature = 0,
+                Tools = tools.Cast<AITool>().ToArray(),
+            });
+
+        return await turnCoordinator.ExecuteTurnAsync(
+            turn.IntakeId,
+            agent,
+            async (session, operationCancellationToken) =>
+            {
+                var response = await agent.RunAsync(
+                    CreateTurnContext(turn),
+                    session,
+                    runOptions,
+                    operationCancellationToken);
+
+                var outcome = ParseResponse(response.Text);
+                if (outcome.Kind
+                    != RequestPreparationInterpretationOutcomeKind.Proposal)
+                {
+                    throw new MalformedModelOutputException();
+                }
+
+                return outcome;
+            },
+            cancellationToken);
+    }
+
+    private async Task<McpClient> CreateMcpClientAsync(
+        CancellationToken cancellationToken)
+    {
+        using var mcpDeadline = new CancellationTokenSource(mcpTimeout);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            mcpDeadline.Token);
+        var httpClient = httpClientFactory!.CreateClient(McpHttpClientName);
+        httpClient.Timeout = mcpTimeout;
+        var transport = new HttpClientTransport(
+            new HttpClientTransportOptions
+            {
+                Endpoint = mcpEndpoint!,
+                Name = "governed-access-request-preparation",
+                TransportMode = HttpTransportMode.StreamableHttp,
+                ConnectionTimeout = mcpTimeout,
+            },
+            httpClient,
+            ownsHttpClient: true);
+
+        try
+        {
+            return await McpClient.CreateAsync(
+                transport,
+                cancellationToken: linkedCancellation.Token);
+        }
+        catch
+        {
+            await transport.DisposeAsync();
+            throw;
+        }
+    }
+
+    private async Task<IReadOnlyList<McpClientTool>> GetAllowedMcpToolsAsync(
+        McpClient mcpClient,
+        CancellationToken cancellationToken)
+    {
+        using var mcpDeadline = new CancellationTokenSource(mcpTimeout);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            mcpDeadline.Token);
+        var tools = await mcpClient.ListToolsAsync(
+            cancellationToken: linkedCancellation.Token);
+        var discoveredNames = tools
+            .Select(tool => tool.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (!discoveredNames.SequenceEqual(
+                AllowedMcpToolNames,
+                StringComparer.Ordinal)
+            || tools.Any(tool => tool.ProtocolTool.Annotations?.ReadOnlyHint != true))
+        {
+            throw new McpCatalogException();
+        }
+
+        return tools.ToArray();
     }
 
     private static string CreateTurnContext(RequestPreparationTurn turn) =>
@@ -297,6 +471,10 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         string? IncidentId);
 
     private sealed class MalformedModelOutputException : Exception
+    {
+    }
+
+    private sealed class McpCatalogException : Exception
     {
     }
 
