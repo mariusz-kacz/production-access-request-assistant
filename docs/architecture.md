@@ -1,11 +1,11 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-30
+- **Last reviewed**: 2026-08-02
 - **Scope**: Governed Production Access Request Assistant MVP
 
-The history-first Teams preparation details describe the target state after Phase 6
-of `specs/002-teams-access-intake/tasks.md`.
+The history-first Teams preparation and Teams-only creation boundaries described here
+are implemented and covered by the current feature test suite.
 
 ## Purpose
 
@@ -31,7 +31,8 @@ The implementation is shaped by the following constraints:
 - a thin React application served from that host;
 - local SQLite persistence and a fixed synthetic dataset;
 - synthetic cookie authentication with exactly four demo principals;
-- a deterministic chat client instead of a live model;
+- a deterministic chat client for automated validation, behind the same boundary a
+  live model can later implement;
 - a real, read-only MCP endpoint with exactly three tools;
 - no model-visible approval, workflow, or provisioning capability;
 - immutable submitted requests and request-bound approvals;
@@ -95,17 +96,18 @@ hosts:
 - antiforgery protection;
 - correlation middleware and application instrumentation;
 - the compiled React static assets and SPA fallback;
-- draft interpretation and the deterministic `IChatClient`;
+- Teams request interpretation, the deterministic `IChatClient`, and MAF's native
+  process-local session store;
 - a real MCP client;
 - the stateless Streamable HTTP `/mcp` server;
 - request validation and workflow application services;
 - EF Core with one SQLite database; and
 - the synthetic access provisioner.
 
-The drafting adapter reaches `/mcp` over HTTP, even though client and server are in the
-same process. This preserves the real MCP initialization, tool discovery,
-serialization, invocation, timeout, and failure boundary without creating another
-deployable service.
+The Teams interpretation adapter reaches `/mcp` over HTTP, even though client and
+server are in the same process. This preserves the real MCP initialization, tool
+discovery, serialization, invocation, timeout, and failure boundary without creating
+another deployable service.
 
 The SPA fallback handles browser routes only. Unknown `/api/*` and `/mcp/*` paths
 return `404` and are never rewritten to `index.html`.
@@ -130,11 +132,12 @@ Core contains:
 - domain entities and workflow evidence;
 - business and DevOps decision policies;
 - workflow evidence validation;
-- request validation, submission, query, workflow, and protected provisioning
+- request validation, intake, confirmation-only submission staging, query, workflow,
+  and protected provisioning
   services;
 - explicit application and provider outcomes; and
-- ports for request context, workflow persistence, time, draft interpretation, and
-  provisioning.
+- ports for request context, workflow persistence, intake persistence, time,
+  request-preparation interpretation, and provisioning.
 
 Core does not reference ASP.NET Core MVC, EF Core, React, `Microsoft.Extensions.AI`,
 or the MCP SDK. AI-provider and protocol-specific types are translated before they
@@ -158,8 +161,9 @@ Web is the composition and infrastructure layer. It contains:
 
 - API controllers and Problem Details translation;
 - synthetic authentication and antiforgery;
-- Teams activity handling, `MafRequestPreparationInterpreter`, bounded
-  `MafConversationSessionCache`, and `DeterministicChatClient`;
+- Teams activity handling, `MafRequestPreparationInterpreter`, MAF's singleton
+  `InMemoryAgentSessionStore`, the process-lifetime
+  `MafConversationTurnCoordinator`, and `DeterministicChatClient`;
 - the EF Core database context, request-context reader, workflow store, and seeder;
 - the synthetic provisioner;
 - correlation and activity instrumentation; and
@@ -175,8 +179,9 @@ request and response shapes, call application services, and map typed failures.
 | React UI | Display the request register/detail, submit structured approval or retry actions, and show audit evidence. | Request creation, identity, authorization, approver assignment, or valid workflow transitions. |
 | MVC controllers | Enforce endpoint authentication/antiforgery attributes, extract server identity, translate HTTP contracts, and invoke application services. | Domain policy or provisioning eligibility. |
 | `TeamsAccessRequestAgent` | Route authenticated personal Teams activities to preparation or deterministic confirmation. | Actor authority, readiness, approval, or provisioning. |
-| `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the bounded agent turn, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
-| `MafConversationSessionCache` | Keep one bounded process-local MAF session per collecting intake, serialize its turns, report cache loss, and discard it on limits or lifecycle completion. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
+| `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the agent turn under request cancellation, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
+| `AIHostAgent` with `InMemoryAgentSessionStore` | Load and save MAF-owned conversation sessions by server-generated intake ID for the process lifetime. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
+| `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
 | `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
 | `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
 | `RequestSubmissionService` | Revalidate and stage a reserved-ID request and request-created audit event for confirmation; never save independently. | Public/browser submission or later approval/provisioning transitions. |
@@ -198,7 +203,8 @@ sequenceDiagram
     participant Agent as TeamsAccessRequestAgent
     participant Intake as RequestIntakeService
     participant Draft as MafRequestPreparationInterpreter
-    participant Memory as Process-local MAF session cache
+    participant Memory as Native MAF session store
+    participant Gate as Per-intake turn coordinator
     participant Chat as IChatClient
     participant McpClient as MCP client
     participant McpServer as /mcp server
@@ -209,11 +215,12 @@ sequenceDiagram
     Teams->>Agent: Authenticated personal activity
     Agent->>Intake: PrepareAsync(actor, latest message)
     Intake->>Draft: Intake ID + complete candidate + validation feedback + latest message
-    Draft->>Memory: Resolve session and serialize this intake turn
-    Memory-->>Draft: AgentSession with available prior messages
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly three read-only tools
+    Draft->>Gate: Execute turn under intake ID
+    Gate->>Memory: Get or create native AgentSession
+    Memory-->>Gate: Session with available prior messages
     Draft->>Chat: Current candidate, latest text, strict schema, allowed tools
     opt Model requests stored context
         Chat->>McpClient: Invoke allowed tool
@@ -226,13 +233,12 @@ sequenceDiagram
     end
     Chat-->>Draft: Closed JSON proposal
     Draft->>Draft: Strict schema parsing and boundary translation
+    Draft-->>Gate: Successfully validated outcome
+    Gate->>Memory: Save native session
     Draft-->>Intake: Untrusted complete candidate + optional target/message
     Intake->>Context: Revalidate identifiers and relationships
     Context->>DB: Query authoritative records
     Intake->>DB: Replace compact candidate or persist immutable ready scope
-    opt Ready or terminal
-        Agent->>Memory: Remove intake session
-    end
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
@@ -246,14 +252,27 @@ The collecting candidate is untrusted and creates no request or approval. Only a
 owned, unexpired ready intake can be confirmed. The model and MCP never receive a
 submit capability.
 
-MAF history is history-first but deliberately ephemeral. SQLite persists the accepted
-complete candidate and intake lifecycle, not clarification options, prompts,
-transcripts, or serialized sessions. The cache is isolated by server-generated intake
-ID, bounded by inactivity and turn count, and guarded against concurrent mutation.
-After restart, the next run receives the durable candidate without prior conversation
-messages; an ambiguous relative reply is re-clarified rather than guessed unless the
-supplied conversation itself contains its preceding question and ordering.
-Confirmation never reads this memory.
+MAF history is history-first but deliberately ephemeral. The singleton native store
+keys sessions by server-generated intake ID, while the singleton coordinator retains
+one exact gate per intake and serializes load, run, and save. Both live for the host
+process lifetime. The application applies no inactivity timeout, turn-count limit,
+terminal deletion, or conversation compaction in the current low-volume baseline.
+Only a completed schema-valid turn is saved; timeout, cancellation, dependency
+failure, and malformed output leave the last successfully stored session unchanged.
+
+SQLite persists the accepted complete candidate and intake lifecycle, not
+clarification options, prompts, transcripts, or serialized MAF sessions. That compact
+candidate is the durable canonical state supplied to every model turn. Process restart
+clears MAF history and gates without changing the intake or losing accepted candidate
+data. The next run receives the durable candidate without prior conversation messages;
+an ambiguous relative reply is re-clarified rather than guessed unless the supplied
+conversation itself contains its preceding question and ordering. Confirmation and
+all downstream workflow actions never read this memory.
+
+Durable MAF sessions, retention/deletion policy, multi-host coordination, and native
+MAF compaction are deferred until a concrete production requirement defines privacy,
+capacity, and lifecycle rules. They are not hidden responsibilities of the SQLite
+intake store.
 
 The adapter defaults to:
 
@@ -299,6 +318,10 @@ stateDiagram-v2
 
 There is no update endpoint for a submitted request. A correction produces a new
 Teams preparation, request ID, and new approvals.
+
+From `AwaitingBusinessApproval` onward, the existing browser-driven human approval,
+protected provisioning, retry, and audit flow is unchanged. Teams creates the same
+immutable request aggregate consumed by that flow; it does not bypass or duplicate it.
 
 ### Business decision
 
@@ -348,7 +371,7 @@ operation are in failed states. Retry:
 
 ## Persistence model
 
-One EF Core `GovernedAccessDbContext` uses SQLite. It stores two categories of data.
+One EF Core `GovernedAccessDbContext` uses SQLite. It stores three categories of data.
 
 ### Fixed reference context
 
@@ -362,6 +385,19 @@ One EF Core `GovernedAccessDbContext` uses SQLite. It stores two categories of d
 against the exact dataset. Startup fails when a stored reference record conflicts with
 the expected synthetic definition or when an unexpected reference record exists.
 There is no runtime command surface for mutating reference context.
+
+### Request intake state
+
+- one `RequestIntakeSession` row per server-generated intake;
+- authenticated channel, tenant, actor, requester, and personal-conversation binding;
+- the complete nullable candidate while collecting;
+- immutable ready scope, reserved request ID, and 30-minute confirmation expiry; and
+- terminal status and correlation metadata for replay-safe old-card handling.
+
+The database stores no raw activity, prompt, transcript, clarification option list,
+model response, or serialized MAF session. Ready scope is immutable, active binding
+and reserved request IDs are unique, and optimistic concurrency protects terminal
+transitions.
 
 ### Workflow evidence
 
@@ -380,8 +416,10 @@ Important database guarantees include:
 - restricted deletes across authoritative relationships; and
 - ordered insert-only audit records from the application workflow.
 
-The detailed entity definitions and transitions are in the
-[data model](../specs/001-governed-production-access/data-model.md).
+The Teams intake entity and save boundary are defined in the
+[Teams intake data model](../specs/002-teams-access-intake/data-model.md). Existing
+workflow entities remain defined in the
+[governed workflow data model](../specs/001-governed-production-access/data-model.md).
 
 ## Consistency and idempotency
 
@@ -522,14 +560,15 @@ The browser never calls MCP or the synthetic provisioner directly.
 ## Testing architecture
 
 Unit tests reference Core and exercise deterministic domain and application rules.
-Integration tests host the real Web composition with `WebApplicationFactory`, an
-in-memory SQLite database, a deterministic clock, synthetic identities, the MCP
-transport, and a controllable provisioner. Frontend tests exercise the thin React
-session and workflow wiring.
+Component tests use real SQLite, native MAF sessions, or the MCP transport without
+starting the full application when that is the lowest faithful boundary. A small
+`WebApplicationFactory` slice is retained for authentication, middleware, Activity
+Protocol, logging, and one Teams-to-provisioning journey. Frontend tests exercise the
+thin React session and workflow wiring.
 
 No automated suite requires a live model or external production system. The
-[quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
-contains the detailed evidence matrix and manual demonstration scenarios.
+[Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md) contains the
+detailed evidence matrix and manual demonstration scenarios.
 
 ## Deliberate limitations
 
@@ -558,11 +597,11 @@ a new ADR before changing the deployment or trust boundaries.
 - [Local development guide](local-development.md)
 - [Testing strategy](testing-strategy.md)
 - [Architecture decision index](adr/README.md)
-- [Documentation plan](documentation-plan.md)
-- [Feature specification](../specs/001-governed-production-access/spec.md)
-- [Implementation plan](../specs/001-governed-production-access/plan.md)
-- [Data model](../specs/001-governed-production-access/data-model.md)
+- [Teams intake feature specification](../specs/002-teams-access-intake/spec.md)
+- [Teams intake implementation plan](../specs/002-teams-access-intake/plan.md)
+- [Teams intake data model](../specs/002-teams-access-intake/data-model.md)
+- [Governed workflow data model](../specs/001-governed-production-access/data-model.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
 - [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
+- [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)

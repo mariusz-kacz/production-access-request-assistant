@@ -1,7 +1,7 @@
 # Local Development Guide
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-30
+- **Last reviewed**: 2026-08-03
 - **Audience**: Developers running or changing the local MVP
 
 ## Prerequisites
@@ -51,6 +51,11 @@ from the same origin.
 No model credentials, external APIs, containers, or infrastructure provisioning are
 required.
 
+The optional real Teams demonstration adds a Microsoft 365 developer tenant, bot
+registration, and public development tunnel. It is deliberately separate from the
+normal local and automated-test loop; follow the [Microsoft Teams Demo Guide](teams-demo.md)
+when that transport is needed.
+
 ## Development modes
 
 ### ASP.NET-hosted application
@@ -68,6 +73,26 @@ or its fake-authenticated integration-test boundary. The browser exposes only
 request list/detail, business and DevOps decisions, protected retry, session, and
 audit presentation. It has no `/requests/new`, draft endpoint, request-creation POST,
 form, navigation item, or creation capability.
+
+### Real Microsoft Teams transport
+
+Use this mode only to demonstrate messages arriving from a real personal Teams chat.
+It requires an eligible Microsoft 365 developer tenant with custom-app upload enabled,
+Teams Developer CLI 3.x, and Dev Tunnels CLI. The E5 developer sandbox does not supply
+an Azure subscription, so the repository helper uses a Teams-managed bot registration
+by default.
+
+Create the integration once:
+
+```powershell
+.\scripts\teams-local.ps1 Fresh -ExpectedTenantId "<e5-sandbox-tenant-guid>" -AppName "governed-access-dev"
+```
+
+On later runs, start `Tunnel` and `Run` in separate terminals. The ignored local state
+file contains identifiers only; the generated bot credential remains outside the
+repository under `%LOCALAPPDATA%\GovernedAccess`. Do not add it to ASP.NET settings or
+source control. Setup, packaging, sideloading, security boundaries, and teardown are
+covered in the [Microsoft Teams Demo Guide](teams-demo.md).
 
 ### React hot-module replacement
 
@@ -114,6 +139,11 @@ The host uses standard ASP.NET Core configuration. The current settings are:
 | Key | Default | Purpose |
 |---|---|---|
 | `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | SQLite connection string |
+| `TokenValidation:TenantId` | empty | Expected Microsoft 365 developer-tenant ID for Teams bearer tokens |
+| `TokenValidation:Audiences:0` | empty | Registered bot client ID accepted as the token audience |
+| `Connections:BotServiceConnection:Settings:ClientId` | empty | Registered bot client ID used for outbound Teams replies |
+| `Connections:BotServiceConnection:Settings:ClientSecret` | empty | Bot client secret; supply only through a local secret source or process environment |
+| `Connections:BotServiceConnection:Settings:TenantId` | empty | Tenant used by the bot connection |
 | `Connections:BotServiceConnection:Settings:Authority` | `https://login.microsoftonline.com/botframework.com` | Multitenant Teams-managed bot token authority |
 | `TeamsAccessRequest:AllowedTenantId` | empty (fail closed) | Accepted Teams tenant |
 | `TeamsAccessRequest:BotConnectionName` | `BotServiceConnection` | Configured bot connection |
@@ -137,6 +167,11 @@ Web base URI must be an absolute HTTPS URI.
 
 Do not commit machine-specific connection strings or local secrets to
 `appsettings*.json`.
+
+For the real Teams transport, prefer `teams-local.ps1 Run`; it reads the credential
+file without printing it and supplies the token-validation and bot-connection values
+to the child process. The table documents the configuration boundary, not an
+instruction to persist a client secret in configuration files.
 
 ## Deterministic AI behavior
 
@@ -322,10 +357,11 @@ SQLite connection. Do not point tests at `governed-access.db`.
 ## Related documentation
 
 - [README](../README.md)
-- [Microsoft Teams local integration](teams-local-integration.md)
+- [Microsoft Teams demo setup and cleanup](teams-demo.md)
+- [Microsoft Teams local-integration helper reference](teams-local-integration.md)
 - [As-built architecture](architecture.md)
 - [Security and trust model](security-model.md)
 - [Testing strategy](testing-strategy.md)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
+- [Teams access-intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
 - [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)

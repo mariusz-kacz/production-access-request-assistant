@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-01
+- **Last reviewed**: 2026-08-03
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -22,18 +22,26 @@ The suites run without:
 Negative scenarios are first-class tests because most important product guarantees
 describe actions the system must reject.
 
+Automated acceptance for the Teams intake is intentionally model-independent. It
+uses the production MAF/session and MCP boundaries with deterministic chat clients
+and fake authenticated activities. A real Teams walkthrough or future live-model
+evaluation is separate deployment, quality, and UX evidence; neither is required to
+establish the application rules below.
+
 ## Test layers
 
 ```mermaid
 flowchart TB
     Manual[Bounded manual demo, responsive, and accessibility checks]
     UI[Vitest and React Testing Library]
-    Integration[xUnit ASP.NET Core integration tests]
+    FullHost[xUnit full ASP.NET Core host tests]
+    Component[xUnit SQLite, MAF, MCP, and adapter component tests]
     Unit[xUnit Core unit tests]
 
     Manual --> UI
-    UI --> Integration
-    Integration --> Unit
+    UI --> FullHost
+    FullHost --> Component
+    Component --> Unit
 ```
 
 The diagram represents breadth, not desired test count. Most security and workflow
@@ -136,6 +144,17 @@ intended.
 route behavior, form/submission absence, empty requester creation capabilities, and
 retained list/detail/business/DevOps controls.
 
+### Teams intake acceptance evidence
+
+| Concern | Primary automated evidence | Required negative assertion |
+|---|---|---|
+| History-sensitive interpretation | [`MafRequestPreparationInterpreterSessionTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs) and direct conversation-quality components | A relative reply without its preceding MAF question cannot select an environment or role. |
+| Native session lifecycle | [`MafConversationSessionStoreTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs) and [`MafConversationSessionStoreSmokeTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheSmokeTests.cs) | Fresh-store restart simulation preserves the supplied durable candidate, isolates intake histories, serializes same-intake turns, permits different-intake progress, and excludes failed turns from the last saved session. |
+| Model failure boundary | [`MafRequestPreparationFailureTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs) | Malformed, unsupported, and injected proposals fail closed; caller cancellation propagates; malformed or unavailable turns do not replace the last good session. |
+| MCP capability boundary | [`MafToolBoundaryTests`](../tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs) and MCP contract components | A missing or additional tool, unavailable call, or caller cancellation fails without exposing a state-changing tool. |
+| Teams-only creation | [`TeamsOnlyRequestCreationTests`](../tests/GovernedAccess.IntegrationTests/Requests/TeamsOnlyRequestCreationTests.cs), [`AppSession.test.tsx`](../src/GovernedAccess.Web/ClientApp/src/test/AppSession.test.tsx), and [`UiWiringSmoke.test.tsx`](../src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx) | Former browser endpoints create no request/audit state, and the UI exposes no creation route, navigation, form, DTO call, or capability. |
+| Existing governed workflow | [`TeamsGovernedWorkflowTests`](../tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs) | A Teams-created request cannot bypass client isolation, either human decision, exact scope, persisted evidence, or the fixed grant lifetime. |
+
 ## Deterministic dependency testing
 
 ### Chat client
@@ -144,28 +163,45 @@ retained list/detail/business/DevOps controls.
 
 - `Candidate`;
 - `Clarification`;
+- `InvalidCandidate`;
+- `UnknownIncidentCandidate`;
+- `CrossClientEnvironmentCandidate`;
+- `CrossClientIncidentCandidate`;
+- `FalseCompleteCandidate`;
 - `Malformed`;
 - `Timeout`;
 - `Cancellation`;
 - `Unavailable`; and
-- `PromptInjection`.
+- `PromptInjection`; and
+- `HistorySensitive`.
 
 The production-shaped local host registers `Candidate`, whose response matches the
 current Teams proposal schema. Tests replace the `IChatClient` to exercise other
-outcomes through the real MAF interpreter. The fake supports scripted,
-history-sensitive turns so a test can distinguish an ordinal answer with the prior
-question in its MAF session from the same answer after a cache miss. This validates
-strict schema parsing, deterministic identifier revalidation, timeout distinction,
-and safe failure translation without network or model nondeterminism.
+outcomes through the real MAF interpreter. `HistorySensitive` parses the same
+server-owned latest-message/current-candidate envelope used by production, then
+examines assistant messages restored by the active MAF session. It resolves `the
+first one` or `the other role` only when the prior clarification target and ordering
+are present. With a fresh native store, it emits a self-contained clarification and
+leaves the unresolved candidate field empty. Its output still uses the strict
+proposal schema and still passes through authoritative application validation; the
+fake is a deterministic test oracle, not an authorization or readiness boundary.
 
-Focused native-store component tests verify intake isolation, per-intake concurrent
-turn serialization, last-successful-session preservation, and
-process-restart-equivalent loss. The current process-lifetime store has no
-application-owned eviction or terminal cleanup. Persistence assertions prove that
-only the complete typed candidate and lifecycle survive: no option list, transcript,
-raw prompt, model body, or serialized MAF session is stored. Restart-loss tests
-retain the candidate and require re-clarification instead of accepting a relative
-selection.
+Focused native-store component tests use a real `InMemoryAgentSessionStore` and
+`MafConversationTurnCoordinator` to verify:
+
+- same-intake session reuse restores prior user and assistant messages;
+- a fresh store models process restart and cannot interpret missing ordering;
+- separate intake IDs never share question ordering;
+- the exact per-intake gate serializes load/run/save for one intake while another
+  intake can progress concurrently; and
+- malformed or unavailable work cannot replace the last successfully saved session,
+  while cancellation is propagated before a save can complete.
+
+The current process-lifetime store has no application-owned eviction, terminal
+cleanup, or compaction. Persistence assertions prove that only the complete typed
+candidate and lifecycle survive: no option list, transcript, raw prompt, model body,
+or serialized MAF session is stored. Restart-loss tests retain that durable candidate
+and require re-clarification instead of accepting a relative selection.
 
 ### MCP
 
@@ -213,6 +249,36 @@ The frontend suite intentionally avoids:
 - asserting internal component implementation details; and
 - treating hidden UI actions as a security guarantee.
 
+## No-live-model acceptance workflow
+
+The repeatable acceptance path is fully local and credential-free:
+
+1. Restore dependencies and build the solution with warnings treated as errors.
+2. Run Core unit tests for deterministic intake, authorization, immutable-scope, and
+   workflow rules.
+3. Run the non-full-host component slice. This executes real SQLite, native MAF
+   sessions, the exact per-intake coordinator, strict proposal translation, and the
+   lightweight real MCP transport while every chat response remains deterministic.
+4. Run the retained full-host slice. Fake SDK-authenticated activities exercise
+   Activity Protocol routing, card/response serialization, Teams-only creation,
+   authentication, middleware, logging, and one complete governed workflow.
+5. Run Vitest to prove browser creation remains absent while the register,
+   approval, retry, and audit presentation remains wired.
+6. Reconcile the results with Scenarios 1-6 in the
+   [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md), including
+   restart-equivalent history loss, same-intake concurrency, failure cases, replay,
+   and the downstream approval/provisioning journey.
+
+No step calls a live LLM, Teams tenant, Azure Bot, corporate identity provider,
+production environment, or real provisioner. The deterministic chat client is
+injected behind the same `IChatClient` boundary that a future live provider will use.
+A later live-model evaluation should add quality, latency, cost, and provider-safety
+evidence without replacing this deterministic regression suite.
+
+The optional Playground or real personal-chat walkthrough validates transport,
+tenant authentication, packaging, and presentation. It cannot replace the automated
+negative assertions because it is neither exhaustive nor deterministic.
+
 ## Manual verification
 
 Automated tests do not fully establish presentation quality. Before a portfolio
@@ -226,8 +292,10 @@ demonstration or release:
 5. repeat at 360px width or 200% browser zoom; and
 6. confirm long identifiers and timestamps remain complete and readable.
 
-The detailed checklist is in the
-[quickstart validation guide](../specs/001-governed-production-access/quickstart.md).
+The Teams-specific automated scenarios and optional real-chat walkthrough are in the
+[Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md). The original
+[governed workflow quickstart](../specs/001-governed-production-access/quickstart.md)
+remains useful for detailed browser approval and provisioning presentation checks.
 
 ## Commands
 
@@ -311,9 +379,9 @@ npm test --prefix src/GovernedAccess.Web/ClientApp
 npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-## Current test baseline
+## Measured test-level migration baseline
 
-After the test-level migration on 2026-08-01, the repository contains:
+At the T072 test-level migration checkpoint on 2026-08-01, the repository contained:
 
 - 54 .NET unit cases;
 - 52 integration-project component cases;
@@ -327,6 +395,11 @@ baseline. Counts remain a diagnostic, not an acceptance criterion; the exhaustiv
 inventory, coverage map, retained-host rationale, and timing evidence are recorded in
 [the feature test-simplification report](../specs/002-teams-access-intake/test-simplification.md).
 
+Those numbers are checkpoint evidence, not a claim about current discovery counts:
+the later replay/failure and governed-workflow tasks added cases after T072. T090 owns
+the final whole-suite run and records the resulting counts and timings in the feature
+validation report.
+
 ## Recommended validation order
 
 For normal development:
@@ -334,8 +407,10 @@ For normal development:
 1. run the focused unit or integration test area while editing;
 2. run the frontend suite when UI contracts or presentation change;
 3. build the full solution with warnings treated as errors;
-4. run all .NET and frontend tests; and
-5. perform the bounded manual check for UI or workflow changes.
+4. run all .NET and frontend tests;
+5. reconcile Teams-intake changes with the six deterministic quickstart scenarios;
+   and
+6. perform the bounded manual check for UI or workflow changes.
 
 For a documentation-only change, validate Markdown links and run `git diff --check`.
 Run code suites when the documentation exposes a suspected code/contract mismatch or
@@ -380,5 +455,8 @@ corresponding integration or deployment becomes real.
 - [Local development guide](local-development.md)
 - [As-built architecture](architecture.md)
 - [Security and trust model](security-model.md)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
-- [Completed task list](../specs/001-governed-production-access/tasks.md)
+- [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
+- [Teams intake test-simplification report](../specs/002-teams-access-intake/test-simplification.md)
+- [Teams intake validation](../specs/002-teams-access-intake/validation.md)
+- [Teams intake task list](../specs/002-teams-access-intake/tasks.md)
+- [Governed workflow quickstart](../specs/001-governed-production-access/quickstart.md)

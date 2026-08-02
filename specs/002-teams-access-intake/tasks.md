@@ -337,15 +337,14 @@ requirements, and a median warm no-build integration-project runtime of at most 
 seconds across three uncontended runs, or record the measured result and a concrete
 justification for every remaining repeated full-host startup.
 
-**Task-ID note**: This gate was added after T068 was completed. New tasks use the next
-unused stable IDs T091-T095 and are intentionally positioned here; complete them
-before starting the remaining Phase 7 tasks T069-T080.
+**Task-ID note**: This gate was added after the original Phase 7 ordering and has now
+been renumbered into execution order. Complete T068-T072 before Phase 7 T073-T084.
 
-- [X] T091 Inventory every automated test by `Unit`, `Component`, or `FullHost`, map each trust-boundary requirement to its lowest faithful coverage plus retained wiring evidence, and record the 78-case/39-second baseline and migration decisions in specs/002-teams-access-intake/test-simplification.md and docs/testing-strategy.md
-- [X] T092 Move business/DevOps decision permutations, retry-state rules, request visibility, action-capability calculation, and immutable-scope negatives to direct Core/application unit tests or real-SQLite component tests; retain only representative HTTP authentication, overposting, antiforgery, and response-contract cases in tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/WorkflowEvidencePolicyTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs, and tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs
-- [X] T093 Move the representative utterance matrix, candidate validation permutations, and history-sensitive interpretation cases to direct deterministic-chat/MAF component tests; retain one complete and one multi-turn hosted Teams scenario proving transport-to-card wiring in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs, tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
-- [X] T094 Mark full-host classes with an explicit `TestLevel=FullHost` trait, document fast unit/component and complete-suite commands, and ensure future task descriptions use `unit`, `component`, or `full-host` deliberately in tests/GovernedAccess.IntegrationTests/Infrastructure/IntegrationTestCollections.cs, docs/testing-strategy.md, and docs/local-development.md
-- [X] T095 Run warnings-as-errors build plus unit, component, retained full-host, and Vitest suites; capture per-test durations for three uncontended warm no-build integration runs, verify no coverage requirement was dropped, and record case counts, median duration, remaining host startups, and justified exceptions in specs/002-teams-access-intake/test-simplification.md and specs/002-teams-access-intake/validation.md
+- [X] T068 Inventory every automated test by `Unit`, `Component`, or `FullHost`, map each trust-boundary requirement to its lowest faithful coverage plus retained wiring evidence, and record the 78-case/39-second baseline and migration decisions in specs/002-teams-access-intake/test-simplification.md and docs/testing-strategy.md
+- [X] T069 Move business/DevOps decision permutations, retry-state rules, request visibility, action-capability calculation, and immutable-scope negatives to direct Core/application unit tests or real-SQLite component tests; retain only representative HTTP authentication, overposting, antiforgery, and response-contract cases in tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/WorkflowEvidencePolicyTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs, and tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs
+- [X] T070 Move the representative utterance matrix, candidate validation permutations, and history-sensitive interpretation cases to direct deterministic-chat/MAF component tests; retain one complete and one multi-turn hosted Teams scenario proving transport-to-card wiring in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs, tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
+- [X] T071 Mark full-host classes with an explicit `TestLevel=FullHost` trait, document fast unit/component and complete-suite commands, and ensure future task descriptions use `unit`, `component`, or `full-host` deliberately in tests/GovernedAccess.IntegrationTests/Infrastructure/IntegrationTestCollections.cs, docs/testing-strategy.md, and docs/local-development.md
+- [X] T072 Run warnings-as-errors build plus unit, component, retained full-host, and Vitest suites; capture per-test durations for three uncontended warm no-build integration runs, verify no coverage requirement was dropped, and record case counts, median duration, remaining host startups, and justified exceptions in specs/002-teams-access-intake/test-simplification.md and specs/002-teams-access-intake/validation.md
 
 **Checkpoint**: Policy and lifecycle permutations execute at unit/component level,
 the retained full-host suite proves only real outer-boundary behavior, all trust and
@@ -370,19 +369,18 @@ operation, or grant.
 
 ### Vertical Implementation Sequence for User Story 3
 
-- [X] T068 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in Core without coupling those durable lifecycle outcomes to the process-lifetime MAF session store in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Core/Application/RequestIntakeService.cs, and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [X] T069 [US3] Add exhaustive Core unit coverage for lazy expiry, supersession, invalidation, owner/conversation binding, terminal transition rejection, submitted replay identity, and persistence-failure outcomes in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
-- [X] T070 [US3] Add optimistic-concurrency recovery that clears tracking, reloads by intake session ID, and returns the stored request ID only for the same owner/conversation in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
-- [X] T071 [US3] Complete compact confirmation-result handling for expiry, replay, supersession, invalidation, concealment, malformed action, stale authoritative context, and dependency failure in src/GovernedAccess.Core/Application/RequestIntakeService.cs
-- [X] T072 [P] [US3] Add direct RequestIntakeService component coverage for unknown, expired, superseded, invalidated, foreign-owner, and conversation-mismatched confirmation, then retain one table-driven full-host test only for malformed action/schema rejection and concealed foreign responses in tests/GovernedAccess.IntegrationTests/Teams/RequestIntakeConfirmationComponentTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
-- [X] T073 [P] [US3] Verify repeated and concurrent confirmation against real SQLite produces one request, one request-created audit event, and one stable request ID, then retain one hosted sequential replay assertion for Teams response translation in tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakeConfirmationConcurrencyTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
-- [X] T074 [US3] Return safe Teams responses for rejected activities, preparation failures, and confirmation outcomes without invoking MAF for confirmation or exposing foreign scope in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [X] T075 [US3] Verify wrong-channel, non-personal, disallowed-tenant, missing-actor, and forged identity/scope behavior directly against TeamsActorResolver, then add unauthenticated activity, unknown verb, and unsupported schema-version rows to the existing hosted Teams suites without creating another full-host fixture/class in tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
-- [X] T076 [US3] Require exact MCP catalog equality, propagate caller cancellation from the request deadline, and translate provider failures to safe outcomes in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
-- [X] T077 [P] [US3] Verify malformed or unsupported proposals, prompt injection, caller cancellation, dependency unavailability, unchanged last-saved MAF session, and no workflow state as direct interpreter component tests without `WebApplicationFactory` in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs
-- [X] T078 [P] [US3] Verify exact three-tool allowlisting, missing/extra catalog failure, tool cancellation/unavailability, and absence of state-changing tools through the lightweight MCP test host and direct interpreter component boundary without starting the full application in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
-- [ ] T079 [US3] Extend direct `ILogger<TeamsAccessRequestAgent>` metadata for preparation and confirmation replay/rejection without adding Core logging dependencies or logging/persisting a parallel intake or MAF-session history in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [ ] T080 [US3] Extend the single retained hosted logging boundary test to cover representative preparation failure, confirmation rejection, and replay metadata without starting a host per outcome or logging tokens, prompts, transcripts, serialized MAF sessions, card bodies, model bodies, or complete MCP payloads in tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs
+- [X] T073 [US3] Enforce lazy expiry, supersession, invalidation, terminal content clearing, and replay-safe transitions in Core without coupling those durable lifecycle outcomes to the process-lifetime MAF session store in src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Core/Application/RequestIntakeService.cs, and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T074 [US3] Add exhaustive Core unit coverage for lazy expiry, supersession, invalidation, owner/conversation binding, terminal transition rejection, submitted replay identity, and persistence-failure outcomes in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
+- [X] T075 [US3] Add optimistic-concurrency recovery that clears tracking, reloads by intake session ID, and returns the stored request ID only for the same owner/conversation in src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
+- [X] T076 [US3] Complete compact confirmation-result handling for expiry, replay, supersession, invalidation, concealment, malformed action, stale authoritative context, and dependency failure in src/GovernedAccess.Core/Application/RequestIntakeService.cs
+- [X] T077 [P] [US3] Add direct RequestIntakeService component coverage for unknown, expired, superseded, invalidated, foreign-owner, and conversation-mismatched confirmation, then retain one table-driven full-host test only for malformed action/schema rejection and concealed foreign responses in tests/GovernedAccess.IntegrationTests/Teams/RequestIntakeConfirmationComponentTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
+- [X] T078 [P] [US3] Verify repeated and concurrent confirmation against real SQLite produces one request, one request-created audit event, and one stable request ID, then retain one hosted sequential replay assertion for Teams response translation in tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakeConfirmationConcurrencyTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
+- [X] T079 [US3] Return safe Teams responses for rejected activities, preparation failures, and confirmation outcomes without invoking MAF for confirmation or exposing foreign scope in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T080 [US3] Verify wrong-channel, non-personal, disallowed-tenant, missing-actor, and forged identity/scope behavior directly against TeamsActorResolver, then add unauthenticated activity, unknown verb, and unsupported schema-version rows to the existing hosted Teams suites without creating another full-host fixture/class in tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
+- [X] T081 [US3] Require exact MCP catalog equality, propagate caller cancellation from the request deadline, and translate provider failures to safe outcomes in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
+- [X] T082 [P] [US3] Verify malformed or unsupported proposals, prompt injection, caller cancellation, dependency unavailability, unchanged last-saved MAF session, and no workflow state as direct interpreter component tests without `WebApplicationFactory` in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs
+- [X] T083 [P] [US3] Verify exact three-tool allowlisting, missing/extra catalog failure, tool cancellation/unavailability, and absence of state-changing tools through the lightweight MCP test host and direct interpreter component boundary without starting the full application in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
+- [X] T084 [US3] Extend direct `ILogger<TeamsAccessRequestAgent>` metadata for preparation and confirmation replay/rejection without adding Core logging dependencies or logging/persisting a parallel intake or MAF-session history in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 
 **Checkpoint**: The Teams intake path meets the expiry, replay, concurrency, failure,
 privacy, and trust-boundary requirements and remains safe under transport retries.
@@ -395,17 +393,15 @@ privacy, and trust-boundary requirements and remains safe under transport retrie
 requests continue through the existing authenticated Web approvals and protected
 provisioning path without channel-specific authorization rules.
 
-**Independent Test**: Confirm a request through Teams, complete business and DevOps
-decisions plus provisioning failure/retry in the existing APIs/UI, and verify all
-existing authorization, immutable scope, fixed-duration, persisted-evidence, and
-idempotency behavior while browser request creation remains unavailable.
+**Independent Test**: Confirm a request through Teams, complete authenticated business
+and DevOps decisions through successful provisioning, and verify client isolation,
+immutable scope, fixed duration, and persisted evidence. Existing component coverage
+remains the proof for provisioning failure/retry and idempotency while browser request
+creation remains unavailable.
 
 ### Layered Verification for User Story 4
 
-- [ ] T081 [P] [US4] Add one retained full-host Teams-to-business-to-DevOps-to-provisioning journey proving authenticated boundary wiring, client isolation, exact role, fixed eight-hour lifetime, and persisted evidence in tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs
-- [ ] T082 [P] [US4] Verify provisioning failure, authenticated retry authorization, evidence reload, scope mismatch, and duplicate convergence as direct application/real-SQLite component tests; rely on T081 only to prove a Teams-created request reaches the unchanged channel-neutral workflow in tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs and tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs
-- [ ] T083 [P] [US4] Extend Teams-only creation regression coverage to prove Teams-reserved request IDs appear through GET list/detail APIs while browser draft and request-creation POSTs remain unavailable in tests/GovernedAccess.IntegrationTests/Requests/TeamsOnlyRequestCreationTests.cs and tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs
-- [ ] T084 [P] [US4] Extend UI wiring regression coverage for request lists, request links, business/DevOps approvals, and retry while asserting no request-entry route or control exists in src/GovernedAccess.Web/ClientApp/src/test/UiWiringSmoke.test.tsx
+- [X] T085 [US4] Add one retained full-host Teams-to-business-to-DevOps-to-provisioning journey proving authenticated boundary wiring, client isolation, exact role, fixed eight-hour lifetime, and persisted evidence in tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs
 
 **Checkpoint**: The new adapter has no effect on approval authority, immutable request
 scope, provisioning evidence, or retry authorization, and no browser intake remains.
@@ -417,12 +413,11 @@ scope, provisioning evidence, or retry authorization, and no browser intake rema
 **Purpose**: Complete operator guidance, packaging, whole-system verification, and
 the portfolio demo evidence.
 
-- [ ] T085 [P] Finalize documentation of native process-local MAF session storage, restart recovery, deferred durable retention/compaction, Teams trust boundary, durable candidate boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
-- [ ] T086 [P] Finalize documentation of the history-sensitive deterministic fake, native session isolation/restart/concurrency negatives, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md
-- [ ] T087 [P] Document E5 developer-tenant setup, Azure Bot registration, secret storage, stable HTTPS tunnel, manifest packaging, sideloading, and cleanup in docs/teams-demo.md and docs/local-development.md
-- [ ] T088 Validate the Teams app package contains only manifest.json, color.png, and outline.png at its ZIP root and record the packaging command in docs/teams-demo.md
-- [ ] T089 Run restore, warnings-as-errors build, .NET tests, Vitest tests, contract validation, and Scenarios 1-6 including Teams-only request creation, then record results and deterministic confirmation timing in specs/002-teams-access-intake/validation.md
-- [ ] T090 Perform the real personal-chat walkthrough and five-person confirmation-comprehension review when tenant access is available, recording evidence or a justified deferral in specs/002-teams-access-intake/validation.md
+- [X] T086 [P] Finalize documentation of native process-local MAF session storage, restart recovery, deferred durable retention/compaction, Teams trust boundary, durable candidate boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
+- [X] T087 [P] Finalize documentation of the history-sensitive deterministic fake, native session isolation/restart/concurrency negatives, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md
+- [X] T088 [P] Document E5 developer-tenant setup, Azure Bot registration, secret storage, stable HTTPS tunnel, manifest packaging, sideloading, and cleanup in docs/teams-demo.md and docs/local-development.md
+- [X] T089 Validate the Teams app package contains only manifest.json, color.png, and outline.png at its ZIP root and record the packaging command in docs/teams-demo.md
+- [X] T090 Run restore, warnings-as-errors build, .NET tests, Vitest tests, contract validation, and Scenarios 1-6 including Teams-only request creation, then record results and deterministic confirmation timing in specs/002-teams-access-intake/validation.md
 
 ---
 
@@ -445,8 +440,7 @@ the portfolio demo evidence.
   remains independently testable with incomplete conversations and simulated process
   restart.
 - **Phase 6A (test-suite simplification gate)**: Depends on the completed US2 test
-  surface and blocks remaining US3 verification work. T068 was completed before this
-  amendment; T091-T095 must pass before T069-T080 continue.
+  surface and blocks Phase 7. T068-T072 must pass before T073-T084 continue.
 - **Phase 7 (US3)**: Depends on Phase 6 and the Phase 6A exit gate. Its exhaustive
   lifecycle and failure coverage belongs at unit/component level; only authenticated
   Activity Protocol, safe-response, and logging wiring retain full-host coverage.
@@ -525,24 +519,23 @@ validation-quality tests T065-T067 target separate files and can run in parallel
 
 ### Test Suite Simplification Gate
 
-Inventory and coverage placement T091 precedes structural changes. Workflow/query
-migration T092 and Teams interpreter/component migration T093 target separate test
-areas. Level markers and developer commands T094 follow both migrations, and the
-measured three-run exit gate T095 completes the phase.
+Inventory and coverage placement T068 precedes structural changes. Workflow/query
+migration T069 and Teams interpreter/component migration T070 target separate test
+areas. Level markers and developer commands T071 follow both migrations, and the
+measured three-run exit gate T072 completes the phase.
 
 ### User Story 3
 
-After unit lifecycle coverage T069 and confirmation hardening T070-T071, the focused
-confirmation boundary/component tasks T072-T073 can run in parallel. Safe adapter
-responses T074 precede the minimal activity boundary task T075. After interpreter
-hardening T076, direct model and MCP component tasks T077-T078 can run in parallel.
-Logging implementation T079 precedes the single retained hosted logging test T080.
+Lifecycle implementation T073 precedes unit coverage T074 and confirmation hardening
+T075-T076. Focused confirmation tasks T077-T078 can run in parallel. Safe adapter
+responses T079 precede the minimal activity boundary task T080. After interpreter
+hardening T081, direct model and MCP component tasks T082-T083 can run in parallel.
+Logging metadata T084 completes the phase.
 
 ### User Story 4
 
-Workflow, provisioning, Teams-only query/API, and UI regression tests T081-T084 touch
-separate test files and can run in parallel after Teams confirmation can create a
-submitted request.
+The retained governed-workflow regression T085 follows Teams confirmation and proves
+the channel-neutral approval and provisioning path through the full host.
 
 ---
 
@@ -585,9 +578,9 @@ submitted request.
 ### Recommended Solo-Developer Order
 
 Follow task ID order through US1 and US5, stop at the US5 complexity-budget checkpoint,
-then complete the US6 Teams-only-creation gate and US2. Run the appended T091-T095
-test-suite simplification gate before continuing the remaining US3 tasks T069-T080,
-then complete US4. Use the parallel markers to batch independent tests or small
+then complete the US6 Teams-only-creation gate and US2. Run the T068-T072 test-suite
+simplification gate before continuing with US3 tasks T073-T084, then complete US4.
+Use the parallel markers to batch independent tests or small
 isolated files, not to introduce additional agents, services, queues, or workflow
 infrastructure.
 
@@ -608,8 +601,7 @@ infrastructure.
   triggers re-clarification rather than reconstructed or guessed choices. Durable
   retention/deletion and native MAF compaction are deferred.
 - Tests never call a live model, Teams tenant, Azure Bot, or production system.
-- T091-T095 retain appended IDs to preserve the stable history of completed T068 even
-  though their execution gate is positioned before the remaining Phase 7 work.
+- Task IDs are sequential in documented execution order, including the Phase 6A gate.
 - `IntegrationTests` may contain component tests that require Web infrastructure,
   SQLite, MAF, or MCP packages, but only tests marked `TestLevel=FullHost` may start
   the complete `WebApplicationFactory` host after the Phase 6A migration.

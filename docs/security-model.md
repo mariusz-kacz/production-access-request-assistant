@@ -1,7 +1,7 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-30
+- **Last reviewed**: 2026-08-02
 - **Scope**: Local synthetic Governed Production Access Request Assistant MVP
 
 ## Purpose
@@ -88,6 +88,7 @@ There is no rate limiting, edge protection, or production capacity design.
 | Asset | Required protection |
 |---|---|
 | Immutable request scope | Integrity and participant-limited visibility |
+| Intake binding and canonical candidate | Integrity, actor/conversation isolation, and safe restart recovery |
 | Authenticated actor identity | Integrity |
 | Business and DevOps decisions | Integrity, ordering, attribution, and request binding |
 | Provisioning operation | Integrity, idempotency, and exact-scope binding |
@@ -112,7 +113,7 @@ for real client, incident, identity, credential, or production-access data.
 | MCP client and wire data | Untrusted protocol-boundary data until typed parsing and application validation succeed. |
 | MCP server adapter | Trusted only to translate typed read-only requests to the request-context port. It is not an authorization boundary. |
 | Application and domain services | Trusted enforcement boundary for validation, authority, state transitions, and exact scope. |
-| Process-local MAF session cache | Best-effort untrusted conversation context, isolated by server-generated intake ID and excluded from authorization and durable evidence. |
+| Native process-local MAF session store and turn coordinator | Best-effort untrusted conversation context, isolated by server-generated intake ID and excluded from authorization and durable evidence. |
 | SQLite workflow store | Authoritative store under the current single-writer application assumption. |
 | Synthetic provisioner | Trusted to implement get-or-create for already authorized server-constructed scope; not trusted to decide eligibility. |
 
@@ -173,8 +174,8 @@ description, or provider adapter would not preserve this boundary.
 | Business approval binds exact scope | The decision references the immutable request ID and approved role. |
 | DevOps cannot change role or duration | The decision body contains no scope or duration; policy uses persisted role; grant lifetime is server-owned. |
 | Model output is not trusted | Closed JSON schema, strict parsing, known-role constraints, identifier revalidation, and full submission validation. |
-| Conversation history cannot authorize or establish candidate truth | Only the canonical typed candidate is durable; history is process-local, bounded, isolated per intake, and never read by confirmation or downstream workflow actions. |
-| Missing history cannot reinterpret a relative answer | Cache miss is passed explicitly to the interpreter; ambiguous references require self-contained re-clarification and cannot be reconstructed or guessed from persisted options. |
+| Conversation history cannot authorize or establish candidate truth | Only the canonical typed candidate is durable; native MAF history is process-local, isolated per intake, and never read by confirmation or downstream workflow actions. |
+| Missing history cannot reinterpret a relative answer | After restart the model receives the durable candidate but no prior conversation messages; ambiguous references require self-contained re-clarification and cannot be reconstructed or guessed from persisted options. |
 | MCP cannot mutate workflow | The MCP project has only three read-only context tools and no workflow or provisioning dependency. |
 | Provisioning does not trust its caller | The protected service accepts a request ID and reloads request, operation, and both approvals. |
 | Retry cannot replace scope | Retry has no body and reuses the same request, operation, evidence checks, and provider idempotency identity. |
@@ -183,23 +184,32 @@ description, or provider adapter would not preserve this boundary.
 
 ## Conversation-memory boundary
 
-History-first clarification uses one bounded in-process MAF session per collecting
-intake. It exists only to preserve conversational meaning across nearby turns. The
-cache key is the opaque server-generated intake ID, and the application verifies the
-authenticated actor/conversation binding through the durable intake before resolving
-that entry. Per-intake mutation is serialized so concurrent activities cannot corrupt
-or interleave one session.
+History-first clarification uses MAF's native singleton
+`InMemoryAgentSessionStore`, addressed by the opaque server-generated intake ID. It
+exists only to preserve conversational meaning across turns in the current host
+process. Before interpretation, the durable intake has already established the
+authenticated actor and personal-conversation binding. A singleton
+`MafConversationTurnCoordinator` retains one exact gate per intake and serializes the
+complete native session load, agent run, and successful save sequence, preventing two
+activities for the same intake from branching or overwriting one another.
 
-The cache is removed on inactivity or turn-count limits and when the intake becomes
-ready, submitted, superseded, expired, or invalidated. Process termination also loses
-it. This is safe because SQLite retains the complete accepted candidate snapshot. A
-fresh session receives that candidate and an explicit missing-history signal and must
-repeat a self-contained question before interpreting relative text.
+Sessions and gates remain in memory until process termination. The application has no
+inactivity timeout, turn-count limit, terminal cleanup, removal race, durable session
+row, or compaction policy in the current local low-volume baseline. Only completed
+schema-valid turns are saved. Timeout, cancellation, dependency failure, and malformed
+output preserve the last successfully stored session.
+
+Process termination loses both native history and gates but causes no domain
+transition. SQLite retains the complete accepted candidate and intake lifecycle. A
+fresh session receives that durable candidate without prior conversation messages and
+must repeat a self-contained clarification before interpreting relative text. The
+application persists no option list and supplies no reconstructed history marker.
 
 No raw activity, prompt, model response, option list, transcript, or serialized MAF
-session is persisted or logged by default. Neither cache presence nor its contents
-are authorization evidence, audit evidence, or an input to confirmation, approval,
-provisioning, retry, or revocation.
+session is persisted or logged by default. Session presence and content are neither
+authorization nor audit evidence and are never inputs to confirmation, approval,
+provisioning, retry, or revocation. Durable session retention/deletion, multi-host
+coordination, and native MAF compaction require a future privacy and capacity design.
 
 ## Browser, identity, and session boundary
 
@@ -297,17 +307,18 @@ The adapter constrains the model interaction with:
 - an explicit expected MCP tool-name set;
 - termination on unknown tool calls;
 - no concurrent tool calls;
-- bounded model iterations and timeouts; and
+- bounded model iterations and propagated request cancellation; and
 - safe typed failure outcomes.
 
 After parsing, the adapter revalidates client, environment, role, and incident
-relationships against stored data. Request submission validates current data again
-before anything is persisted.
+relationships against stored data. Deterministic confirmation validates current data
+again before creating a request.
 
-A valid-looking draft is still only a proposal shown for review. It cannot create an
-approval, transition workflow, or invoke provisioning. If the model is compromised or
-malfunctioning, the maximum intended effect is an incorrect or unavailable draft that
-the requester must correct and that deterministic submission validation may reject.
+A valid-looking proposal is still only untrusted input to deterministic preparation.
+It cannot create an approval, transition workflow, or invoke provisioning. If the
+model is compromised or malfunctioning, the maximum intended effect is an incorrect
+or unavailable proposal that the requester must correct and that deterministic
+confirmation validation may reject.
 
 The default implementation uses a deterministic fake `IChatClient`. Replacing it with
 a live provider must preserve the same schema, allowlist, timeout, logging, and
@@ -326,7 +337,7 @@ envelopes. The MCP project has no dependency on the workflow store or provisione
 cannot approve, reject, transition, provision, revoke, or issue arbitrary database
 queries.
 
-The drafting adapter lists server tools and rejects the catalog unless its names
+The Teams preparation adapter lists server tools and rejects the catalog unless its names
 exactly equal the expected allowlist. Tool annotations and discovery are defense in
 depth; the absence of state-changing dependencies is the stronger capability
 boundary.
@@ -345,10 +356,23 @@ it.
 
 ### Submission
 
-Only the requester role can call draft preparation and submission. Submission derives
-the requester ID from the authenticated principal, validates stored client,
-environment, role, and incident context, creates a server-generated request ID, and
-persists an immutable request.
+Authenticated confirmation of a server-owned Teams intake is the only request-creation
+path. The Activity Protocol boundary derives tenant, channel actor, and personal
+conversation from authenticated SDK context and maps the actor server-side to the
+fixed synthetic requester. The action carries only a schema version and opaque intake
+ID; payload identity, role, duration, approval, and scope fields are rejected.
+
+`RequestIntakeService` reloads the intake, verifies exact actor/conversation ownership,
+readiness, expiry, and supersession, and revalidates immutable canonical scope.
+`RequestSubmissionService` requires the reserved server-generated request ID and
+stages the immutable request plus request-created audit evidence without saving
+independently. One shared `SaveChangesAsync` commits the `Ready -> Submitted` intake
+transition, `AwaitingBusinessApproval` request, and audit event. Confirmation does not
+read MAF history and cannot approve or provision access.
+
+After creation, the request follows the unchanged browser-driven business approval,
+DevOps approval, protected provisioning, retry, and audit path. Teams supplies no
+alternate decision or provisioning route.
 
 ### Business decision
 
@@ -416,6 +440,8 @@ does not provide automatic reconciliation or compensation.
 
 The database enforces:
 
+- unique active intake binding and reserved request identity;
+- optimistic concurrency on intake transitions;
 - one business and one DevOps decision per request;
 - one provisioning operation keyed by request ID;
 - at most one access grant per request;
@@ -479,7 +505,8 @@ or long-term retention solution.
 | Replay or concurrent retry | Many retries attempt to create duplicate grants. | Request-keyed get-or-create, unique grant constraint, concurrency recovery. | No distributed provider guarantee exists beyond the adapter contract. |
 | Lost provider response | Provider creates access but caller sees failure. | Stable idempotency identity and scoped retry converge on the existing grant. | No automatic reconciliation; human retry is required. |
 | Information disclosure through errors or logs | Exception or prompt is returned or logged. | Safe typed failures, Problem Details mapping, metadata-only operation logging. | Local framework or infrastructure logging configuration still requires review before real data. |
-| Denial of service | Repeated MCP, model, or provisioning calls consume resources. | Bounded 5/30/10-second operations and cancellation propagation. | No rate limiting, quotas, edge controls, or capacity SLO. |
+| Conversation cross-talk or restart loss | Concurrent turns overwrite history, or a relative answer is interpreted after memory loss. | Exact per-intake load/run/save gate, native sessions keyed by intake ID, durable canonical candidate, and self-contained re-clarification after restart. | Sessions and gates are retained until process termination and have no current compaction policy. |
+| Denial of service | Repeated Teams, MCP, model, or provisioning calls consume resources. | One 100-second Teams request deadline, a ten-second provisioning deadline, bounded model iterations, and cancellation propagation. | No rate limiting, quotas, edge controls, or capacity SLO. |
 | Stored script injection | Justification contains HTML or script. | React renders values as escaped JSX text; no raw HTML rendering API is used. | Future rich-text or HTML rendering would require a new control. |
 
 ## Verification evidence
@@ -489,10 +516,14 @@ Security behavior is exercised by automated tests, including:
 - [API security tests](../tests/GovernedAccess.IntegrationTests/Security/ApiSecurityTests.cs):
   unauthenticated access, antiforgery coverage, over-posting resistance, and SPA
   fallback exclusion;
-- [demo authentication tests](../tests/GovernedAccess.IntegrationTests/Authentication/DemoAuthenticationTests.cs):
+- [demo authentication tests](../tests/GovernedAccess.IntegrationTests/Endpoints/SessionEndpointsTests.cs):
   fixed identity mapping and cookie/session behavior;
-- [business decision tests](../tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs):
-  configured approver, wrong-client denial, duplicates, audit, and antiforgery;
+- [workflow service component tests](../tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs):
+  client isolation, duplicate/invalid transitions, actor authorization, and durable
+  decision behavior against real SQLite;
+- [business decision boundary tests](../tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs):
+  authenticated actor mapping, over-posting resistance, response contract, audit, and
+  antiforgery;
 - [DevOps decision tests](../tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs):
   exact scope, actor restrictions, no grant on rejection, and safe failures;
 - [protected provisioning tests](../tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs):
@@ -503,7 +534,20 @@ Security behavior is exercised by automated tests, including:
   concurrent attempts converging on one operation and grant; and
 - [MCP contract tests](../tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs):
   exact allowlist, closed schemas, typed identifiers, failures, and forbidden
-  capability absence.
+  capability absence;
+- [MAF session-store tests](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs):
+  native session reuse, intake isolation, restart-equivalent loss, exact turn
+  serialization, and last-good-session preservation;
+- [Teams actor tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs):
+  channel, tenant, personal-conversation, actor, and forged-payload boundaries;
+- [confirmation component tests](../tests/GovernedAccess.IntegrationTests/Teams/RequestIntakeConfirmationComponentTests.cs):
+  ownership, concealment, terminal states, stale context, and typed failure behavior;
+- [confirmation concurrency tests](../tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakeConfirmationConcurrencyTests.cs):
+  one atomic submitted intake, request, and audit result under competing confirmations;
+  and
+- [governed full-host journey](../tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs):
+  authenticated Teams creation, wrong-client rejection, human approvals, exact scope,
+  fixed lifetime, and persisted provisioning evidence.
 
 Unit tests separately exercise request validation, exact-scope decision policies, and
 workflow evidence rules without infrastructure dependencies.
@@ -529,6 +573,8 @@ The following limitations are accepted only for the synthetic portfolio scope:
 - no incident response, backup, recovery, retention, or regulatory control set is
   implemented; and
 - no rate limiting, abuse detection, lockout, or production monitoring is present.
+- native MAF sessions and per-intake gates are retained for the process lifetime with
+  no inactivity eviction, terminal cleanup, compaction, or durable restart continuity.
 
 These limitations must not be obscured when presenting the application.
 
@@ -554,7 +600,9 @@ would require at least:
     classification;
 11. perform privacy, threat-model, dependency, penetration, and abuse-case reviews;
     and
-12. define incident response, ownership, SLOs, and emergency access procedures.
+12. define conversation-session privacy, retention/deletion, compaction, and
+    multi-host behavior if durable or higher-volume history is required; and
+13. define incident response, ownership, SLOs, and emergency access procedures.
 
 Those changes require new architectural decisions. They must preserve the rule that
 model output and MCP visibility are not authorization.
@@ -567,6 +615,7 @@ Review this document and the related tests whenever a change:
 - changes request scope, workflow states, approval rules, or grant lifetime;
 - adds an MCP tool, resource, prompt, or external MCP client;
 - replaces the deterministic chat client with a live provider;
+- changes the MAF session store, retention/deletion, compaction, or concurrency model;
 - introduces mutable or external reference data;
 - connects a real provisioner or stores credentials;
 - changes provider idempotency or retry behavior;
@@ -582,12 +631,12 @@ Review this document and the related tests whenever a change:
 - [Local development guide](local-development.md)
 - [Testing strategy](testing-strategy.md)
 - [Architecture decision index](adr/README.md)
-- [Documentation plan](documentation-plan.md)
-- [Feature specification](../specs/001-governed-production-access/spec.md)
-- [Data model](../specs/001-governed-production-access/data-model.md)
+- [Teams intake feature specification](../specs/002-teams-access-intake/spec.md)
+- [Teams intake data model](../specs/002-teams-access-intake/data-model.md)
+- [Governed workflow data model](../specs/001-governed-production-access/data-model.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
 - [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)
-- [Quickstart validation guide](../specs/001-governed-production-access/quickstart.md)
+- [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)
 - [ADR 0002: Validate Persisted Workflow Evidence at Provisioning](adr/0002-validate-persisted-workflow-evidence-at-provisioning.md)
 - [ADR 0003: Do Not Model Provider and Workflow Persistence as Atomic](adr/0003-do-not-model-provider-and-workflow-persistence-as-atomic.md)

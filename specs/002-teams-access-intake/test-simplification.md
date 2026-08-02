@@ -1,6 +1,6 @@
 # Test Suite Simplification
 
-**Gate**: Phase 6A (T091-T095)  
+**Gate**: Phase 6A (T068-T072)
 **Baseline captured**: 2026-08-01
 
 ## Baseline
@@ -76,7 +76,7 @@ case proves the production adapter invokes that policy or component.
 
 ## Final measurements
 
-T095 completed on 2026-08-01 with these gates:
+T072 completed on 2026-08-01 with these gates:
 
 | Gate | Result |
 |---|---|

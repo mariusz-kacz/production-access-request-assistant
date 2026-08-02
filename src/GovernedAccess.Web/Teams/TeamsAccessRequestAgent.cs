@@ -112,6 +112,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 logger,
                 "Prepare",
                 outcome.Kind,
+                turnContext.Activity.Type,
                 durationMs,
                 correlationId,
                 actor.Channel,
@@ -120,7 +121,10 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 actor.ConversationId,
                 actor.RequesterId,
                 sessionId,
-                requestId);
+                requestId,
+                outcome.ValidationErrors.Count,
+                outcome.Failure?.Kind,
+                outcome.Failure?.Code);
         }
 
         switch (outcome.Kind)
@@ -203,6 +207,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 logger,
                 "Confirm",
                 outcome.Kind,
+                turnContext.Activity.Type,
                 durationMs,
                 correlationId,
                 actor.Channel,
@@ -211,7 +216,10 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 actor.ConversationId,
                 actor.RequesterId,
                 preparationId,
-                requestId);
+                requestId,
+                outcome.WasAlreadySubmitted,
+                outcome.Failure?.Kind,
+                outcome.Failure?.Code);
         }
 
         return outcome.Kind switch
@@ -453,11 +461,12 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         EventId = 1001,
         EventName = "TeamsIntakePreparationCompleted",
         Level = LogLevel.Information,
-        Message = "Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}.")]
+        Message = "Teams intake {Transition} completed with {Outcome} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; validation error count {ValidationErrorCount}; failure kind {FailureKind}; failure code {FailureCode}.")]
     private static partial void LogPreparationCompleted(
         ILogger logger,
         string transition,
         RequestPreparationResultKind outcome,
+        string activityType,
         double durationMs,
         string correlationId,
         string channel,
@@ -466,17 +475,21 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         string conversationId,
         string requesterId,
         Guid? sessionId,
-        Guid? requestId);
+        Guid? requestId,
+        int validationErrorCount,
+        ApplicationFailureKind? failureKind,
+        string? failureCode);
 
     [LoggerMessage(
         EventId = 1002,
         EventName = "TeamsIntakeConfirmationCompleted",
         Level = LogLevel.Information,
-        Message = "Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}.")]
+        Message = "Teams intake {Transition} completed with {Outcome} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; replay {WasReplay}; failure kind {FailureKind}; failure code {FailureCode}.")]
     private static partial void LogConfirmationCompleted(
         ILogger logger,
         string transition,
         RequestConfirmationResultKind outcome,
+        string activityType,
         double durationMs,
         string correlationId,
         string channel,
@@ -485,5 +498,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         string conversationId,
         string requesterId,
         Guid sessionId,
-        Guid? requestId);
+        Guid? requestId,
+        bool wasReplay,
+        ApplicationFailureKind? failureKind,
+        string? failureCode);
 }

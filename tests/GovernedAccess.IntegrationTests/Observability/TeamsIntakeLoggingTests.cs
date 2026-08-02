@@ -20,6 +20,8 @@ namespace GovernedAccess.IntegrationTests.Observability;
     IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsIntakeLoggingTests
 {
+    private const double ConfirmationTargetMilliseconds = 5_000;
+
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "
         + "INC-1042 because customer-facing errors require diagnosis.";
@@ -72,18 +74,22 @@ public sealed class TeamsIntakeLoggingTests
             agentLogs,
             entry => entry.EventId.Name == "TeamsIntakeConfirmationCompleted");
 
-        AssertOperationMetadata(
+        _ = AssertOperationMetadata(
             preparation,
             "Prepare",
             "ReadyForConfirmation",
             sessionId,
             requestId);
-        AssertOperationMetadata(
+        var confirmationDurationMs = AssertOperationMetadata(
             confirmation,
             "Confirm",
             "Submitted",
             sessionId,
             requestId);
+        Assert.True(
+            confirmationDurationMs < ConfirmationTargetMilliseconds,
+            $"Deterministic confirmation took {confirmationDurationMs:F3} ms; "
+            + $"target is under {ConfirmationTargetMilliseconds:F0} ms.");
 
         var capturedText = string.Join(
             Environment.NewLine,
@@ -105,7 +111,7 @@ public sealed class TeamsIntakeLoggingTests
             StringComparison.Ordinal);
     }
 
-    private static void AssertOperationMetadata(
+    private static double AssertOperationMetadata(
         CapturedLog entry,
         string transition,
         string outcome,
@@ -129,10 +135,11 @@ public sealed class TeamsIntakeLoggingTests
         Assert.False(
             string.IsNullOrWhiteSpace(
                 entry.Properties["CorrelationId"]?.ToString()));
-        Assert.True(
-            Convert.ToDouble(
-                entry.Properties["DurationMs"],
-                System.Globalization.CultureInfo.InvariantCulture) >= 0);
+        var durationMs = Convert.ToDouble(
+            entry.Properties["DurationMs"],
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(durationMs >= 0);
+        return durationMs;
     }
 
     private static Activity CreateMessage(string text)
