@@ -111,8 +111,8 @@ the unchanged governed workflow after confirmation.
 - [X] T016 [US1] Implement process-wide deterministic, valid Azure OpenAI, and unavailable selection with the offline factory seam and existing function-invocation limits in src/GovernedAccess.Web/Ai/RequestPreparationChatRegistration.cs
 - [X] T017 [US1] Replace the hard-coded deterministic registration with `RequestPreparationChatRegistration` while preserving one singleton `IChatClient` pipeline and all existing Web/MCP/Teams route ordering in src/GovernedAccess.Web/Program.cs
 - [X] T018 [US1] Keep the native ASP.NET Core request timeout as the single overall deadline and preserve its existing cancellation propagation through src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
-- [ ] T019 [US1] Add selected profile, approved model, duration, and outcome to existing safe turn metadata without logging bodies in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
-- [ ] T020 [US1] Update only the host assertions and factory wiring needed for singleton profile selection and offline overrides in tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs and tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
+- [X] T019 [US1] Add selected profile, approved model, duration, and outcome to existing safe turn metadata without logging bodies in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T020 [US1] Update only the host assertions and factory wiring needed for singleton profile selection and offline overrides in tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs and tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
 
 **Checkpoint**: User Story 1 is complete with offline proof that provider provenance
 cannot change tools, schema, validation, readiness, confirmation, approvals, or

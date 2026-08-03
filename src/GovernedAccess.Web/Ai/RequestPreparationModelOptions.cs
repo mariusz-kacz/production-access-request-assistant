@@ -2,6 +2,10 @@ using Microsoft.Extensions.Configuration;
 
 namespace GovernedAccess.Web.Ai;
 
+public sealed record RequestPreparationModelMetadata(
+    string ProfileId,
+    string? ModelId);
+
 internal sealed class RequestPreparationModelOptions
 {
     internal const string SectionName = "RequestPreparationModel";

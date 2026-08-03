@@ -14,6 +14,7 @@ using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -101,8 +102,20 @@ public sealed class ProgramCompositionTests(
         var sessionStore = services.GetRequiredService<AgentSessionStore>();
         var coordinator = services.GetRequiredService<MafConversationTurnCoordinator>();
         var interpreter = services.GetRequiredService<IRequestPreparationInterpreter>();
+        var chatClient = services.GetRequiredService<IChatClient>();
+        var modelResolution = services
+            .GetRequiredService<RequestPreparationModelResolution>();
+        var modelMetadata = services
+            .GetRequiredService<RequestPreparationModelMetadata>();
 
         Assert.Same(concreteStore, sessionStore);
+        Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
+        Assert.Equal(
+            RequestPreparationModelProfile.Deterministic,
+            modelResolution.Profile);
+        Assert.Null(modelResolution.ModelId);
+        Assert.Equal("Deterministic", modelMetadata.ProfileId);
+        Assert.Null(modelMetadata.ModelId);
 
         await using var firstScope = services.CreateAsyncScope();
         await using var secondScope = services.CreateAsyncScope();
@@ -129,6 +142,28 @@ public sealed class ProgramCompositionTests(
             interpreter,
             secondScope.ServiceProvider
                 .GetRequiredService<IRequestPreparationInterpreter>());
+        Assert.Same(
+            chatClient,
+            firstScope.ServiceProvider.GetRequiredService<IChatClient>());
+        Assert.Same(
+            chatClient,
+            secondScope.ServiceProvider.GetRequiredService<IChatClient>());
+        Assert.Same(
+            modelResolution,
+            firstScope.ServiceProvider
+                .GetRequiredService<RequestPreparationModelResolution>());
+        Assert.Same(
+            modelResolution,
+            secondScope.ServiceProvider
+                .GetRequiredService<RequestPreparationModelResolution>());
+        Assert.Same(
+            modelMetadata,
+            firstScope.ServiceProvider
+                .GetRequiredService<RequestPreparationModelMetadata>());
+        Assert.Same(
+            modelMetadata,
+            secondScope.ServiceProvider
+                .GetRequiredService<RequestPreparationModelMetadata>());
     }
 
     [Fact]

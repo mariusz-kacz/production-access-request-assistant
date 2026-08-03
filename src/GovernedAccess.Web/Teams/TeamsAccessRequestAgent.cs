@@ -4,6 +4,7 @@ using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.Web.Ai;
 using Microsoft.Agents.Builder;
 using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Builder.App.AdaptiveCards;
@@ -32,6 +33,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     private readonly RequestIntakeService intakeService;
     private readonly PreparedRequestCardFactory cardFactory;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
+    private readonly RequestPreparationModelMetadata modelMetadata;
     private readonly Uri trustedWebBaseUri;
 
     public TeamsAccessRequestAgent(
@@ -40,7 +42,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         RequestIntakeService intakeService,
         PreparedRequestCardFactory cardFactory,
         ILogger<TeamsAccessRequestAgent> logger,
-        IOptions<TeamsAccessRequestOptions> teamsOptions)
+        IOptions<TeamsAccessRequestOptions> teamsOptions,
+        RequestPreparationModelMetadata modelMetadata)
         : base(options)
     {
         ArgumentNullException.ThrowIfNull(actorResolver);
@@ -48,11 +51,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         ArgumentNullException.ThrowIfNull(cardFactory);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(teamsOptions);
+        ArgumentNullException.ThrowIfNull(modelMetadata);
 
         this.actorResolver = actorResolver;
         this.intakeService = intakeService;
         this.cardFactory = cardFactory;
         this.logger = logger;
+        this.modelMetadata = modelMetadata;
         trustedWebBaseUri = teamsOptions.Value.TrustedWebBaseUri
             ?? throw new InvalidOperationException(
                 "A trusted Web base URI is required for Teams request links.");
@@ -112,6 +117,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 logger,
                 "Prepare",
                 outcome.Kind,
+                modelMetadata.ProfileId,
+                modelMetadata.ModelId,
                 turnContext.Activity.Type,
                 durationMs,
                 correlationId,
@@ -461,11 +468,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         EventId = 1001,
         EventName = "TeamsIntakePreparationCompleted",
         Level = LogLevel.Information,
-        Message = "Teams intake {Transition} completed with {Outcome} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; validation error count {ValidationErrorCount}; failure kind {FailureKind}; failure code {FailureCode}.")]
+        Message = "Teams intake {Transition} completed with {Outcome} using profile {ProfileId} and approved model {ModelId} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; validation error count {ValidationErrorCount}; failure kind {FailureKind}; failure code {FailureCode}.")]
     private static partial void LogPreparationCompleted(
         ILogger logger,
         string transition,
         RequestPreparationResultKind outcome,
+        string profileId,
+        string? modelId,
         string activityType,
         double durationMs,
         string correlationId,

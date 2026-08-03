@@ -15,13 +15,13 @@ internal static class RequestPreparationChatRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var resolution = RequestPreparationModelOptions
-            .Bind(configuration)
-            .Validate();
+        var options = RequestPreparationModelOptions.Bind(configuration);
+        var resolution = options.Validate();
 
         return AddRequestPreparationChat(
             services,
             resolution,
+            CreateMetadata(options, resolution),
             () => CreateAzureOpenAIClient(resolution));
     }
 
@@ -34,22 +34,24 @@ internal static class RequestPreparationChatRegistration
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(azureOpenAIClientFactory);
 
-        var resolution = RequestPreparationModelOptions
-            .Bind(configuration)
-            .Validate();
+        var options = RequestPreparationModelOptions.Bind(configuration);
+        var resolution = options.Validate();
 
         return AddRequestPreparationChat(
             services,
             resolution,
+            CreateMetadata(options, resolution),
             azureOpenAIClientFactory);
     }
 
     private static IServiceCollection AddRequestPreparationChat(
         IServiceCollection services,
         RequestPreparationModelResolution resolution,
+        RequestPreparationModelMetadata metadata,
         Func<IChatClient> azureOpenAIClientFactory)
     {
         services.AddSingleton(resolution);
+        services.AddSingleton(metadata);
         services
             .AddChatClient(_ => CreateSelectedClient(
                 resolution,
@@ -63,6 +65,26 @@ internal static class RequestPreparationChatRegistration
             });
 
         return services;
+    }
+
+    private static RequestPreparationModelMetadata CreateMetadata(
+        RequestPreparationModelOptions options,
+        RequestPreparationModelResolution resolution)
+    {
+        var profileId = options.ExecutionProfile switch
+        {
+            nameof(RequestPreparationModelProfile.Deterministic) =>
+                nameof(RequestPreparationModelProfile.Deterministic),
+            nameof(RequestPreparationModelProfile.AzureOpenAI) =>
+                nameof(RequestPreparationModelProfile.AzureOpenAI),
+            _ => "Unavailable",
+        };
+        var modelId =
+            resolution.Profile == RequestPreparationModelProfile.AzureOpenAI
+                ? resolution.ModelId
+                : null;
+
+        return new RequestPreparationModelMetadata(profileId, modelId);
     }
 
     private static IChatClient CreateSelectedClient(

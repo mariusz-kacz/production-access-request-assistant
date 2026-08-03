@@ -237,16 +237,28 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(CreateTeamsConfiguration());
             configuration.AddInMemoryCollection(configurationOverrides);
         });
-        builder.ConfigureServices(services =>
+        builder.ConfigureServices((context, services) =>
         {
             services.RemoveAll<GovernedAccessDbContext>();
             services.RemoveAll<DbContextOptions<GovernedAccessDbContext>>();
             services.RemoveAll<SqliteConnection>();
             services.RemoveAll<IClock>();
+            services.RemoveAll<IChatClient>();
+            services.RemoveAll<RequestPreparationModelResolution>();
+            services.RemoveAll<RequestPreparationModelMetadata>();
 
-            if (replacementChatClient is not null)
+            var modelResolution = RequestPreparationModelOptions
+                .Bind(context.Configuration)
+                .Validate();
+            if (replacementChatClient is not null
+                && modelResolution.Profile
+                    == RequestPreparationModelProfile.Deterministic)
             {
-                services.RemoveAll<IChatClient>();
+                services.AddSingleton(modelResolution);
+                services.AddSingleton(
+                    new RequestPreparationModelMetadata(
+                        nameof(RequestPreparationModelProfile.Deterministic),
+                        null));
                 services
                     .AddChatClient(replacementChatClient)
                     .UseFunctionInvocation(configure: static client =>
@@ -256,6 +268,15 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                         client.MaximumIterationsPerRequest = 6;
                         client.TerminateOnUnknownCalls = true;
                     });
+            }
+            else
+            {
+                RequestPreparationChatRegistration.AddRequestPreparationChat(
+                    services,
+                    context.Configuration,
+                    () => replacementChatClient
+                        ?? throw new InvalidOperationException(
+                            "Full-host tests require an offline client for a valid real-model profile."));
             }
 
             // Full-host tests retain only transport-to-interpreter wiring. Exact MCP

@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
-using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
 using Microsoft.Agents.Core.Models;
@@ -20,11 +19,19 @@ namespace GovernedAccess.IntegrationTests.Observability;
     IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsIntakeLoggingTests
 {
+    private const string ApprovedModelId = "approved-chat-model";
+    private const string AzureEndpoint =
+        "https://governed-access.openai.azure.com/";
     private const double ConfirmationTargetMilliseconds = 5_000;
 
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "
         + "INC-1042 because customer-facing errors require diagnosis.";
+
+    private const string CompleteProviderCandidate =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
 
     [Fact]
     public async Task PreparationAndConfirmationLogOnlyStructuredOperationMetadata()
@@ -32,8 +39,9 @@ public sealed class TeamsIntakeLoggingTests
         var cancellationToken = TestContext.Current.CancellationToken;
         using var logs = new CapturingLoggerProvider();
         await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate,
-            loggerProvider: logs);
+            new RecordingChatClient(CompleteProviderCandidate),
+            loggerProvider: logs,
+            configurationOverrides: CreateAzureProfileConfiguration());
         using var client = factory.CreateTeamsClient();
 
         using var preparationResponse = await client.PostAsJsonAsync(
@@ -74,6 +82,8 @@ public sealed class TeamsIntakeLoggingTests
             agentLogs,
             entry => entry.EventId.Name == "TeamsIntakeConfirmationCompleted");
 
+        Assert.Equal("AzureOpenAI", preparation.Properties["ProfileId"]);
+        Assert.Equal(ApprovedModelId, preparation.Properties["ModelId"]);
         _ = AssertOperationMetadata(
             preparation,
             "Prepare",
@@ -109,7 +119,21 @@ public sealed class TeamsIntakeLoggingTests
             "Confirm production access request",
             capturedText,
             StringComparison.Ordinal);
+        Assert.DoesNotContain(AzureEndpoint, capturedText, StringComparison.Ordinal);
     }
+
+    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+        new()
+        {
+            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
+            ["RequestPreparationModel:ApprovedModelIds:0"] = ApprovedModelId,
+            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = AzureEndpoint,
+            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
+                "11111111-1111-1111-1111-111111111111",
+            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+                "governed-access-chat",
+            ["RequestPreparationModel:AzureOpenAI:ModelId"] = ApprovedModelId,
+        };
 
     private static double AssertOperationMetadata(
         CapturedLog entry,
