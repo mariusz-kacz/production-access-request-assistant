@@ -36,3 +36,6 @@
   constraints, not implementation prescriptions.
 - The profile-selection assumption deliberately excludes requester-controlled,
   per-conversation switching and automatic fallback.
+- Validation iteration 2 passed after scope consolidation on 2026-08-03. The
+  specification now uses representative feature-specific coverage and relies on the
+  existing governed-workflow regression suite for unchanged behavior.

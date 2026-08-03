@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
@@ -56,6 +57,44 @@ public sealed class MafToolBoundaryTests
                 || name.Contains("revoke", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("submit", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("retry", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task RealProfileBoundaryReusesToolsSchemaAndCancellation()
+    {
+        var testCancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await BoundaryMcpTestHost.CreateAsync(
+            TestCatalog.Exact,
+            ToolBehavior.Success,
+            testCancellationToken);
+        var providerClient = new ToolBoundaryChatClient(
+            invokeEnvironmentTool: false);
+        using var realProfileClient = CreateRealProfileClient(providerClient);
+        var interpreter = CreateInterpreter(realProfileClient, host.HttpClientFactory);
+        using var callerCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            testCancellationToken);
+
+        var outcome = await interpreter.InterpretAsync(
+            CreateTurn("Use the approved real-profile boundary."),
+            callerCancellation.Token);
+
+        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, outcome.Kind);
+        Assert.Equal(AllowedToolNames, providerClient.ObservedToolNames);
+        var responseFormat = Assert.IsType<ChatResponseFormatJson>(
+            providerClient.ObservedResponseFormat);
+        Assert.Equal("request_intake_proposal", responseFormat.SchemaName);
+        var schema = Assert.IsType<System.Text.Json.JsonElement>(
+            responseFormat.Schema);
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            ["kind", "candidate", "clarification"],
+            schema.GetProperty("required")
+                .EnumerateArray()
+                .Select(item => item.GetString()!)
+                .ToArray());
+        Assert.Equal(
+            callerCancellation.Token,
+            providerClient.ObservedCancellationToken);
     }
 
     [Theory]
@@ -148,6 +187,27 @@ public sealed class MafToolBoundaryTests
             new MafConversationTurnCoordinator(),
             httpClientFactory);
 
+    private static IChatClient CreateRealProfileClient(IChatClient providerClient)
+    {
+        var adapterType = typeof(DeterministicChatClient).Assembly.GetType(
+            "GovernedAccess.Web.Ai.ProviderFailureMappingChatClient");
+        Assert.NotNull(adapterType);
+        var constructor = Assert.Single(
+            adapterType.GetConstructors(
+                BindingFlags.Instance
+                | BindingFlags.Public
+                | BindingFlags.NonPublic),
+            candidate =>
+            {
+                var parameters = candidate.GetParameters();
+                return parameters.Length == 1
+                    && parameters[0].ParameterType == typeof(IChatClient);
+            });
+
+        return Assert.IsAssignableFrom<IChatClient>(
+            constructor.Invoke([providerClient]));
+    }
+
     private static RequestPreparationTurn CreateTurn(string message) =>
         new(
             Guid.NewGuid(),
@@ -179,6 +239,10 @@ public sealed class MafToolBoundaryTests
 
         public string[] ObservedToolNames { get; private set; } = [];
 
+        public ChatResponseFormat? ObservedResponseFormat { get; private set; }
+
+        public CancellationToken ObservedCancellationToken { get; private set; }
+
         public async Task<ChatResponse> GetResponseAsync(
             IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
@@ -186,6 +250,8 @@ public sealed class MafToolBoundaryTests
         {
             ArgumentNullException.ThrowIfNull(messages);
             Interlocked.Increment(ref requestCount);
+            ObservedResponseFormat = options?.ResponseFormat;
+            ObservedCancellationToken = cancellationToken;
             ObservedToolNames = options?.Tools?
                 .Select(tool => tool.Name)
                 .Order(StringComparer.Ordinal)

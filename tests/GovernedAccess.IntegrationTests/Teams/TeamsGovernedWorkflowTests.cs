@@ -26,12 +26,18 @@ public sealed class TeamsGovernedWorkflowTests
         "I need production read-only access to PROD-ALPHA-EU to investigate "
         + "INC-1042 because customer-facing errors require diagnosis.";
 
+    private const string CompleteProviderCandidate =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
+
     [Fact]
     public async Task TeamsSubmittedRequestCompletesAuthenticatedGovernedWorkflow()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate);
+            new RecordingChatClient(CompleteProviderCandidate),
+            configurationOverrides: CreateAzureProfileConfiguration());
         await factory.ResetDatabaseAsync(cancellationToken);
 
         RequestIntakeSession intake;
@@ -248,6 +254,23 @@ public sealed class TeamsGovernedWorkflowTests
         activity.DeliveryMode = DeliveryModes.ExpectReplies;
         return activity;
     }
+
+    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+        new()
+        {
+            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
+            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
+            ["RequestPreparationModel:ApprovedModelIds:0"] =
+                "approved-chat-model",
+            ["RequestPreparationModel:AzureOpenAI:Endpoint"] =
+                "https://governed-access.openai.azure.com/",
+            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
+                "11111111-1111-1111-1111-111111111111",
+            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+                "governed-access-chat",
+            ["RequestPreparationModel:AzureOpenAI:ModelId"] =
+                "approved-chat-model",
+        };
 
     private static Activity CreateConfirmation(Guid intakeId) =>
         new FakeTeamsActivityBuilder()

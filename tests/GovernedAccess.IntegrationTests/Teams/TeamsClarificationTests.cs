@@ -18,6 +18,48 @@ namespace GovernedAccess.IntegrationTests.Teams;
 public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture)
     : IClassFixture<HistorySensitiveTeamsFixture>
 {
+    private const string ProviderClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Which Client Alpha production environment do you need?"}}
+        """;
+
+    [Fact]
+    public async Task ProviderClarificationIsFocusedAndCreatesNoWorkflowState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var providerClient = new RecordingChatClient(ProviderClarification);
+        await using var factory = new GovernedAccessWebFactory(
+            providerClient,
+            configurationOverrides: CreateAzureProfileConfiguration());
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = factory.CreateTeamsClient();
+
+        var responseBody = await SendMessageAsync(
+            client,
+            "I need access for the active Client Alpha incident.",
+            "provider-clarification-turn",
+            cancellationToken);
+
+        AssertClarification(
+            responseBody,
+            "Which Client Alpha production environment do you need?");
+        Assert.Equal(1, providerClient.InvocationCount);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var session = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.Equal(RequestIntakeStatus.Collecting, session.Status);
+        Assert.Empty(await dbContext.AccessRequests
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.AccessGrants
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+    }
+
     [Fact]
     public async Task DirectAndOrdinalRepliesCarryCandidateUntilItIsReady()
     {
@@ -101,6 +143,23 @@ public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture
             $"Expected 200 but received {(int)response.StatusCode}: {responseBody}");
         return responseBody;
     }
+
+    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+        new()
+        {
+            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
+            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
+            ["RequestPreparationModel:ApprovedModelIds:0"] =
+                "approved-chat-model",
+            ["RequestPreparationModel:AzureOpenAI:Endpoint"] =
+                "https://governed-access.openai.azure.com/",
+            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
+                "11111111-1111-1111-1111-111111111111",
+            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+                "governed-access-chat",
+            ["RequestPreparationModel:AzureOpenAI:ModelId"] =
+                "approved-chat-model",
+        };
 
     private static void AssertClarification(
         string responseBody,

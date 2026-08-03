@@ -7,11 +7,13 @@ using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Persistence;
+using GovernedAccess.Web.Teams;
 using Microsoft.Agents.Core.Models;
 using Microsoft.Agents.Core.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
@@ -212,6 +214,77 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         await AssertNoWorkflowStateAsync(factory, cancellationToken);
     }
 
+    [Theory]
+    [InlineData(RealProfileFailure.InvalidConfiguration)]
+    [InlineData(RealProfileFailure.ProviderUnavailable)]
+    public async Task SelectedRealProfileFailureIsSafeAndDoesNotFallback(
+        RealProfileFailure failure)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var configuration = CreateAzureProfileConfiguration();
+        IChatClient? providerClient = failure switch
+        {
+            RealProfileFailure.InvalidConfiguration => null,
+            RealProfileFailure.ProviderUnavailable => new ThrowingChatClient(
+                new HttpRequestException("offline provider unavailable")),
+            _ => throw new ArgumentOutOfRangeException(nameof(failure)),
+        };
+        if (failure == RealProfileFailure.InvalidConfiguration)
+        {
+            configuration[
+                "RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty;
+        }
+
+        await using var factory = new GovernedAccessWebFactory(
+            providerClient,
+            configurationOverrides: configuration);
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = factory.CreateTeamsClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(CompleteRequest),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(
+            "Request preparation is temporarily unavailable.",
+            responseBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            PreparedRequestCardFactory.AdaptiveCardContentType,
+            responseBody,
+            StringComparison.Ordinal);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        Assert.Empty(await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken));
+        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+    }
+
+    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+        new()
+        {
+            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
+            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
+            ["RequestPreparationModel:ApprovedModelIds:0"] =
+                "approved-chat-model",
+            ["RequestPreparationModel:AzureOpenAI:Endpoint"] =
+                "https://governed-access.openai.azure.com/",
+            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
+                "11111111-1111-1111-1111-111111111111",
+            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+                "governed-access-chat",
+            ["RequestPreparationModel:AzureOpenAI:ModelId"] =
+                "approved-chat-model",
+        };
+
     private static Activity CreateExpectRepliesActivity(string text)
     {
         var activity = new FakeTeamsActivityBuilder()
@@ -256,6 +329,12 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             await dbContext.AuditEvents
                 .AsNoTracking()
                 .ToListAsync(cancellationToken));
+    }
+
+    public enum RealProfileFailure
+    {
+        InvalidConfiguration,
+        ProviderUnavailable,
     }
 
 }

@@ -18,6 +18,41 @@ namespace GovernedAccess.IntegrationTests.Teams;
 
 public sealed class TeamsCandidateValidationTests
 {
+    private const string CompleteProviderCandidate =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
+
+    private const string CrossClientProviderCandidate =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-BETA-UK","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
+
+    [Fact]
+    public async Task ProviderCandidateBecomesReadyOnlyAfterAuthoritativeValidation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var providerClient = new RecordingChatClient(CompleteProviderCandidate);
+        var service = CreateService(dbContext, fixture.Clock, providerClient);
+
+        var result = await service.PrepareAsync(
+            CreateCommand("Prepare the complete provider candidate."),
+            cancellationToken);
+
+        Assert.Equal(RequestPreparationResultKind.ReadyForConfirmation, result.Kind);
+        var session = Assert.IsType<RequestIntakeSession>(result.Session);
+        Assert.Equal(RequestIntakeStatus.Ready, session.Status);
+        Assert.Equal(DemoDataIds.ClientAlphaId, session.ClientId);
+        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
+        Assert.Equal(DemoDataIds.PrimaryIncidentId, session.IncidentId);
+        Assert.Equal(1, providerClient.InvocationCount);
+        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+    }
+
     [Theory]
     [InlineData(
         DeterministicChatMode.InvalidCandidate,
@@ -138,12 +173,21 @@ public sealed class TeamsCandidateValidationTests
         GovernedAccessDbContext dbContext,
         IClock clock,
         DeterministicChatMode mode)
+        => CreateService(
+            dbContext,
+            clock,
+            new DeterministicChatClient(mode));
+
+    private static RequestIntakeService CreateService(
+        GovernedAccessDbContext dbContext,
+        IClock clock,
+        IChatClient chatClient)
     {
         var requestContext = new EfRequestContextReader(dbContext);
         var workflowStore = new EfWorkflowStore(dbContext);
         var validator = new RequestValidator(requestContext);
         return new RequestIntakeService(
-            CreateInterpreter(mode),
+            CreateInterpreter(chatClient),
             validator,
             new EfRequestIntakeStore(dbContext),
             new RequestSubmissionService(
@@ -155,8 +199,12 @@ public sealed class TeamsCandidateValidationTests
 
     private static MafRequestPreparationInterpreter CreateInterpreter(
         DeterministicChatMode mode) =>
+        CreateInterpreter(new DeterministicChatClient(mode));
+
+    private static MafRequestPreparationInterpreter CreateInterpreter(
+        IChatClient chatClient) =>
         new(
-            new DeterministicChatClient(mode),
+            chatClient,
             Options.Create(
                 new TeamsAccessRequestOptions
                 {

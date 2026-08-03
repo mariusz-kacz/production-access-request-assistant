@@ -49,25 +49,32 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
     private readonly SemaphoreSlim databaseResetLock = new(1, 1);
     private readonly IChatClient? replacementChatClient;
     private readonly ILoggerProvider? loggerProvider;
+    private readonly IReadOnlyDictionary<string, string?> configurationOverrides;
 
     public GovernedAccessWebFactory(
         IChatClient? chatClient = null,
         Uri? trustedWebBaseUri = null,
-        ILoggerProvider? loggerProvider = null)
+        ILoggerProvider? loggerProvider = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         replacementChatClient = chatClient;
         this.loggerProvider = loggerProvider;
+        this.configurationOverrides = configurationOverrides is null
+            ? new Dictionary<string, string?>()
+            : new Dictionary<string, string?>(configurationOverrides);
         TrustedWebBaseUri = trustedWebBaseUri ?? DefaultTrustedWebBaseUri;
     }
 
     public GovernedAccessWebFactory(
         DeterministicChatMode chatMode,
         Uri? trustedWebBaseUri = null,
-        ILoggerProvider? loggerProvider = null)
+        ILoggerProvider? loggerProvider = null,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
         : this(
             new DeterministicChatClient(chatMode),
             trustedWebBaseUri,
-            loggerProvider)
+            loggerProvider,
+            configurationOverrides)
     {
     }
 
@@ -226,7 +233,10 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             }
         });
         builder.ConfigureAppConfiguration((_, configuration) =>
-            configuration.AddInMemoryCollection(CreateTeamsConfiguration()));
+        {
+            configuration.AddInMemoryCollection(CreateTeamsConfiguration());
+            configuration.AddInMemoryCollection(configurationOverrides);
+        });
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<GovernedAccessDbContext>();
@@ -317,6 +327,12 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                 AuthenticationConstants.BotFrameworkDefaultScope,
             ["ConnectionsMap:0:ServiceUrl"] = "*",
             ["ConnectionsMap:0:Connection"] = BotConnectionName,
+            ["RequestPreparationModel:ExecutionProfile"] = "Deterministic",
+            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
+            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = string.Empty,
+            ["RequestPreparationModel:AzureOpenAI:TenantId"] = string.Empty,
+            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty,
+            ["RequestPreparationModel:AzureOpenAI:ModelId"] = string.Empty,
             ["TeamsAccessRequest:AllowedTenantId"] =
                 FakeTeamsActivityBuilder.DefaultTenantId,
             ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,
