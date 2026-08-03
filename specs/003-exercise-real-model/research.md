@@ -112,28 +112,24 @@ would make that acceptance behavior impossible.
 - Fallback to deterministic on error: rejected because it conceals the failed real
   exercise and directly violates the feature contract.
 
-## Decision 5: Give model and MCP work one cumulative 90-second deadline
+## Decision 5: Reuse the native ASP.NET Core request timeout
 
-**Decision**: Create one linked cancellation source at the interpreter boundary with
-a 90-second deadline. Use that same token for MCP connection/catalog work, every
-provider call, every tool call, the MAF run, and session save. Retain the existing
-100-second Teams request timeout as the outer transport failsafe.
+**Decision**: Keep the existing 100-second Teams endpoint request timeout as the one
+overall deadline. Propagate its cancellation token through MCP connection/catalog
+work, provider and tool calls, response parsing, and session save. Do not add a
+second interpreter timer.
 
-**Rationale**: The current request token reaches every asynchronous boundary, but an
-outer endpoint cancellation can abort reply delivery. The shorter inner deadline
-allows the interpreter to classify its own cancellation as `Timeout`, preserve the
-last saved session, and return safe Teams guidance with ten seconds of transport
-headroom. A single cumulative budget prevents retries or tool loops from resetting
-the clock.
+**Rationale**: ASP.NET Core already owns the request lifetime and cancels the token
+supplied to the complete Teams handling path. Reusing it removes duplicate policy,
+configuration, classification, and tests while still bounding model and MCP work and
+preventing failed turns from saving session or workflow state.
 
 **Alternatives considered**:
 
-- Rely only on the 100-second endpoint timeout: rejected because it may cancel the
-  response channel before safe timeout guidance is sent.
-- Separate per-provider and per-tool timeouts: rejected as the primary control because
-  their budgets could accumulate beyond the overall turn deadline.
-- Increase the Teams timeout: rejected because the approved baseline already caps it
-  at 100 seconds and a longer wait harms the demonstration.
+- Add a shorter interpreter deadline: rejected because conversational reply headroom
+  does not justify a second timer for this portfolio scope.
+- Separate per-provider and per-tool deadlines: rejected as overall controls because
+  their budgets could accumulate beyond the endpoint deadline.
 
 ## Decision 6: Preserve the existing schema, tool allowlist, and validation path
 
@@ -181,8 +177,8 @@ without sensitive payload capture.
 
 ## Decision 8: Do not persist profile or model provenance
 
-**Decision**: Treat execution profile, provider model ID, deadline, and provider
-operation outcome as process-wide configuration and structured operational metadata.
+**Decision**: Treat execution profile, provider model ID, and provider operation
+outcome as process-wide configuration and structured operational metadata.
 Do not add them to `RequestIntakeSession`, `AccessRequest`, approval, operation, grant,
 or audit tables.
 
@@ -201,7 +197,7 @@ request and human decision evidence remain sufficient.
 ## Decision 9: Keep automated tests offline and make the real run a manual gate
 
 **Decision**: Test profile validation, exact selection, no fallback, provider error
-translation, cumulative deadlines, unchanged saved sessions, exact MCP tools,
+translation, native request cancellation, unchanged saved sessions, exact MCP tools,
 authoritative rejection, and safe logging with deterministic clients and loopback
 hosts. Document a separate manual Azure OpenAI/Teams exercise for complete,
 clarification, rejection, and configuration-failure scenarios.

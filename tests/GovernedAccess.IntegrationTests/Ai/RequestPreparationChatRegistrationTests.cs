@@ -96,13 +96,6 @@ public sealed class RequestPreparationChatRegistrationTests
                         "unapproved-chat-model",
                 "AzureOpenAI.ModelId",
                 "unapproved-chat-model"),
-            new(
-                "wrong turn timeout",
-                configuration =>
-                    configuration["RequestPreparationModel:TurnTimeout"] =
-                        "00:01:31",
-                "TurnTimeout",
-                "00:01:31"),
         ];
 
         foreach (var testCase in cases)
@@ -215,7 +208,6 @@ public sealed class RequestPreparationChatRegistrationTests
         new()
         {
             ["RequestPreparationModel:ExecutionProfile"] = "Deterministic",
-            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
             ["RequestPreparationModel:AzureOpenAI:Endpoint"] = string.Empty,
             ["RequestPreparationModel:AzureOpenAI:TenantId"] = string.Empty,
             ["RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty,
@@ -226,7 +218,6 @@ public sealed class RequestPreparationChatRegistrationTests
         new()
         {
             ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
             ["RequestPreparationModel:ApprovedModelIds:0"] = ApprovedModelId,
             ["RequestPreparationModel:AzureOpenAI:Endpoint"] = AzureEndpoint,
             ["RequestPreparationModel:AzureOpenAI:TenantId"] = TenantId,

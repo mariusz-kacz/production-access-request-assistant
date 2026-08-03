@@ -9,7 +9,6 @@ using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using GovernedAccess.Web.Teams;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.AI;
 
 const string databaseConnectionStringName = "GovernedAccess";
 const string defaultDatabaseConnectionString = "Data Source=governed-access.db";
@@ -46,15 +45,7 @@ builder.Services.AddSingleton<SyntheticAccessProvisioner>();
 builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
     serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
-builder.Services
-    .AddChatClient(_ => new DeterministicChatClient(DeterministicChatMode.Candidate))
-    .UseFunctionInvocation(configure: static client =>
-    {
-        client.AllowConcurrentInvocation = false;
-        client.IncludeDetailedErrors = false;
-        client.MaximumIterationsPerRequest = 6;
-        client.TerminateOnUnknownCalls = true;
-    });
+builder.Services.AddRequestPreparationChat(builder.Configuration);
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();

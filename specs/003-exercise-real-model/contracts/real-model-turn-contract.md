@@ -66,13 +66,16 @@ successful JSON-schema conformance.
 
 ## Deadline and Cancellation
 
-- One cumulative inner deadline: 90 seconds.
-- Covered operations: MCP connect/catalog, all model calls, all tool calls, response
-  parsing, and successful MAF session save.
-- Outer Teams endpoint deadline: 100 seconds.
-- Inner deadline expiry: typed `Timeout`, with reply headroom.
-- Caller cancellation: honored and classified separately from the inner deadline.
-- No per-call timeout may reset or extend the cumulative deadline.
+- The existing ASP.NET Core Teams endpoint request timeout is the single overall
+  deadline: 100 seconds.
+- Its cancellation token is propagated through MCP connect/catalog, model and tool
+  calls, response parsing, and successful MAF session save.
+- Endpoint deadline expiry is handled by native request-timeout middleware; a normal
+  conversational reply is not guaranteed after the response channel is cancelled.
+- Caller disconnect and request-timeout cancellation both fail closed and cannot
+  advance intake or workflow state.
+- Provider-side timeouts are still translated to the provider-neutral `Timeout`
+  outcome while the request remains active.
 
 ## Outcomes
 
@@ -80,8 +83,8 @@ successful JSON-schema conformance.
 |------------------|---------------------|----------------|----------------|
 | Schema-valid proposal | `Proposal` | Clarification, validation rejection, or confirmation after authoritative validation | Candidate/readiness may change only through existing application rules |
 | Malformed or unsupported response | `MalformedModelOutput` | Safe retry guidance | No candidate, ready scope, request, approval, operation, grant, or audit change |
-| Inner deadline expires | `Timeout` | Safe timeout guidance | Last accepted candidate and saved MAF session remain unchanged |
-| Caller cancels | `Cancelled` | Safe response when channel remains writable | Last accepted candidate and saved MAF session remain unchanged |
+| Provider-side timeout | `Timeout` | Safe timeout guidance while the request remains active | Last accepted candidate and saved MAF session remain unchanged |
+| Endpoint timeout or caller disconnect | Native request cancellation | Transport-level safe failure | Last accepted candidate and saved MAF session remain unchanged |
 | Invalid profile, credential failure, provider failure, quota/service failure, MCP failure, or catalog mismatch | `Unavailable` | Safe unavailable guidance | No fallback and no governed workflow state change |
 
 ## Authoritative Validation

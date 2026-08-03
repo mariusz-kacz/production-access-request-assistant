@@ -14,11 +14,11 @@ conversation/session flow, the exact three read-only loopback MCP tools, and the
 existing closed JSON-schema proposal. Invalid or unavailable real profiles resolve to
 a fail-closed unavailable client and never fall back to the deterministic client.
 
-The model/MCP loop receives one cumulative 90-second inner deadline, leaving ten
-seconds inside the existing 100-second Teams endpoint deadline to translate timeout
-and return safe guidance. No Core contract, domain rule, request/approval/provisioning
-path, external endpoint, React surface, database table, or persisted model provenance
-is added.
+The existing ASP.NET Core 100-second Teams endpoint request timeout remains the single
+overall deadline. Its cancellation token continues through model, MCP, parsing, and
+session operations; no second interpreter timer is added. No Core contract, domain
+rule, request/approval/provisioning path, external endpoint, React surface, database
+table, or persisted model provenance is added.
 
 ## Technical Context
 
@@ -45,10 +45,9 @@ Azure OpenAI resource reachable over HTTPS
 **Project Type**: Single-host modular web application with a thin React UI and
 personal Teams transport
 
-**Performance Goals**: Every model/MCP interpretation turn completes or returns a
-typed timeout within 90 seconds; the Teams endpoint retains its 100-second outer
-deadline; a complete valid request reaches confirmation within five requester
-messages; ten controlled complete conversations prepare correctly
+**Performance Goals**: Every Teams preparation request completes or is terminated by
+the existing 100-second endpoint deadline; a complete valid request reaches
+confirmation within five requester messages
 
 **Constraints**: Warnings as errors; nullable enabled; one selected profile per host;
 explicit real-profile opt-in; no automatic fallback; Microsoft Entra authentication
@@ -72,7 +71,7 @@ model policy, production rollout, RAG, or distributed coordination
 | **Scope integrity** | PASS | A real-model proposal enters the same immutable ready snapshot, reserved request ID, actor/conversation ownership, revalidation, fixed eight-hour scope, and correction-by-new-request rules. |
 | **Provisioning evidence** | PASS | No model-visible state-changing tool is added. Provisioning still receives only request ID, reloads persisted evidence, and uses that ID for idempotency. |
 | **Proportionality** | PASS | One options/configuration surface, one concrete registration/adapter boundary, and one unavailable client are added to the existing executable. There is no new project, endpoint, process, database entity, router, or generic provider abstraction. |
-| **Verification and operations** | PASS | Automated tests use deterministic provider substitutes and cover profile selection, no fallback, provider translation, cumulative deadline, exact tools, schema rejection, unchanged state, and safe logs. One manual guide covers the approved live-model exercise. |
+| **Verification and operations** | PASS | Automated tests use deterministic provider substitutes and cover profile selection, no fallback, provider translation, native request-timeout cancellation, exact tools, schema rejection, unchanged state, and safe logs. One manual guide covers the approved live-model exercise. |
 
 No constitution violation or amendment is required.
 
@@ -109,7 +108,7 @@ src/
     │   ├── RequestPreparationChatRegistration.cs   # New exact client selection
     │   ├── ProviderFailureMappingChatClient.cs     # New SDK failure normalization/logging
     │   ├── UnavailableChatClient.cs                # New fail-closed invalid profile
-    │   ├── MafRequestPreparationInterpreter.cs     # Cumulative inner turn deadline
+    │   ├── MafRequestPreparationInterpreter.cs     # Native request cancellation propagation
     │   └── DeterministicChatClient.cs               # Existing default/test client
     ├── Teams/
     │   └── TeamsAccessRequestAgent.cs               # Safe profile/model operation metadata
@@ -158,7 +157,7 @@ server configuration
         └── missing/invalid/unknown ─────► UnavailableChatClient
                                            (never deterministic fallback)
                                                     │
-authenticated Teams message ─► existing MAF interpreter + 90s cumulative deadline
+authenticated Teams message ─► ASP.NET request timeout + existing MAF interpreter
                                                     │
                          exact three read-only MCP tools + closed proposal schema
                                                     │

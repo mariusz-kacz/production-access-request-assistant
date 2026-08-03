@@ -15,7 +15,6 @@ One process-wide configuration object selects the request-preparation client.
 | Field | Type | Rules |
 |------|------|-------|
 | `ExecutionProfile` | closed enum | Exactly `Deterministic` or `AzureOpenAI`; unknown or missing values fail closed |
-| `TurnTimeout` | duration | Exactly 90 seconds for the current baseline and strictly less than the 100-second Teams endpoint deadline |
 | `ApprovedModelIds` | string collection | Server-owned, exact ordinal values; non-empty when Azure OpenAI is selected |
 | `AzureOpenAI.Endpoint` | nullable absolute URI | Required for Azure OpenAI; HTTPS Azure OpenAI origin only, with no user info, non-root path, query, or fragment |
 | `AzureOpenAI.TenantId` | nullable GUID | Required non-empty Microsoft Entra tenant identifier for Azure OpenAI credential discovery |
@@ -26,6 +25,10 @@ No API key, bearer token, client secret, or credential value is part of this obj
 `DefaultAzureCredential` discovers the signed-in developer identity, constrained to
 `TenantId`. Credential absence or authorization failure is observed only when the
 real provider is called and maps to `Unavailable`.
+
+The existing ASP.NET Core 100-second Teams request timeout is the single overall
+deadline. Its cancellation token flows through model and MCP work; it is not a
+model-profile setting or persisted value.
 
 ### Resolution states
 
@@ -64,7 +67,6 @@ response parsing, and successful MAF session save.
 | `ProfileId` | closed string | Selected process-wide profile; not requester-controlled |
 | `ModelId` | nullable string | Approved Azure model identity; absent for deterministic profile |
 | `StartedAt` | timestamp | UTC operational measurement only |
-| `Deadline` | timestamp | `StartedAt + 90 seconds`; one cumulative budget |
 | `Outcome` | closed enum | `Proposal`, `MalformedModelOutput`, `Timeout`, `Cancelled`, or `Unavailable` |
 | `Duration` | duration | Logged without prompt, response, or payload data |
 
@@ -78,8 +80,8 @@ existing process-local in-memory store.
 Started
   ├── valid schema response ----------------------> Proposal
   ├── malformed/unsupported response ------------> MalformedModelOutput
-  ├── cumulative inner deadline expires ---------> Timeout
-  ├── outer caller cancellation -----------------> Cancelled
+  ├── provider-side timeout ----------------------> Timeout
+  ├── request timeout or caller cancellation -----> Cancelled
   └── profile/auth/provider/MCP dependency fails -> Unavailable
 ```
 

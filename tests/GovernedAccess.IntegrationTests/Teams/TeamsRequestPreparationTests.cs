@@ -272,7 +272,6 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         new()
         {
             ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
             ["RequestPreparationModel:ApprovedModelIds:0"] =
                 "approved-chat-model",
             ["RequestPreparationModel:AzureOpenAI:Endpoint"] =

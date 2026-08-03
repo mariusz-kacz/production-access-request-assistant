@@ -328,7 +328,6 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             ["ConnectionsMap:0:ServiceUrl"] = "*",
             ["ConnectionsMap:0:Connection"] = BotConnectionName,
             ["RequestPreparationModel:ExecutionProfile"] = "Deterministic",
-            ["RequestPreparationModel:TurnTimeout"] = "00:01:30",
             ["RequestPreparationModel:AzureOpenAI:Endpoint"] = string.Empty,
             ["RequestPreparationModel:AzureOpenAI:TenantId"] = string.Empty,
             ["RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty,

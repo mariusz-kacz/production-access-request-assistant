@@ -61,7 +61,6 @@ Set process-local environment variables in the shell that will start the host:
 
 ```powershell
 $env:RequestPreparationModel__ExecutionProfile = 'AzureOpenAI'
-$env:RequestPreparationModel__TurnTimeout = '00:01:30'
 $env:RequestPreparationModel__ApprovedModelIds__0 = '<approved-model-id>'
 $env:RequestPreparationModel__AzureOpenAI__Endpoint = 'https://<resource-name>.openai.azure.com/'
 $env:RequestPreparationModel__AzureOpenAI__TenantId = '<azure-tenant-guid>'
@@ -170,8 +169,8 @@ Expected:
 - logs identify the closed profile failure without exposing configuration values.
 
 Restore the deployment variable before further real-model use. Provider
-unavailability and the cumulative 90-second deadline are also covered by offline
-automated failure tests; an optional controlled provider outage may be used to observe
+unavailability and native request-timeout cancellation are also covered by offline
+automated tests; an optional controlled provider outage may be used to observe
 the same safe Teams behavior manually.
 
 ## 8. Inspect safe evidence
@@ -195,7 +194,6 @@ Stop the host and clear the process-local profile settings:
 
 ```powershell
 Remove-Item Env:RequestPreparationModel__ExecutionProfile -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__TurnTimeout -ErrorAction SilentlyContinue
 Remove-Item Env:RequestPreparationModel__ApprovedModelIds__0 -ErrorAction SilentlyContinue
 Remove-Item Env:RequestPreparationModel__AzureOpenAI__Endpoint -ErrorAction SilentlyContinue
 Remove-Item Env:RequestPreparationModel__AzureOpenAI__TenantId -ErrorAction SilentlyContinue

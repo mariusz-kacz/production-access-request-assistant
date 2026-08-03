@@ -67,7 +67,7 @@ the request must enter the unchanged human-governed workflow.
 - **FR-002**: The system MUST accept the real-model profile only when its required
   settings and protected credentials are present and its model is approved.
 - **FR-003**: A missing, invalid, unavailable, cancelled, or timed-out real-model turn
-  MUST fail closed with safe guidance, no deterministic fallback, and no governed
+  MUST fail closed with a safe outcome, no deterministic fallback, and no governed
   workflow state change.
 - **FR-004**: The real model MUST receive only the bounded authenticated intake
   context and exactly these read-only tools: `get_production_environment`,
@@ -81,9 +81,9 @@ the request must enter the unchanged human-governed workflow.
   relationships.
 - **FR-008**: Incomplete or ambiguous input MUST produce at most one focused
   clarification for the turn and MUST NOT create a request or grant.
-- **FR-009**: Model invocation and approved context lookup MUST share one overall turn
-  deadline, honor cancellation, and preserve the last successfully accepted intake
-  state when the turn fails.
+- **FR-009**: Model invocation and approved context lookup MUST remain governed by
+  the Teams endpoint's single overall request deadline, honor its cancellation, and
+  preserve the last successfully accepted intake state when the turn fails.
 - **FR-010**: A validated real-model candidate MUST enter the existing immutable
   requester-confirmation, human-approval, and deterministic provisioning flow with
   the existing authenticated ownership and client-isolation rules.
@@ -130,7 +130,8 @@ the request must enter the unchanged human-governed workflow.
 - Existing domain and workflow regressions continue to verify authorization,
   immutable scope, client isolation, human approval, and idempotent provisioning.
 - Focused offline integration coverage verifies profile selection, provider
-  forwarding and failure, the shared deadline, exact read-only tools, schema reuse,
+  forwarding and failure, native request-timeout cancellation propagation, exact
+  read-only tools, schema reuse,
   authoritative candidate rejection, safe logging, and unchanged confirmation
   wiring using representative cases.
 - One documented manual exercise verifies the approved real-model profile with a

@@ -7,7 +7,6 @@
   "additionalProperties": false,
   "required": [
     "ExecutionProfile",
-    "TurnTimeout",
     "ApprovedModelIds",
     "AzureOpenAI"
   ],
@@ -18,11 +17,6 @@
         "Deterministic",
         "AzureOpenAI"
       ]
-    },
-    "TurnTimeout": {
-      "type": "string",
-      "const": "00:01:30",
-      "description": "One cumulative model and MCP interpretation budget, shorter than the 100-second Teams endpoint deadline."
     },
     "ApprovedModelIds": {
       "type": "array",

@@ -53,7 +53,7 @@ documents and exercises the approved real-model profile manually.
 process-wide configuration surface required by the approved design.
 
 - [X] T001 Add exact `Microsoft.Extensions.AI.OpenAI` 10.7.0, `Azure.AI.OpenAI` 2.1.0, and `Azure.Identity` 1.21.0 package references alongside the existing AI packages in src/GovernedAccess.Web/GovernedAccess.Web.csproj
-- [X] T002 [P] Add checked-in `RequestPreparationModel` sections with `Deterministic` as the explicit default, a fixed 90-second turn timeout, an empty approved-model list, and blank nonsecret Azure OpenAI placeholders in src/GovernedAccess.Web/appsettings.json and src/GovernedAccess.Web/appsettings.Development.json
+- [X] T002 [P] Add checked-in `RequestPreparationModel` sections with `Deterministic` as the explicit default, an empty approved-model list, and blank nonsecret Azure OpenAI placeholders in src/GovernedAccess.Web/appsettings.json and src/GovernedAccess.Web/appsettings.Development.json
 
 **Checkpoint**: The host restores with pinned provider packages and checked-in
 configuration selects no live model and contains no provider credential.
@@ -68,7 +68,7 @@ real-profile composition without ambient credentials or network access.
 **CRITICAL**: No User Story 1 test may run until the test host proves that machine
 environment variables cannot accidentally select or call a live provider.
 
-- [X] T003 Force the integration host's base configuration to `RequestPreparationModel:ExecutionProfile=Deterministic`, supply the fixed test timeout, clear Azure profile values, and preserve explicit per-test configuration overrides in tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
+- [X] T003 Force the integration host's base configuration to `RequestPreparationModel:ExecutionProfile=Deterministic`, clear Azure profile values, and preserve explicit per-test configuration overrides in tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
 - [X] T004 [P] Add reusable recording, blocking, throwing, and sentinel `IChatClient` test doubles that capture options and cancellation without network access in tests/GovernedAccess.IntegrationTests/Infrastructure/ModelExecutionTestClients.cs
 
 **Checkpoint**: Automated tests have deterministic model selection, controllable
@@ -96,7 +96,7 @@ the unchanged governed workflow after confirmation.
 
 - [X] T005 [P] [US1] Add three offline selection tests covering deterministic mode, a valid Azure OpenAI sentinel, and one representative invalid-configuration table that proves safe no-fallback behavior in tests/GovernedAccess.IntegrationTests/Ai/RequestPreparationChatRegistrationTests.cs
 - [X] T006 [P] [US1] Add focused adapter tests for option/token forwarding plus one unavailable failure and one timeout failure in tests/GovernedAccess.IntegrationTests/Ai/ProviderFailureMappingChatClientTests.cs
-- [X] T007 [P] [US1] Add one cumulative 90-second deadline test and one caller-cancellation test, relying on existing session-failure regressions for state preservation, in tests/GovernedAccess.IntegrationTests/Ai/RealModelDeadlineTests.cs
+- [X] T007 [P] [US1] Reuse focused caller-cancellation coverage to verify the native ASP.NET Core request-timeout token propagates through the interpreter and MCP tool path without a second timer in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs and tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
 - [X] T008 [P] [US1] Extend the existing MCP boundary with one real-profile-path test that reuses the exact three-tool catalog, closed proposal schema, and propagated cancellation token in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
 - [X] T009 [P] [US1] Add one parameterized hosted Teams test for invalid or unavailable selected real profiles, asserting safe guidance, no fallback, and no request or grant in tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs
 - [X] T010 [P] [US1] Add three representative provider-boundary scenarios—complete request, focused clarification, and cross-client rejection—using existing authoritative validation assertions in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
@@ -105,12 +105,12 @@ the unchanged governed workflow after confirmation.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [P] [US1] Implement binding and concise validation for the two closed profiles, exact 90-second timeout, trusted Azure origin, required tenant/deployment/model, and approved-model membership in src/GovernedAccess.Web/Ai/RequestPreparationModelOptions.cs
-- [ ] T014 [P] [US1] Implement a provider-neutral fail-closed `IChatClient` that reports selected missing, invalid, or unknown real profiles as unavailable at turn time without constructing the deterministic client in src/GovernedAccess.Web/Ai/UnavailableChatClient.cs
-- [ ] T015 [P] [US1] Implement a delegating provider boundary that forwards options/cancellation and maps dependency failures to unavailable and provider timeouts to timeout in src/GovernedAccess.Web/Ai/ProviderFailureMappingChatClient.cs
-- [ ] T016 [US1] Implement process-wide deterministic, valid Azure OpenAI, and unavailable selection with the offline factory seam and existing function-invocation limits in src/GovernedAccess.Web/Ai/RequestPreparationChatRegistration.cs
-- [ ] T017 [US1] Replace the hard-coded deterministic registration with `RequestPreparationChatRegistration` while preserving one singleton `IChatClient` pipeline and all existing Web/MCP/Teams route ordering in src/GovernedAccess.Web/Program.cs
-- [ ] T018 [US1] Apply one linked 90-second budget to the existing interpreter operation and preserve distinct caller cancellation in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
+- [X] T013 [P] [US1] Implement binding and concise validation for the two closed profiles, trusted Azure origin, required tenant/deployment/model, and approved-model membership in src/GovernedAccess.Web/Ai/RequestPreparationModelOptions.cs
+- [X] T014 [P] [US1] Implement a provider-neutral fail-closed `IChatClient` that reports selected missing, invalid, or unknown real profiles as unavailable at turn time without constructing the deterministic client in src/GovernedAccess.Web/Ai/UnavailableChatClient.cs
+- [X] T015 [P] [US1] Implement a delegating provider boundary that forwards options/cancellation and maps dependency failures to unavailable and provider timeouts to timeout in src/GovernedAccess.Web/Ai/ProviderFailureMappingChatClient.cs
+- [X] T016 [US1] Implement process-wide deterministic, valid Azure OpenAI, and unavailable selection with the offline factory seam and existing function-invocation limits in src/GovernedAccess.Web/Ai/RequestPreparationChatRegistration.cs
+- [X] T017 [US1] Replace the hard-coded deterministic registration with `RequestPreparationChatRegistration` while preserving one singleton `IChatClient` pipeline and all existing Web/MCP/Teams route ordering in src/GovernedAccess.Web/Program.cs
+- [X] T018 [US1] Keep the native ASP.NET Core request timeout as the single overall deadline and preserve its existing cancellation propagation through src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
 - [ ] T019 [US1] Add selected profile, approved model, duration, and outcome to existing safe turn metadata without logging bodies in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 - [ ] T020 [US1] Update only the host assertions and factory wiring needed for singleton profile selection and offline overrides in tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs and tests/GovernedAccess.IntegrationTests/Infrastructure/GovernedAccessWebFactory.cs
 
@@ -161,7 +161,7 @@ T005-T012 tests
       ├── T014 unavailable client ├── T016 exact registration ── T017 Program
       └── T015 provider wrapper ──┘
                     │
-                    ├── T018 cumulative interpreter deadline
+                    ├── T018 native request cancellation
                     ├── T019 safe Teams/profile metadata
                     └── T020 composition and test-host alignment
 ```
@@ -172,8 +172,8 @@ T005-T012 tests
   separate production files.
 - T016 depends on T013–T015.
 - T017 depends on T016.
-- T018 and T019 depend on T013 and may proceed in parallel with T016/T017 where file
-  changes do not overlap, but the story checkpoint requires all production tasks.
+- T018 is satisfied by the existing native request-timeout cancellation path. T019
+  may proceed in parallel with T016/T017 where file changes do not overlap.
 - T020 runs after T016–T019 so composition assertions target the final service graph.
 
 ### Parallel Opportunities
@@ -193,7 +193,7 @@ After Phase 2, author these offline tests concurrently:
 
 Task T005: three focused profile-selection tests
 Task T006: forwarding plus unavailable/timeout adapter tests
-Task T007: cumulative deadline and caller-cancellation tests
+Task T007: native request-timeout cancellation propagation tests
 Task T008: one real-profile MCP/schema reuse test
 Task T009: one hosted invalid-profile/no-state test
 Task T011: one unchanged governed-workflow regression
@@ -216,7 +216,7 @@ Task T015: ProviderFailureMappingChatClient.cs
 2. Make the test host explicitly deterministic and add offline provider test doubles.
 3. Write and fail one focused real-profile delta test at each changed boundary.
 4. Implement exact profile selection, safe unavailable behavior, Azure provider
-   translation, cumulative deadline, and safe metadata.
+   translation, native request cancellation, and safe metadata.
 5. Run the User Story 1 checkpoint entirely offline.
 6. Complete documentation and the deliberate manual Azure/Teams acceptance exercise.
 
