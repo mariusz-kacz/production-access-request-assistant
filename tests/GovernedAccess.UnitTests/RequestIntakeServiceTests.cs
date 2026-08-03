@@ -13,6 +13,159 @@ public sealed class RequestIntakeServiceTests
             () => RequestPreparationResult.CandidateRejected([]));
         Assert.Throws<ArgumentException>(
             () => RequestConfirmationResult.Submitted(Guid.Empty));
+        Assert.Throws<ArgumentException>(
+            () => RequestIntakeResetResult.Reset(Guid.Empty));
+    }
+
+    [Theory]
+    [InlineData(false, RequestIntakeStatus.Collecting, RequestIntakeStatus.Superseded)]
+    [InlineData(false, RequestIntakeStatus.Ready, RequestIntakeStatus.Superseded)]
+    [InlineData(true, RequestIntakeStatus.Ready, RequestIntakeStatus.Expired)]
+    public async Task ResetTerminatesOnlyTheActivePreparationAndClearsItsCandidate(
+        bool expired,
+        RequestIntakeStatus initialStatus,
+        RequestIntakeStatus expectedStatus)
+    {
+        var initial = initialStatus == RequestIntakeStatus.Ready
+            ? CreateReadySession(
+                expired
+                    ? IntakeScenario.CurrentTime.Subtract(
+                        RequestIntakeSession.ConfirmationLifetime)
+                    : IntakeScenario.CurrentTime)
+            : CreateCollectingSessionWithCandidate();
+        var reservedRequestId = initial.ReservedRequestId;
+        var scenario = new IntakeScenario(initialSession: initial);
+
+        var result = await scenario.ResetResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestIntakeResetResultKind.Reset, result.Kind);
+        Assert.Equal(initial.Id, result.IntakeId);
+        Assert.Null(result.Failure);
+        Assert.Equal(expectedStatus, initial.Status);
+        Assert.Equal(reservedRequestId, initial.ReservedRequestId);
+        Assert.Null(initial.ClientId);
+        Assert.Null(initial.EnvironmentId);
+        Assert.Null(initial.RequestedRoleId);
+        Assert.Null(initial.Justification);
+        Assert.Null(initial.IncidentId);
+        Assert.Equal("reset-correlation", initial.CorrelationId);
+        Assert.Equal(IntakeScenario.CurrentTime, initial.LastUpdatedAt);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Equal(0, scenario.InterpreterCallCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task ResetIsIdempotentWhenNoActivePreparationOrOnlySubmittedEvidenceExists()
+    {
+        var noActive = new IntakeScenario();
+
+        var first = await noActive.ResetResultAsync(IntakeScenario.Owner);
+        var repeated = await noActive.ResetResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestIntakeResetResultKind.AlreadyClear, first.Kind);
+        Assert.Equal(RequestIntakeResetResultKind.AlreadyClear, repeated.Kind);
+        Assert.Null(first.IntakeId);
+        Assert.Null(first.Failure);
+        Assert.Equal(0, noActive.SaveCount);
+        Assert.Equal(0, noActive.InterpreterCallCount);
+
+        var submitted = CreateSubmittedSession();
+        var submittedScenario = new IntakeScenario(initialSession: submitted);
+
+        var submittedResult = await submittedScenario.ResetResultAsync(
+            IntakeScenario.Owner);
+
+        Assert.Equal(
+            RequestIntakeResetResultKind.AlreadyClear,
+            submittedResult.Kind);
+        Assert.Equal(RequestIntakeStatus.Submitted, submitted.Status);
+        Assert.Equal(0, submittedScenario.SaveCount);
+        Assert.Equal(0, submittedScenario.InterpreterCallCount);
+        Assert.Empty(submittedScenario.Requests);
+        Assert.Empty(submittedScenario.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData("other-actor", "conversation-001")]
+    [InlineData("actor-001", "other-conversation")]
+    public async Task ResetCannotSelectAnotherActorOrConversationPreparation(
+        string actorId,
+        string conversationId)
+    {
+        var initial = CreateCollectingSessionWithCandidate();
+        var scenario = new IntakeScenario(initialSession: initial);
+        var other = new AuthenticatedChannelActor(
+            RequestIntakeSession.TeamsChannel,
+            IntakeScenario.Owner.TenantId,
+            actorId,
+            conversationId,
+            IntakeScenario.Owner.RequesterId);
+
+        var result = await scenario.ResetResultAsync(other);
+
+        Assert.Equal(RequestIntakeResetResultKind.AlreadyClear, result.Kind);
+        Assert.Equal(RequestIntakeStatus.Collecting, initial.Status);
+        Assert.NotNull(initial.ClientId);
+        Assert.Equal(0, scenario.SaveCount);
+        Assert.Equal(0, scenario.InterpreterCallCount);
+    }
+
+    [Fact]
+    public async Task ResetRetainsTypedLoadAndSaveFailures()
+    {
+        var loadFailure = new ApplicationFailure(
+            ApplicationFailureKind.DependencyUnavailable,
+            "forced_load_failure",
+            "The test load failed.");
+        var loadScenario = new IntakeScenario
+        {
+            ActiveLoadFailure = loadFailure,
+        };
+
+        var loadResult = await loadScenario.ResetResultAsync(
+            IntakeScenario.Owner);
+
+        Assert.Equal(RequestIntakeResetResultKind.Failed, loadResult.Kind);
+        Assert.Same(loadFailure, loadResult.Failure);
+        Assert.Null(loadResult.IntakeId);
+        Assert.Equal(0, loadScenario.SaveCount);
+
+        var active = CreateCollectingSessionWithCandidate();
+        var saveFailure = ForcedSaveFailure();
+        var saveScenario = new IntakeScenario(initialSession: active)
+        {
+            SaveFailure = saveFailure,
+        };
+
+        var saveResult = await saveScenario.ResetResultAsync(
+            IntakeScenario.Owner);
+
+        Assert.Equal(RequestIntakeResetResultKind.Failed, saveResult.Kind);
+        Assert.Same(saveFailure, saveResult.Failure);
+        Assert.Equal(active.Id, saveResult.IntakeId);
+        Assert.Equal(RequestIntakeStatus.Superseded, active.Status);
+        Assert.Equal(1, saveScenario.SaveCount);
+        Assert.Equal(0, saveScenario.InterpreterCallCount);
+    }
+
+    [Fact]
+    public async Task ResetPropagatesCallerCancellationWithoutInvokingTheInterpreter()
+    {
+        var scenario = new IntakeScenario(
+            initialSession: CreateCollectingSessionWithCandidate());
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => scenario.ResetResultAsync(
+                IntakeScenario.Owner,
+                cancellation.Token));
+
+        Assert.Equal(0, scenario.SaveCount);
+        Assert.Equal(0, scenario.InterpreterCallCount);
+        Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
     }
 
     [Fact]
@@ -640,6 +793,10 @@ public sealed class RequestIntakeServiceTests
 
         public bool RoleIsAvailable { get; set; } = true;
 
+        public int InterpreterCallCount { get; private set; }
+
+        public ApplicationFailure? ActiveLoadFailure { get; set; }
+
         public string? StatusWhenAdded { get; private set; }
 
         public string? IntakeStatus => session?.Status.ToString();
@@ -750,6 +907,15 @@ public sealed class RequestIntakeServiceTests
                 TestContext.Current.CancellationToken);
         }
 
+        public Task<RequestIntakeResetResult> ResetResultAsync(
+            AuthenticatedChannelActor actor,
+            CancellationToken? cancellationToken = null) =>
+            service.ResetAsync(
+                new ResetRequestIntakeCommand(
+                    actor,
+                    "reset-correlation"),
+                cancellationToken ?? TestContext.Current.CancellationToken);
+
         public void AttemptReadyScopeChange()
         {
             var current = session
@@ -769,6 +935,7 @@ public sealed class RequestIntakeServiceTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            InterpreterCallCount++;
             return Task.FromResult(interpretation);
         }
 
@@ -781,13 +948,29 @@ public sealed class RequestIntakeServiceTests
         public Task<ApplicationResult<RequestIntakeSession>>
             GetActiveAsync(
                 AuthenticatedChannelActor actor,
-                CancellationToken cancellationToken) =>
-            FromOptional(
+                CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ActiveLoadFailure is not null)
+            {
+                return Task.FromResult(
+                    ApplicationResult.Failed<RequestIntakeSession>(
+                        ActiveLoadFailure));
+            }
+
+            return FromOptional(
                 session is { Status: RequestIntakeStatus.Collecting or RequestIntakeStatus.Ready }
+                && session.IsOwnedBy(
+                    actor.Channel,
+                    actor.TenantId,
+                    actor.ChannelActorId,
+                    actor.ConversationId,
+                    actor.RequesterId)
                     ? session
                     : null,
                 "active_intake_not_found",
                 cancellationToken);
+        }
 
         public Task<ApplicationResult<RequestIntakeSession>>
             GetAsync(
@@ -1027,6 +1210,20 @@ public sealed class RequestIntakeServiceTests
             IntakeScenario.CurrentTime,
             "created");
 
+    private static RequestIntakeSession CreateCollectingSessionWithCandidate()
+    {
+        var session = CreateCollectingSession();
+        session.UpdateCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042",
+            IntakeScenario.CurrentTime,
+            "candidate");
+        return session;
+    }
+
     private static RequestIntakeSession CreateReadySession(
         DateTimeOffset readyAt)
     {
@@ -1048,6 +1245,15 @@ public sealed class RequestIntakeServiceTests
             readyAt,
             "candidate");
         session.MarkReady(Guid.NewGuid(), readyAt, "ready");
+        return session;
+    }
+
+    private static RequestIntakeSession CreateSubmittedSession()
+    {
+        var session = CreateReadySession(IntakeScenario.CurrentTime);
+        session.MarkSubmitted(
+            IntakeScenario.CurrentTime,
+            "submitted");
         return session;
     }
 

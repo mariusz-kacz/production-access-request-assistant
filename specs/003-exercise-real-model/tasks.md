@@ -109,8 +109,8 @@ submit, the reset invokes no chat client, and the replacement carries no old sta
 
 ### Minimum remaining work
 
-- [ ] T021 [US2] Add focused offline reset coverage in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationResetTests.cs, and tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs for collecting/ready/expired/no-active/submitted outcomes, exact command matching, actor/conversation isolation, zero chat invocation, old-card rejection, clean replacement identity, typed failures, cancellation, and safe metadata
-- [ ] T022 [US2] Implement the complete reset slice by adding the provider-neutral command/result in src/GovernedAccess.Core/Ports/RequestIntake.cs, actor-bound reset using existing `MarkSuperseded`/`MarkExpired` transitions in src/GovernedAccess.Core/Application/RequestIntakeService.cs, and exact `/new` handling with safe reply/failure/logging behavior in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T021 [US2] Add focused offline reset coverage in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationResetTests.cs, and tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs for collecting/ready/expired/no-active/submitted outcomes, exact command matching, actor/conversation isolation, zero chat invocation, old-card rejection, clean replacement identity, typed failures, cancellation, and safe metadata
+- [X] T022 [US2] Implement the complete reset slice by adding the provider-neutral command/result in src/GovernedAccess.Core/Ports/RequestIntake.cs, actor-bound reset using existing `MarkSuperseded`/`MarkExpired` transitions in src/GovernedAccess.Core/Application/RequestIntakeService.cs, and exact `/new` handling with safe reply/failure/logging behavior in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 
 **Checkpoint**: T021 passes against T022, `/new` creates no access request, submitted
 requests remain immutable, and other messages retain the existing intake behavior.

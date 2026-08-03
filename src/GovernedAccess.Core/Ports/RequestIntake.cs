@@ -69,6 +69,29 @@ public sealed record PrepareAccessRequestCommand
 }
 
 /// <summary>
+/// Abandons only the active unsubmitted preparation resolved from the authenticated
+/// actor and exact conversation binding. The command deliberately contains no
+/// caller-selected intake identity, candidate, or lifecycle status.
+/// </summary>
+public sealed record ResetRequestIntakeCommand
+{
+    public ResetRequestIntakeCommand(
+        AuthenticatedChannelActor actor,
+        string correlationId)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
+
+        Actor = actor;
+        CorrelationId = correlationId.Trim();
+    }
+
+    public AuthenticatedChannelActor Actor { get; }
+
+    public string CorrelationId { get; }
+}
+
+/// <summary>
 /// Confirms one server-owned prepared snapshot. The command deliberately contains
 /// no caller-supplied request scope, role, duration, or approval assertion.
 /// </summary>
@@ -178,6 +201,71 @@ public sealed class RequestPreparationResult
     {
         ArgumentNullException.ThrowIfNull(failure);
         return new(RequestPreparationResultKind.Failed, failure: failure);
+    }
+}
+
+public enum RequestIntakeResetResultKind
+{
+    Reset,
+    AlreadyClear,
+    Failed,
+}
+
+/// <summary>
+/// Closed application result for an explicit preparation reset. An affected intake
+/// identity is returned only as safe operation metadata; requesters receive the same
+/// guidance for <see cref="RequestIntakeResetResultKind.Reset"/> and
+/// <see cref="RequestIntakeResetResultKind.AlreadyClear"/>.
+/// </summary>
+public sealed class RequestIntakeResetResult
+{
+    private RequestIntakeResetResult(
+        RequestIntakeResetResultKind kind,
+        Guid? intakeId,
+        ApplicationFailure? failure)
+    {
+        Kind = kind;
+        IntakeId = intakeId;
+        Failure = failure;
+    }
+
+    public RequestIntakeResetResultKind Kind { get; }
+
+    public Guid? IntakeId { get; }
+
+    public ApplicationFailure? Failure { get; }
+
+    public static RequestIntakeResetResult Reset(Guid intakeId)
+    {
+        if (intakeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "The reset intake identifier must not be empty.",
+                nameof(intakeId));
+        }
+
+        return new(RequestIntakeResetResultKind.Reset, intakeId, failure: null);
+    }
+
+    public static RequestIntakeResetResult AlreadyClear() =>
+        new(
+            RequestIntakeResetResultKind.AlreadyClear,
+            intakeId: null,
+            failure: null);
+
+    public static RequestIntakeResetResult Failed(
+        ApplicationFailure failure,
+        Guid? intakeId = null)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        if (intakeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "The failed reset intake identifier must not be empty.",
+                nameof(intakeId));
+        }
+
+        return new(RequestIntakeResetResultKind.Failed, intakeId, failure);
     }
 }
 

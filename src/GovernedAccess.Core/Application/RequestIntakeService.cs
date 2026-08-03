@@ -198,6 +198,41 @@ public sealed class RequestIntakeService
             : RequestPreparationResult.ReadyForConfirmation(session);
     }
 
+    public async Task<RequestIntakeResetResult> ResetAsync(
+        ResetRequestIntakeCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var sessionResult = await intakeStore.GetActiveAsync(
+            command.Actor,
+            cancellationToken);
+        if (sessionResult.IsFailure)
+        {
+            return sessionResult.Failure!.Kind == ApplicationFailureKind.NotFound
+                ? RequestIntakeResetResult.AlreadyClear()
+                : RequestIntakeResetResult.Failed(sessionResult.Failure);
+        }
+
+        var session = sessionResult.Value;
+        var occurredAt = clock.UtcNow.ToUniversalTime();
+        if (session.IsExpired(occurredAt))
+        {
+            session.MarkExpired(occurredAt, command.CorrelationId);
+        }
+        else
+        {
+            session.MarkSuperseded(occurredAt, command.CorrelationId);
+        }
+
+        var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
+        return saveResult.IsFailure
+            ? RequestIntakeResetResult.Failed(
+                saveResult.Failure!,
+                session.Id)
+            : RequestIntakeResetResult.Reset(session.Id);
+    }
+
     public async Task<RequestConfirmationResult> ConfirmAsync(
         ConfirmRequestIntakeCommand command,
         CancellationToken cancellationToken)

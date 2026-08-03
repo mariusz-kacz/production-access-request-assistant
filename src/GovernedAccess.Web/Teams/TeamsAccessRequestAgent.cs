@@ -23,6 +23,11 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 {
     private const string ConfirmAndSubmitVerb = "confirmAndSubmit";
 
+    private const string NewRequestCommand = "/new";
+
+    private const string ResetSucceededMessage =
+        "Started a new request. Send an incident ID or production environment ID when you are ready.";
+
     private const string RejectedActivityMessage =
         "This assistant accepts production-access requests only from an authenticated personal Microsoft Teams chat.";
 
@@ -100,6 +105,19 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         }
 
         var correlationId = CreateCorrelationId();
+        if (string.Equals(
+                latestMessage,
+                NewRequestCommand,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            await ResetPreparationAsync(
+                turnContext,
+                actor,
+                correlationId,
+                cancellationToken);
+            return;
+        }
+
         var startedAt = Stopwatch.GetTimestamp();
         var outcome = await intakeService.PrepareAsync(
             new PrepareAccessRequestCommand(
@@ -169,6 +187,61 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             default:
                 throw new InvalidOperationException(
                     "The request-preparation outcome is unsupported.");
+        }
+    }
+
+    private async Task ResetPreparationAsync(
+        ITurnContext turnContext,
+        AuthenticatedChannelActor actor,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        var outcome = await intakeService.ResetAsync(
+            new ResetRequestIntakeCommand(actor, correlationId),
+            cancellationToken);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            var durationMs =
+                Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            LogResetCompleted(
+                logger,
+                "Reset",
+                outcome.Kind,
+                turnContext.Activity.Type,
+                durationMs,
+                correlationId,
+                actor.Channel,
+                actor.TenantId,
+                actor.ChannelActorId,
+                actor.ConversationId,
+                actor.RequesterId,
+                outcome.IntakeId,
+                outcome.Failure?.Kind,
+                outcome.Failure?.Code);
+        }
+
+        switch (outcome.Kind)
+        {
+            case RequestIntakeResetResultKind.Reset:
+            case RequestIntakeResetResultKind.AlreadyClear:
+                await SendTextAsync(
+                    turnContext,
+                    ResetSucceededMessage,
+                    InputHints.ExpectingInput,
+                    cancellationToken);
+                return;
+
+            case RequestIntakeResetResultKind.Failed:
+                await SendResetFailureAsync(
+                    turnContext,
+                    outcome.Failure!,
+                    cancellationToken);
+                return;
+
+            default:
+                throw new InvalidOperationException(
+                    "The request-intake reset outcome is unsupported.");
         }
     }
 
@@ -283,6 +356,33 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             RequestIntakeService.ModelUnavailableCode =>
                 "Request preparation is temporarily unavailable. No request was submitted; please try again later.",
             _ => CreateGenericPreparationFailureMessage(failure.Kind),
+        };
+
+        return SendTextAsync(
+            turnContext,
+            message,
+            InputHints.AcceptingInput,
+            cancellationToken);
+    }
+
+    private static Task SendResetFailureAsync(
+        ITurnContext turnContext,
+        ApplicationFailure failure,
+        CancellationToken cancellationToken)
+    {
+        var message = failure.Kind switch
+        {
+            ApplicationFailureKind.Timeout =>
+                "Starting a new request timed out. Your current preparation was not safely reset; please try again.",
+            ApplicationFailureKind.Cancelled =>
+                "Starting a new request was cancelled. Your current preparation was not safely reset; please try again.",
+            ApplicationFailureKind.DependencyUnavailable
+                or ApplicationFailureKind.DependencyFailure =>
+                "Starting a new request is temporarily unavailable. Your current preparation was not safely reset; please try again later.",
+            ApplicationFailureKind.ConcurrencyConflict =>
+                "The preparation changed while the new request was starting. Please try /new again.",
+            _ =>
+                "A new request could not be started safely. Please try again.",
         };
 
         return SendTextAsync(
@@ -509,6 +609,27 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         Guid sessionId,
         Guid? requestId,
         bool wasReplay,
+        ApplicationFailureKind? failureKind,
+        string? failureCode);
+
+    [LoggerMessage(
+        EventId = 1003,
+        EventName = "TeamsIntakeResetCompleted",
+        Level = LogLevel.Information,
+        Message = "Teams intake {Transition} completed with {Outcome} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; failure kind {FailureKind}; failure code {FailureCode}.")]
+    private static partial void LogResetCompleted(
+        ILogger logger,
+        string transition,
+        RequestIntakeResetResultKind outcome,
+        string activityType,
+        double durationMs,
+        string correlationId,
+        string channel,
+        string tenantId,
+        string channelActorId,
+        string conversationId,
+        string requesterId,
+        Guid? sessionId,
         ApplicationFailureKind? failureKind,
         string? failureCode);
 }
