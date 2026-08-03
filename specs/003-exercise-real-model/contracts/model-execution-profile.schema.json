@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/contracts/model-execution-profile.schema.json",
+  "title": "Request Preparation Model Profile",
+  "description": "Server-owned process-wide configuration for selecting the deterministic test client or one approved Azure OpenAI request-preparation profile.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ExecutionProfile",
+    "TurnTimeout",
+    "ApprovedModelIds",
+    "AzureOpenAI"
+  ],
+  "properties": {
+    "ExecutionProfile": {
+      "type": "string",
+      "enum": [
+        "Deterministic",
+        "AzureOpenAI"
+      ]
+    },
+    "TurnTimeout": {
+      "type": "string",
+      "const": "00:01:30",
+      "description": "One cumulative model and MCP interpretation budget, shorter than the 100-second Teams endpoint deadline."
+    },
+    "ApprovedModelIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "uniqueItems": true
+    },
+    "AzureOpenAI": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Endpoint",
+        "TenantId",
+        "DeploymentName",
+        "ModelId"
+      ],
+      "properties": {
+        "Endpoint": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "TenantId": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "DeploymentName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "ModelId": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ExecutionProfile": {
+            "const": "AzureOpenAI"
+          }
+        },
+        "required": [
+          "ExecutionProfile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ApprovedModelIds": {
+            "minItems": 1
+          },
+          "AzureOpenAI": {
+            "properties": {
+              "Endpoint": {
+                "minLength": 1,
+                "format": "uri",
+                "pattern": "^https://[^/?#]+\\.openai\\.azure\\.com/?$"
+              },
+              "TenantId": {
+                "minLength": 36
+              },
+              "DeploymentName": {
+                "minLength": 1
+              },
+              "ModelId": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$comment": "Application validation additionally requires AzureOpenAI.ModelId to exactly equal one ApprovedModelIds entry and rejects empty GUIDs, URI user info, non-root paths, queries, and fragments. Credentials come from Microsoft Entra identity discovery and are not part of this schema."
+}
