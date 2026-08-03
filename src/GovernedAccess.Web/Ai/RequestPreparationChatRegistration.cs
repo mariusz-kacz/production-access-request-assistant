@@ -1,8 +1,9 @@
-using Azure.AI.OpenAI;
 using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenAI.Responses;
+using System.ClientModel.Primitives;
 
 namespace GovernedAccess.Web.Ai;
 
@@ -22,17 +23,17 @@ internal static class RequestPreparationChatRegistration
             services,
             resolution,
             CreateMetadata(options, resolution),
-            () => CreateAzureOpenAIClient(resolution));
+            () => CreateFoundryResponsesClient(resolution));
     }
 
     internal static IServiceCollection AddRequestPreparationChat(
         IServiceCollection services,
         IConfiguration configuration,
-        Func<IChatClient> azureOpenAIClientFactory)
+        Func<IChatClient> foundryResponsesClientFactory)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
-        ArgumentNullException.ThrowIfNull(azureOpenAIClientFactory);
+        ArgumentNullException.ThrowIfNull(foundryResponsesClientFactory);
 
         var options = RequestPreparationModelOptions.Bind(configuration);
         var resolution = options.Validate();
@@ -41,21 +42,21 @@ internal static class RequestPreparationChatRegistration
             services,
             resolution,
             CreateMetadata(options, resolution),
-            azureOpenAIClientFactory);
+            foundryResponsesClientFactory);
     }
 
     private static IServiceCollection AddRequestPreparationChat(
         IServiceCollection services,
         RequestPreparationModelResolution resolution,
         RequestPreparationModelMetadata metadata,
-        Func<IChatClient> azureOpenAIClientFactory)
+        Func<IChatClient> foundryResponsesClientFactory)
     {
         services.AddSingleton(resolution);
         services.AddSingleton(metadata);
         services
             .AddChatClient(_ => CreateSelectedClient(
                 resolution,
-                azureOpenAIClientFactory))
+                foundryResponsesClientFactory))
             .UseFunctionInvocation(configure: static client =>
             {
                 client.AllowConcurrentInvocation = false;
@@ -75,21 +76,21 @@ internal static class RequestPreparationChatRegistration
         {
             nameof(RequestPreparationModelProfile.Deterministic) =>
                 nameof(RequestPreparationModelProfile.Deterministic),
-            nameof(RequestPreparationModelProfile.AzureOpenAI) =>
-                nameof(RequestPreparationModelProfile.AzureOpenAI),
+            nameof(RequestPreparationModelProfile.FoundryResponses) =>
+                nameof(RequestPreparationModelProfile.FoundryResponses),
             _ => "Unavailable",
         };
-        var modelId =
-            resolution.Profile == RequestPreparationModelProfile.AzureOpenAI
-                ? resolution.ModelId
+        var deploymentName =
+            resolution.Profile == RequestPreparationModelProfile.FoundryResponses
+                ? resolution.DeploymentName
                 : null;
 
-        return new RequestPreparationModelMetadata(profileId, modelId);
+        return new RequestPreparationModelMetadata(profileId, deploymentName);
     }
 
     private static IChatClient CreateSelectedClient(
         RequestPreparationModelResolution resolution,
-        Func<IChatClient> azureOpenAIClientFactory)
+        Func<IChatClient> foundryResponsesClientFactory)
     {
         if (!resolution.IsValid)
         {
@@ -100,37 +101,38 @@ internal static class RequestPreparationChatRegistration
         {
             RequestPreparationModelProfile.Deterministic =>
                 new DeterministicChatClient(DeterministicChatMode.Candidate),
-            RequestPreparationModelProfile.AzureOpenAI =>
+            RequestPreparationModelProfile.FoundryResponses =>
                 new ProviderFailureMappingChatClient(
-                    azureOpenAIClientFactory()),
+                    foundryResponsesClientFactory()),
             _ => new UnavailableChatClient(
                 "The request-preparation model profile is unavailable."),
         };
     }
 
-    private static IChatClient CreateAzureOpenAIClient(
+    private static IChatClient CreateFoundryResponsesClient(
         RequestPreparationModelResolution resolution)
     {
-        if (resolution.Profile != RequestPreparationModelProfile.AzureOpenAI
+        if (resolution.Profile != RequestPreparationModelProfile.FoundryResponses
             || resolution.Endpoint is null
-            || resolution.TenantId is null
             || resolution.DeploymentName is null)
         {
             throw new InvalidOperationException(
-                "A valid Azure OpenAI profile is required.");
+                "A valid Foundry Responses profile is required.");
         }
 
-        var credential = new DefaultAzureCredential(
-            new DefaultAzureCredentialOptions
-            {
-                TenantId = resolution.TenantId.Value.ToString("D"),
-            });
-        var azureClient = new AzureOpenAIClient(
-            resolution.Endpoint,
-            credential);
+        var credential = new DefaultAzureCredential();
+        BearerTokenPolicy tokenPolicy = new(
+            credential,
+            "https://ai.azure.com/.default");
 
-        return azureClient
-            .GetChatClient(resolution.DeploymentName)
-            .AsIChatClient();
+#pragma warning disable OPENAI001
+        ResponsesClient responsesClient = new(
+            tokenPolicy,
+            new ResponsesClientOptions
+            {
+                Endpoint = resolution.Endpoint,
+            });
+        return responsesClient.AsIChatClient(resolution.DeploymentName);
+#pragma warning restore OPENAI001
     }
 }

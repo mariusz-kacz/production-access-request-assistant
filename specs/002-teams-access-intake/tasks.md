@@ -415,8 +415,8 @@ the portfolio demo evidence.
 
 - [X] T086 [P] Finalize documentation of native process-local MAF session storage, restart recovery, deferred durable retention/compaction, Teams trust boundary, durable candidate boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
 - [X] T087 [P] Finalize documentation of the history-sensitive deterministic fake, native session isolation/restart/concurrency negatives, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md
-- [X] T088 [P] Document E5 developer-tenant setup, Azure Bot registration, secret storage, stable HTTPS tunnel, manifest packaging, sideloading, and cleanup in docs/teams-demo.md and docs/local-development.md
-- [X] T089 Validate the Teams app package contains only manifest.json, color.png, and outline.png at its ZIP root and record the packaging command in docs/teams-demo.md
+- [X] T088 [P] Document E5 developer-tenant setup, Azure Bot registration, secret storage, stable HTTPS tunnel, manifest packaging, sideloading, and cleanup in docs/teams-quickstart.md, docs/teams-advanced-reference.md, and docs/local-development.md
+- [X] T089 Validate the Teams app package contains only manifest.json, color.png, and outline.png at its ZIP root and record the packaging command in docs/teams-advanced-reference.md
 - [X] T090 Run restore, warnings-as-errors build, .NET tests, Vitest tests, contract validation, and Scenarios 1-6 including Teams-only request creation, then record results and deterministic confirmation timing in specs/002-teams-access-intake/validation.md
 
 ---

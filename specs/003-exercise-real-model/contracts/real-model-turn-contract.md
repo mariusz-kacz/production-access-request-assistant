@@ -6,10 +6,14 @@ This contract defines the provider-boundary behavior added by the real-model
 execution profile. It does not add a public HTTP endpoint, Teams action, MCP tool, or
 domain command.
 
+The exact Teams `/new` lifecycle command is intercepted before this boundary and is
+defined separately in [teams-reset-command.md](teams-reset-command.md). It never
+becomes `latestMessage`, model history, or an MCP call.
+
 ## Profile Selection
 
 - Configuration section: `RequestPreparationModel`
-- Closed profiles: `Deterministic`, `AzureOpenAI`
+- Closed profiles: `Deterministic`, `FoundryResponses`
 - Resolution: once per running host
 - Authority: server/operator configuration only
 - Requester override: forbidden through message text, activity data, card data,
@@ -114,7 +118,7 @@ Allowed structured metadata:
 
 - correlation ID;
 - profile ID;
-- approved model ID when applicable;
+- deployment name when applicable;
 - operation and closed outcome;
 - duration;
 - existing safe actor/conversation identifiers; and
@@ -122,7 +126,7 @@ Allowed structured metadata:
 
 Forbidden by default:
 
-- Azure endpoint;
+- Foundry Responses endpoint;
 - credentials, tokens, or authentication diagnostics containing secrets;
 - raw prompt or latest requester message;
 - transcript or serialized MAF session;

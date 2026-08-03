@@ -31,8 +31,9 @@ schema-validated and checked against authoritative synthetic data.
 8. Protected provisioning reloads persisted evidence and creates or returns one
    idempotent synthetic eight-hour grant.
 
-There is no live LLM, real production access, real identity provider, or real
-provisioning integration in the repository baseline.
+The checked-in default uses no live LLM. An explicitly selected Azure AI Foundry
+Responses profile is available for manual Teams exercises. There is no real
+production access, real identity provider, or real provisioning integration.
 
 ## Architecture
 
@@ -101,7 +102,7 @@ ambiguous replies are clarified again rather than guessed.
 - EF Core with SQLite
 - Microsoft 365 Agents SDK for authenticated Teams transport
 - Microsoft Agent Framework with its native process-local session store
-- `Microsoft.Extensions.AI` with a deterministic `IChatClient`
+- `Microsoft.Extensions.AI` with deterministic and optional Foundry Responses clients
 - Model Context Protocol SDK with Streamable HTTP transport
 - React 19, TypeScript 7, React Router, and Vite
 - xUnit, ASP.NET Core `WebApplicationFactory`, Vitest, and React Testing Library
@@ -147,8 +148,8 @@ That behavior makes the default demo stable for transport, card, confirmation,
 approval, and provisioning walkthroughs. It does not simulate realistic information
 gathering. History-sensitive clarification, restart recovery, malformed output,
 timeout, cancellation, and dependency failures are exercised with specialized
-deterministic modes in automated tests. A future real `IChatClient` implementation
-can clarify incomplete requests without changing the deterministic authorization
+deterministic modes in automated tests. The optional `FoundryResponses` profile uses
+the same schema validation, authoritative checks, and deterministic authorization
 boundary.
 
 ## Demonstrate the governed workflow
@@ -173,11 +174,21 @@ The optional real transport demo uses a Microsoft 365 developer tenant, a
 Teams-managed bot registration by default, a persistent Dev Tunnel, and a
 personal-scope sideloaded app package.
 
-Follow the [Microsoft Teams demo guide](docs/teams-demo.md) for tenant setup, secret
-storage, registration choices, tunnel operation, manifest packaging, sideloading,
-verification, and cleanup. The lower-level
-[local-integration reference](docs/teams-local-integration.md) documents helper
-commands and troubleshooting. A live LLM is not required.
+Follow the concise [Teams quickstart](docs/teams-quickstart.md).
+It uses separate scripts for one-time setup, tunnel hosting, app startup, and route
+checks. The [Teams advanced reference](docs/teams-advanced-reference.md) covers registration
+choices, manual package inspection, and permanent cleanup.
+
+The default app-start command uses the deterministic model. After `az login`, select
+the optional live model explicitly:
+
+```powershell
+.\scripts\teams\start-app.ps1 -ModelProfile FoundryResponses -FoundryEndpoint "https://<project>.services.ai.azure.com/openai/v1" -DeploymentName "<deployment-name>"
+```
+
+The live model may interpret and gather context, but it receives no approval or
+provisioning capability. Invalid configuration or provider failure does not fall
+back to a deterministic candidate.
 
 ## Build and test
 
@@ -240,8 +251,8 @@ specs/
 - [As-built architecture](docs/architecture.md)
 - [Security and trust model](docs/security-model.md)
 - [Local development guide](docs/local-development.md)
-- [Microsoft Teams demo guide](docs/teams-demo.md)
-- [Teams local-integration reference](docs/teams-local-integration.md)
+- [Teams quickstart](docs/teams-quickstart.md)
+- [Teams advanced reference](docs/teams-advanced-reference.md)
 - [Testing strategy](docs/testing-strategy.md)
 - [Teams access-intake specification](specs/002-teams-access-intake/spec.md)
 - [Teams access-intake implementation plan](specs/002-teams-access-intake/plan.md)

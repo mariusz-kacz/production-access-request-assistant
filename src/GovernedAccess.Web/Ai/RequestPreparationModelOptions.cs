@@ -4,7 +4,7 @@ namespace GovernedAccess.Web.Ai;
 
 public sealed record RequestPreparationModelMetadata(
     string ProfileId,
-    string? ModelId);
+    string? DeploymentName);
 
 internal sealed class RequestPreparationModelOptions
 {
@@ -12,9 +12,7 @@ internal sealed class RequestPreparationModelOptions
 
     public string? ExecutionProfile { get; init; }
 
-    public IReadOnlyList<string> ApprovedModelIds { get; init; } = [];
-
-    public AzureOpenAIModelOptions AzureOpenAI { get; init; } = new();
+    public FoundryResponsesModelOptions FoundryResponses { get; init; } = new();
 
     internal static RequestPreparationModelOptions Bind(IConfiguration configuration)
     {
@@ -24,17 +22,10 @@ internal sealed class RequestPreparationModelOptions
         return new RequestPreparationModelOptions
         {
             ExecutionProfile = section["ExecutionProfile"],
-            ApprovedModelIds = section
-                .GetSection("ApprovedModelIds")
-                .GetChildren()
-                .Select(child => child.Value ?? string.Empty)
-                .ToArray(),
-            AzureOpenAI = new AzureOpenAIModelOptions
+            FoundryResponses = new FoundryResponsesModelOptions
             {
-                Endpoint = section["AzureOpenAI:Endpoint"],
-                TenantId = section["AzureOpenAI:TenantId"],
-                DeploymentName = section["AzureOpenAI:DeploymentName"],
-                ModelId = section["AzureOpenAI:ModelId"],
+                Endpoint = section["FoundryResponses:Endpoint"],
+                DeploymentName = section["FoundryResponses:DeploymentName"],
             },
         };
     }
@@ -44,7 +35,7 @@ internal sealed class RequestPreparationModelOptions
         var profile = ExecutionProfile switch
         {
             "Deterministic" => RequestPreparationModelProfile.Deterministic,
-            "AzureOpenAI" => RequestPreparationModelProfile.AzureOpenAI,
+            "FoundryResponses" => RequestPreparationModelProfile.FoundryResponses,
             _ => (RequestPreparationModelProfile?)null,
         };
         if (profile is null)
@@ -57,44 +48,26 @@ internal sealed class RequestPreparationModelOptions
             return RequestPreparationModelResolution.ValidDeterministic();
         }
 
-        if (!TryGetTrustedAzureOpenAIEndpoint(
-                AzureOpenAI.Endpoint,
+        if (!TryGetTrustedFoundryResponsesEndpoint(
+                FoundryResponses.Endpoint,
                 out var endpoint))
         {
             return RequestPreparationModelResolution.Invalid(
-                "AzureOpenAI.Endpoint");
+                "FoundryResponses.Endpoint");
         }
 
-        if (!Guid.TryParse(AzureOpenAI.TenantId, out var tenantId)
-            || tenantId == Guid.Empty)
+        if (!IsBoundedValue(FoundryResponses.DeploymentName))
         {
             return RequestPreparationModelResolution.Invalid(
-                "AzureOpenAI.TenantId");
+                "FoundryResponses.DeploymentName");
         }
 
-        if (!IsBoundedValue(AzureOpenAI.DeploymentName))
-        {
-            return RequestPreparationModelResolution.Invalid(
-                "AzureOpenAI.DeploymentName");
-        }
-
-        if (!IsBoundedValue(AzureOpenAI.ModelId)
-            || !ApprovedModelIds.Contains(
-                AzureOpenAI.ModelId,
-                StringComparer.Ordinal))
-        {
-            return RequestPreparationModelResolution.Invalid(
-                "AzureOpenAI.ModelId");
-        }
-
-        return RequestPreparationModelResolution.ValidAzureOpenAI(
+        return RequestPreparationModelResolution.ValidFoundryResponses(
             endpoint!,
-            tenantId,
-            AzureOpenAI.DeploymentName!,
-            AzureOpenAI.ModelId!);
+            FoundryResponses.DeploymentName!);
     }
 
-    private static bool TryGetTrustedAzureOpenAIEndpoint(
+    private static bool TryGetTrustedFoundryResponsesEndpoint(
         string? value,
         out Uri? endpoint)
     {
@@ -107,17 +80,19 @@ internal sealed class RequestPreparationModelOptions
             || !string.IsNullOrEmpty(candidate.UserInfo)
             || !string.IsNullOrEmpty(candidate.Query)
             || !string.IsNullOrEmpty(candidate.Fragment)
-            || (candidate.AbsolutePath.Length > 0
-                && candidate.AbsolutePath != "/"))
+            || !string.Equals(
+                candidate.AbsolutePath.TrimEnd('/'),
+                "/openai/v1",
+                StringComparison.Ordinal))
         {
             return false;
         }
 
-        const string azureOpenAISuffix = ".openai.azure.com";
+        const string foundryServicesSuffix = ".services.ai.azure.com";
         if (!candidate.IdnHost.EndsWith(
-                azureOpenAISuffix,
+                foundryServicesSuffix,
                 StringComparison.OrdinalIgnoreCase)
-            || candidate.IdnHost.Length <= azureOpenAISuffix.Length)
+            || candidate.IdnHost.Length <= foundryServicesSuffix.Length)
         {
             return false;
         }
@@ -130,37 +105,29 @@ internal sealed class RequestPreparationModelOptions
         !string.IsNullOrWhiteSpace(value) && value.Length <= 128;
 }
 
-internal sealed class AzureOpenAIModelOptions
+internal sealed class FoundryResponsesModelOptions
 {
     public string? Endpoint { get; init; }
 
-    public string? TenantId { get; init; }
-
     public string? DeploymentName { get; init; }
-
-    public string? ModelId { get; init; }
 }
 
 internal enum RequestPreparationModelProfile
 {
     Deterministic,
-    AzureOpenAI,
+    FoundryResponses,
 }
 
 internal sealed record RequestPreparationModelResolution(
     RequestPreparationModelProfile? Profile,
     Uri? Endpoint,
-    Guid? TenantId,
     string? DeploymentName,
-    string? ModelId,
     string? ValidationFailure)
 {
     public bool IsValid => ValidationFailure is null;
 
     public static RequestPreparationModelResolution Invalid(string fieldName) =>
         new(
-            null,
-            null,
             null,
             null,
             null,
@@ -171,20 +138,14 @@ internal sealed record RequestPreparationModelResolution(
             RequestPreparationModelProfile.Deterministic,
             null,
             null,
-            null,
-            null,
             null);
 
-    public static RequestPreparationModelResolution ValidAzureOpenAI(
+    public static RequestPreparationModelResolution ValidFoundryResponses(
         Uri endpoint,
-        Guid tenantId,
-        string deploymentName,
-        string modelId) =>
+        string deploymentName) =>
         new(
-            RequestPreparationModelProfile.AzureOpenAI,
+            RequestPreparationModelProfile.FoundryResponses,
             endpoint,
-            tenantId,
             deploymentName,
-            modelId,
             null);
 }

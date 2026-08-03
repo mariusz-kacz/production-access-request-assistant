@@ -37,7 +37,7 @@ public sealed class TeamsGovernedWorkflowTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory(
             new RecordingChatClient(CompleteProviderCandidate),
-            configurationOverrides: CreateAzureProfileConfiguration());
+            configurationOverrides: CreateFoundryResponsesProfileConfiguration());
         await factory.ResetDatabaseAsync(cancellationToken);
 
         RequestIntakeSession intake;
@@ -255,20 +255,14 @@ public sealed class TeamsGovernedWorkflowTests
         return activity;
     }
 
-    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+    private static Dictionary<string, string?> CreateFoundryResponsesProfileConfiguration() =>
         new()
         {
-            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:ApprovedModelIds:0"] =
-                "approved-chat-model",
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] =
-                "https://governed-access.openai.azure.com/",
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
-                "11111111-1111-1111-1111-111111111111",
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+            ["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] =
+                "https://governed-access.services.ai.azure.com/openai/v1",
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
                 "governed-access-chat",
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] =
-                "approved-chat-model",
         };
 
     private static Activity CreateConfirmation(Guid intakeId) =>

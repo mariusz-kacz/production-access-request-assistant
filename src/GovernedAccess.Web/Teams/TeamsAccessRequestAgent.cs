@@ -118,7 +118,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 "Prepare",
                 outcome.Kind,
                 modelMetadata.ProfileId,
-                modelMetadata.ModelId,
+                modelMetadata.DeploymentName,
                 turnContext.Activity.Type,
                 durationMs,
                 correlationId,
@@ -468,13 +468,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         EventId = 1001,
         EventName = "TeamsIntakePreparationCompleted",
         Level = LogLevel.Information,
-        Message = "Teams intake {Transition} completed with {Outcome} using profile {ProfileId} and approved model {ModelId} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; validation error count {ValidationErrorCount}; failure kind {FailureKind}; failure code {FailureCode}.")]
+        Message = "Teams intake {Transition} completed with {Outcome} using profile {ProfileId} and deployment {DeploymentName} for activity {ActivityType} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; session {SessionId}; request {RequestId}; validation error count {ValidationErrorCount}; failure kind {FailureKind}; failure code {FailureCode}.")]
     private static partial void LogPreparationCompleted(
         ILogger logger,
         string transition,
         RequestPreparationResultKind outcome,
         string profileId,
-        string? modelId,
+        string? deploymentName,
         string activityType,
         double durationMs,
         string correlationId,

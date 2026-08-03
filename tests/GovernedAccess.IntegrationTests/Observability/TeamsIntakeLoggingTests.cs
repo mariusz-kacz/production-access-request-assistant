@@ -19,9 +19,9 @@ namespace GovernedAccess.IntegrationTests.Observability;
     IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsIntakeLoggingTests
 {
-    private const string ApprovedModelId = "approved-chat-model";
-    private const string AzureEndpoint =
-        "https://governed-access.openai.azure.com/";
+    private const string DeploymentName = "governed-access-chat";
+    private const string FoundryEndpoint =
+        "https://governed-access.services.ai.azure.com/openai/v1";
     private const double ConfirmationTargetMilliseconds = 5_000;
 
     private const string CompleteRequest =
@@ -41,7 +41,7 @@ public sealed class TeamsIntakeLoggingTests
         await using var factory = new GovernedAccessWebFactory(
             new RecordingChatClient(CompleteProviderCandidate),
             loggerProvider: logs,
-            configurationOverrides: CreateAzureProfileConfiguration());
+            configurationOverrides: CreateFoundryResponsesProfileConfiguration());
         using var client = factory.CreateTeamsClient();
 
         using var preparationResponse = await client.PostAsJsonAsync(
@@ -82,8 +82,8 @@ public sealed class TeamsIntakeLoggingTests
             agentLogs,
             entry => entry.EventId.Name == "TeamsIntakeConfirmationCompleted");
 
-        Assert.Equal("AzureOpenAI", preparation.Properties["ProfileId"]);
-        Assert.Equal(ApprovedModelId, preparation.Properties["ModelId"]);
+        Assert.Equal("FoundryResponses", preparation.Properties["ProfileId"]);
+        Assert.Equal(DeploymentName, preparation.Properties["DeploymentName"]);
         _ = AssertOperationMetadata(
             preparation,
             "Prepare",
@@ -119,20 +119,16 @@ public sealed class TeamsIntakeLoggingTests
             "Confirm production access request",
             capturedText,
             StringComparison.Ordinal);
-        Assert.DoesNotContain(AzureEndpoint, capturedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(FoundryEndpoint, capturedText, StringComparison.Ordinal);
     }
 
-    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+    private static Dictionary<string, string?> CreateFoundryResponsesProfileConfiguration() =>
         new()
         {
-            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:ApprovedModelIds:0"] = ApprovedModelId,
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = AzureEndpoint,
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
-                "11111111-1111-1111-1111-111111111111",
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
-                "governed-access-chat",
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] = ApprovedModelId,
+            ["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] = FoundryEndpoint,
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
+                DeploymentName,
         };
 
     private static double AssertOperationMetadata(

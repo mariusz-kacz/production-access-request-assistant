@@ -3,7 +3,7 @@
 ## Goal
 
 Run the existing personal Teams request-intake journey with one explicitly selected,
-approved Azure OpenAI model while proving that structured model output remains
+approved Azure AI Foundry model through the Responses API while proving that structured model output remains
 untrusted and every governed workflow boundary is unchanged.
 
 This guide is a manual acceptance exercise. The automated regression suite never
@@ -11,15 +11,15 @@ uses Azure credentials or a live language model.
 
 ## Prerequisites
 
-- Complete the existing [Teams demo setup](../../docs/teams-demo.md), including the
+- Complete the existing [Teams quickstart](../../docs/teams-quickstart.md), including the
   developer tenant, bot registration, trusted HTTPS tunnel, personal-scope app
   package, and secure bot credential configuration.
-- Have an Azure OpenAI resource and a chat-completions deployment approved for this
-  portfolio exercise. The deployed model must support function/tool calling and
+- Have an Azure AI Foundry project and model deployment approved for this portfolio
+  exercise. The deployed model must support Responses API function/tool calling and
   strict JSON-schema structured output.
-- Know the Azure OpenAI HTTPS resource endpoint, Microsoft Entra tenant ID,
-  deployment name, and approved model ID.
-- Sign in with a developer identity assigned the minimum Azure OpenAI inference role
+- Know the Foundry project inference base URL ending in `/openai/v1` and deployment
+  name.
+- Sign in with a developer identity assigned the minimum Azure AI inference role
   for that resource. Microsoft documents `Cognitive Services OpenAI User` for this
   purpose.
 - Use .NET 10, Node.js 24, PowerShell, and a trusted local HTTPS certificate as
@@ -39,16 +39,16 @@ npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 Expected:
 
 - all automated model behavior uses deterministic substitutes;
-- no Azure OpenAI credential or network call is required;
+- no Foundry credential or network call is required;
 - exact MCP catalog, malformed output, deadline, cancellation, authoritative
   validation, confirmation, approval, and provisioning tests pass.
 
 ## 2. Authenticate to Azure
 
-Use the approved tenant:
+Sign in with the identity authorized to invoke the deployment:
 
 ```powershell
-az login --tenant '<azure-tenant-guid>'
+az login
 az account show
 ```
 
@@ -60,17 +60,13 @@ Do not place an access token or API key in application settings.
 Set process-local environment variables in the shell that will start the host:
 
 ```powershell
-$env:RequestPreparationModel__ExecutionProfile = 'AzureOpenAI'
-$env:RequestPreparationModel__ApprovedModelIds__0 = '<approved-model-id>'
-$env:RequestPreparationModel__AzureOpenAI__Endpoint = 'https://<resource-name>.openai.azure.com/'
-$env:RequestPreparationModel__AzureOpenAI__TenantId = '<azure-tenant-guid>'
-$env:RequestPreparationModel__AzureOpenAI__DeploymentName = '<deployment-name>'
-$env:RequestPreparationModel__AzureOpenAI__ModelId = '<approved-model-id>'
+$env:RequestPreparationModel__ExecutionProfile = 'FoundryResponses'
+$env:RequestPreparationModel__FoundryResponses__Endpoint = 'https://<project-name>.services.ai.azure.com/openai/v1'
+$env:RequestPreparationModel__FoundryResponses__DeploymentName = '<deployment-name>'
 ```
 
-The selected `ModelId` must exactly match an `ApprovedModelIds` entry. The endpoint
-must be the trusted Azure OpenAI HTTPS resource origin. These are server-owned values;
-Teams text cannot alter them.
+The endpoint must be the trusted Foundry HTTPS Responses API base. The endpoint and
+deployment name are server-owned values; Teams text cannot alter them.
 
 Start the host using the existing Teams/tunnel configuration:
 
@@ -78,7 +74,7 @@ Start the host using the existing Teams/tunnel configuration:
 dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
-Expected startup evidence identifies the `AzureOpenAI` profile and approved model ID
+Expected startup evidence identifies the `FoundryResponses` profile and deployment name
 without printing endpoint, credentials, prompt, or response bodies.
 
 ## 4. Complete valid request
@@ -150,12 +146,47 @@ Expected for every case:
 - no confirmation appears until valid information is supplied; and
 - no request or grant is created.
 
-## 7. Exercise profile failure without fallback
+## 7. Exercise explicit conversation reset
 
-Stop the host, keep `ExecutionProfile=AzureOpenAI`, and clear one required value:
+Begin an incomplete preparation:
+
+```text
+I need support access.
+```
+
+After the assistant asks for missing context, send this as a message by itself:
+
+```text
+/new
+```
+
+Expected:
+
+- the assistant replies that a new request has started and asks for an incident ID
+  or production environment ID;
+- the incomplete durable candidate is terminally superseded;
+- the command makes no model or MCP call and creates no access request; and
+- repeating `/new`, including as `/NEW` or with surrounding spaces, is safe and has
+  the same requester-facing result.
+
+Send a complete valid message next. Verify it receives a different preparation ID
+and that none of the abandoned values are carried into the new candidate or model
+history.
+
+Repeat from a fresh preparation, continue until the confirmation card is displayed,
+and then send `/new` instead of confirming. Expected: the ready preparation is
+superseded and its old card cannot submit a request. Any previously submitted request
+remains unchanged.
+
+The match is deliberately exact. A longer message such as `/new please` is ordinary
+requester text and is not a lifecycle reset.
+
+## 8. Exercise profile failure without fallback
+
+Stop the host, keep `ExecutionProfile=FoundryResponses`, and clear one required value:
 
 ```powershell
-Remove-Item Env:RequestPreparationModel__AzureOpenAI__DeploymentName
+Remove-Item Env:RequestPreparationModel__FoundryResponses__DeploymentName
 dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
@@ -173,14 +204,14 @@ unavailability and native request-timeout cancellation are also covered by offli
 automated tests; an optional controlled provider outage may be used to observe
 the same safe Teams behavior manually.
 
-## 8. Inspect safe evidence
+## 9. Inspect safe evidence
 
-Verify operational logs contain correlation ID, `AzureOpenAI`, approved model ID,
+Verify operational logs contain correlation ID, `FoundryResponses`, deployment name,
 duration, and closed outcome. Verify they do not contain:
 
 - requester message text;
 - model JSON response;
-- Azure endpoint or credential diagnostics;
+- Foundry endpoint or credential diagnostics;
 - serialized conversation history;
 - complete MCP arguments/results; or
 - card JSON.
@@ -188,17 +219,14 @@ duration, and closed outcome. Verify they do not contain:
 Use the existing Web request list/detail and authenticated demo identities to verify
 that only confirmed requests enter the human approval and provisioning workflow.
 
-## 9. Clean up
+## 10. Clean up
 
 Stop the host and clear the process-local profile settings:
 
 ```powershell
 Remove-Item Env:RequestPreparationModel__ExecutionProfile -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__ApprovedModelIds__0 -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__AzureOpenAI__Endpoint -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__AzureOpenAI__TenantId -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__AzureOpenAI__DeploymentName -ErrorAction SilentlyContinue
-Remove-Item Env:RequestPreparationModel__AzureOpenAI__ModelId -ErrorAction SilentlyContinue
+Remove-Item Env:RequestPreparationModel__FoundryResponses__Endpoint -ErrorAction SilentlyContinue
+Remove-Item Env:RequestPreparationModel__FoundryResponses__DeploymentName -ErrorAction SilentlyContinue
 ```
 
 Remove the sideloaded Teams app, stop the tunnel, and follow the existing Teams demo

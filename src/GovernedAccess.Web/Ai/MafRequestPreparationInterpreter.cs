@@ -296,7 +296,6 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                     schemaName: "request_intake_proposal",
                     schemaDescription:
                         "An untrusted structured proposal for one access-request preparation turn."),
-                Temperature = 0,
                 Tools = tools.Cast<AITool>().ToArray(),
             });
 

@@ -349,10 +349,8 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             ["ConnectionsMap:0:ServiceUrl"] = "*",
             ["ConnectionsMap:0:Connection"] = BotConnectionName,
             ["RequestPreparationModel:ExecutionProfile"] = "Deterministic",
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] = string.Empty,
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] = string.Empty,
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] = string.Empty,
             ["TeamsAccessRequest:AllowedTenantId"] =
                 FakeTeamsActivityBuilder.DefaultTenantId,
             ["TeamsAccessRequest:BotConnectionName"] = BotConnectionName,

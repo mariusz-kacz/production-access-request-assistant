@@ -113,9 +113,9 @@ public sealed class ProgramCompositionTests(
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,
             modelResolution.Profile);
-        Assert.Null(modelResolution.ModelId);
+        Assert.Null(modelResolution.DeploymentName);
         Assert.Equal("Deterministic", modelMetadata.ProfileId);
-        Assert.Null(modelMetadata.ModelId);
+        Assert.Null(modelMetadata.DeploymentName);
 
         await using var firstScope = services.CreateAsyncScope();
         await using var secondScope = services.CreateAsyncScope();

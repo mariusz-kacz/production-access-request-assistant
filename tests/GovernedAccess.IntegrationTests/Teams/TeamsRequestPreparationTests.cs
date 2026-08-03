@@ -221,7 +221,7 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         RealProfileFailure failure)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var configuration = CreateAzureProfileConfiguration();
+        var configuration = CreateFoundryResponsesProfileConfiguration();
         IChatClient? providerClient = failure switch
         {
             RealProfileFailure.InvalidConfiguration => null,
@@ -232,7 +232,7 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         if (failure == RealProfileFailure.InvalidConfiguration)
         {
             configuration[
-                "RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty;
+                "RequestPreparationModel:FoundryResponses:DeploymentName"] = string.Empty;
         }
 
         await using var factory = new GovernedAccessWebFactory(
@@ -268,20 +268,14 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
 
-    private static Dictionary<string, string?> CreateAzureProfileConfiguration() =>
+    private static Dictionary<string, string?> CreateFoundryResponsesProfileConfiguration() =>
         new()
         {
-            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:ApprovedModelIds:0"] =
-                "approved-chat-model",
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] =
-                "https://governed-access.openai.azure.com/",
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] =
-                "11111111-1111-1111-1111-111111111111",
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+            ["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] =
+                "https://governed-access.services.ai.azure.com/openai/v1",
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
                 "governed-access-chat",
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] =
-                "approved-chat-model",
         };
 
     private static Activity CreateExpectRepliesActivity(string text)

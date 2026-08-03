@@ -47,6 +47,42 @@ the request must enter the unchanged human-governed workflow.
    confirms it, **Then** request creation, human approval, and provisioning follow
    the existing governed workflow and remain unavailable to the model.
 
+### User Story 2 - Start a Fresh Preparation Explicitly (Priority: P2)
+
+An authenticated requester can send the reserved `/new` command in the same personal
+Teams conversation to abandon the current unsubmitted preparation. The command is
+handled by deterministic lifecycle code without invoking the model or MCP. The next
+ordinary message starts with a new preparation ID, empty candidate, and isolated MAF
+session.
+
+**Why this priority**: Process restart is recovery behavior and deliberately preserves
+accepted candidate state. Requesters need an explicit, understandable way to discard
+that state without deleting the database or completing an unwanted preparation.
+
+**Independent Test**: Create a collecting preparation with accepted partial fields,
+send `/new` as the same authenticated Teams actor, then send a new request message.
+Verify that the old preparation is terminal, its candidate is cleared, the new
+preparation has a different ID, and no old candidate or model history affects it.
+
+**Acceptance Scenarios**:
+
+1. **Given** an authenticated requester owns an active collecting preparation,
+   **When** they send exactly `/new`, **Then** the preparation becomes `Superseded`,
+   its candidate is cleared, no model or MCP call occurs, and the bot acknowledges a
+   fresh start.
+2. **Given** an authenticated requester owns a ready but unconfirmed preparation,
+   **When** they send `/new` before expiry, **Then** it becomes `Superseded`, its card
+   can no longer submit, and no access request is created.
+3. **Given** no active preparation exists, **When** the requester sends `/new`,
+   **Then** the command succeeds idempotently and the next ordinary message starts a
+   fresh preparation.
+4. **Given** a preparation was already submitted, **When** `/new` is sent, **Then**
+   the immutable submitted request and its workflow are unchanged and the next
+   ordinary message starts a separate preparation.
+5. **Given** another actor or conversation has an active preparation, **When** the
+   requester sends `/new`, **Then** only the active preparation bound to the
+   authenticated requester and exact conversation may be superseded.
+
 ### Edge Cases
 
 - The selected real-model profile is incomplete, unapproved, or lacks credentials.
@@ -56,16 +92,23 @@ the request must enter the unchanged human-governed workflow.
   the model returns a malformed proposal.
 - A well-formed proposal contains a representative invalid or cross-client value.
 - Requester content attempts to choose the execution profile or bypass validation.
+- `/new` is repeated, sent with surrounding whitespace or different casing, or sent
+  when no active preparation exists.
+- A ready preparation expires immediately before the reset is recorded.
+- Text merely containing `/new` as part of a longer message is normal requester input
+  and is not interpreted as a lifecycle command.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST provide a server-controlled choice between the existing
-  deterministic profile and one approved real-model profile; requester-provided
-  content MUST NOT select or alter that choice.
-- **FR-002**: The system MUST accept the real-model profile only when its required
-  settings and protected credentials are present and its model is approved.
+- **FR-001**: The system MUST provide exactly two server-controlled execution
+  profiles, `Deterministic` and `FoundryResponses`; requester-provided content MUST
+  NOT select or alter that choice.
+- **FR-002**: The system MUST accept the real-model profile only when its trusted
+  endpoint and deployment name are configured; Entra authentication MUST use the
+  host's credential chain and fail closed when that identity cannot invoke the
+  deployment.
 - **FR-003**: A missing, invalid, unavailable, cancelled, or timed-out real-model turn
   MUST fail closed with a safe outcome, no deterministic fallback, and no governed
   workflow state change.
@@ -93,6 +136,21 @@ the request must enter the unchanged human-governed workflow.
 - **FR-012**: Automated verification MUST run without live-model credentials or
   calls, and developer guidance MUST describe setup, one representative walkthrough,
   expected safe failures, and cleanup.
+- **FR-013**: The authenticated personal Teams intake MUST recognize only the exact
+  trimmed reserved command `/new`, case-insensitively, as an explicit request to
+  abandon the current unsubmitted preparation; longer text containing that token
+  MUST remain ordinary model input.
+- **FR-014**: Reset MUST supersede only the active `Collecting` or unexpired `Ready`
+  preparation bound to the authenticated actor and exact Teams conversation, clear
+  its candidate through the existing terminal transition, mark an active `Ready`
+  preparation `Expired` instead when its deadline has elapsed, and invoke neither
+  the model nor MCP.
+- **FR-015**: Reset MUST be idempotent when no active preparation exists, MUST NOT
+  modify an immutable submitted request or its workflow, and MUST cause the next
+  ordinary message to use a new preparation ID and isolated model session.
+- **FR-016**: Reset MUST record the existing correlation and lifecycle evidence and
+  return safe Teams guidance without exposing the discarded candidate or model
+  history.
 
 ### Governance & Trust Requirements *(mandatory)*
 
@@ -124,6 +182,9 @@ the request must enter the unchanged human-governed workflow.
 - **Request Intake and Access Request**: The existing authenticated intake state and
   immutable confirmed request. Their ownership, approval, provisioning, and audit
   behavior do not change based on model provenance.
+- **Reset Command**: An authenticated Teams lifecycle command that applies the
+  existing `Superseded` transition to the caller's active unsubmitted preparation.
+  It is not model input and creates no access request.
 
 ### Verification Requirements *(mandatory)*
 
@@ -134,6 +195,10 @@ the request must enter the unchanged human-governed workflow.
   read-only tools, schema reuse,
   authoritative candidate rejection, safe logging, and unchanged confirmation
   wiring using representative cases.
+- Focused unit and Teams integration coverage verifies exact reset-command matching,
+  actor/conversation isolation, collecting and ready supersession, idempotent no-op,
+  no model/MCP invocation, new preparation/session identity, and unchanged submitted
+  requests.
 - One documented manual exercise verifies the approved real-model profile with a
   complete request plus representative clarification, rejection, and safe-failure
   outcomes. It is not an automated-test dependency.
@@ -158,13 +223,17 @@ the request must enter the unchanged human-governed workflow.
   and audit behavior as the existing journey.
 - **SC-006**: The automated regression suite runs with zero real-model credentials
   and zero live-model calls.
+- **SC-007**: In every covered collecting, ready, or no-active-preparation case, one
+  `/new` command leaves no active candidate from the previous preparation and the
+  next ordinary message receives a distinct preparation ID.
 
 ## Assumptions
 
 - The existing Teams intake, immutable confirmation, human approval, provisioning,
   and audit journeys remain dependencies rather than redesign scope.
-- One application-wide approved execution profile is selected by a developer or
-  reviewer; requesters cannot switch profiles per conversation.
+- One application-wide `Deterministic` or `FoundryResponses` execution profile is
+  selected by a developer or reviewer; requesters cannot switch profiles per
+  conversation.
 - Real-model acceptance is a deliberate manual exercise; automated tests use
   deterministic substitutes.
 - Provider administration, quota changes, model training, evaluation platforms, and

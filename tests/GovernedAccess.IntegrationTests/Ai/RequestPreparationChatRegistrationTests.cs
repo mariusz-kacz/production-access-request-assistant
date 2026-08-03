@@ -10,12 +10,9 @@ namespace GovernedAccess.IntegrationTests.Ai;
 
 public sealed class RequestPreparationChatRegistrationTests
 {
-    private const string ApprovedModelId = "approved-chat-model";
-    private const string AzureEndpoint =
-        "https://governed-access.openai.azure.com/";
+    private const string FoundryEndpoint =
+        "https://governed-access.services.ai.azure.com/openai/v1";
     private const string DeploymentName = "governed-access-chat";
-    private const string TenantId =
-        "11111111-1111-1111-1111-111111111111";
 
     [Fact]
     public void DeterministicProfileDoesNotCreateRealClient()
@@ -38,12 +35,12 @@ public sealed class RequestPreparationChatRegistrationTests
     }
 
     [Fact]
-    public void ValidAzureProfileSelectsOfflineSentinel()
+    public void ValidFoundryResponsesProfileSelectsOfflineSentinel()
     {
         var sentinel = new SentinelChatClient();
         var realClientFactoryCalls = 0;
         using var provider = CreateProvider(
-            CreateValidAzureConfiguration(),
+            CreateValidFoundryResponsesConfiguration(),
             () =>
             {
                 Interlocked.Increment(ref realClientFactoryCalls);
@@ -79,28 +76,21 @@ public sealed class RequestPreparationChatRegistrationTests
             new(
                 "unsafe endpoint",
                 configuration =>
-                    configuration["RequestPreparationModel:AzureOpenAI:Endpoint"] =
+                    configuration["RequestPreparationModel:FoundryResponses:Endpoint"] =
                         "https://example.com/",
-                "AzureOpenAI.Endpoint",
+                "FoundryResponses.Endpoint",
                 "https://example.com/"),
             new(
                 "incomplete profile",
                 configuration =>
-                    configuration["RequestPreparationModel:AzureOpenAI:TenantId"] =
+                    configuration["RequestPreparationModel:FoundryResponses:DeploymentName"] =
                         string.Empty,
-                "AzureOpenAI.TenantId"),
-            new(
-                "unapproved model",
-                configuration =>
-                    configuration["RequestPreparationModel:AzureOpenAI:ModelId"] =
-                        "unapproved-chat-model",
-                "AzureOpenAI.ModelId",
-                "unapproved-chat-model"),
+                "FoundryResponses.DeploymentName"),
         ];
 
         foreach (var testCase in cases)
         {
-            var configuration = CreateValidAzureConfiguration();
+            var configuration = CreateValidFoundryResponsesConfiguration();
             testCase.Mutate(configuration);
 
             await AssertInvalidConfigurationAsync(
@@ -147,14 +137,14 @@ public sealed class RequestPreparationChatRegistrationTests
 
     private static ServiceProvider CreateProvider(
         Dictionary<string, string?> values,
-        Func<IChatClient> azureOpenAIClientFactory)
+        Func<IChatClient> foundryResponsesClientFactory)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(values)
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        InvokeRegistration(services, configuration, azureOpenAIClientFactory);
+        InvokeRegistration(services, configuration, foundryResponsesClientFactory);
 
         return services.BuildServiceProvider(
             new ServiceProviderOptions
@@ -167,7 +157,7 @@ public sealed class RequestPreparationChatRegistrationTests
     private static void InvokeRegistration(
         IServiceCollection services,
         IConfiguration configuration,
-        Func<IChatClient> azureOpenAIClientFactory)
+        Func<IChatClient> foundryResponsesClientFactory)
     {
         var registrationType = typeof(DeterministicChatClient).Assembly.GetType(
             "GovernedAccess.Web.Ai.RequestPreparationChatRegistration");
@@ -192,7 +182,7 @@ public sealed class RequestPreparationChatRegistrationTests
         {
             var result = registrationMethod.Invoke(
                 null,
-                [services, configuration, azureOpenAIClientFactory]);
+                [services, configuration, foundryResponsesClientFactory]);
             Assert.Same(services, result);
         }
         catch (TargetInvocationException exception)
@@ -208,22 +198,17 @@ public sealed class RequestPreparationChatRegistrationTests
         new()
         {
             ["RequestPreparationModel:ExecutionProfile"] = "Deterministic",
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] = string.Empty,
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] = string.Empty,
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] = string.Empty,
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] = string.Empty,
         };
 
-    private static Dictionary<string, string?> CreateValidAzureConfiguration() =>
+    private static Dictionary<string, string?> CreateValidFoundryResponsesConfiguration() =>
         new()
         {
-            ["RequestPreparationModel:ExecutionProfile"] = "AzureOpenAI",
-            ["RequestPreparationModel:ApprovedModelIds:0"] = ApprovedModelId,
-            ["RequestPreparationModel:AzureOpenAI:Endpoint"] = AzureEndpoint,
-            ["RequestPreparationModel:AzureOpenAI:TenantId"] = TenantId,
-            ["RequestPreparationModel:AzureOpenAI:DeploymentName"] =
+            ["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
+            ["RequestPreparationModel:FoundryResponses:Endpoint"] = FoundryEndpoint,
+            ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
                 DeploymentName,
-            ["RequestPreparationModel:AzureOpenAI:ModelId"] = ApprovedModelId,
         };
 
     private sealed record InvalidConfigurationCase(
