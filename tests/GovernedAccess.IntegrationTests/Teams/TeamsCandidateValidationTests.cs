@@ -28,6 +28,16 @@ public sealed class TeamsCandidateValidationTests
         {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-BETA-UK","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active production incident.","incidentId":"INC-1042"},"clarification":null}
         """;
 
+    private const string AlphaRoleClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"Choose ProductionReadOnly or ProductionSupport."}}
+        """;
+
+    private const string BetaRoleClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-beta","environmentId":"PROD-BETA-UK","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"Choose ProductionReadOnly."}}
+        """;
+
     [Fact]
     public async Task ProviderCandidateBecomesReadyOnlyAfterAuthoritativeValidation()
     {
@@ -81,12 +91,25 @@ public sealed class TeamsCandidateValidationTests
             cancellationToken);
 
         Assert.Equal(RequestPreparationResultKind.CandidateRejected, result.Kind);
-        Assert.Contains(
+        var validationError = Assert.Single(
             result.ValidationErrors,
             error => error.Message == expectedValidationMessage);
-        Assert.Empty(await dbContext.RequestIntakeSessions
+        var session = Assert.Single(await dbContext.RequestIntakeSessions
             .AsNoTracking()
             .ToListAsync(cancellationToken));
+        Assert.Equal(RequestIntakeStatus.Collecting, session.Status);
+        Assert.Null(session.ReservedRequestId);
+        Assert.Equal("client-alpha", session.ClientId);
+        if (validationError.Field == "environmentId")
+        {
+            Assert.Null(session.EnvironmentId);
+        }
+        else
+        {
+            Assert.Equal("incidentId", validationError.Field);
+            Assert.Null(session.IncidentId);
+        }
+
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
 
@@ -113,9 +136,16 @@ public sealed class TeamsCandidateValidationTests
         Assert.Contains(
             result.ValidationErrors,
             error => error.Message == "A requested role is required.");
-        Assert.Empty(await dbContext.RequestIntakeSessions
+        var session = Assert.Single(await dbContext.RequestIntakeSessions
             .AsNoTracking()
             .ToListAsync(cancellationToken));
+        Assert.Equal(RequestIntakeStatus.Collecting, session.Status);
+        Assert.Equal("client-alpha", session.ClientId);
+        Assert.Null(session.EnvironmentId);
+        Assert.Null(session.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            session.Justification);
     }
 
     [Fact]
@@ -138,7 +168,10 @@ public sealed class TeamsCandidateValidationTests
             mcpClient,
             betaEnvironment,
             cancellationToken);
-        var interpreter = CreateInterpreter(DeterministicChatMode.HistorySensitive);
+        var interpreter = CreateInterpreter(
+            new ScriptedChatClient(
+                AlphaRoleClarification,
+                BetaRoleClarification));
 
         var alpha = await interpreter.InterpretAsync(
             CreateTurn(Guid.NewGuid(), $"Use {alphaEnvironment}."),
@@ -146,6 +179,10 @@ public sealed class TeamsCandidateValidationTests
         var beta = await interpreter.InterpretAsync(
             CreateTurn(Guid.NewGuid(), $"Use {betaEnvironment}."),
             cancellationToken);
+        var alphaProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            alpha).Proposal;
+        var betaProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            beta).Proposal;
 
         Assert.Equal(
             [ProductionRoleIds.ReadOnly, ProductionRoleIds.Support],
@@ -155,17 +192,17 @@ public sealed class TeamsCandidateValidationTests
             alphaRoles,
             role => Assert.Contains(
                 role,
-                alpha.Proposal!.Clarification!.Message,
+                alphaProposal.Clarification!.Message,
                 StringComparison.Ordinal));
         Assert.All(
             betaRoles,
             role => Assert.Contains(
                 role,
-                beta.Proposal!.Clarification!.Message,
+                betaProposal.Clarification!.Message,
                 StringComparison.Ordinal));
         Assert.DoesNotContain(
             ProductionRoleIds.Support,
-            beta.Proposal!.Clarification!.Message,
+            betaProposal.Clarification!.Message,
             StringComparison.Ordinal);
     }
 
@@ -198,10 +235,6 @@ public sealed class TeamsCandidateValidationTests
     }
 
     private static MafRequestPreparationInterpreter CreateInterpreter(
-        DeterministicChatMode mode) =>
-        CreateInterpreter(new DeterministicChatClient(mode));
-
-    private static MafRequestPreparationInterpreter CreateInterpreter(
         IChatClient chatClient) =>
         new(
             chatClient,
@@ -231,7 +264,6 @@ public sealed class TeamsCandidateValidationTests
             intakeId,
             message,
             new RequestCandidate(null, null, null, null, null),
-            validationFeedback: [],
             Guid.NewGuid().ToString("N"));
 
     private static async Task<string[]> DiscoverRolesAsync(

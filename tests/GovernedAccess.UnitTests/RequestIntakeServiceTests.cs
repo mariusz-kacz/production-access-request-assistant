@@ -169,6 +169,94 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
+    public async Task InvalidPartialIdentifierIsSanitizedAndRejectedWithoutRetry()
+    {
+        var proposal = new RequestPreparationProposal(
+            RequestPreparationProposalKind.Clarification,
+            new RequestCandidate(
+                "ClientA",
+                environmentId: null,
+                requestedRoleId: null,
+                justification: null,
+                incidentId: null),
+            new RequestClarificationProposal(
+                RequestClarificationTarget.EnvironmentId,
+                "Which environment should be used?"));
+        var scenario = new IntakeScenario(proposal: proposal);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.CandidateRejected,
+            result.Kind);
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.Equal("clientId", error.Field);
+        Assert.Equal("client_not_found", error.Code);
+        Assert.Single(scenario.InterpretationTurns);
+        Assert.Null(scenario.Session.ClientId);
+        Assert.Equal(1, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task ValidEnvironmentReplacesClientDisplayNameWithCanonicalIdentity()
+    {
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    "Client Alpha",
+                    "PROD-ALPHA-EU",
+                    requestedRoleId: null,
+                    justification: null,
+                    incidentId: null),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.RequestedRoleId,
+                    "Which approved role is required?")));
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.ClarificationRequired,
+            result.Kind);
+        Assert.Equal("client-alpha", scenario.Session.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", scenario.Session.EnvironmentId);
+        Assert.Single(scenario.InterpretationTurns);
+        Assert.Equal(1, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task InvalidIncidentIsClearedWhileValidFieldsArePreservedWithoutRetry()
+    {
+        var proposal = new RequestPreparationProposal(
+            RequestPreparationProposalKind.Candidate,
+            new RequestCandidate(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-UNKNOWN"),
+            clarification: null);
+        var scenario = new IntakeScenario(proposal: proposal);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.CandidateRejected,
+            result.Kind);
+        var error = Assert.Single(result.ValidationErrors);
+        Assert.Equal("incident_not_found", error.Code);
+        Assert.Single(scenario.InterpretationTurns);
+        Assert.Equal("client-alpha", scenario.Session.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", scenario.Session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, scenario.Session.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            scenario.Session.Justification);
+        Assert.Null(scenario.Session.IncidentId);
+        Assert.Equal(1, scenario.SaveCount);
+    }
+
+    [Fact]
     public async Task PrepareAndConfirmPreserveOneImmutableScopeAndReservedIdentity()
     {
         var scenario = new IntakeScenario();
@@ -268,19 +356,19 @@ public sealed class RequestIntakeServiceTests
 
     [Theory]
     [InlineData(
-        RequestPreparationInterpretationOutcomeKind.MalformedModelOutput,
+        RequestPreparationInterpretationFailure.MalformedModelOutput,
         ApplicationFailureKind.DependencyFailure)]
     [InlineData(
-        RequestPreparationInterpretationOutcomeKind.Timeout,
+        RequestPreparationInterpretationFailure.Timeout,
         ApplicationFailureKind.Timeout)]
     [InlineData(
-        RequestPreparationInterpretationOutcomeKind.Cancelled,
+        RequestPreparationInterpretationFailure.Cancelled,
         ApplicationFailureKind.Cancelled)]
     [InlineData(
-        RequestPreparationInterpretationOutcomeKind.Unavailable,
+        RequestPreparationInterpretationFailure.Unavailable,
         ApplicationFailureKind.DependencyUnavailable)]
     public async Task PreparationFailuresRetainTheirTypedCategory(
-        RequestPreparationInterpretationOutcomeKind interpretationFailure,
+        RequestPreparationInterpretationFailure interpretationFailure,
         ApplicationFailureKind expectedFailure)
     {
         var scenario = new IntakeScenario(interpretationFailure);
@@ -419,7 +507,13 @@ public sealed class RequestIntakeServiceTests
             error => error.Code == "environment_not_found");
         Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
         Assert.Null(scenario.Session.ReservedRequestId);
-        Assert.Equal(0, scenario.SaveCount);
+        Assert.Null(scenario.Session.EnvironmentId);
+        Assert.Equal("client-alpha", scenario.Session.ClientId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, scenario.Session.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            scenario.Session.Justification);
+        Assert.Equal(1, scenario.SaveCount);
     }
 
     [Fact]
@@ -748,25 +842,25 @@ public sealed class RequestIntakeServiceTests
         public static readonly DateTimeOffset CurrentTime =
             new(2026, 7, 27, 10, 5, 0, TimeSpan.Zero);
 
-        private readonly RequestPreparationInterpretationOutcome interpretation;
+        private readonly RequestPreparationInterpretationResult interpretation;
         private readonly RequestIntakeService service;
         private RequestIntakeSession? session;
 
         public IntakeScenario(
-            RequestPreparationInterpretationOutcomeKind? interpretationFailure = null,
+            RequestPreparationInterpretationFailure? interpretationFailure = null,
             RequestPreparationProposal? proposal = null,
             RequestIntakeSession? initialSession = null)
         {
-            if (interpretationFailure is not null && proposal is not null)
+            if (interpretationFailure is not null
+                && proposal is not null)
             {
                 throw new ArgumentException(
                     "A scenario cannot define both a proposal and an interpretation failure.");
             }
-
             interpretation = interpretationFailure is not null
-                ? new RequestPreparationInterpretationOutcome(
+                ? new RequestPreparationInterpretationFailed(
                     interpretationFailure.Value)
-                : new RequestPreparationInterpretationOutcome(
+                : new RequestPreparationInterpretationSucceeded(
                     proposal ?? ValidCandidateProposal());
             session = initialSession;
 
@@ -794,6 +888,8 @@ public sealed class RequestIntakeServiceTests
         public bool RoleIsAvailable { get; set; } = true;
 
         public int InterpreterCallCount { get; private set; }
+
+        public List<RequestPreparationTurn> InterpretationTurns { get; } = [];
 
         public ApplicationFailure? ActiveLoadFailure { get; set; }
 
@@ -930,12 +1026,13 @@ public sealed class RequestIntakeServiceTests
                 "forged-change");
         }
 
-        public Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+        public Task<RequestPreparationInterpretationResult> InterpretAsync(
             RequestPreparationTurn turn,
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             InterpreterCallCount++;
+            InterpretationTurns.Add(turn);
             return Task.FromResult(interpretation);
         }
 

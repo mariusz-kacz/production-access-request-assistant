@@ -1,7 +1,7 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-02
+- **Last reviewed**: 2026-08-04
 - **Scope**: Governed Production Access Request Assistant MVP
 
 The history-first Teams preparation and Teams-only creation boundaries described here
@@ -236,9 +236,14 @@ sequenceDiagram
     Draft-->>Gate: Successfully validated outcome
     Gate->>Memory: Save native session
     Draft-->>Intake: Untrusted complete candidate + optional target/message
-    Intake->>Context: Revalidate identifiers and relationships
+    Intake->>Context: Validate every supplied identifier and relationship
     Context->>DB: Query authoritative records
-    Intake->>DB: Replace compact candidate or persist immutable ready scope
+    alt Identifier or candidate value is rejected
+        Intake->>Intake: Clear rejected fields and preserve validated fields
+        Intake->>DB: Persist sanitized candidate and typed validation errors
+    else Candidate is accepted
+        Intake->>DB: Persist clarification or immutable ready scope
+    end
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
@@ -248,9 +253,14 @@ sequenceDiagram
     Agent-->>Teams: Stable request ID and trusted Web link
 ```
 
-The collecting candidate is untrusted and creates no request or approval. Only an
-owned, unexpired ready intake can be confirmed. The model and MCP never receive a
-submit capability.
+The collecting candidate is untrusted and creates no request or approval. Core
+validates every supplied client, environment, role, and incident value before it is
+persisted. A valid environment or active incident supplies canonical client ownership;
+display names never become stable identifiers. When validation rejects a value, Core
+clears that field, preserves unrelated validated fields, persists the sanitized
+candidate, and returns typed deterministic correction guidance without another model
+call. Only an owned, unexpired ready intake can be confirmed. The model and MCP never
+receive a submit capability.
 
 MAF history is history-first but deliberately ephemeral. The singleton native store
 keys sessions by server-generated intake ID, while the singleton coordinator retains
@@ -260,7 +270,22 @@ terminal deletion, or conversation compaction in the current low-volume baseline
 Only a completed schema-valid turn is saved; timeout, cancellation, dependency
 failure, and malformed output leave the last successfully stored session unchanged.
 
-SQLite persists the accepted complete candidate and intake lifecycle, not
+### Known limitation: process-lifetime gate retention
+
+`MafConversationTurnCoordinator` stores one `SemaphoreSlim` in a
+`ConcurrentDictionary<Guid, SemaphoreSlim>` for every intake ID it encounters. Gates
+are not removed when an intake becomes ready, submitted, superseded, expired, or
+invalidated. Memory usage therefore grows monotonically with the number of distinct
+intakes handled during one host process lifetime and is released only when the process
+stops.
+
+This is accepted for the current local, low-volume baseline. A long-running or
+higher-volume deployment must add safe gate retirement or a bounded keyed-lock
+implementation. Removal must account for current holders and waiters; deleting a gate
+solely because an intake reached a terminal state could create two different gates for
+the same intake and break same-intake serialization.
+
+SQLite persists the accepted sanitized nullable candidate and intake lifecycle, not
 clarification options, prompts, transcripts, or serialized MAF sessions. That compact
 candidate is the durable canonical state supplied to every model turn. Process restart
 clears MAF history and gates without changing the intake or losing accepted candidate
@@ -596,6 +621,7 @@ a new ADR before changing the deployment or trust boundaries.
 - [Security and trust model](security-model.md)
 - [Local development guide](local-development.md)
 - [Testing strategy](testing-strategy.md)
+- [Request intake orchestration rules](request-intake-orchestration.md)
 - [Architecture decision index](adr/README.md)
 - [Teams intake feature specification](../specs/002-teams-access-intake/spec.md)
 - [Teams intake implementation plan](../specs/002-teams-access-intake/plan.md)

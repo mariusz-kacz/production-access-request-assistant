@@ -322,7 +322,7 @@ public sealed class RequestIntakePersistenceTests
 
     private sealed class UnusedInterpreter : IRequestPreparationInterpreter
     {
-        public Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+        public Task<RequestPreparationInterpretationResult> InterpretAsync(
             RequestPreparationTurn turn,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException(

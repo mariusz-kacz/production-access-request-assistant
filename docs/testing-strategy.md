@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-03
+- **Last reviewed**: 2026-08-04
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -121,7 +121,7 @@ test level.
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Teams preparation | Full host: authenticated personal activity and representative complete/multi-turn card wiring. Component: utterance matrix, candidate validation, active-history direct/ordinal replies, history isolation/restart recovery, and failure outcomes |
+| Teams preparation | Full host: authenticated personal activity and scripted complete/multi-turn card wiring. Component: exact proposal parsing, single-pass candidate validation, sanitized rejection persistence, model-history isolation/restart behavior, and failure outcomes |
 | Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
 | Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact three-tool advertisement, closed schemas, stable identifiers, forbidden capability absence, typed failures, and cancellation |
@@ -148,7 +148,7 @@ retained list/detail/business/DevOps controls.
 
 | Concern | Primary automated evidence | Required negative assertion |
 |---|---|---|
-| History-sensitive interpretation | [`MafRequestPreparationInterpreterSessionTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs) and direct conversation-quality components | A relative reply without its preceding MAF question cannot select an environment or role. |
+| Session-history transport | [`MafRequestPreparationInterpreterSessionTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs) | A fresh session contains no prior assistant question, and failed turns do not enter later model history. |
 | Native session lifecycle | [`MafConversationSessionStoreTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs) and [`MafConversationSessionStoreSmokeTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheSmokeTests.cs) | Fresh-store restart simulation preserves the supplied durable candidate, isolates intake histories, serializes same-intake turns, permits different-intake progress, and excludes failed turns from the last saved session. |
 | Model failure boundary | [`MafRequestPreparationFailureTests`](../tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs) | Malformed, unsupported, and injected proposals fail closed; caller cancellation propagates; malformed or unavailable turns do not replace the last good session. |
 | MCP capability boundary | [`MafToolBoundaryTests`](../tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs) and MCP contract components | A missing or additional tool, unavailable call, or caller cancellation fails without exposing a state-changing tool. |
@@ -172,26 +172,23 @@ retained list/detail/business/DevOps controls.
 - `Timeout`;
 - `Cancellation`;
 - `Unavailable`; and
-- `PromptInjection`; and
-- `HistorySensitive`.
+- `PromptInjection`.
 
 The production-shaped local host registers `Candidate`, whose response matches the
 current Teams proposal schema. Tests replace the `IChatClient` to exercise other
-outcomes through the real MAF interpreter. `HistorySensitive` parses the same
-server-owned latest-message/current-candidate envelope used by production, then
-examines assistant messages restored by the active MAF session. It resolves `the
-first one` or `the other role` only when the prior clarification target and ordering
-are present. With a fresh native store, it emits a self-contained clarification and
-leaves the unresolved candidate field empty. Its output still uses the strict
-proposal schema and still passes through authoritative application validation; the
-fake is a deterministic test oracle, not an authorization or readiness boundary.
+outcomes through the real MAF interpreter. Multi-turn tests use a scripted client
+that queues exact schema-valid or malformed provider responses and records every
+request and option. Assertions inspect the current-candidate envelope, restored
+assistant messages, tool options, and cancellation. The fake does
+not parse requester phrases or decide what a relative reply means; natural-language
+interpretation quality belongs to the deliberate live-model exercise.
 
 Focused native-store component tests use a real `InMemoryAgentSessionStore` and
 `MafConversationTurnCoordinator` to verify:
 
 - same-intake session reuse restores prior user and assistant messages;
-- a fresh store models process restart and cannot interpret missing ordering;
-- separate intake IDs never share question ordering;
+- a fresh store models process restart and sends no prior transcript;
+- separate intake IDs never share model history;
 - the exact per-intake gate serializes load/run/save for one intake while another
   intake can progress concurrently; and
 - malformed or unavailable work cannot replace the last successfully saved session,
@@ -201,7 +198,13 @@ The current process-lifetime store has no application-owned eviction, terminal
 cleanup, or compaction. Persistence assertions prove that only the complete typed
 candidate and lifecycle survive: no option list, transcript, raw prompt, model body,
 or serialized MAF session is stored. Restart-loss tests retain that durable candidate
-and require re-clarification instead of accepting a relative selection.
+in the next application-owned turn envelope while proving the prior transcript is
+absent.
+
+The coordinator's per-intake gate dictionary also has no eviction. One gate remains
+for every distinct intake ID until process shutdown, so memory grows monotonically in
+a long-running process. The current suite verifies serialization and isolation but
+does not claim bounded gate retention.
 
 ### MCP
 
@@ -270,10 +273,10 @@ The repeatable acceptance path is fully local and credential-free:
    and the downstream approval/provisioning journey.
 
 No step calls a live LLM, Teams tenant, Azure Bot, corporate identity provider,
-production environment, or real provisioner. The deterministic chat client is
-injected behind the same `IChatClient` boundary that a future live provider will use.
-A later live-model evaluation should add quality, latency, cost, and provider-safety
-evidence without replacing this deterministic regression suite.
+production environment, or real provisioner. Fixed-mode and scripted chat clients
+are injected behind the same `IChatClient` boundary used by the live provider. The
+manual real-model exercise supplies quality, latency, cost, and provider-safety
+evidence without turning natural-language behavior into a hand-written test oracle.
 
 The optional Playground or real personal-chat walkthrough validates transport,
 tenant authentication, packaging, and presentation. It cannot replace the automated

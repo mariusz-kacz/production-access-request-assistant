@@ -113,61 +113,80 @@ public sealed class RequestIntakeService
                 session.Id,
                 command.LatestMessage,
                 ToCandidate(session),
-                validationFeedback: [],
                 command.CorrelationId),
             cancellationToken);
 
-        if (interpretation.Kind != RequestPreparationInterpretationOutcomeKind.Proposal)
+        if (interpretation is RequestPreparationInterpretationFailed failed)
         {
-            return MapInterpretationFailure(interpretation.Kind);
+            return MapInterpretationFailure(failed.Failure);
         }
 
-        var proposal = interpretation.Proposal
-            ?? throw new InvalidOperationException(
-                "A successful preparation interpretation must contain a proposal.");
-
-        var candidate = proposal.Candidate;
-        var validation = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                candidate.ClientId,
-                candidate.EnvironmentId,
-                candidate.RequestedRoleId,
-                candidate.Justification,
-                candidate.IncidentId),
-            cancellationToken);
-
-        if (validation is RequestValidationFailed validationFailed)
+        if (interpretation is not RequestPreparationInterpretationSucceeded succeeded)
         {
-            return RequestPreparationResult.Failed(validationFailed.Failure);
+            throw new InvalidOperationException(
+                "The request preparation interpretation result is unsupported.");
         }
 
-        if (validation is RequestValidationSucceeded validationSucceeded)
+        var proposal = succeeded.Proposal;
+        var assessmentResult =
+            await requestValidator.AssessCandidateAsync(
+                proposal.Candidate,
+                cancellationToken);
+        if (assessmentResult.IsFailure)
+        {
+            return RequestPreparationResult.Failed(
+                assessmentResult.Failure!);
+        }
+
+        if (assessmentResult.Value
+            is RequestCandidateAssessmentRejected rejected)
+        {
+            return await PersistRejectedCandidateAsync(
+                session,
+                rejected.Candidate,
+                rejected.Errors,
+                command.CorrelationId,
+                cancellationToken);
+        }
+
+        if (assessmentResult.Value
+            is RequestCandidateAssessmentReady ready)
         {
             return await PersistReadyAsync(
                 session,
-                validationSucceeded.Fields,
+                ready.Fields,
                 command.CorrelationId,
                 cancellationToken);
         }
 
-        if (proposal.Kind == RequestPreparationProposalKind.Clarification)
+        if (assessmentResult.Value
+                is RequestCandidateAssessmentIncomplete incomplete
+            && proposal.Kind == RequestPreparationProposalKind.Clarification
+            && IsClarificationUnresolved(
+                incomplete.Candidate,
+                proposal.Clarification!.Target))
         {
             return await PersistClarificationAsync(
                 session,
-                candidate,
-                proposal.Clarification!,
+                incomplete.Candidate,
+                proposal.Clarification,
                 command.CorrelationId,
                 cancellationToken);
         }
 
-        if (validation is RequestValidationRejected validationRejected)
+        if (assessmentResult.Value
+            is RequestCandidateAssessmentIncomplete rejectedIncomplete)
         {
-            return RequestPreparationResult.CandidateRejected(
-                validationRejected.Errors);
+            return await PersistRejectedCandidateAsync(
+                session,
+                rejectedIncomplete.Candidate,
+                rejectedIncomplete.Errors,
+                command.CorrelationId,
+                cancellationToken);
         }
 
         throw new InvalidOperationException(
-            "The request validation outcome is unsupported.");
+            "The request candidate assessment is unsupported.");
     }
 
     private async Task<RequestPreparationResult> PersistReadyAsync(
@@ -443,6 +462,30 @@ public sealed class RequestIntakeService
             : RequestPreparationResult.ClarificationRequired(clarification);
     }
 
+    private async Task<RequestPreparationResult> PersistRejectedCandidateAsync(
+        RequestIntakeSession session,
+        RequestCandidate candidate,
+        IReadOnlyList<FieldValidationError> validationErrors,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        session.UpdateCandidate(
+            candidate.ClientId,
+            candidate.EnvironmentId,
+            candidate.RequestedRoleId,
+            candidate.Justification,
+            candidate.IncidentId,
+            clock.UtcNow,
+            correlationId);
+
+        var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
+        return saveResult.IsFailure
+            ? RequestPreparationResult.Failed(saveResult.Failure!)
+            : RequestPreparationResult.CandidateRejected(validationErrors);
+    }
+
     private static RequestCandidate ToCandidate(
         RequestIntakeSession session) =>
         new(
@@ -452,31 +495,45 @@ public sealed class RequestIntakeService
             session.Justification,
             session.IncidentId);
 
-    private static RequestPreparationResult MapInterpretationFailure(
-        RequestPreparationInterpretationOutcomeKind kind) =>
-        kind switch
+    private static bool IsClarificationUnresolved(
+        RequestCandidate candidate,
+        RequestClarificationTarget target) =>
+        target switch
         {
-            RequestPreparationInterpretationOutcomeKind.MalformedModelOutput => Failed(
+            RequestClarificationTarget.ClientId => candidate.ClientId is null,
+            RequestClarificationTarget.EnvironmentId =>
+                candidate.EnvironmentId is null,
+            RequestClarificationTarget.RequestedRoleId =>
+                candidate.RequestedRoleId is null,
+            RequestClarificationTarget.Justification =>
+                candidate.Justification is null,
+            RequestClarificationTarget.IncidentId => candidate.IncidentId is null,
+            _ => throw new InvalidOperationException(
+                "The clarification target is unsupported."),
+        };
+
+    private static RequestPreparationResult MapInterpretationFailure(
+        RequestPreparationInterpretationFailure failure) =>
+        failure switch
+        {
+            RequestPreparationInterpretationFailure.MalformedModelOutput => Failed(
                 ApplicationFailureKind.DependencyFailure,
                 MalformedModelOutputCode,
                 "The request assistant returned an invalid response."),
-            RequestPreparationInterpretationOutcomeKind.Timeout => Failed(
+            RequestPreparationInterpretationFailure.Timeout => Failed(
                 ApplicationFailureKind.Timeout,
                 ModelTimeoutCode,
                 "Request preparation timed out."),
-            RequestPreparationInterpretationOutcomeKind.Cancelled => Failed(
+            RequestPreparationInterpretationFailure.Cancelled => Failed(
                 ApplicationFailureKind.Cancelled,
                 ModelCancelledCode,
                 "Request preparation was cancelled."),
-            RequestPreparationInterpretationOutcomeKind.Unavailable => Failed(
+            RequestPreparationInterpretationFailure.Unavailable => Failed(
                 ApplicationFailureKind.DependencyUnavailable,
                 ModelUnavailableCode,
                 "The request assistant is unavailable."),
-            RequestPreparationInterpretationOutcomeKind.Proposal =>
-                throw new InvalidOperationException(
-                    "A proposal is not an interpretation failure."),
             _ => throw new InvalidOperationException(
-                "The preparation interpretation outcome is unsupported."),
+                "The preparation interpretation failure is unsupported."),
         };
 
     private static bool MatchesScope(

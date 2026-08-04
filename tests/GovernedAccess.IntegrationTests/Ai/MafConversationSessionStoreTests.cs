@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
@@ -18,13 +19,44 @@ public sealed class MafConversationSessionStoreTests
         {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-UK."}}
         """;
 
+    private const string RoleClarificationResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"requestedRoleId","message":"Choose ProductionReadOnly or ProductionSupport."}}
+        """;
+
+    private const string CompleteReadOnlyResponse =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
+
+    private const string IntakeAEnvironmentResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"intake-a-environment-question"}}
+        """;
+
+    private const string IntakeBRoleResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-b-role-question"}}
+        """;
+
+    private const string IntakeARoleResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-a-role-question"}}
+        """;
+
+    private const string IntakeBCompleteResponse =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":null,"incidentId":null},"clarification":null}
+        """;
+
     [Fact]
-    public async Task NativeSessionReuseAndFreshStoreHaveDifferentHistorySemantics()
+    public async Task NativeSessionReuseRestoresHistoryWhileFreshStoreStartsWithoutIt()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var intakeId = Guid.NewGuid();
-        var activeChatClient = new DeterministicChatClient(
-            DeterministicChatMode.HistorySensitive);
+        var activeChatClient = new ScriptedChatClient(
+            RoleClarificationResponse,
+            CompleteReadOnlyResponse);
         var activeInterpreter = CreateInterpreter(
             activeChatClient,
             new InMemoryAgentSessionStore(),
@@ -33,38 +65,48 @@ public sealed class MafConversationSessionStoreTests
         var environmentAccepted = await activeInterpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "Use PROD-ALPHA-EU for this request."),
+                "Use PROD-ALPHA-EU to investigate the active incident."),
             cancellationToken);
-        var durableCandidate = environmentAccepted.Proposal!.Candidate;
+        var environmentProposal =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(
+                environmentAccepted).Proposal;
+        var durableCandidate = environmentProposal.Candidate;
 
         Assert.Equal(
             RequestPreparationProposalKind.Clarification,
-            environmentAccepted.Proposal.Kind);
+            environmentProposal.Kind);
         Assert.Equal("client-alpha", durableCandidate.ClientId);
         Assert.Equal("PROD-ALPHA-EU", durableCandidate.EnvironmentId);
         Assert.Null(durableCandidate.RequestedRoleId);
         Assert.Equal(
             RequestClarificationTarget.RequestedRoleId,
-            environmentAccepted.Proposal.Clarification!.Target);
+            environmentProposal.Clarification!.Target);
 
         var continued = await activeInterpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "the first one",
+                "select ProductionReadOnly",
                 durableCandidate),
             cancellationToken);
+        var continuedProposal =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(
+                continued).Proposal;
 
         Assert.Equal(
             RequestPreparationProposalKind.Candidate,
-            continued.Proposal!.Kind);
+            continuedProposal.Kind);
         Assert.Equal(
             ProductionRoleIds.ReadOnly,
-            continued.Proposal.Candidate.RequestedRoleId);
-        Assert.Null(continued.Proposal.Clarification);
-        Assert.Equal(2, activeChatClient.RequestCount);
+            continuedProposal.Candidate.RequestedRoleId);
+        Assert.Null(continuedProposal.Clarification);
+        Assert.Equal(2, activeChatClient.InvocationCount);
+        Assert.Contains(
+            activeChatClient.Invocations[1].Messages,
+            message => message.Role == ChatRole.Assistant
+                && message.Text == RoleClarificationResponse);
 
-        var restartedChatClient = new DeterministicChatClient(
-            DeterministicChatMode.HistorySensitive);
+        var restartedChatClient = new ScriptedChatClient(
+            RoleClarificationResponse);
         var restartedInterpreter = CreateInterpreter(
             restartedChatClient,
             new InMemoryAgentSessionStore(),
@@ -73,44 +115,55 @@ public sealed class MafConversationSessionStoreTests
         var recovered = await restartedInterpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "the first one",
+                "select ProductionReadOnly",
                 durableCandidate),
             cancellationToken);
+        var recoveredProposal =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(
+                recovered).Proposal;
 
         Assert.Equal(
             RequestPreparationProposalKind.Clarification,
-            recovered.Proposal!.Kind);
-        Assert.Equal("client-alpha", recovered.Proposal.Candidate.ClientId);
+            recoveredProposal.Kind);
+        Assert.Equal("client-alpha", recoveredProposal.Candidate.ClientId);
         Assert.Equal(
             "PROD-ALPHA-EU",
-            recovered.Proposal.Candidate.EnvironmentId);
-        Assert.Null(recovered.Proposal.Candidate.RequestedRoleId);
+            recoveredProposal.Candidate.EnvironmentId);
+        Assert.Null(recoveredProposal.Candidate.RequestedRoleId);
         Assert.Equal(
             durableCandidate.Justification,
-            recovered.Proposal.Candidate.Justification);
+            recoveredProposal.Candidate.Justification);
         Assert.Equal(
             durableCandidate.IncidentId,
-            recovered.Proposal.Candidate.IncidentId);
+            recoveredProposal.Candidate.IncidentId);
         Assert.Equal(
             RequestClarificationTarget.RequestedRoleId,
-            recovered.Proposal.Clarification!.Target);
+            recoveredProposal.Clarification!.Target);
         Assert.Contains(
             "ProductionReadOnly",
-            recovered.Proposal.Clarification.Message,
+            recoveredProposal.Clarification.Message,
             StringComparison.Ordinal);
         Assert.Contains(
             "ProductionSupport",
-            recovered.Proposal.Clarification.Message,
+            recoveredProposal.Clarification.Message,
             StringComparison.Ordinal);
-        Assert.Equal(1, restartedChatClient.RequestCount);
+        Assert.Equal(1, restartedChatClient.InvocationCount);
+        Assert.DoesNotContain(
+            restartedChatClient.Invocations[0].Messages,
+            message => message.Role == ChatRole.Assistant);
     }
 
     [Fact]
     public async Task IndependentIntakesNeverShareQuestionOrdering()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var chatClient = new ScriptedChatClient(
+            IntakeAEnvironmentResponse,
+            IntakeBRoleResponse,
+            IntakeARoleResponse,
+            IntakeBCompleteResponse);
         var interpreter = CreateInterpreter(
-            new DeterministicChatClient(DeterministicChatMode.HistorySensitive),
+            chatClient,
             new InMemoryAgentSessionStore(),
             new MafConversationTurnCoordinator());
         var intakeA = Guid.NewGuid();
@@ -122,25 +175,47 @@ public sealed class MafConversationSessionStoreTests
         var firstB = await interpreter.InterpretAsync(
             CreateTurn(intakeB, "Use PROD-ALPHA-EU."),
             cancellationToken);
+        var firstAProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            firstA).Proposal;
+        var firstBProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            firstB).Proposal;
         var secondA = await interpreter.InterpretAsync(
-            CreateTurn(intakeA, "the first one", firstA.Proposal!.Candidate),
+            CreateTurn(intakeA, "intake-a-second", firstAProposal.Candidate),
             cancellationToken);
         var secondB = await interpreter.InterpretAsync(
-            CreateTurn(intakeB, "the first one", firstB.Proposal!.Candidate),
+            CreateTurn(intakeB, "intake-b-second", firstBProposal.Candidate),
             cancellationToken);
+        var secondAProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            secondA).Proposal;
+        var secondBProposal = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            secondB).Proposal;
 
         Assert.Equal(
             RequestClarificationTarget.EnvironmentId,
-            firstA.Proposal!.Clarification!.Target);
+            firstAProposal.Clarification!.Target);
         Assert.Equal(
             RequestClarificationTarget.RequestedRoleId,
-            firstB.Proposal!.Clarification!.Target);
-        Assert.Equal("PROD-ALPHA-EU", secondA.Proposal!.Candidate.EnvironmentId);
-        Assert.Null(secondA.Proposal.Candidate.RequestedRoleId);
-        Assert.Equal("PROD-ALPHA-EU", secondB.Proposal!.Candidate.EnvironmentId);
+            firstBProposal.Clarification!.Target);
+        Assert.Equal("PROD-ALPHA-EU", secondAProposal.Candidate.EnvironmentId);
+        Assert.Null(secondAProposal.Candidate.RequestedRoleId);
+        Assert.Equal("PROD-ALPHA-EU", secondBProposal.Candidate.EnvironmentId);
         Assert.Equal(
             ProductionRoleIds.ReadOnly,
-            secondB.Proposal.Candidate.RequestedRoleId);
+            secondBProposal.Candidate.RequestedRoleId);
+        Assert.Contains(
+            chatClient.Invocations[2].Messages,
+            message => message.Role == ChatRole.Assistant
+                && message.Text == IntakeAEnvironmentResponse);
+        Assert.DoesNotContain(
+            chatClient.Invocations[2].Messages,
+            message => message.Text == IntakeBRoleResponse);
+        Assert.Contains(
+            chatClient.Invocations[3].Messages,
+            message => message.Role == ChatRole.Assistant
+                && message.Text == IntakeBRoleResponse);
+        Assert.DoesNotContain(
+            chatClient.Invocations[3].Messages,
+            message => message.Text == IntakeAEnvironmentResponse);
     }
 
     [Fact]
@@ -184,9 +259,8 @@ public sealed class MafConversationSessionStoreTests
         var outcomes = await Task.WhenAll(firstA, secondA, firstB);
         Assert.All(
             outcomes,
-            outcome => Assert.Equal(
-                RequestPreparationInterpretationOutcomeKind.Proposal,
-                outcome.Kind));
+            outcome => Assert.IsType<RequestPreparationInterpretationSucceeded>(
+                outcome));
         await chatClient.SecondAEntered.Task.WaitAsync(
             TimeSpan.FromSeconds(5),
             cancellationToken);
@@ -226,15 +300,12 @@ public sealed class MafConversationSessionStoreTests
             CreateTurn(intakeId, "third-saved-turn"),
             cancellationToken);
 
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(first);
+        var failure = Assert.IsType<RequestPreparationInterpretationFailed>(failed);
         Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.Proposal,
-            first.Kind);
-        Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.Unavailable,
-            failed.Kind);
-        Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.Proposal,
-            third.Kind);
+            RequestPreparationInterpretationFailure.Unavailable,
+            failure.Failure);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(third);
 
         var thirdRequest = chatClient.Requests[2];
         Assert.Contains(
@@ -276,7 +347,6 @@ public sealed class MafConversationSessionStoreTests
             intakeId,
             latestMessage,
             candidate ?? new RequestCandidate(null, null, null, null, null),
-            validationFeedback: [],
             Guid.NewGuid().ToString("N"));
 
     private abstract class RecordingChatClient : IChatClient

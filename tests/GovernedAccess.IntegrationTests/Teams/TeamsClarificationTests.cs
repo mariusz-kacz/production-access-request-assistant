@@ -15,12 +15,31 @@ namespace GovernedAccess.IntegrationTests.Teams;
 [Trait(
     IntegrationTestCollections.TestLevelTrait,
     IntegrationTestCollections.FullHostLevel)]
-public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture)
-    : IClassFixture<HistorySensitiveTeamsFixture>
+public sealed class TeamsClarificationTests
 {
     private const string ProviderClarification =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Which Client Alpha production environment do you need?"}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":null},"clarification":{"target":"environmentId","message":"Which Client Alpha production environment do you need?"}}
+        """;
+
+    private const string EnvironmentClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Choose an environment: first PROD-ALPHA-EU or second PROD-BETA-UK."}}
+        """;
+
+    private const string RoleClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"Choose a role: first ProductionReadOnly or second ProductionSupport."}}
+        """;
+
+    private const string JustificationClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":null,"incidentId":null},"clarification":{"target":"justification","message":"Provide a brief operational justification for this production access."}}
+        """;
+
+    private const string CompleteCandidate =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":null},"clarification":null}
         """;
 
     [Fact]
@@ -61,11 +80,16 @@ public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture
     }
 
     [Fact]
-    public async Task DirectAndOrdinalRepliesCarryCandidateUntilItIsReady()
+    public async Task ScriptedProviderProposalsCarryCandidateUntilItIsReady()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var requestCountBefore = await fixture.ResetAsync(cancellationToken);
-        var factory = fixture.Factory;
+        var chatClient = new ScriptedChatClient(
+            EnvironmentClarification,
+            RoleClarification,
+            JustificationClarification,
+            CompleteCandidate);
+        await using var factory = new GovernedAccessWebFactory(chatClient);
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = factory.CreateTeamsClient();
 
         var firstBody = await SendMessageAsync(
@@ -88,8 +112,17 @@ public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture
 
         var thirdBody = await SendMessageAsync(
             client,
-            "the first one",
+            "ProductionReadOnly",
             "clarification-turn-3",
+            cancellationToken);
+        AssertClarification(
+            thirdBody,
+            "Provide a brief operational justification for this production access.");
+
+        var fourthBody = await SendMessageAsync(
+            client,
+            "I need it to investigate the active production incident.",
+            "clarification-turn-4",
             cancellationToken);
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -106,16 +139,16 @@ public sealed class TeamsClarificationTests(HistorySensitiveTeamsFixture fixture
         Assert.Equal(
             "Investigate the active production incident.",
             session.Justification);
-        Assert.Equal("INC-1042", session.IncidentId);
+        Assert.Null(session.IncidentId);
         Assert.NotNull(session.ReservedRequestId);
-        AssertPreparedCard(thirdBody, session);
+        AssertPreparedCard(fourthBody, session);
         Assert.Empty(await dbContext.AccessRequests
             .AsNoTracking()
             .ToListAsync(cancellationToken));
         Assert.Empty(await dbContext.AuditEvents
             .AsNoTracking()
             .ToListAsync(cancellationToken));
-        Assert.Equal(requestCountBefore + 3, fixture.ChatClient.RequestCount);
+        Assert.Equal(4, chatClient.InvocationCount);
     }
 
     private static async Task<string> SendMessageAsync(

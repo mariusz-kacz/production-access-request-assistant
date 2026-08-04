@@ -105,8 +105,12 @@ No field, status, or schema is added. Explicit reset invokes existing terminal
 transitions instead of deleting or rewriting a preparation. Existing rules remain:
 
 - actor, tenant, conversation, and requester binding;
-- collecting candidate stored only after a structurally valid proposal and
-  deterministic application decision;
+- every supplied partial identifier validated before persistence;
+- canonical client and environment ownership derived from a validated environment or
+  active incident;
+- rejected fields cleared while unrelated validated candidate fields are retained;
+- exactly one interpretation per requester message, followed by deterministic
+  sanitized rejection when authoritative validation fails;
 - immutable canonical scope and reserved request ID at readiness;
 - 30-minute confirmation expiry;
 - terminal content clearing; and

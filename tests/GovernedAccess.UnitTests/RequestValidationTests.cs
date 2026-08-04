@@ -7,6 +7,152 @@ namespace GovernedAccess.UnitTests;
 public sealed class RequestValidationTests
 {
     [Fact]
+    public async Task CandidateAssessmentClearsAnUnknownPartialClientImmediately()
+    {
+        var validator = new RequestValidator(new StubRequestContextReader());
+
+        var result = await validator.AssessCandidateAsync(
+            new RequestCandidate(
+                "ClientA",
+                environmentId: null,
+                requestedRoleId: null,
+                justification: null,
+                incidentId: null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+            result.Value);
+        Assert.Null(assessment.Candidate.ClientId);
+        var error = Assert.Single(assessment.Errors);
+        Assert.Equal("clientId", error.Field);
+        Assert.Equal("client_not_found", error.Code);
+    }
+
+    [Fact]
+    public async Task CandidateAssessmentDerivesCanonicalClientFromEnvironment()
+    {
+        var validator = new RequestValidator(new StubRequestContextReader());
+
+        var result = await validator.AssessCandidateAsync(
+            new RequestCandidate(
+                "Client Alpha",
+                "PROD-ALPHA-EU",
+                requestedRoleId: null,
+                justification: null,
+                incidentId: null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentIncomplete>(
+            result.Value);
+        Assert.Equal("client-alpha", assessment.Candidate.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", assessment.Candidate.EnvironmentId);
+    }
+
+    [Fact]
+    public async Task CandidateAssessmentDerivesCanonicalScopeFromActiveIncident()
+    {
+        var validator = new RequestValidator(new StubRequestContextReader());
+
+        var result = await validator.AssessCandidateAsync(
+            new RequestCandidate(
+                clientId: null,
+                environmentId: null,
+                requestedRoleId: null,
+                justification: null,
+                "INC-1042"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentIncomplete>(
+            result.Value);
+        Assert.Equal("client-alpha", assessment.Candidate.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", assessment.Candidate.EnvironmentId);
+        Assert.Equal("INC-1042", assessment.Candidate.IncidentId);
+    }
+
+    [Fact]
+    public async Task CandidateAssessmentClearsOnlyAnUnknownIncident()
+    {
+        var validator = new RequestValidator(new StubRequestContextReader());
+        var candidate = new RequestCandidate(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-UNKNOWN");
+
+        var result = await validator.AssessCandidateAsync(
+            candidate,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+            result.Value);
+        var sanitized = assessment.Candidate;
+        Assert.Equal(candidate.ClientId, sanitized.ClientId);
+        Assert.Equal(candidate.EnvironmentId, sanitized.EnvironmentId);
+        Assert.Equal(candidate.RequestedRoleId, sanitized.RequestedRoleId);
+        Assert.Equal(candidate.Justification, sanitized.Justification);
+        Assert.Null(sanitized.IncidentId);
+        var error = Assert.Single(assessment.Errors);
+        Assert.Equal("incidentId", error.Field);
+        Assert.Equal("incident_not_found", error.Code);
+    }
+
+    [Fact]
+    public async Task CandidateAssessmentClearsARoleUnavailableForCanonicalEnvironment()
+    {
+        var validator = new RequestValidator(new StubRequestContextReader());
+
+        var result = await validator.AssessCandidateAsync(
+            new RequestCandidate(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.Support,
+                justification: null,
+                incidentId: null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+            result.Value);
+        Assert.Null(assessment.Candidate.RequestedRoleId);
+        var error = Assert.Single(assessment.Errors);
+        Assert.Equal("requestedRoleId", error.Field);
+        Assert.Equal("role_unavailable", error.Code);
+    }
+
+    [Fact]
+    public async Task CandidateAssessmentReturnsReadyAfterOneAuthoritativePass()
+    {
+        var requestContext = new StubRequestContextReader();
+        var validator = new RequestValidator(requestContext);
+
+        var result = await validator.AssessCandidateAsync(
+            new RequestCandidate(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var assessment = Assert.IsType<RequestCandidateAssessmentReady>(
+            result.Value);
+        Assert.Equal("client-alpha", assessment.Fields.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", assessment.Fields.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, assessment.Fields.RequestedRoleId);
+        Assert.Equal("INC-1042", assessment.Fields.IncidentId);
+        Assert.Equal(1, requestContext.ClientLookupCount);
+        Assert.Equal(1, requestContext.EnvironmentLookupCount);
+        Assert.Equal(1, requestContext.RoleLookupCount);
+        Assert.Equal(1, requestContext.IncidentLookupCount);
+    }
+
+    [Fact]
     public async Task ValidateAsyncReturnsNormalizedFieldsForAValidRequest()
     {
         var requestContext = new StubRequestContextReader();
@@ -308,10 +454,19 @@ public sealed class RequestValidationTests
 
         public ApplicationFailure? ClientFailure { get; init; }
 
+        public int ClientLookupCount { get; private set; }
+
+        public int EnvironmentLookupCount { get; private set; }
+
+        public int RoleLookupCount { get; private set; }
+
+        public int IncidentLookupCount { get; private set; }
+
         public Task<ApplicationResult<Client>> GetClientAsync(
             string clientId,
             CancellationToken cancellationToken)
         {
+            ClientLookupCount++;
             if (ClientFailure is not null)
             {
                 return Task.FromResult(ApplicationResult.Failed<Client>(ClientFailure));
@@ -324,6 +479,7 @@ public sealed class RequestValidationTests
             string environmentId,
             CancellationToken cancellationToken)
         {
+            EnvironmentLookupCount++;
             return GetAsync(
                 environments,
                 environmentId,
@@ -336,6 +492,7 @@ public sealed class RequestValidationTests
             string roleId,
             CancellationToken cancellationToken)
         {
+            RoleLookupCount++;
             return GetAsync(
                 roles,
                 (environmentId, roleId),
@@ -358,7 +515,12 @@ public sealed class RequestValidationTests
             string incidentId,
             CancellationToken cancellationToken)
         {
-            return GetAsync(incidents, incidentId, "incident_not_found", cancellationToken);
+            IncidentLookupCount++;
+            return GetAsync(
+                incidents,
+                incidentId,
+                "incident_not_found",
+                cancellationToken);
         }
 
         public Task<ApplicationResult<AuthenticatedPrincipal>> GetPrincipalAsync(

@@ -48,7 +48,7 @@ public sealed class MafToolBoundaryTests
             CreateTurn("Discover only approved read-only context tools."),
             cancellationToken);
 
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, outcome.Kind);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(outcome);
         Assert.Equal(AllowedToolNames, chatClient.ObservedToolNames);
         Assert.DoesNotContain(
             chatClient.ObservedToolNames,
@@ -78,7 +78,7 @@ public sealed class MafToolBoundaryTests
             CreateTurn("Use the approved real-profile boundary."),
             callerCancellation.Token);
 
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, outcome.Kind);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(outcome);
         Assert.Equal(AllowedToolNames, providerClient.ObservedToolNames);
         var responseFormat = Assert.IsType<ChatResponseFormatJson>(
             providerClient.ObservedResponseFormat);
@@ -115,9 +115,8 @@ public sealed class MafToolBoundaryTests
             CreateTurn("Reject an unexpected MCP catalog."),
             cancellationToken);
 
-        Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.Unavailable,
-            outcome.Kind);
+        var failure = Assert.IsType<RequestPreparationInterpretationFailed>(outcome);
+        Assert.Equal(RequestPreparationInterpretationFailure.Unavailable, failure.Failure);
         Assert.Equal(0, chatClient.RequestCount);
         Assert.Empty(chatClient.ObservedToolNames);
     }
@@ -166,9 +165,8 @@ public sealed class MafToolBoundaryTests
             CreateTurn("Call the unavailable environment context tool."),
             cancellationToken);
 
-        Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.Unavailable,
-            outcome.Kind);
+        var failure = Assert.IsType<RequestPreparationInterpretationFailed>(outcome);
+        Assert.Equal(RequestPreparationInterpretationFailure.Unavailable, failure.Failure);
         Assert.Equal(AllowedToolNames, chatClient.ObservedToolNames);
     }
 
@@ -213,7 +211,6 @@ public sealed class MafToolBoundaryTests
             Guid.NewGuid(),
             message,
             new RequestCandidate(null, null, null, null, null),
-            validationFeedback: [],
             Guid.NewGuid().ToString("N"));
 
     public enum TestCatalog

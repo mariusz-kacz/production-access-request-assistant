@@ -270,7 +270,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
 
     private sealed class UnusedInterpreter : IRequestPreparationInterpreter
     {
-        public Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+        public Task<RequestPreparationInterpretationResult> InterpretAsync(
             RequestPreparationTurn turn,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException(

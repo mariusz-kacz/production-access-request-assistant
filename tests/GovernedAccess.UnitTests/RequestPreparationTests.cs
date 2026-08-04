@@ -41,6 +41,27 @@ public sealed class RequestPreparationTests
     }
 
     [Fact]
+    public void InterpretationResultSeparatesSuccessPayloadFromFailureReason()
+    {
+        var proposal = new RequestPreparationProposal(
+            RequestPreparationProposalKind.Candidate,
+            EmptyCandidate(),
+            clarification: null);
+
+        var succeeded = new RequestPreparationInterpretationSucceeded(proposal);
+        var failed = new RequestPreparationInterpretationFailed(
+            RequestPreparationInterpretationFailure.MalformedModelOutput);
+
+        Assert.Same(proposal, succeeded.Proposal);
+        Assert.Equal(
+            RequestPreparationInterpretationFailure.MalformedModelOutput,
+            failed.Failure);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new RequestPreparationInterpretationFailed(
+                (RequestPreparationInterpretationFailure)int.MaxValue));
+    }
+
+    [Fact]
     public void ClarificationProposalRequiresAClosedTargetAndBoundedMessage()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
@@ -60,31 +81,17 @@ public sealed class RequestPreparationTests
     }
 
     [Fact]
-    public void PreparationTurnSnapshotsRunScopedFeedbackAndHistoryAvailability()
+    public void PreparationTurnNormalizesApplicationOwnedContext()
     {
-        var feedback = new List<RequestValidationFeedback>
-        {
-            new(
-                "environmentId",
-                "environment_not_found",
-                "The environment was not found."),
-        };
+        var candidate = EmptyCandidate();
         var turn = new RequestPreparationTurn(
             Guid.NewGuid(),
             "  use the first environment  ",
-            EmptyCandidate(),
-            feedback,
+            candidate,
             "  correlation-001  ");
 
-        feedback.Clear();
-
         Assert.Equal("use the first environment", turn.LatestMessage);
-        var capturedFeedback = Assert.Single(turn.ValidationFeedback);
-        Assert.Equal("environmentId", capturedFeedback.Field);
-        Assert.Equal("environment_not_found", capturedFeedback.Code);
-        Assert.Equal(
-            "The environment was not found.",
-            capturedFeedback.Message);
+        Assert.Same(candidate, turn.Candidate);
         Assert.Equal("correlation-001", turn.CorrelationId);
     }
 

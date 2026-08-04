@@ -94,6 +94,23 @@ Additional MCP tools are outside the current baseline.
 - Malformed model output and MCP failure or timeout require tests.
 - Negative scenarios are first-class tests.
 - Exhaustive UI and enterprise-scale load testing are not required.
+- Final validation after a code change must run in this order and must not run these
+  commands in parallel:
+
+  1. `dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror`
+  2. `dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore`
+  3. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m`
+  4. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m`
+
+- Do not run the complete integration-test project without one of the two `TestLevel`
+  filters above. The split prevents the full-host fixtures and the remaining fixtures
+  from sharing one long-lived test runner.
+- Give each integration-test command an outer shell or tool timeout of at least four
+  minutes. A shorter outer timeout can abandon the command while its child test runner
+  remains alive.
+- If a test command times out, do not immediately start another test run. First identify
+  and stop only the test-runner process tree created by that command; never terminate
+  unrelated or pre-existing `dotnet` processes.
 
 ## Security and Logging
 

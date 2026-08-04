@@ -107,6 +107,29 @@ internal sealed class RecordingChatClient : ModelExecutionTestChatClient
     }
 }
 
+internal sealed class ScriptedChatClient(params string[] responses)
+    : ModelExecutionTestChatClient
+{
+    private readonly ConcurrentQueue<string> responses = new(responses);
+
+    public override Task<ChatResponse> GetResponseAsync(
+        IEnumerable<ChatMessage> messages,
+        ChatOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        _ = RecordInvocation(messages, options, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!responses.TryDequeue(out var response))
+        {
+            throw new InvalidOperationException(
+                "The scripted chat client has no response for this invocation.");
+        }
+
+        return Task.FromResult(CreateResponse(response));
+    }
+}
+
 internal sealed class BlockingChatClient : ModelExecutionTestChatClient
 {
     public TaskCompletionSource<ModelExecutionChatInvocation> Started { get; } = new(

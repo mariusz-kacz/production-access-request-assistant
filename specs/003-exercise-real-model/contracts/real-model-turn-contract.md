@@ -37,8 +37,7 @@ Teams intake feature:
     "requestedRoleId": null,
     "justification": null,
     "incidentId": null
-  },
-  "validationFeedback": []
+  }
 }
 ```
 
@@ -68,6 +67,11 @@ It contains one complete nullable candidate snapshot and either one focused
 clarification or `null`. The response is untrusted even when the provider reports
 successful JSON-schema conformance.
 
+When the latest message supplies or changes an incident or environment identifier,
+the model instructions require the matching read-only lookup before returning that
+identifier. Successful environment or incident results supply canonical `clientId`;
+the requester is not expected to repeat a client display name as an identifier.
+
 ## Deadline and Cancellation
 
 - The existing ASP.NET Core Teams endpoint request timeout is the single overall
@@ -85,7 +89,7 @@ successful JSON-schema conformance.
 
 | Boundary outcome | Application outcome | Teams behavior | Durable effect |
 |------------------|---------------------|----------------|----------------|
-| Schema-valid proposal | `Proposal` | Clarification, validation rejection, or confirmation after authoritative validation | Candidate/readiness may change only through existing application rules |
+| Schema-valid proposal | `Proposal` | Clarification, validation rejection, or confirmation after authoritative validation | Only sanitized validated fields or immutable readiness may be persisted |
 | Malformed or unsupported response | `MalformedModelOutput` | Safe retry guidance | No candidate, ready scope, request, approval, operation, grant, or audit change |
 | Provider-side timeout | `Timeout` | Safe timeout guidance while the request remains active | Last accepted candidate and saved MAF session remain unchanged |
 | Endpoint timeout or caller disconnect | Native request cancellation | Transport-level safe failure | Last accepted candidate and saved MAF session remain unchanged |
@@ -101,6 +105,14 @@ After a `Proposal`, the existing deterministic validation must reload and verify
 - incident existence, active state, client, and environment relationship;
 - required justification bounds; and
 - all other fixed request policy.
+
+Validation applies to every non-null partial identifier before a collecting candidate
+is saved. Unknown, inactive, unavailable-role, and inconsistent values are cleared;
+unrelated validated fields are retained. A validated environment or active incident
+may derive canonical client and environment ownership. A rejected value produces
+typed deterministic correction guidance immediately. The application does not run a
+second interpretation for the same requester message; the next model call occurs only
+after the requester supplies another message.
 
 The model's `kind`, wording, validation claims, tool results, or selected profile
 cannot override a validation rejection.

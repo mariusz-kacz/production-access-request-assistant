@@ -12,7 +12,6 @@ public sealed record RequestPreparationTurn
         Guid intakeId,
         string latestMessage,
         RequestCandidate candidate,
-        IEnumerable<RequestValidationFeedback> validationFeedback,
         string correlationId)
     {
         if (intakeId == Guid.Empty)
@@ -24,21 +23,11 @@ public sealed record RequestPreparationTurn
 
         ArgumentException.ThrowIfNullOrWhiteSpace(latestMessage);
         ArgumentNullException.ThrowIfNull(candidate);
-        ArgumentNullException.ThrowIfNull(validationFeedback);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
-
-        var feedback = validationFeedback.ToArray();
-        if (feedback.Any(item => item is null))
-        {
-            throw new ArgumentException(
-                "Validation feedback cannot contain null values.",
-                nameof(validationFeedback));
-        }
 
         IntakeId = intakeId;
         LatestMessage = latestMessage.Trim();
         Candidate = candidate;
-        ValidationFeedback = Array.AsReadOnly(feedback);
         CorrelationId = correlationId.Trim();
     }
 
@@ -48,36 +37,7 @@ public sealed record RequestPreparationTurn
 
     public RequestCandidate Candidate { get; }
 
-    public IReadOnlyList<RequestValidationFeedback> ValidationFeedback { get; }
-
     public string CorrelationId { get; }
-}
-
-/// <summary>
-/// Application-owned validation feedback supplied only for the current interpreter
-/// run. It is context for correction, not durable conversation or authorization
-/// evidence.
-/// </summary>
-public sealed record RequestValidationFeedback
-{
-    public RequestValidationFeedback(string field, string code, string message)
-    {
-        Field = NormalizeRequired(field, nameof(field));
-        Code = NormalizeRequired(code, nameof(code));
-        Message = NormalizeRequired(message, nameof(message));
-    }
-
-    public string Field { get; }
-
-    public string Code { get; }
-
-    public string Message { get; }
-
-    private static string NormalizeRequired(string value, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        return value.Trim();
-    }
 }
 
 /// <summary>
@@ -236,9 +196,8 @@ public sealed record RequestPreparationProposal
     public RequestClarificationProposal? Clarification { get; }
 }
 
-public enum RequestPreparationInterpretationOutcomeKind
+public enum RequestPreparationInterpretationFailure
 {
-    Proposal,
     MalformedModelOutput,
     Timeout,
     Cancelled,
@@ -246,35 +205,44 @@ public enum RequestPreparationInterpretationOutcomeKind
 }
 
 /// <summary>
-/// A typed interpreter result that keeps provider failures and untrusted proposals
+/// A closed interpreter result that keeps provider failures and untrusted proposals
 /// outside deterministic preparation decisions.
 /// </summary>
-public sealed record RequestPreparationInterpretationOutcome
+public abstract record RequestPreparationInterpretationResult
 {
-    public RequestPreparationInterpretationOutcome(
+    private protected RequestPreparationInterpretationResult()
+    {
+    }
+}
+
+public sealed record RequestPreparationInterpretationSucceeded
+    : RequestPreparationInterpretationResult
+{
+    public RequestPreparationInterpretationSucceeded(
         RequestPreparationProposal proposal)
     {
         ArgumentNullException.ThrowIfNull(proposal);
-
-        Kind = RequestPreparationInterpretationOutcomeKind.Proposal;
         Proposal = proposal;
     }
 
-    public RequestPreparationInterpretationOutcome(
-        RequestPreparationInterpretationOutcomeKind failureKind)
+    public RequestPreparationProposal Proposal { get; }
+}
+
+public sealed record RequestPreparationInterpretationFailed
+    : RequestPreparationInterpretationResult
+{
+    public RequestPreparationInterpretationFailed(
+        RequestPreparationInterpretationFailure failure)
     {
-        if (!Enum.IsDefined(failureKind)
-            || failureKind == RequestPreparationInterpretationOutcomeKind.Proposal)
+        if (!Enum.IsDefined(failure))
         {
-            throw new ArgumentOutOfRangeException(nameof(failureKind));
+            throw new ArgumentOutOfRangeException(nameof(failure));
         }
 
-        Kind = failureKind;
+        Failure = failure;
     }
 
-    public RequestPreparationInterpretationOutcomeKind Kind { get; }
-
-    public RequestPreparationProposal? Proposal { get; }
+    public RequestPreparationInterpretationFailure Failure { get; }
 }
 
 /// <summary>
@@ -283,7 +251,7 @@ public sealed record RequestPreparationInterpretationOutcome
 /// </summary>
 public interface IRequestPreparationInterpreter
 {
-    Task<RequestPreparationInterpretationOutcome> InterpretAsync(
+    Task<RequestPreparationInterpretationResult> InterpretAsync(
         RequestPreparationTurn turn,
         CancellationToken cancellationToken);
 }

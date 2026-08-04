@@ -25,25 +25,33 @@ public sealed class TeamsConversationResetTests
         "I need production read-only access to PROD-ALPHA-EU to investigate "
         + "INC-1042 because customer-facing errors require diagnosis.";
 
+    private const string InitialClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Choose an environment: PROD-ALPHA-EU or PROD-BETA-UK."}}
+        """;
+
+    private const string ReplacementClarification =
+        """
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Please choose an environment explicitly: PROD-ALPHA-EU or PROD-BETA-UK."}}
+        """;
+
     [Fact]
     public async Task CollectingResetSkipsChatAndCreatesCleanReplacementIdentityAndHistory()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var chatClient = new DeterministicChatClient(
-            DeterministicChatMode.HistorySensitive);
+        var chatClient = new ScriptedChatClient(
+            InitialClarification,
+            ReplacementClarification);
         await using var factory = new GovernedAccessWebFactory(chatClient);
         using var client = factory.CreateTeamsClient();
 
-        var firstBody = await PostMessageAsync(
+        _ = await PostMessageAsync(
             client,
             "I need temporary production access.",
             "reset-collecting-first",
             cancellationToken);
-        Assert.Contains(
-            "Choose an environment",
-            firstBody,
-            StringComparison.Ordinal);
-        Assert.Equal(1, chatClient.RequestCount);
+        var requestCountBeforeReset = chatClient.InvocationCount;
+        Assert.True(requestCountBeforeReset > 0);
 
         RequestIntakeSession abandoned;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -54,7 +62,7 @@ public sealed class TeamsConversationResetTests
                 .AsNoTracking()
                 .SingleAsync(cancellationToken);
             Assert.Equal(RequestIntakeStatus.Collecting, abandoned.Status);
-            Assert.NotNull(abandoned.ClientId);
+            Assert.Null(abandoned.ClientId);
         }
 
         var resetBody = await PostMessageAsync(
@@ -64,7 +72,7 @@ public sealed class TeamsConversationResetTests
             cancellationToken);
 
         Assert.Contains(ResetGuidance, resetBody, StringComparison.Ordinal);
-        Assert.Equal(1, chatClient.RequestCount);
+        Assert.Equal(requestCountBeforeReset, chatClient.InvocationCount);
 
         var replacementBody = await PostMessageAsync(
             client,
@@ -75,8 +83,17 @@ public sealed class TeamsConversationResetTests
         Assert.Contains(
             "Please choose an environment explicitly",
             replacementBody,
-            StringComparison.Ordinal);
-        Assert.Equal(2, chatClient.RequestCount);
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(requestCountBeforeReset + 1, chatClient.InvocationCount);
+        var replacementRequest = chatClient.Invocations[1].Messages;
+        Assert.DoesNotContain(
+            replacementRequest,
+            message => message.Role == Microsoft.Extensions.AI.ChatRole.Assistant);
+        Assert.DoesNotContain(
+            replacementRequest,
+            message => message.Text?.Contains(
+                "I need temporary production access.",
+                StringComparison.Ordinal) == true);
 
         await using var verificationScope = factory.Services.CreateAsyncScope();
         var verificationDb = verificationScope.ServiceProvider

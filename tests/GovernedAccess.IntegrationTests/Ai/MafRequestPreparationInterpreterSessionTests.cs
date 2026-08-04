@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
@@ -18,8 +18,23 @@ public sealed class MafRequestPreparationInterpreterSessionTests
         {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-UK."}}
         """;
 
+    private const string EnvironmentClarificationResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Please choose an environment explicitly: PROD-ALPHA-EU or PROD-BETA-UK."}}
+        """;
+
+    private const string RoleClarificationResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"requestedRoleId","message":"Please choose a role: ProductionReadOnly or ProductionSupport."}}
+        """;
+
+    private const string CompletedCandidateResponse =
+        """
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionSupport","justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":null}
+        """;
+
     [Fact]
-    public async Task SuccessfulTurnsRestoreHistoryAndReceiveCurrentApplicationContext()
+    public async Task SuccessfulTurnsRestoreHistoryAndReceiveCurrentCandidateContext()
     {
         var chatClient = new ScriptedChatClient(
             ValidClarificationResponse,
@@ -32,31 +47,25 @@ public sealed class MafRequestPreparationInterpreterSessionTests
             requestedRoleId: null,
             "Investigate the active production incident.",
             "INC-1042");
-        var feedback = new RequestValidationFeedback(
-            "environmentId",
-            "environment_not_found",
-            "The environment was not found.");
-
         var first = await interpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
                 "Which environment should I use?",
-                candidate,
-                [feedback]),
+                candidate),
             TestContext.Current.CancellationToken);
         var second = await interpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "the first one",
-                candidate,
-                [feedback]),
+                "second provider-bound turn",
+                candidate),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, first.Kind);
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, second.Kind);
-        Assert.Equal(2, chatClient.Requests.Count);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(first);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(second);
+        Assert.Equal(2, chatClient.InvocationCount);
 
-        using var firstContext = ParseLatestTurnContext(chatClient.Requests[0]);
+        using var firstContext = ParseLatestTurnContext(
+            chatClient.Invocations[0].Messages);
         Assert.False(firstContext.RootElement.TryGetProperty("historyAvailable", out _));
         Assert.Equal(
             "client-alpha",
@@ -64,25 +73,60 @@ public sealed class MafRequestPreparationInterpreterSessionTests
                 .GetProperty("currentCandidate")
                 .GetProperty("clientId")
                 .GetString());
-        Assert.Equal(
-            "environment_not_found",
-            firstContext.RootElement
-                .GetProperty("validationFeedback")[0]
-                .GetProperty("code")
-                .GetString());
+        Assert.False(
+            firstContext.RootElement.TryGetProperty(
+                "validationFeedback",
+                out _));
 
-        using var secondContext = ParseLatestTurnContext(chatClient.Requests[1]);
+        using var secondContext = ParseLatestTurnContext(
+            chatClient.Invocations[1].Messages);
         Assert.False(secondContext.RootElement.TryGetProperty("historyAvailable", out _));
         Assert.Contains(
-            chatClient.Requests[1],
+            chatClient.Invocations[1].Messages,
             message => message.Role == ChatRole.User
                 && message.Text!.Contains(
                     "Which environment should I use?",
                     StringComparison.Ordinal));
         Assert.Contains(
-            chatClient.Requests[1],
+            chatClient.Invocations[1].Messages,
             message => message.Role == ChatRole.Assistant
                 && message.Text == ValidClarificationResponse);
+    }
+
+    [Fact]
+    public async Task InstructionsRequireIdentifierLookupsAndSafeClarification()
+    {
+        var chatClient = new ScriptedChatClient(ValidClarificationResponse);
+        var interpreter = CreateInterpreter(chatClient);
+
+        _ = await interpreter.InterpretAsync(
+            CreateTurn(Guid.NewGuid(), "Use PROD-ALPHA-EU for INC-1042."),
+            TestContext.Current.CancellationToken);
+
+        var options = Assert.IsType<ChatOptions>(
+            Assert.Single(chatClient.Invocations).Options);
+        var instructions = Assert.IsType<string>(options.Instructions);
+        Assert.Contains("MUST call", instructions, StringComparison.Ordinal);
+        Assert.Contains(
+            "get_production_environment",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "get_incident",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "derive clientId",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "relative expression",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "otherwise repeat a self-contained focused clarification",
+            instructions,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,13 +149,14 @@ public sealed class MafRequestPreparationInterpreterSessionTests
             CreateTurn(intakeId, "third valid turn"),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, first.Kind);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(first);
+        var failure = Assert.IsType<RequestPreparationInterpretationFailed>(malformed);
         Assert.Equal(
-            RequestPreparationInterpretationOutcomeKind.MalformedModelOutput,
-            malformed.Kind);
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, third.Kind);
+            RequestPreparationInterpretationFailure.MalformedModelOutput,
+            failure.Failure);
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(third);
 
-        var thirdRequest = chatClient.Requests[2];
+        var thirdRequest = chatClient.Invocations[2].Messages;
         Assert.Contains(
             thirdRequest,
             message => message.Role == ChatRole.User
@@ -127,10 +172,10 @@ public sealed class MafRequestPreparationInterpreterSessionTests
     }
 
     [Fact]
-    public async Task RelativeReplyWithoutHistoryProducesSelfContainedClarification()
+    public async Task FreshSessionSendsNoPriorAssistantQuestionToProvider()
     {
-        var interpreter = CreateInterpreter(
-            new DeterministicChatClient(DeterministicChatMode.HistorySensitive));
+        var chatClient = new ScriptedChatClient(EnvironmentClarificationResponse);
+        var interpreter = CreateInterpreter(chatClient);
         var candidate = new RequestCandidate(
             "client-alpha",
             environmentId: null,
@@ -141,30 +186,30 @@ public sealed class MafRequestPreparationInterpreterSessionTests
         var outcome = await interpreter.InterpretAsync(
             CreateTurn(
                 Guid.NewGuid(),
-                "the first one",
+                "fresh provider-bound turn",
                 candidate),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequestPreparationInterpretationOutcomeKind.Proposal, outcome.Kind);
+        var interpreted = Assert.IsType<RequestPreparationInterpretationSucceeded>(
+            outcome);
         Assert.Equal(
             RequestPreparationProposalKind.Clarification,
-            outcome.Proposal!.Kind);
-        Assert.Null(outcome.Proposal.Candidate.EnvironmentId);
-        Assert.Contains(
-            "PROD-ALPHA-EU",
-            outcome.Proposal.Clarification!.Message,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "PROD-BETA-UK",
-            outcome.Proposal.Clarification.Message,
-            StringComparison.Ordinal);
+            interpreted.Proposal.Kind);
+        Assert.Null(interpreted.Proposal.Candidate.EnvironmentId);
+        var request = Assert.Single(chatClient.Invocations).Messages;
+        Assert.DoesNotContain(
+            request,
+            message => message.Role == ChatRole.Assistant);
     }
 
     [Fact]
-    public async Task RelativeRepliesUseOnlyTheActiveSessionQuestionOrdering()
+    public async Task ScriptedRepliesReceiveOnlyTheActiveSessionHistory()
     {
-        var interpreter = CreateInterpreter(
-            new DeterministicChatClient(DeterministicChatMode.HistorySensitive));
+        var chatClient = new ScriptedChatClient(
+            EnvironmentClarificationResponse,
+            RoleClarificationResponse,
+            CompletedCandidateResponse);
+        var interpreter = CreateInterpreter(chatClient);
         var intakeId = Guid.NewGuid();
         var candidate = new RequestCandidate(
             "client-alpha",
@@ -176,30 +221,49 @@ public sealed class MafRequestPreparationInterpreterSessionTests
         var environmentQuestion = await interpreter.InterpretAsync(
             CreateTurn(intakeId, "I still need to choose the scope.", candidate),
             TestContext.Current.CancellationToken);
+        var environmentInterpreted =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(
+                environmentQuestion);
         var roleQuestion = await interpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "the first one",
-                environmentQuestion.Proposal!.Candidate),
+                "environment selection response",
+                environmentInterpreted.Proposal.Candidate),
             TestContext.Current.CancellationToken);
+        var roleInterpreted =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(roleQuestion);
         var completed = await interpreter.InterpretAsync(
             CreateTurn(
                 intakeId,
-                "the other role",
-                roleQuestion.Proposal!.Candidate),
+                "role selection response",
+                roleInterpreted.Proposal.Candidate),
             TestContext.Current.CancellationToken);
+        var completedInterpreted =
+            Assert.IsType<RequestPreparationInterpretationSucceeded>(completed);
 
         Assert.Equal(
             RequestClarificationTarget.EnvironmentId,
-            environmentQuestion.Proposal!.Clarification!.Target);
-        Assert.Equal("PROD-ALPHA-EU", roleQuestion.Proposal!.Candidate.EnvironmentId);
+            environmentInterpreted.Proposal.Clarification!.Target);
+        Assert.Equal(
+            "PROD-ALPHA-EU",
+            roleInterpreted.Proposal.Candidate.EnvironmentId);
         Assert.Equal(
             RequestClarificationTarget.RequestedRoleId,
-            roleQuestion.Proposal.Clarification!.Target);
-        Assert.Equal(RequestPreparationProposalKind.Candidate, completed.Proposal!.Kind);
+            roleInterpreted.Proposal.Clarification!.Target);
+        Assert.Equal(
+            RequestPreparationProposalKind.Candidate,
+            completedInterpreted.Proposal.Kind);
         Assert.Equal(
             ProductionRoleIds.Support,
-            completed.Proposal.Candidate.RequestedRoleId);
+            completedInterpreted.Proposal.Candidate.RequestedRoleId);
+        Assert.Contains(
+            chatClient.Invocations[1].Messages,
+            message => message.Role == ChatRole.Assistant
+                && message.Text == EnvironmentClarificationResponse);
+        Assert.Contains(
+            chatClient.Invocations[2].Messages,
+            message => message.Role == ChatRole.Assistant
+                && message.Text == RoleClarificationResponse);
     }
 
     private static MafRequestPreparationInterpreter CreateInterpreter(
@@ -217,13 +281,11 @@ public sealed class MafRequestPreparationInterpreterSessionTests
     private static RequestPreparationTurn CreateTurn(
         Guid intakeId,
         string latestMessage,
-        RequestCandidate? candidate = null,
-        IEnumerable<RequestValidationFeedback>? validationFeedback = null) =>
+        RequestCandidate? candidate = null) =>
         new(
             intakeId,
             latestMessage,
             candidate ?? new RequestCandidate(null, null, null, null, null),
-            validationFeedback ?? [],
             Guid.NewGuid().ToString("N"));
 
     private static JsonDocument ParseLatestTurnContext(
@@ -233,42 +295,4 @@ public sealed class MafRequestPreparationInterpreterSessionTests
         return JsonDocument.Parse(latestUserMessage.Text!);
     }
 
-    private sealed class ScriptedChatClient(params string[] responses) : IChatClient
-    {
-        private readonly Queue<string> responses = new(responses);
-
-        public List<IReadOnlyList<ChatMessage>> Requests { get; } = [];
-
-        public Task<ChatResponse> GetResponseAsync(
-            IEnumerable<ChatMessage> messages,
-            ChatOptions? options = null,
-            CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Requests.Add(messages.ToArray());
-
-            return Task.FromResult(
-                new ChatResponse(
-                    new ChatMessage(ChatRole.Assistant, responses.Dequeue())));
-        }
-
-        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
-            IEnumerable<ChatMessage> messages,
-            ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {
-            var response = await GetResponseAsync(messages, options, cancellationToken);
-            foreach (var message in response.Messages)
-            {
-                yield return new ChatResponseUpdate(message.Role, message.Text);
-            }
-        }
-
-        public object? GetService(Type serviceType, object? serviceKey = null) =>
-            serviceKey is null && serviceType.IsInstanceOfType(this) ? this : null;
-
-        public void Dispose()
-        {
-        }
-    }
 }
