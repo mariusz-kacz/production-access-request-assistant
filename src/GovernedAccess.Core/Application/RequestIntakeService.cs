@@ -500,7 +500,6 @@ public sealed class RequestIntakeService
         RequestClarificationTarget target) =>
         target switch
         {
-            RequestClarificationTarget.ClientId => candidate.ClientId is null,
             RequestClarificationTarget.EnvironmentId =>
                 candidate.EnvironmentId is null,
             RequestClarificationTarget.RequestedRoleId =>

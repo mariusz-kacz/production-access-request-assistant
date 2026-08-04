@@ -76,12 +76,12 @@ and structured clarification contracts required by every story.
 **Critical**: No user-story implementation begins until this phase compiles and its
 focused tests pass.
 
-- [ ] T003 [P] Add one focused unit-test group for the new clarification value-object invariants: removal of `ClientId`, zero-to-20 unique environment option IDs, and the required relationship between option IDs and an environment clarification target in `tests/GovernedAccess.UnitTests/RequestPreparationTests.cs`
-- [ ] T004 [P] Add focused persistence integration coverage for the new query only: one seeded projection/ordering case and one boundary theory for zero and 21 records proving empty success and fail-closed overflow without truncation in `tests/GovernedAccess.IntegrationTests/Persistence/EfRequestContextReaderTests.cs`
-- [ ] T005 [P] Define the non-persistent `ProductionEnvironmentContext` projection and exact/list reader operations while retaining exact environment-role validation in `src/GovernedAccess.Core/Ports/CorePorts.cs`
-- [ ] T006 [P] Extend the untrusted clarification proposal and application result contracts with bounded `EnvironmentOptionIds` and validated environment-choice records, and remove `RequestClarificationTarget.ClientId`, in `src/GovernedAccess.Core/Ports/RequestDrafting.cs` and `src/GovernedAccess.Core/Ports/RequestIntake.cs`
-- [ ] T007 Implement no-tracking exact/list environment context aggregation over clients, environments, and roles with stable ordinal ordering and a load-at-most-21 fail-closed cap, and remove the obsolete role-list reader operation, in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs`
-- [ ] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
+- [X] T003 [P] Add one focused unit-test group for the new clarification value-object invariants: removal of `ClientId`, zero-to-20 unique environment option IDs, and the required relationship between option IDs and an environment clarification target in `tests/GovernedAccess.UnitTests/RequestPreparationTests.cs`
+- [X] T004 [P] Add focused persistence integration coverage for the new query only: one seeded projection/ordering case and one boundary theory for zero and 21 records proving empty success and fail-closed overflow without truncation in `tests/GovernedAccess.IntegrationTests/Persistence/EfRequestContextReaderTests.cs`
+- [X] T005 [P] Define the non-persistent `ProductionEnvironmentContext` projection and exact/list reader operations while retaining exact environment-role validation in `src/GovernedAccess.Core/Ports/CorePorts.cs`
+- [X] T006 [P] Extend the untrusted clarification proposal and application result contracts with bounded `EnvironmentOptionIds` and validated environment-choice records, and remove `RequestClarificationTarget.ClientId`, in `src/GovernedAccess.Core/Ports/RequestDrafting.cs` and `src/GovernedAccess.Core/Ports/RequestIntake.cs`
+- [X] T007 Implement no-tracking exact/list environment context aggregation over clients, environments, and roles with stable ordinal ordering and a load-at-most-21 fail-closed cap, and remove the obsolete role-list reader operation, in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs`
+- [X] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 
 **Checkpoint**: Core contracts and persistence can return authoritative, ordered
 environment/client/role context without any MCP or AI SDK types.
@@ -113,7 +113,7 @@ discovery and explicit confirmation of any proposed alternative.
 - [ ] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 - [ ] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [ ] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject unknown IDs, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
-- [ ] T016 [US1] Render server-owned environment clarification from authoritative choice records, including the one-option "did you mean" form, without advancing workflow state in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [ ] T016 [US1] Render a deterministic server-owned environment clarification from authoritative choice records, including the one-option "did you mean" form, without displaying model prose for a non-empty choice list or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: The application exposes the bounded authoritative environment context,
 accepts only validated choice IDs, and can render a safe one-option correction. Real
@@ -139,7 +139,7 @@ and lost-history isolation.
 ### Implementation for User Story 2
 
 - [ ] T018 [US2] Update ambiguity and history instructions for direct environment discovery, explicit-term conflicts, structured authoritative shortlist IDs, and self-contained clarification after lost history while retaining existing relative-choice rules in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
-- [ ] T019 [US2] Extend server-owned environment clarification rendering to zero and multiple authoritative choices with stable IDs and deterministic ordering in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [ ] T019 [US2] Extend environment clarification rendering to preserve the bounded model message for zero choices and use deterministic server-owned wording for multiple authoritative choices with stable IDs and deterministic ordering in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: Ambiguous and no-match environment responses remain clarifications,
 and the only new end-to-end test proves the Teams adapter's authoritative rendering

@@ -124,6 +124,44 @@ public sealed record ConfirmRequestIntakeCommand
     public string CorrelationId { get; }
 }
 
+/// <summary>
+/// Application-owned environment choice created only after an option identifier is
+/// reloaded from authoritative context. Model-provided display values must never be
+/// used to construct this record.
+/// </summary>
+public sealed record RequestEnvironmentChoice
+{
+    public RequestEnvironmentChoice(
+        string environmentId,
+        string environmentDisplayName,
+        string clientId,
+        string clientDisplayName)
+    {
+        EnvironmentId = NormalizeRequired(environmentId, nameof(environmentId));
+        EnvironmentDisplayName = NormalizeRequired(
+            environmentDisplayName,
+            nameof(environmentDisplayName));
+        ClientId = NormalizeRequired(clientId, nameof(clientId));
+        ClientDisplayName = NormalizeRequired(
+            clientDisplayName,
+            nameof(clientDisplayName));
+    }
+
+    public string EnvironmentId { get; }
+
+    public string EnvironmentDisplayName { get; }
+
+    public string ClientId { get; }
+
+    public string ClientDisplayName { get; }
+
+    private static string NormalizeRequired(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        return value.Trim();
+    }
+}
+
 public enum RequestPreparationResultKind
 {
     ClarificationRequired,
@@ -141,12 +179,14 @@ public sealed class RequestPreparationResult
     private RequestPreparationResult(
         RequestPreparationResultKind kind,
         RequestClarificationProposal? clarification = null,
+        IReadOnlyList<RequestEnvironmentChoice>? environmentChoices = null,
         RequestIntakeSession? session = null,
         IReadOnlyList<FieldValidationError>? validationErrors = null,
         ApplicationFailure? failure = null)
     {
         Kind = kind;
         Clarification = clarification;
+        EnvironmentChoices = environmentChoices ?? [];
         Session = session;
         ValidationErrors = validationErrors ?? [];
         Failure = failure;
@@ -156,6 +196,8 @@ public sealed class RequestPreparationResult
 
     public RequestClarificationProposal? Clarification { get; }
 
+    public IReadOnlyList<RequestEnvironmentChoice> EnvironmentChoices { get; }
+
     public RequestIntakeSession? Session { get; }
 
     public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
@@ -163,12 +205,64 @@ public sealed class RequestPreparationResult
     public ApplicationFailure? Failure { get; }
 
     public static RequestPreparationResult ClarificationRequired(
-        RequestClarificationProposal clarification)
+        RequestClarificationProposal clarification) =>
+        ClarificationRequired(clarification, []);
+
+    public static RequestPreparationResult ClarificationRequired(
+        RequestClarificationProposal clarification,
+        IEnumerable<RequestEnvironmentChoice> environmentChoices)
     {
         ArgumentNullException.ThrowIfNull(clarification);
+        ArgumentNullException.ThrowIfNull(environmentChoices);
+
+        var choiceSnapshot = environmentChoices.ToArray();
+        if (choiceSnapshot.Length
+            > RequestClarificationProposal.MaximumEnvironmentOptionCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(environmentChoices),
+                choiceSnapshot.Length,
+                $"A clarification cannot contain more than {RequestClarificationProposal.MaximumEnvironmentOptionCount} environment choices.");
+        }
+
+        foreach (var choice in choiceSnapshot)
+        {
+            ArgumentNullException.ThrowIfNull(choice);
+        }
+
+        var choiceIds = choiceSnapshot
+            .Select(choice => choice.EnvironmentId)
+            .ToArray();
+        if (choiceIds.Distinct(StringComparer.Ordinal).Count() != choiceIds.Length)
+        {
+            throw new ArgumentException(
+                "Environment choices must have unique identifiers.",
+                nameof(environmentChoices));
+        }
+
+        if (clarification.Target != RequestClarificationTarget.EnvironmentId
+            && choiceSnapshot.Length > 0)
+        {
+            throw new ArgumentException(
+                "Only an environment clarification can contain environment choices.",
+                nameof(environmentChoices));
+        }
+
+        if (choiceIds.Length != clarification.EnvironmentOptionIds.Count
+            || choiceIds.Except(
+                    clarification.EnvironmentOptionIds,
+                    StringComparer.Ordinal)
+                .Any())
+        {
+            throw new ArgumentException(
+                "Validated environment choices must match the proposed option identifiers.",
+                nameof(environmentChoices));
+        }
+
         return new(
             RequestPreparationResultKind.ClarificationRequired,
-            clarification: clarification);
+            clarification: clarification,
+            environmentChoices: Array.AsReadOnly(choiceSnapshot));
     }
 
     public static RequestPreparationResult ReadyForConfirmation(

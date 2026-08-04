@@ -9,6 +9,8 @@ namespace GovernedAccess.Web.Persistence;
 internal sealed class EfRequestContextReader(GovernedAccessDbContext dbContext)
     : IRequestContextReader
 {
+    private const int MaximumEnvironmentCandidates = 20;
+
     public Task<ApplicationResult<Client>> GetClientAsync(
         string clientId,
         CancellationToken cancellationToken)
@@ -31,6 +33,75 @@ internal sealed class EfRequestContextReader(GovernedAccessDbContext dbContext)
             cancellationToken);
     }
 
+    public async Task<ApplicationResult<ProductionEnvironmentContext>>
+        GetProductionEnvironmentContextAsync(
+            string environmentId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var environment = await dbContext.ProductionEnvironments
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    candidate => candidate.Id == environmentId,
+                    cancellationToken);
+            if (environment is null)
+            {
+                return NotFound<ProductionEnvironmentContext>(
+                    "environment-not-found",
+                    "The production environment was not found.");
+            }
+
+            var contexts = await LoadProductionEnvironmentContextsAsync(
+                [environment],
+                cancellationToken);
+            return contexts.IsFailure
+                ? ApplicationResult.Failed<ProductionEnvironmentContext>(
+                    contexts.Failure!)
+                : ApplicationResult.Succeeded(contexts.Value[0]);
+        }
+        catch (DbException)
+        {
+            return Unavailable<ProductionEnvironmentContext>();
+        }
+    }
+
+    public async Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+        ListProductionEnvironmentContextsAsync(
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var environments = await dbContext.ProductionEnvironments
+                .AsNoTracking()
+                .Take(MaximumEnvironmentCandidates + 1)
+                .ToArrayAsync(cancellationToken);
+            if (environments.Length > MaximumEnvironmentCandidates)
+            {
+                return ApplicationResult.Failed<
+                    IReadOnlyList<ProductionEnvironmentContext>>(
+                    new ApplicationFailure(
+                        ApplicationFailureKind.DependencyUnavailable,
+                        "environment-candidate-limit-exceeded",
+                        "The production environment catalog exceeds the supported candidate limit."));
+            }
+
+            Array.Sort(
+                environments,
+                static (left, right) => StringComparer.Ordinal.Compare(
+                    left.Id,
+                    right.Id));
+
+            return await LoadProductionEnvironmentContextsAsync(
+                environments,
+                cancellationToken);
+        }
+        catch (DbException)
+        {
+            return Unavailable<IReadOnlyList<ProductionEnvironmentContext>>();
+        }
+    }
+
     public Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
         string environmentId,
         string roleId,
@@ -42,36 +113,6 @@ internal sealed class EfRequestContextReader(GovernedAccessDbContext dbContext)
             "environment-role-not-found",
             "The role is not assigned to the production environment.",
             cancellationToken);
-    }
-
-    public async Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>> GetEnvironmentRolesAsync(
-        string environmentId,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var environmentExists = await dbContext.ProductionEnvironments
-                .AsNoTracking()
-                .AnyAsync(environment => environment.Id == environmentId, cancellationToken);
-            if (!environmentExists)
-            {
-                return NotFound<IReadOnlyList<EnvironmentRole>>(
-                    "environment-not-found",
-                    "The production environment was not found.");
-            }
-
-            var roles = await dbContext.EnvironmentRoles
-                .AsNoTracking()
-                .Where(role => role.EnvironmentId == environmentId)
-                .OrderBy(role => role.RoleId)
-                .ToArrayAsync(cancellationToken);
-
-            return ApplicationResult.Succeeded<IReadOnlyList<EnvironmentRole>>(roles);
-        }
-        catch (DbException)
-        {
-            return Unavailable<IReadOnlyList<EnvironmentRole>>();
-        }
     }
 
     public Task<ApplicationResult<Incident>> GetIncidentAsync(
@@ -94,6 +135,60 @@ internal sealed class EfRequestContextReader(GovernedAccessDbContext dbContext)
             "principal-not-found",
             "The authenticated principal was not found.",
             cancellationToken);
+    }
+
+    private async Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+        LoadProductionEnvironmentContextsAsync(
+            ProductionEnvironment[] environments,
+            CancellationToken cancellationToken)
+    {
+        if (environments.Length == 0)
+        {
+            return ApplicationResult.Succeeded<
+                IReadOnlyList<ProductionEnvironmentContext>>(
+                Array.Empty<ProductionEnvironmentContext>());
+        }
+
+        var clientIds = environments
+            .Select(environment => environment.ClientId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var clients = await dbContext.Clients
+            .AsNoTracking()
+            .Where(client => clientIds.Contains(client.Id))
+            .ToArrayAsync(cancellationToken);
+        var clientsById = clients.ToDictionary(
+            client => client.Id,
+            StringComparer.Ordinal);
+
+        var environmentIds = environments
+            .Select(environment => environment.Id)
+            .ToArray();
+        var roles = await dbContext.EnvironmentRoles
+            .AsNoTracking()
+            .Where(role => environmentIds.Contains(role.EnvironmentId))
+            .ToArrayAsync(cancellationToken);
+        var rolesByEnvironment = roles.ToLookup(
+            role => role.EnvironmentId,
+            StringComparer.Ordinal);
+
+        var contexts = new ProductionEnvironmentContext[environments.Length];
+        for (var index = 0; index < environments.Length; index++)
+        {
+            var environment = environments[index];
+            if (!clientsById.TryGetValue(environment.ClientId, out var client))
+            {
+                return Unavailable<IReadOnlyList<ProductionEnvironmentContext>>();
+            }
+
+            contexts[index] = new ProductionEnvironmentContext(
+                environment,
+                client,
+                rolesByEnvironment[environment.Id]);
+        }
+
+        return ApplicationResult.Succeeded<
+            IReadOnlyList<ProductionEnvironmentContext>>(contexts);
     }
 
     private static async Task<ApplicationResult<T>> FindAsync<T>(

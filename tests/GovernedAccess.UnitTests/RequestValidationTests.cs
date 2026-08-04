@@ -487,6 +487,51 @@ public sealed class RequestValidationTests
                 cancellationToken);
         }
 
+        public Task<ApplicationResult<ProductionEnvironmentContext>>
+            GetProductionEnvironmentContextAsync(
+                string environmentId,
+                CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!environments.TryGetValue(environmentId, out var environment)
+                || !clients.TryGetValue(environment.ClientId, out var client))
+            {
+                return Task.FromResult(
+                    NotFound<ProductionEnvironmentContext>(
+                        "environment_not_found"));
+            }
+
+            var environmentRoles = roles.Values
+                .Where(role => string.Equals(
+                    role.EnvironmentId,
+                    environmentId,
+                    StringComparison.Ordinal));
+            return Task.FromResult(
+                ApplicationResult.Succeeded(
+                    new ProductionEnvironmentContext(
+                        environment,
+                        client,
+                        environmentRoles)));
+        }
+
+        public Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+            ListProductionEnvironmentContextsAsync(
+                CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<ProductionEnvironmentContext> contexts = environments.Values
+                .OrderBy(environment => environment.Id, StringComparer.Ordinal)
+                .Select(environment => new ProductionEnvironmentContext(
+                    environment,
+                    clients[environment.ClientId],
+                    roles.Values.Where(role => string.Equals(
+                        role.EnvironmentId,
+                        environment.Id,
+                        StringComparison.Ordinal))))
+                .ToArray();
+            return Task.FromResult(ApplicationResult.Succeeded(contexts));
+        }
+
         public Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
             string environmentId,
             string roleId,
@@ -498,17 +543,6 @@ public sealed class RequestValidationTests
                 (environmentId, roleId),
                 "role_not_found",
                 cancellationToken);
-        }
-
-        public Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>> GetEnvironmentRolesAsync(
-            string environmentId,
-            CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            IReadOnlyList<EnvironmentRole> environmentRoles = roles.Values
-                .Where(role => string.Equals(role.EnvironmentId, environmentId, StringComparison.Ordinal))
-                .ToArray();
-            return Task.FromResult(ApplicationResult.Succeeded(environmentRoles));
         }
 
         public Task<ApplicationResult<Incident>> GetIncidentAsync(

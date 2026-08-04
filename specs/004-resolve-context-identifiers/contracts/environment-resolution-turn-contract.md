@@ -68,9 +68,12 @@ execution. `get_available_roles` is not part of the catalog.
 8. The application rejects duplicate, excessive, or unknown option IDs, reloads every
    accepted option, orders accepted contexts by stable environment ID, and renders
    their authoritative client name, environment name, and unchanged ID. A non-empty
-   environment choice list is never rendered directly from model prose. The model
-   must not shortlist an option that conflicts with explicit readable scope terms,
-   and mandatory user confirmation or selection prevents automatic substitution.
+   environment choice list uses a deterministic application-owned question and is
+   never rendered directly from model prose. The bounded model message may still be
+   used when an environment clarification has no options and for non-environment
+   clarification targets. The model must not shortlist an option that conflicts with
+   explicit readable scope terms, and mandatory user confirmation or selection
+   prevents automatic substitution.
 9. Derive `clientId` from the selected environment candidate.
    Never ask the requester to supply or choose a client ID independently.
 10. Select or clarify `requestedRoleId` only from the `roles` included with the

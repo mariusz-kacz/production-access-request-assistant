@@ -112,7 +112,6 @@ public enum RequestPreparationProposalKind
 
 public enum RequestClarificationTarget
 {
-    ClientId,
     EnvironmentId,
     RequestedRoleId,
     Justification,
@@ -127,10 +126,19 @@ public enum RequestClarificationTarget
 public sealed record RequestClarificationProposal
 {
     public const int MaximumMessageLength = 500;
+    public const int MaximumEnvironmentOptionCount = 20;
 
     public RequestClarificationProposal(
         RequestClarificationTarget target,
         string message)
+        : this(target, message, [])
+    {
+    }
+
+    public RequestClarificationProposal(
+        RequestClarificationTarget target,
+        string message,
+        IEnumerable<string> environmentOptionIds)
     {
         if (!Enum.IsDefined(target))
         {
@@ -147,13 +155,49 @@ public sealed record RequestClarificationProposal
                 $"A clarification message cannot exceed {MaximumMessageLength} characters.");
         }
 
+        ArgumentNullException.ThrowIfNull(environmentOptionIds);
+        var optionIds = environmentOptionIds
+            .Select(NormalizeEnvironmentOptionId)
+            .ToArray();
+        if (optionIds.Length > MaximumEnvironmentOptionCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(environmentOptionIds),
+                optionIds.Length,
+                $"A clarification cannot contain more than {MaximumEnvironmentOptionCount} environment options.");
+        }
+
+        if (optionIds.Distinct(StringComparer.Ordinal).Count() != optionIds.Length)
+        {
+            throw new ArgumentException(
+                "Environment option identifiers must be unique.",
+                nameof(environmentOptionIds));
+        }
+
+        if (target != RequestClarificationTarget.EnvironmentId
+            && optionIds.Length > 0)
+        {
+            throw new ArgumentException(
+                "Only an environment clarification can contain environment options.",
+                nameof(environmentOptionIds));
+        }
+
         Target = target;
         Message = message;
+        EnvironmentOptionIds = Array.AsReadOnly(optionIds);
     }
 
     public RequestClarificationTarget Target { get; }
 
     public string Message { get; }
+
+    public IReadOnlyList<string> EnvironmentOptionIds { get; }
+
+    private static string NormalizeEnvironmentOptionId(string optionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(optionId);
+        return optionId.Trim();
+    }
 }
 
 /// <summary>

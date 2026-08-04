@@ -1137,6 +1137,27 @@ public sealed class RequestIntakeServiceTests
                     "business-approver"),
                 cancellationToken);
 
+        public Task<ApplicationResult<ProductionEnvironmentContext>>
+            GetProductionEnvironmentContextAsync(
+                string environmentId,
+                CancellationToken cancellationToken) =>
+            FromOptional(
+                environmentId == "PROD-ALPHA-EU"
+                    ? CreateEnvironmentContext()
+                    : null,
+                "environment_not_found",
+                cancellationToken);
+
+        public Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+            ListProductionEnvironmentContextsAsync(
+                CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyList<ProductionEnvironmentContext> contexts =
+                [CreateEnvironmentContext()];
+            return Task.FromResult(ApplicationResult.Succeeded(contexts));
+        }
+
         public Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
             string environmentId,
             string roleId,
@@ -1149,19 +1170,6 @@ public sealed class RequestIntakeServiceTests
                     : null,
                 "role_not_found",
                 cancellationToken);
-
-        public Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>>
-            GetEnvironmentRolesAsync(
-                string environmentId,
-                CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            IReadOnlyList<EnvironmentRole> roles = RoleIsAvailable
-                && environmentId == "PROD-ALPHA-EU"
-                    ? [new EnvironmentRole(environmentId, ProductionRoleIds.ReadOnly)]
-                    : [];
-            return Task.FromResult(ApplicationResult.Succeeded(roles));
-        }
 
         public Task<ApplicationResult<Incident>> GetIncidentAsync(
             string incidentId,
@@ -1188,6 +1196,24 @@ public sealed class RequestIntakeServiceTests
                     "Requester",
                     PrincipalKind.Requester),
                 cancellationToken);
+
+        private ProductionEnvironmentContext CreateEnvironmentContext()
+        {
+            var environment = new ProductionEnvironment(
+                "PROD-ALPHA-EU",
+                "client-alpha",
+                "Client Alpha Production EU",
+                "business-approver");
+            EnvironmentRole[] assignedRoles = RoleIsAvailable
+                ? [new EnvironmentRole(
+                    environment.Id,
+                    ProductionRoleIds.ReadOnly)]
+                : [];
+            return new ProductionEnvironmentContext(
+                environment,
+                new Client("client-alpha", "Client Alpha"),
+                assignedRoles);
+        }
 
         public void AddRequest(AccessRequest request) => Requests.Add(request);
 

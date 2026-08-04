@@ -29,11 +29,11 @@ public sealed class McpFailureTests
             StringComparer.Ordinal);
         var reader = new StubRequestContextReader
         {
-            GetProductionEnvironment = (environmentId, _) =>
+            GetProductionEnvironmentContext = (environmentId, _) =>
             {
                 var failure = failuresByEnvironmentId[environmentId];
                 return Task.FromResult(
-                    ApplicationResult.Failed<ProductionEnvironment>(
+                    ApplicationResult.Failed<ProductionEnvironmentContext>(
                         new ApplicationFailure(
                             failure.Kind,
                             failure.Code,
@@ -74,7 +74,7 @@ public sealed class McpFailureTests
             TaskCreationOptions.RunContinuationsAsynchronously);
         var reader = new StubRequestContextReader
         {
-            GetProductionEnvironment = async (_, cancellationToken) =>
+            GetProductionEnvironmentContext = async (_, cancellationToken) =>
             {
                 callStarted.TrySetResult();
 
@@ -149,9 +149,16 @@ public sealed class McpFailureTests
 
     private sealed class StubRequestContextReader : IRequestContextReader
     {
-        public Func<string, CancellationToken, Task<ApplicationResult<ProductionEnvironment>>>
-            GetProductionEnvironment { get; init; } = (_, _) =>
-                Task.FromResult(NotFound<ProductionEnvironment>());
+        public Func<string, CancellationToken, Task<
+            ApplicationResult<ProductionEnvironmentContext>>>
+            GetProductionEnvironmentContext { get; init; } = (_, _) =>
+                Task.FromResult(NotFound<ProductionEnvironmentContext>());
+
+        public Func<CancellationToken, Task<ApplicationResult<
+            IReadOnlyList<ProductionEnvironmentContext>>>>
+            ListProductionEnvironmentContexts { get; init; } = _ =>
+                Task.FromResult(
+                    NotFound<IReadOnlyList<ProductionEnvironmentContext>>());
 
         public Task<ApplicationResult<Client>> GetClientAsync(
             string clientId,
@@ -164,7 +171,24 @@ public sealed class McpFailureTests
             string environmentId,
             CancellationToken cancellationToken)
         {
-            return GetProductionEnvironment(environmentId, cancellationToken);
+            return Task.FromResult(NotFound<ProductionEnvironment>());
+        }
+
+        public Task<ApplicationResult<ProductionEnvironmentContext>>
+            GetProductionEnvironmentContextAsync(
+                string environmentId,
+                CancellationToken cancellationToken)
+        {
+            return GetProductionEnvironmentContext(
+                environmentId,
+                cancellationToken);
+        }
+
+        public Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+            ListProductionEnvironmentContextsAsync(
+                CancellationToken cancellationToken)
+        {
+            return ListProductionEnvironmentContexts(cancellationToken);
         }
 
         public Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
@@ -173,13 +197,6 @@ public sealed class McpFailureTests
             CancellationToken cancellationToken)
         {
             return Task.FromResult(NotFound<EnvironmentRole>());
-        }
-
-        public Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>> GetEnvironmentRolesAsync(
-            string environmentId,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(NotFound<IReadOnlyList<EnvironmentRole>>());
         }
 
         public Task<ApplicationResult<Incident>> GetIncidentAsync(

@@ -13,8 +13,8 @@ public sealed class RequestPreparationTests
     {
         var candidate = EmptyCandidate();
         var clarification = new RequestClarificationProposal(
-            RequestClarificationTarget.ClientId,
-            "Which client requires production access?");
+            RequestClarificationTarget.EnvironmentId,
+            "Which production environment requires access?");
 
         Assert.Throws<ArgumentException>(
             () => new RequestPreparationProposal(
@@ -78,6 +78,74 @@ public sealed class RequestPreparationTests
                 new string(
                     'x',
                     RequestClarificationProposal.MaximumMessageLength + 1)));
+    }
+
+    [Fact]
+    public void ClarificationTargetsExcludeTheDerivedClient()
+    {
+        Assert.Equal(
+            [
+                nameof(RequestClarificationTarget.EnvironmentId),
+                nameof(RequestClarificationTarget.RequestedRoleId),
+                nameof(RequestClarificationTarget.Justification),
+                nameof(RequestClarificationTarget.IncidentId),
+            ],
+            Enum.GetNames<RequestClarificationTarget>());
+    }
+
+    [Fact]
+    public void EnvironmentClarificationAcceptsZeroToTwentyUniqueOptionIds()
+    {
+        var maximumOptions = Enumerable.Range(1, 20)
+            .Select(index => $"PROD-{index:D2}")
+            .ToArray();
+
+        var noMatch = new RequestClarificationProposal(
+            RequestClarificationTarget.EnvironmentId,
+            "Provide different environment information.",
+            environmentOptionIds: []);
+        var boundedChoices = new RequestClarificationProposal(
+            RequestClarificationTarget.EnvironmentId,
+            "Choose a production environment.",
+            maximumOptions);
+
+        Assert.Empty(noMatch.EnvironmentOptionIds);
+        Assert.Equal(maximumOptions, boundedChoices.EnvironmentOptionIds);
+    }
+
+    [Fact]
+    public void ClarificationProposalRejectsInvalidEnvironmentOptionSets()
+    {
+        var excessiveOptions = Enumerable.Range(1, 21)
+            .Select(index => $"PROD-{index:D2}")
+            .ToArray();
+
+        Assert.Throws<ArgumentException>(
+            () => new RequestClarificationProposal(
+                RequestClarificationTarget.EnvironmentId,
+                "Choose a production environment.",
+                ["PROD-ALPHA-EU", "PROD-ALPHA-EU"]));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new RequestClarificationProposal(
+                RequestClarificationTarget.EnvironmentId,
+                "Choose a production environment.",
+                excessiveOptions));
+        Assert.Throws<ArgumentException>(
+            () => new RequestClarificationProposal(
+                RequestClarificationTarget.EnvironmentId,
+                "Choose a production environment.",
+                ["   "]));
+        Assert.Throws<ArgumentException>(
+            () => new RequestClarificationProposal(
+                RequestClarificationTarget.RequestedRoleId,
+                "Choose an assigned role.",
+                ["PROD-ALPHA-EU"]));
+
+        var roleClarification = new RequestClarificationProposal(
+            RequestClarificationTarget.RequestedRoleId,
+            "Choose an assigned role.",
+            environmentOptionIds: []);
+        Assert.Empty(roleClarification.EnvironmentOptionIds);
     }
 
     [Fact]

@@ -4,6 +4,61 @@ using GovernedAccess.Core.Domain;
 namespace GovernedAccess.Core.Ports;
 
 /// <summary>
+/// Provider-neutral authoritative context for one production environment.
+/// This read projection is not persisted and is not approval or provisioning evidence.
+/// </summary>
+public sealed record ProductionEnvironmentContext
+{
+    public ProductionEnvironmentContext(
+        ProductionEnvironment environment,
+        Client client,
+        IEnumerable<EnvironmentRole> assignedRoles)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(assignedRoles);
+
+        if (!string.Equals(client.Id, environment.ClientId, StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "The client must own the production environment.",
+                nameof(client));
+        }
+
+        var roleSnapshot = assignedRoles.ToArray();
+        foreach (var role in roleSnapshot)
+        {
+            ArgumentNullException.ThrowIfNull(role);
+            if (!string.Equals(
+                    role.EnvironmentId,
+                    environment.Id,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Every assigned role must belong to the production environment.",
+                    nameof(assignedRoles));
+            }
+        }
+
+        Array.Sort(
+            roleSnapshot,
+            static (left, right) => StringComparer.Ordinal.Compare(
+                left.RoleId,
+                right.RoleId));
+
+        Environment = environment;
+        Client = client;
+        AssignedRoles = Array.AsReadOnly(roleSnapshot);
+    }
+
+    public ProductionEnvironment Environment { get; }
+
+    public Client Client { get; }
+
+    public IReadOnlyList<EnvironmentRole> AssignedRoles { get; }
+}
+
+/// <summary>
 /// Reads the current context needed to prepare and validate a request.
 /// Implementations must not substitute caller-supplied assertions for stored state.
 /// </summary>
@@ -17,13 +72,16 @@ public interface IRequestContextReader
         string environmentId,
         CancellationToken cancellationToken);
 
+    Task<ApplicationResult<ProductionEnvironmentContext>> GetProductionEnvironmentContextAsync(
+        string environmentId,
+        CancellationToken cancellationToken);
+
+    Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
+        ListProductionEnvironmentContextsAsync(CancellationToken cancellationToken);
+
     Task<ApplicationResult<EnvironmentRole>> GetEnvironmentRoleAsync(
         string environmentId,
         string roleId,
-        CancellationToken cancellationToken);
-
-    Task<ApplicationResult<IReadOnlyList<EnvironmentRole>>> GetEnvironmentRolesAsync(
-        string environmentId,
         CancellationToken cancellationToken);
 
     Task<ApplicationResult<Incident>> GetIncidentAsync(
