@@ -35,6 +35,7 @@ public sealed class RequestIntakeService
 
     private readonly IRequestPreparationInterpreter interpreter;
     private readonly RequestValidator requestValidator;
+    private readonly IRequestContextReader requestContext;
     private readonly IRequestIntakeStore intakeStore;
     private readonly RequestSubmissionService submissionService;
     private readonly IClock clock;
@@ -42,18 +43,21 @@ public sealed class RequestIntakeService
     public RequestIntakeService(
         IRequestPreparationInterpreter interpreter,
         RequestValidator requestValidator,
+        IRequestContextReader requestContext,
         IRequestIntakeStore intakeStore,
         RequestSubmissionService submissionService,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(interpreter);
         ArgumentNullException.ThrowIfNull(requestValidator);
+        ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(intakeStore);
         ArgumentNullException.ThrowIfNull(submissionService);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.interpreter = interpreter;
         this.requestValidator = requestValidator;
+        this.requestContext = requestContext;
         this.intakeStore = intakeStore;
         this.submissionService = submissionService;
         this.clock = clock;
@@ -447,6 +451,58 @@ public sealed class RequestIntakeService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var environmentChoices = new List<RequestEnvironmentChoice>(
+            clarification.EnvironmentOptionIds.Count);
+        foreach (var environmentOptionId in clarification.EnvironmentOptionIds)
+        {
+            var contextResult =
+                await requestContext.GetProductionEnvironmentContextAsync(
+                    environmentOptionId,
+                    cancellationToken);
+            if (contextResult.IsFailure)
+            {
+                if (contextResult.Failure!.Kind
+                    != ApplicationFailureKind.NotFound)
+                {
+                    return RequestPreparationResult.Failed(
+                        contextResult.Failure);
+                }
+
+                return await PersistRejectedCandidateAsync(
+                    session,
+                    candidate,
+                    [InvalidEnvironmentOptionError()],
+                    correlationId,
+                    cancellationToken);
+            }
+
+            var context = contextResult.Value;
+            if (!string.Equals(
+                    context.Environment.Id,
+                    environmentOptionId,
+                    StringComparison.Ordinal))
+            {
+                return await PersistRejectedCandidateAsync(
+                    session,
+                    candidate,
+                    [InvalidEnvironmentOptionError()],
+                    correlationId,
+                    cancellationToken);
+            }
+
+            environmentChoices.Add(
+                new RequestEnvironmentChoice(
+                    context.Environment.Id,
+                    context.Environment.DisplayName,
+                    context.Client.Id,
+                    context.Client.DisplayName));
+        }
+
+        environmentChoices.Sort(
+            static (left, right) => StringComparer.Ordinal.Compare(
+                left.EnvironmentId,
+                right.EnvironmentId));
+
         session.UpdateCandidate(
             candidate.ClientId,
             candidate.EnvironmentId,
@@ -459,8 +515,16 @@ public sealed class RequestIntakeService
         var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
         return saveResult.IsFailure
             ? RequestPreparationResult.Failed(saveResult.Failure!)
-            : RequestPreparationResult.ClarificationRequired(clarification);
+            : RequestPreparationResult.ClarificationRequired(
+                clarification,
+                environmentChoices);
     }
+
+    private static FieldValidationError InvalidEnvironmentOptionError() =>
+        new(
+            "environmentOptionIds",
+            "environment_option_not_found",
+            "A proposed production environment option does not exist.");
 
     private async Task<RequestPreparationResult> PersistRejectedCandidateAsync(
         RequestIntakeSession session,

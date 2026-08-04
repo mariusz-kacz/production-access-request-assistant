@@ -171,6 +171,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         return new RequestIntakeService(
             new UnusedInterpreter(),
             validator,
+            requestContext,
             new EfRequestIntakeStore(context),
             new RequestSubmissionService(
                 validator,

@@ -157,7 +157,9 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestPreparationResultKind.ClarificationRequired:
                 await SendTextAsync(
                     turnContext,
-                    outcome.Clarification!.Message,
+                    RenderClarification(
+                        outcome.Clarification!,
+                        outcome.EnvironmentChoices),
                     InputHints.ExpectingInput,
                     cancellationToken);
                 return;
@@ -427,6 +429,37 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         message.AppendLine();
         message.Append(
             "Correct the listed details in your next message. Nothing has been submitted.");
+
+        return message.ToString();
+    }
+
+    private static string RenderClarification(
+        RequestClarificationProposal clarification,
+        IReadOnlyList<RequestEnvironmentChoice> environmentChoices)
+    {
+        if (environmentChoices.Count == 0)
+        {
+            return clarification.Message;
+        }
+
+        var message = new StringBuilder(clarification.Message);
+        message.AppendLine();
+        message.AppendLine();
+        message.Append(environmentChoices.Count == 1
+            ? "Authoritative environment choice:"
+            : "Authoritative environment choices:");
+
+        foreach (var choice in environmentChoices)
+        {
+            message.AppendLine();
+            message.Append("- ");
+            message.Append(choice.ClientDisplayName);
+            message.Append(" — ");
+            message.Append(choice.EnvironmentDisplayName);
+            message.Append(" (");
+            message.Append(choice.EnvironmentId);
+            message.Append(')');
+        }
 
         return message.ToString();
     }

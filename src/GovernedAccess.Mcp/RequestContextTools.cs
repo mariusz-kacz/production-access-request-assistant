@@ -34,23 +34,31 @@ public sealed partial class RequestContextTools(
         OpenWorld = false,
         UseStructuredContent = true,
         OutputSchemaType = typeof(ProductionEnvironmentToolResult))]
-    [Description("Gets current stored configuration for one production environment.")]
+    [Description("Discovers the bounded production-environment catalog or gets one environment by stable identifier, including authoritative client and assigned role context.")]
     public Task<CallToolResult> GetProductionEnvironmentAsync(
-        [Description("Stable production environment identifier.")]
+        [Description("Optional stable production-environment identifier. Omit for bounded discovery.")]
         [MinLength(1)]
-        string environmentId,
-        CancellationToken cancellationToken)
+        string environmentId = null!,
+        CancellationToken cancellationToken = default)
     {
-        return ExecuteAsync(
-            "get_production_environment",
-            environmentId,
-            requestContext.GetProductionEnvironmentAsync,
-            static environment => new ProductionEnvironmentToolResult(
-                environment.Id,
-                environment.ClientId,
-                environment.DisplayName,
-                environment.BusinessApproverPrincipalId),
-            cancellationToken);
+        if (environmentId is not null && string.IsNullOrWhiteSpace(environmentId))
+        {
+            return Task.FromResult(InvalidIdentifier("get_production_environment"));
+        }
+
+        return environmentId is null
+            ? ExecuteAsync(
+                "get_production_environment",
+                requestContext.ListProductionEnvironmentContextsAsync,
+                CreateProductionEnvironmentResult,
+                cancellationToken)
+            : ExecuteAsync(
+                "get_production_environment",
+                token => requestContext.GetProductionEnvironmentContextAsync(
+                    environmentId.Trim(),
+                    token),
+                static environment => CreateProductionEnvironmentResult([environment]),
+                cancellationToken);
     }
 
     [McpServerTool(
@@ -68,10 +76,14 @@ public sealed partial class RequestContextTools(
         string incidentId,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(incidentId))
+        {
+            return Task.FromResult(InvalidIdentifier("get_incident"));
+        }
+
         return ExecuteAsync(
             "get_incident",
-            incidentId,
-            requestContext.GetIncidentAsync,
+            token => requestContext.GetIncidentAsync(incidentId.Trim(), token),
             static incident => new IncidentToolResult(
                 incident.Id,
                 incident.Title,
@@ -81,40 +93,9 @@ public sealed partial class RequestContextTools(
             cancellationToken);
     }
 
-    [McpServerTool(
-        Name = "get_available_roles",
-        ReadOnly = true,
-        Destructive = false,
-        Idempotent = true,
-        OpenWorld = false,
-        UseStructuredContent = true,
-        OutputSchemaType = typeof(AvailableRolesToolResult))]
-    [Description("Gets the roles currently assigned to one production environment.")]
-    public Task<CallToolResult> GetAvailableRolesAsync(
-        [Description("Stable production environment identifier.")]
-        [MinLength(1)]
-        string environmentId,
-        CancellationToken cancellationToken)
-    {
-        return ExecuteAsync(
-            "get_available_roles",
-            environmentId,
-            requestContext.GetEnvironmentRolesAsync,
-            roles => new AvailableRolesToolResult(
-                environmentId.Trim(),
-                roles
-                    .OrderBy(role => role.RoleId, StringComparer.Ordinal)
-                    .Select(role => new AvailableRoleToolResult(
-                        role.RoleId,
-                        GetRoleDisplayName(role.RoleId)))
-                    .ToArray()),
-            cancellationToken);
-    }
-
     private async Task<CallToolResult> ExecuteAsync<TSource, TResult>(
         string toolName,
-        string identifier,
-        Func<string, CancellationToken, Task<ApplicationResult<TSource>>> read,
+        Func<CancellationToken, Task<ApplicationResult<TSource>>> read,
         Func<TSource, TResult> createResult,
         CancellationToken cancellationToken)
         where TSource : notnull
@@ -122,22 +103,9 @@ public sealed partial class RequestContextTools(
     {
         var startedAt = Stopwatch.GetTimestamp();
 
-        if (string.IsNullOrWhiteSpace(identifier))
-        {
-            return Complete(
-                toolName,
-                startedAt,
-                new McpFailureEnvelope(
-                    "InvalidInput",
-                    "request-context-identifier-required",
-                    "A non-empty stable identifier is required.",
-                    GetCorrelationId()),
-                isError: true);
-        }
-
         try
         {
-            var result = await read(identifier.Trim(), cancellationToken);
+            var result = await read(cancellationToken);
             if (result.IsFailure)
             {
                 return Complete(
@@ -158,6 +126,42 @@ public sealed partial class RequestContextTools(
             LogCompletion(toolName, startedAt, "Cancelled");
             throw;
         }
+    }
+
+    private CallToolResult InvalidIdentifier(string toolName)
+    {
+        return Complete(
+            toolName,
+            Stopwatch.GetTimestamp(),
+            new McpFailureEnvelope(
+                "InvalidInput",
+                "request-context-identifier-required",
+                "A non-empty stable identifier is required.",
+                GetCorrelationId()),
+            isError: true);
+    }
+
+    private static ProductionEnvironmentToolResult CreateProductionEnvironmentResult(
+        IEnumerable<ProductionEnvironmentContext> contexts)
+    {
+        return new ProductionEnvironmentToolResult(
+            contexts
+                .OrderBy(
+                    context => context.Environment.Id,
+                    StringComparer.Ordinal)
+                .Select(context => new ProductionEnvironmentToolEnvironment(
+                    context.Environment.Id,
+                    context.Client.Id,
+                    context.Client.DisplayName,
+                    context.Environment.DisplayName,
+                    context.Environment.BusinessApproverPrincipalId,
+                    context.AssignedRoles
+                        .OrderBy(role => role.RoleId, StringComparer.Ordinal)
+                        .Select(role => new ProductionEnvironmentToolRole(
+                            role.RoleId,
+                            GetRoleDisplayName(role.RoleId)))
+                        .ToArray()))
+                .ToArray());
     }
 
     private CallToolResult Complete<T>(
@@ -256,10 +260,17 @@ public sealed partial class RequestContextTools(
 }
 
 public sealed record ProductionEnvironmentToolResult(
+    IReadOnlyList<ProductionEnvironmentToolEnvironment> Environments);
+
+public sealed record ProductionEnvironmentToolEnvironment(
     string EnvironmentId,
     string ClientId,
+    string ClientDisplayName,
     string DisplayName,
-    string BusinessApproverResponsibilityId);
+    string BusinessApproverResponsibilityId,
+    IReadOnlyList<ProductionEnvironmentToolRole> Roles);
+
+public sealed record ProductionEnvironmentToolRole(string RoleId, string DisplayName);
 
 public sealed record IncidentToolResult(
     string IncidentId,
@@ -267,12 +278,6 @@ public sealed record IncidentToolResult(
     string Status,
     string ClientId,
     string? EnvironmentId);
-
-public sealed record AvailableRolesToolResult(
-    string EnvironmentId,
-    IReadOnlyList<AvailableRoleToolResult> Roles);
-
-public sealed record AvailableRoleToolResult(string RoleId, string DisplayName);
 
 public sealed record McpFailureEnvelope(
     string Outcome,

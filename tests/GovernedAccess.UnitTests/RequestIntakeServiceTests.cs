@@ -954,6 +954,7 @@ public sealed class RequestIntakeServiceTests
                 this,
                 validator,
                 this,
+                this,
                 submissionService,
                 this);
         }

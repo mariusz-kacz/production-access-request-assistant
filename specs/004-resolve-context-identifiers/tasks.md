@@ -108,12 +108,12 @@ discovery and explicit confirmation of any proposed alternative.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Replace the exact-only environment result and separate role tool with the dual-mode `get_production_environment` contract, common environment array, authoritative client display data, embedded ordered roles, and typed failures in `src/GovernedAccess.Mcp/RequestContextTools.cs`
-- [ ] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
-- [ ] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
-- [ ] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
-- [ ] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
-- [ ] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [X] T011 [P] [US1] Replace the exact-only environment result and separate role tool with the dual-mode `get_production_environment` contract, common environment array, authoritative client display data, embedded ordered roles, and typed failures in `src/GovernedAccess.Mcp/RequestContextTools.cs`
+- [X] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
+- [X] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
+- [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
+- [X] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: The application exposes the bounded authoritative environment context,
 accepts only validated choice IDs, and can present the model's question with a safe

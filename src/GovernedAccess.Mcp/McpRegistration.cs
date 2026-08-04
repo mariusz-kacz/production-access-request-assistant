@@ -23,7 +23,6 @@ public static class McpRegistration
             [
                 CreateTool(nameof(RequestContextTools.GetProductionEnvironmentAsync)),
                 CreateTool(nameof(RequestContextTools.GetIncidentAsync)),
-                CreateTool(nameof(RequestContextTools.GetAvailableRolesAsync)),
             ]);
 
         return services;
