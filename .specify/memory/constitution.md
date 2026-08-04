@@ -1,27 +1,37 @@
 <!--
 Sync Impact Report
-- Version change: unratified template → 1.0.0
+- Version change: 1.0.0 -> 2.0.0
+- Amendment rationale:
+  - The fixed model-visible MCP catalog changes incompatibly from three tools to two.
+  - Environment context now carries the roles assigned to each environment, removing
+    the separate `get_available_roles` capability without weakening deterministic
+    environment-role validation.
 - Modified principles:
-  - Placeholder Principle 1 → Human Approval, Deterministic Authorization
-  - Placeholder Principle 2 → Untrusted AI, Bounded MCP
-  - Placeholder Principle 3 → Authenticated, Immutable, Client-Isolated Scope
-  - Placeholder Principle 4 → Evidence-Validated, Idempotent Provisioning
-  - Placeholder Principle 5 → Proportionate Modular Architecture
-- Added sections:
-  - Product and Technical Constraints
-  - Specification and Delivery Workflow
-- Removed sections: None; template placeholders were concretized.
-- Templates requiring updates:
-  - ✅ .specify/templates/plan-template.md
-  - ✅ .specify/templates/spec-template.md
-  - ✅ .specify/templates/tasks-template.md
-  - ✅ .agents/skills/speckit-*/SKILL.md (reviewed; no obsolete agent-specific guidance)
-  - ✅ AGENTS.md
-  - ✅ README.md and runtime guidance in docs/ (reviewed; no other changes required)
+  - II. Untrusted AI, Bounded MCP (three-tool allowlist -> two-tool allowlist;
+    environment discovery and exact-only incident boundaries made explicit)
+- Added sections: None.
+- Removed sections: None.
+- Templates and dependent artifacts:
+  - [updated] .specify/templates/plan-template.md
+  - [reviewed] .specify/templates/spec-template.md (already refers generically to the
+    constitution-defined fixed allowlist)
+  - [reviewed] .specify/templates/tasks-template.md (contract and negative-test rules
+    remain valid)
+  - [reviewed] .agents/skills/speckit-*/SKILL.md (no hard-coded MCP catalog)
+  - [updated] AGENTS.md
+  - [updated] docs/governed-production-access-product-baseline.md
+  - [updated] docs/roadmap.md
+  - [updated] specs/004-resolve-context-identifiers/spec.md
+  - [pending implementation] source, tests, MCP contract, historical feature
+    artifacts, and as-built runtime guidance still describe the currently implemented
+    three-tool surface until feature 004 is delivered
 - Repository tracking:
-  - ⚠ .specify/ is ignored by .gitignore; use `git add -f` or revise the ignore
-    policy if the constitution and synchronized templates must be committed.
-- Follow-up TODOs: Decide whether Spec Kit governance artifacts are repository-tracked.
+  - [warning] .specify/ is ignored by .gitignore; use `git add -f` or revise the
+    ignore policy if governance artifacts must be committed.
+- Follow-up TODOs:
+  - Implement feature 004, then synchronize the as-built architecture, README,
+    security guidance, quickstarts, MCP contract, and affected tests with the
+    two-tool runtime.
 -->
 # Governed Production Access Request Assistant Constitution
 
@@ -43,11 +53,17 @@ All model output MUST be schema-validated, and every model-proposed identifier a
 business value MUST be checked against authoritative data before use. Domain logic
 MUST NOT depend on AI-provider or MCP SDK contracts; infrastructure adapters MUST
 translate those contracts at the boundary. The model MUST receive an explicit
-allowlist containing exactly `get_production_environment`, `get_incident`, and
-`get_available_roles`. MCP MUST remain read-only and MUST NOT expose approval,
+allowlist containing exactly `get_production_environment` and `get_incident`.
+`get_production_environment` MUST provide bounded production-environment discovery,
+exact environment lookup, authoritative client relationships, and the roles assigned
+to each returned environment. `get_incident` MUST remain an exact-identifier lookup;
+incident listing, search, and inference are outside the model-visible surface. MCP
+MUST remain read-only and MUST NOT expose a separate role tool, approval,
 provisioning, revocation, workflow-transition, arbitrary-database, or generic-query
-tools. LLM and MCP calls MUST support cancellation, explicit timeouts, and typed
-failures. These controls bound unreliable or compromised AI behavior.
+tools. The application MUST independently validate every proposed environment-role
+pair. LLM and MCP calls MUST support cancellation, explicit timeouts, and typed
+failures. These controls bound unreliable or compromised AI behavior while keeping
+the tool surface proportionate.
 
 ### III. Authenticated, Immutable, Client-Isolated Scope
 
@@ -90,7 +106,7 @@ understandable and proportionate to its single-host scope.
 
 - `docs/governed-production-access-product-baseline.md` defines the active product
   behavior, synthetic reference data, supported workflow, and explicit non-goals.
-- The application MUST expose one real read-only MCP endpoint with exactly the three
+- The application MUST expose one real read-only MCP endpoint with exactly the two
   tools listed in Principle II. Inputs and outputs MUST use explicit typed schemas,
   and authoritative results MUST use stable identifiers.
 - Nullable reference types MUST be enabled, warnings MUST be treated as errors, and
@@ -141,4 +157,4 @@ Code review and completion checks MUST verify the applicable principles, require
 negative tests, and synchronization of templates and runtime guidance. Complexity
 that violates a principle MUST be rejected unless an approved amendment precedes it.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-07-27
+**Version**: 2.0.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-08-04

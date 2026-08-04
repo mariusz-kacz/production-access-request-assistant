@@ -62,13 +62,19 @@ The application exposes one real read-only MCP endpoint with exactly these tools
 
 - `get_production_environment`
 - `get_incident`
-- `get_available_roles`
+
+`get_production_environment` provides bounded environment discovery, exact
+environment lookup, authoritative client relationships, and the roles assigned to
+each returned environment. `get_incident` remains an exact-identifier lookup.
 
 Additional MCP tools are outside the current baseline.
 
 - MCP inputs and outputs use explicit typed schemas.
 - Authoritative results use stable identifiers.
 - The model receives tools through an explicit allowlist.
+- The MCP server must not expose a separate role-listing tool; allowed roles are
+  returned as part of authoritative environment context and are independently
+  validated by deterministic application services.
 - The MCP server must not expose approval, provisioning, revocation, workflow
   transition, arbitrary database, or generic query tools.
 - MCP tool visibility and annotations never replace authorization.

@@ -25,7 +25,7 @@ A requester enters in a personal Microsoft Teams conversation:
 The system:
 
 1. asks the model to produce a typed but untrusted request candidate,
-2. permits the model to call three approved read-only MCP tools for environment, role, and incident data,
+2. permits the model to call two approved read-only MCP tools for environment and incident data, with allowed roles included in authoritative environment context,
 3. schema-validates the model output,
 4. deterministically validates every identifier and business rule,
 5. presents an immutable final request for explicit requester confirmation,
@@ -78,11 +78,10 @@ Deterministic services enforce:
 
 ### 3.4 MCP Is Read-Only and Focused
 
-The model is registered only with the three approved read-only MCP tools defined in this baseline:
+The model is registered only with the two approved read-only MCP tools defined in this baseline:
 
 * `get_production_environment`
 * `get_incident`
-* `get_available_roles`
 
 The MCP endpoint exposes stored production data for request preparation. It does not expose workflow commands or state-changing capabilities.
 
@@ -97,7 +96,7 @@ The MCP endpoint must not expose capabilities that:
 * execute generic queries,
 * bypass deterministic request validation.
 
-The model receives the three tools through an explicit allowlist. Additional MCP tools are outside the MVP unless introduced by a later approved change.
+The model receives the two tools through an explicit allowlist. Additional MCP tools are outside the MVP unless introduced by a later approved change. A separate role-listing tool is unnecessary because authoritative environment results include the roles assigned to each returned environment.
 
 Because the MVP uses a co-hosted MCP endpoint and synthetic read-only data, local MCP authentication must remain proportionate to the portfolio scenario. The design must document how the endpoint is reached and isolated, but it must not introduce artificial service-to-service identity infrastructure solely to simulate a distributed production deployment.
 
@@ -175,7 +174,6 @@ Microsoft Teams personal chat      Browser
 | /mcp - real read-only MCP endpoint               |
 |   - get_production_environment                   |
 |   - get_incident                                 |
-|   - get_available_roles                          |
 |                                                  |
 | Request validation, workflow, and approvals      |
 | Protected internal provisioning handler          |
@@ -237,10 +235,10 @@ The precise project structure is a design decision, but the domain and applicati
 ```text
 Model through MCP                  Authenticated application
 -------------------------------    ---------------------------------
-Read environment context           Record business decisions
-Read available roles               Record DevOps decisions
-Read incident context              Enforce workflow and version rules
-Prepare a typed draft              Invoke internal provisioning handler
+Read environment and role context  Record business decisions
+Read incident context              Record DevOps decisions
+Prepare a typed draft              Enforce workflow and version rules
+                                   Invoke internal provisioning handler
 
 Cannot approve                     Derives identity from server context
 Cannot change workflow state       Reloads persisted workflow evidence
@@ -257,16 +255,26 @@ The model must not receive:
 
 ## 5. MCP Surface
 
-The Governed Access Host exposes exactly three read-only MCP tools for the MVP.
+The Governed Access Host exposes exactly two read-only MCP tools for the MVP.
 
 ### 5.1 `get_production_environment`
 
-Returns typed environment data using a stable environment identifier. The result includes:
+Supports bounded discovery from readable production-environment context and exact
+lookup using a stable environment identifier. Discovery returns authoritative
+environment candidates; exact lookup returns the matching authoritative environment.
+Each returned environment includes:
 
 - environment ID,
 - client ID,
 - display name,
-- business approver group identifier.
+- business approver group identifier,
+- the role identifiers and display names currently assigned to the environment.
+
+Readable environment descriptions, display names, and model-selected candidates are
+interpretation aids rather than authority. The model may propose an environment only
+when one candidate satisfies the supplied context; ambiguous candidates require a
+focused clarification. Deterministic application services independently validate the
+selected environment, its client relationship, and its requested role.
 
 ### 5.2 `get_incident`
 
@@ -277,19 +285,14 @@ Returns typed incident data using a stable incident identifier. The result inclu
 - client or environment relationship when applicable,
 - summary suitable for request validation.
 
-### 5.3 `get_available_roles`
-
-Returns the typed role identifiers currently allowed for a stable environment identifier.
-
-The tool returns the roles assigned to the environment. It does not define or compare a generalized privilege hierarchy.
-
-### 5.4 MCP Constraints
+### 5.3 MCP Constraints
 
 - Tool inputs and outputs use explicit schemas.
 - Tool results use stable identifiers, not display names as authority.
 - Unsupported or missing records return typed failures.
 - Calls use cancellation and explicit timeouts.
 - The model receives only these tools through an explicit allowlist.
+- The MCP endpoint exposes no separate role-listing tool.
 - No additional MCP tools are part of the MVP.
 
 ## 6. Small Domain Model
@@ -446,7 +449,9 @@ The model produces a typed draft such as:
 }
 ```
 
-The model may call the three read-only MCP tools to obtain request context. Each turn
+The model may call the two read-only MCP tools to obtain request context. The
+environment tool supplies bounded authoritative candidates and their assigned roles,
+while the incident tool accepts only a precise stable incident identifier. Each turn
 produces either:
 
 - a schema-valid complete-shape candidate,
@@ -571,7 +576,10 @@ used by confirmation or downstream workflow actions.
 
 ### FR-02 Restricted MCP Context
 
-The model shall receive only the three approved read-only MCP tools. Each tool shall return typed stored data with stable identifiers.
+The model shall receive only the two approved read-only MCP tools. Each tool shall
+return typed stored data with stable identifiers. Environment results shall include
+the roles assigned to each returned environment; incident lookup shall require a
+precise stable incident identifier.
 
 ### FR-03 Trusted Server Validation
 
@@ -713,7 +721,7 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 
 1. The requester asks in a personal Teams conversation for four hours of
    `ProductionReadOnly` access to Client Alpha for `INC-1042`.
-2. The model uses the three read-only MCP tools as needed and produces a typed draft.
+2. The model uses the two read-only MCP tools as needed and produces a typed draft.
 3. Deterministic validation succeeds.
 4. The requester confirms the immutable final request in Teams.
 5. The request appears in the web request register.
@@ -762,7 +770,7 @@ The MVP includes:
 - authenticated synthetic user context with four principals,
 - one typed LLM extraction flow,
 - one real read-only MCP endpoint,
-- exactly three MCP context tools,
+- exactly two MCP context tools,
 - two clients and two environments,
 - two access roles without role hierarchy,
 - two explicit authenticated approval stages,
@@ -839,7 +847,7 @@ The project is successful when it proves that:
 
 - natural-language input becomes a schema-valid but untrusted typed draft,
 - the model obtains request context through one real MCP server,
-- the model can access only the three approved read-only tools,
+- the model can access only the two approved read-only tools,
 - every model-proposed identifier is deterministically validated,
 - only authenticated Teams confirmation can create an access request,
 - browser draft and request-creation endpoints, routes, forms, and capabilities are absent,

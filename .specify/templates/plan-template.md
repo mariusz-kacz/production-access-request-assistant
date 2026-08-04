@@ -43,8 +43,9 @@
 - **Human authority**: Identify every state-changing action, its authenticated human
   actor, and the deterministic authorization rule. AI output is not approval evidence.
 - **AI and MCP boundary**: Schema-validate model output, revalidate proposed
-  identifiers against authoritative data, preserve the three-tool read-only allowlist,
-  and keep provider/MCP contracts outside domain logic.
+  identifiers against authoritative data, preserve the two-tool read-only allowlist,
+  keep allowed roles within authoritative environment context, and keep provider/MCP
+  contracts outside domain logic.
 - **Scope integrity**: Bind decisions to an immutable request ID and exact client,
   environment, role, and duration policy. Corrections create a new request.
 - **Provisioning evidence**: Keep provisioning model-inaccessible, reload persisted
