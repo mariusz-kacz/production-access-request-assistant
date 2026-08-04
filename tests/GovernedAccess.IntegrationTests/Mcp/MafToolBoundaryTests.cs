@@ -23,7 +23,6 @@ public sealed class MafToolBoundaryTests
 {
     private static readonly string[] AllowedToolNames =
     [
-        "get_available_roles",
         "get_incident",
         "get_production_environment",
     ];
@@ -358,7 +357,6 @@ public sealed class MafToolBoundaryTests
             var tools = new List<McpServerTool>
             {
                 CreateTool(nameof(BoundaryTools.GetProductionEnvironmentAsync)),
-                CreateTool(nameof(BoundaryTools.GetAvailableRoles)),
             };
 
             if (catalog != TestCatalog.Missing)
@@ -422,10 +420,10 @@ public sealed class MafToolBoundaryTests
             Destructive = false,
             Idempotent = true,
             OpenWorld = false)]
-        [Description("Gets one test production environment.")]
+        [Description("Discovers test production environments or gets one by stable identifier.")]
         public async Task<object> GetProductionEnvironmentAsync(
-            string environmentId,
-            CancellationToken cancellationToken)
+            string? environmentId = null,
+            CancellationToken cancellationToken = default)
         {
             CallStarted.TrySetResult();
 
@@ -452,8 +450,26 @@ public sealed class MafToolBoundaryTests
 
             return new
             {
-                environmentId,
-                clientId = "client-alpha",
+                environments = new[]
+                {
+                    new
+                    {
+                        environmentId = environmentId ?? "PROD-ALPHA-EU",
+                        clientId = "client-alpha",
+                        clientDisplayName = "Client Alpha",
+                        displayName = "Client Alpha Production EU",
+                        businessApproverResponsibilityId =
+                            "client-alpha-business-approver",
+                        roles = new[]
+                        {
+                            new
+                            {
+                                roleId = ProductionRoleIds.ReadOnly,
+                                displayName = "Production read-only",
+                            },
+                        },
+                    },
+                },
             };
         }
 
@@ -479,22 +495,6 @@ public sealed class MafToolBoundaryTests
         {
             _ = behavior;
             return new { incidentId };
-        }
-
-        [McpServerTool(
-            Name = "get_available_roles",
-            ReadOnly = true,
-            Destructive = false,
-            Idempotent = true,
-            OpenWorld = false)]
-        public object GetAvailableRoles(string environmentId)
-        {
-            _ = behavior;
-            return new
-            {
-                environmentId,
-                roles = Array.Empty<object>(),
-            };
         }
 
         [McpServerTool(

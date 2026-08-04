@@ -103,8 +103,8 @@ discovery and explicit confirmation of any proposed alternative.
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Rewrite the existing MCP contract and MAF catalog assertions for exactly two read-only tools, `{}` discovery, exact environment lookup, a common `environments` envelope, authoritative client display data, embedded ordered roles, and the unchanged exact incident contract; modify existing tests rather than adding parallel contract cases in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs` and `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs`
-- [ ] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`
+- [X] T009 [P] [US1] Rewrite the existing MCP contract and MAF catalog assertions for exactly two read-only tools, `{}` discovery, exact environment lookup, a common `environments` envelope, authoritative client display data, embedded ordered roles, and the unchanged exact incident contract; modify existing tests rather than adding parallel contract cases in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs` and `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs`
+- [X] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`
 
 ### Implementation for User Story 1
 
@@ -112,12 +112,13 @@ discovery and explicit confirmation of any proposed alternative.
 - [ ] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
 - [ ] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 - [ ] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
-- [ ] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject unknown IDs, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
-- [ ] T016 [US1] Render a deterministic server-owned environment clarification from authoritative choice records, including the one-option "did you mean" form, without displaying model prose for a non-empty choice list or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [ ] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
+- [ ] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: The application exposes the bounded authoritative environment context,
-accepts only validated choice IDs, and can render a safe one-option correction. Real
-model interpretation quality is evaluated separately from deterministic automation.
+accepts only validated choice IDs, and can present the model's question with a safe
+authoritative one-option correction. Real model interpretation quality is evaluated
+separately from deterministic automation.
 
 ---
 
@@ -127,23 +128,25 @@ model interpretation quality is evaluated separately from deterministic automati
 without guessing, support relative selection only with active history, and repeat a
 self-contained clarification after history loss.
 
-**Independent Test**: Supply multiple validated structured option IDs through the
-authenticated Teams test host; verify stable authoritative display values and no
-created workflow state. Existing session tests continue to prove active-history carry
-and lost-history isolation.
+**Independent Test**: Supply a bounded model-authored message and multiple validated
+structured option IDs through the authenticated Teams test host; verify the message is
+preserved, stable authoritative display values are appended, prose-only values are not
+selectable, and no workflow state is created. Existing session tests continue to prove
+active-history carry and lost-history isolation.
 
 ### Tests for User Story 2
 
-- [ ] T017 [US2] Refocus the single retained Teams clarification test instead of adding a FullHost journey: supply multiple validated option IDs, assert authoritative stable client/environment display values and stable IDs, prove model prose is not used as choice data, and verify no request, approval, operation, or grant is created in `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs`
+- [ ] T017 [US2] Refocus the single retained Teams clarification test instead of adding a FullHost journey: supply a distinctive bounded model message and multiple validated option IDs, assert the message is preserved beside canonical display values and stable IDs, prove an invented environment mentioned only in prose is not selectable, and verify no request, approval, operation, or grant is created in `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs`
 
 ### Implementation for User Story 2
 
 - [ ] T018 [US2] Update ambiguity and history instructions for direct environment discovery, explicit-term conflicts, structured authoritative shortlist IDs, and self-contained clarification after lost history while retaining existing relative-choice rules in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
-- [ ] T019 [US2] Extend environment clarification rendering to preserve the bounded model message for zero choices and use deterministic server-owned wording for multiple authoritative choices with stable IDs and deterministic ordering in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [ ] T019 [US2] Extend environment clarification rendering to preserve the bounded model message for every valid choice cardinality and append authoritative choices with stable IDs and deterministic ordering without synthesizing replacement wording in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: Ambiguous and no-match environment responses remain clarifications,
-and the only new end-to-end test proves the Teams adapter's authoritative rendering
-and state boundary rather than a scripted model's semantic choices.
+and the only new end-to-end test proves model-message preservation, authoritative
+choice rendering, and the state boundary rather than a scripted model's semantic
+choices.
 
 ---
 
@@ -194,9 +197,10 @@ rollback, logging, and workflow-state isolation.
 - [ ] T023 [US4] Complete typed MCP failure mapping and deterministic per-turn fallback gating while preserving cancellation, the existing iteration bound, and metadata-only logging in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 
 The remaining US4 enforcement is delivered by T007 (bounded persistence), T015
-(invalid-choice rejection and candidate preservation), and T016/T019 (server-owned
-safe clarification). Existing tests already own prompt injection, replay/concurrency,
-logging, and zero workflow side effects.
+(invalid-choice rejection, associated-message suppression, and candidate
+preservation), and T016/T019 (model-authored message plus authoritative choices).
+Existing tests already own prompt injection, replay/concurrency, logging, and zero
+workflow side effects.
 
 **Checkpoint**: Every newly introduced deterministic failure branch has one owning
 test layer, with no duplicate resilience matrix in persistence, MCP, MAF, and Teams.
@@ -209,7 +213,7 @@ test layer, with no duplicate resilience matrix in persistence, MCP, MAF, and Te
 validation without expanding feature scope.
 
 - [ ] T024 [P] Update the product overview, runtime architecture, current MCP contract link, and co-hosted MCP ADR from the three-tool exact-only design to feature 004 in `README.md`, `docs/architecture.md`, and `docs/adr/0001-use-one-deployable-service-including-mcp.md`
-- [ ] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
+- [ ] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
 - [ ] T026 [P] Update operator/developer walkthroughs and reconcile current baseline/roadmap wording with the delivered two-tool runtime in `docs/teams-quickstart.md`, `docs/teams-advanced-reference.md`, `docs/local-development.md`, `docs/governed-production-access-product-baseline.md`, and `docs/roadmap.md`
 - [ ] T027 Run the warnings-as-errors build, unit tests, FullHost integration tests, and remaining integration tests sequentially in the exact order and with the timeout/process-cleanup rules documented in `specs/004-resolve-context-identifiers/quickstart.md`
 
@@ -273,7 +277,8 @@ US2 + US3 + US4 -> Polish -> Final validation
 1. Migrate existing fixtures and complete the foundational contracts.
 2. Rewrite existing MCP/catalog assertions and add the focused Core choice tests.
 3. Deliver environment discovery, exact lookup, embedded roles, derived client,
-   validated correction options, and one-option server-owned clarification.
+   validated correction options, and model-authored clarification wording beside
+   authoritative one-option choice data.
 4. Run only the affected focused tests at the US1 checkpoint.
 
 ### Incremental Delivery

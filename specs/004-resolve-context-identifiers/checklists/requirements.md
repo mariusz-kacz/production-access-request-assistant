@@ -44,3 +44,8 @@
 - A potential identifier that returns authoritative no-match falls back to bounded
   discovery, but every plausible alternative requires explicit user confirmation or
   selection and no other failure type is reinterpreted as no-match.
+- Validation iteration 4 passed all checklist items after separating the model-owned
+  conversational clarification message from application-rendered authoritative
+  choices. Structured option identifiers remain independently validated, prose is
+  never interpreted as scope or choice data, and invalid option sets suppress the
+  associated message.

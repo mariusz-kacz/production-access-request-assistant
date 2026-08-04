@@ -29,7 +29,8 @@ is not authorization evidence. The feature contract is
 candidate fields remain compatible with feature 002, but `clientId` is no longer a
 clarification target. Every non-null clarification also contains a structured
 `environmentOptionIds` array so proposed environment choices can be validated and
-rendered outside free-form model text.
+rendered from authoritative records. The bounded `message` remains model-authored
+conversational text and is kept separate from the structured choice data.
 
 ## Tool Catalog
 
@@ -67,13 +68,13 @@ execution. `get_available_roles` is not part of the catalog.
    only inside `message`.
 8. The application rejects duplicate, excessive, or unknown option IDs, reloads every
    accepted option, orders accepted contexts by stable environment ID, and renders
-   their authoritative client name, environment name, and unchanged ID. A non-empty
-   environment choice list uses a deterministic application-owned question and is
-   never rendered directly from model prose. The bounded model message may still be
-   used when an environment clarification has no options and for non-environment
-   clarification targets. The model must not shortlist an option that conflicts with
-   explicit readable scope terms, and mandatory user confirmation or selection
-   prevents automatic substitution.
+   the bounded model-authored `message` followed by their authoritative client name,
+   environment name, and unchanged ID. The message is non-authoritative plain text:
+   the application does not parse identifiers, names, relationships, or actions from
+   it. Any invalid structured option set suppresses both the associated message and
+   choices. The model must not shortlist an option that conflicts with explicit
+   readable scope terms, and mandatory user confirmation or selection prevents
+   automatic substitution.
 9. Derive `clientId` from the selected environment candidate.
    Never ask the requester to supply or choose a client ID independently.
 10. Select or clarify `requestedRoleId` only from the `roles` included with the
@@ -153,7 +154,8 @@ latest message with potential environment ID
   -> typed NotFound
   -> bounded environment discovery
   -> zero, one, or several structured environmentOptionIds
-  -> deterministic option reload and authoritative rendering
+  -> deterministic option reload
+  -> model-authored question plus authoritative choice rendering
   -> focused correction, confirmation, or selection
   -> no candidate substitution before the developer replies
 ```
@@ -190,6 +192,9 @@ missing/extra tool, malformed result, timeout, cancellation, unavailable context
 - MCP results and model output are context, not authority.
 - Structured `environmentOptionIds` are untrusted proposals; only independently
   reloaded contexts are rendered as choices.
+- The bounded model-authored clarification `message` may be rendered only after its
+  structured options validate. It remains informational and is never parsed into
+  choice data, candidate scope, workflow action, approval, or authorization.
 - The model cannot confirm, submit, approve, provision, retry, or mutate workflow.
 - Browser- or message-supplied identities and approver data are not trusted.
 - Final confirmation binds only the server-owned, independently validated snapshot.

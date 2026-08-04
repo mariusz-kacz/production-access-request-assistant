@@ -72,7 +72,7 @@
       }
     },
     "clarification": {
-      "description": "One optional focused clarification proposal. Client is derived from environment and therefore is not a clarification target. Environment option IDs are untrusted until reloaded and validated.",
+      "description": "One optional focused clarification proposal. Client is derived from environment and therefore is not a clarification target. The message is bounded model-authored conversational text; environment option IDs remain separate and untrusted until reloaded and validated.",
       "type": [
         "object",
         "null"
@@ -94,6 +94,7 @@
           ]
         },
         "message": {
+          "description": "Non-authoritative conversational wording. It is never parsed as an identifier, choice, relationship, workflow action, approval, or authorization fact.",
           "type": "string",
           "minLength": 1,
           "maxLength": 500

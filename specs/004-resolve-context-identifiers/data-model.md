@@ -121,10 +121,13 @@ of zero to 20 unique stable IDs. It is empty for non-environment clarifications 
 for an environment no-match correction. For an environment choice it contains only
 the model-proposed shortlist. The array remains untrusted: the application reloads
 the referenced environments, rejects duplicate, excessive, or unknown IDs, sorts
-valid contexts by stable environment ID, and renders client/environment names from
-those records. The model must honor explicit readable scope terms, while mandatory
-confirmation or selection prevents a fallback option from becoming scope
-automatically. Complete contexts and choice lists are not persisted in the intake.
+valid contexts by stable environment ID, presents the model's bounded `message` as
+non-authoritative plain text, and appends client/environment names and stable IDs from
+those records. The message is never parsed for additional options or scope, and an
+invalid option set suppresses the associated message and choices. The model must
+honor explicit readable scope terms, while mandatory confirmation or selection
+prevents a fallback option from becoming scope automatically. Complete contexts and
+choice lists are not persisted in the intake.
 
 ## Relationships
 
@@ -154,10 +157,10 @@ These are not persisted states or MCP failures:
 | Catalog interpretation | Model outcome | Application behavior |
 |------------------------|---------------|----------------------|
 | Exactly one environment satisfies the readable terms | Candidate proposal | Independently validate all stable values |
-| More than one environment remains plausible | One focused `environmentId` clarification | Persist sanitized candidate only; create no request |
-| No environment satisfies the terms | One focused correction | Keep environment unresolved; create no request |
-| Potential identifier exact lookup returns `NotFound`, one catalog alternative is plausible | One focused “did you mean” `environmentId` clarification with one structured option ID | Reload and render the authoritative option; do not replace the rejected value until the developer confirms |
-| Potential identifier exact lookup returns `NotFound`, several catalog alternatives are plausible | One focused `environmentId` clarification with structured option IDs | Reload, sort, and render authoritative choices; accept only a developer-selected member |
+| More than one environment remains plausible | One focused model-authored `environmentId` clarification plus structured option IDs | Validate every ID, render the message with authoritative choices, persist sanitized candidate only, and create no request |
+| No environment satisfies the terms | One focused model-authored correction with no options | Keep environment unresolved; create no request |
+| Potential identifier exact lookup returns `NotFound`, one catalog alternative is plausible | One focused model-authored "did you mean" `environmentId` clarification with one structured option ID | Validate the ID, render the message with the authoritative option, and do not replace the rejected value until the developer confirms |
+| Potential identifier exact lookup returns `NotFound`, several catalog alternatives are plausible | One focused model-authored `environmentId` clarification with structured option IDs | Validate, reload, sort, and render the message with authoritative choices; accept only a developer-selected member |
 | Potential identifier exact lookup returns `NotFound`, no catalog alternative is plausible | One focused correction | Keep environment unresolved; never fabricate an ID |
 | Potential identifier exact lookup returns any other failure | Typed safe failure or retry guidance | Do not run discovery fallback or alter dependent values |
 | Requested role absent from selected candidate | One focused `requestedRoleId` clarification | Never treat the role as allowed |

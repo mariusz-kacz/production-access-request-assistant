@@ -153,7 +153,9 @@ candidate field is needed; the clarification contract gains only the bounded opt
 ID array. Retaining one call per model response reduces parallel ambiguity while
 allowing the framework to perform sequential reads. Structured option IDs let the
 application reload and render authoritative names rather than trusting identifiers
-or display values embedded in free-form model text.
+or display values embedded in free-form model text. The existing bounded `message`
+remains the model-owned conversational question; it is informational and separate
+from the structured choice data.
 
 **Alternatives considered**:
 
@@ -239,7 +241,9 @@ then form a structured clarification shortlist only from the returned catalog,
 considering both identifier resemblance and the message's explicit readable terms.
 The application rejects duplicate, excessive, or unknown IDs, reloads each accepted
 option, orders valid options by stable ID, and renders their authoritative client and
-environment names. The model must honor explicit readable scope terms, but no
+environment names beside the model's bounded conversational message. The message is
+shown only after the structured option set passes validation and is never parsed for
+additional choices or scope. The model must honor explicit readable scope terms, but no
 fallback alternative is automatically proposed: one requires confirmation, several
 require selection, and none require focused correction. The rejected value is never
 silently rewritten.
@@ -260,6 +264,33 @@ also prevents outages or malformed calls from masquerading as authoritative abse
   because those outcomes do not prove that the supplied identifier is absent.
 - Add fuzzy search or aliases to MCP: rejected because the model already interprets
   the bounded catalog and another search surface is outside the fixed-data scope.
+
+## R12. Clarification wording and authoritative choices
+
+**Decision**: Use one model response containing a bounded conversational `message`
+and separate structured `environmentOptionIds`. After all option IDs pass schema and
+authoritative validation, the Teams adapter presents the model message as plain
+informational text and appends application-rendered choices containing only stored
+client names, environment names, and stable IDs. An invalid option set suppresses the
+associated message and choices. Text appearing only in `message` is never parsed into
+an option, candidate value, relationship, action, approval, or authorization fact.
+
+**Rationale**: This keeps conversational phrasing with the language model while the
+application retains exclusive ownership of selectable values and authoritative
+display facts. It avoids duplicating the model's question in deterministic templates,
+does not add a second model call, and preserves the rule that model output cannot
+change governed state.
+
+**Alternatives considered**:
+
+- Replace every non-empty environment clarification with an application-authored
+  question: rejected because it discards useful model phrasing and duplicates
+  response composition after the model already produced a focused question.
+- Make a second model call after option validation: rejected because it adds latency,
+  another timeout/failure path, and no additional authority.
+- Render model-generated option labels or parse choices from `message`: rejected
+  because prose cannot be schema-validated as authoritative identifiers or
+  relationships.
 
 ## Sources
 

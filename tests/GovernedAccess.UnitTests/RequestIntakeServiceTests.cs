@@ -461,6 +461,87 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
+    public async Task ValidEnvironmentOptionRemainsOutsideDurableCandidateScope()
+    {
+        const string justification =
+            "Investigate elevated error rates in the production service.";
+        var clarification = new RequestClarificationProposal(
+            RequestClarificationTarget.EnvironmentId,
+            "Did you mean the available production environment?",
+            ["PROD-ALPHA-EU"]);
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    clientId: null,
+                    environmentId: null,
+                    requestedRoleId: null,
+                    justification,
+                    incidentId: null),
+                clarification));
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.ClarificationRequired,
+            result.Kind);
+        Assert.Same(clarification, result.Clarification);
+        var choice = Assert.Single(result.EnvironmentChoices);
+        Assert.Equal("PROD-ALPHA-EU", choice.EnvironmentId);
+        Assert.Equal("Client Alpha Production EU", choice.EnvironmentDisplayName);
+        Assert.Equal("client-alpha", choice.ClientId);
+        Assert.Equal("Client Alpha", choice.ClientDisplayName);
+        Assert.Equal(["PROD-ALPHA-EU"], scenario.EnvironmentContextLookupIds);
+        Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
+        Assert.Null(scenario.Session.ClientId);
+        Assert.Null(scenario.Session.EnvironmentId);
+        Assert.Null(scenario.Session.RequestedRoleId);
+        Assert.Equal(justification, scenario.Session.Justification);
+        Assert.Null(scenario.Session.ReservedRequestId);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task UnknownEnvironmentOptionIsRejectedWithoutClearingValidFields()
+    {
+        const string justification =
+            "Investigate elevated error rates in the production service.";
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    clientId: null,
+                    environmentId: null,
+                    requestedRoleId: null,
+                    justification,
+                    incidentId: null),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.EnvironmentId,
+                    "Choose the suggested production environment.",
+                    ["PROD-UNKNOWN"])));
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.CandidateRejected, result.Kind);
+        Assert.Contains(
+            result.ValidationErrors,
+            error => error.Field == "environmentOptionIds");
+        Assert.Empty(result.EnvironmentChoices);
+        Assert.Equal(["PROD-UNKNOWN"], scenario.EnvironmentContextLookupIds);
+        Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
+        Assert.Null(scenario.Session.ClientId);
+        Assert.Null(scenario.Session.EnvironmentId);
+        Assert.Null(scenario.Session.RequestedRoleId);
+        Assert.Equal(justification, scenario.Session.Justification);
+        Assert.Null(scenario.Session.ReservedRequestId);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
     public async Task DeterministicReadinessOverridesACompleteClarificationProposal()
     {
         var scenario = new IntakeScenario(
@@ -891,6 +972,8 @@ public sealed class RequestIntakeServiceTests
 
         public List<RequestPreparationTurn> InterpretationTurns { get; } = [];
 
+        public List<string> EnvironmentContextLookupIds { get; } = [];
+
         public ApplicationFailure? ActiveLoadFailure { get; set; }
 
         public string? StatusWhenAdded { get; private set; }
@@ -1140,13 +1223,16 @@ public sealed class RequestIntakeServiceTests
         public Task<ApplicationResult<ProductionEnvironmentContext>>
             GetProductionEnvironmentContextAsync(
                 string environmentId,
-                CancellationToken cancellationToken) =>
-            FromOptional(
+                CancellationToken cancellationToken)
+        {
+            EnvironmentContextLookupIds.Add(environmentId);
+            return FromOptional(
                 environmentId == "PROD-ALPHA-EU"
                     ? CreateEnvironmentContext()
                     : null,
                 "environment_not_found",
                 cancellationToken);
+        }
 
         public Task<ApplicationResult<IReadOnlyList<ProductionEnvironmentContext>>>
             ListProductionEnvironmentContextsAsync(

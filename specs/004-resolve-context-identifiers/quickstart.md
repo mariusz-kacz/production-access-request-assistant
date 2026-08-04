@@ -115,7 +115,9 @@ Use a context double with two environments matching the supplied readable terms.
 
 Expected:
 
-- one focused environment clarification shows stable ordered readable choices;
+- one focused model-authored environment clarification message is preserved;
+- the application appends stable ordered readable choices loaded from authoritative
+  context rather than model prose;
 - no environment is guessed;
 - no ready snapshot or request is created;
 - "the first one" works only while the relevant process-local history is available;
@@ -130,15 +132,17 @@ I need read-only access to PROD-ALPHA.
 ```
 
 Script the model to call exact lookup first, receive typed `NotFound`, call discovery,
-and return `environmentOptionIds: ["PROD-ALPHA-EU"]`.
+and return a focused `message` together with
+`environmentOptionIds: ["PROD-ALPHA-EU"]`.
 
 Expected:
 
 - exact lookup occurs before discovery;
 - the proposed option ID is reloaded from authoritative context;
-- the application renders Client Alpha, Production Europe, and
-  `PROD-ALPHA-EU` from authoritative data;
-- the assistant asks whether the developer meant that environment;
+- the application preserves the bounded model-authored question and appends Client
+  Alpha, Production Europe, and `PROD-ALPHA-EU` from authoritative data;
+- identifiers or display values written only in the model message do not become
+  selectable options;
 - `environmentId` remains unresolved and no ready snapshot or request exists until
   the developer confirms the option.
 
@@ -153,6 +157,8 @@ written only in free-form `message`.
 Expected:
 
 - malformed schema or invalid options are rejected;
+- the associated model message is suppressed when the structured option set is
+  invalid;
 - unknown or prose-only IDs are never rendered as authoritative choices;
 - no candidate, request, approval, operation, or grant is created.
 
@@ -269,8 +275,9 @@ Record:
 - exact-only incident evidence;
 - ambiguity, no-match, overflow, timeout, cancellation, and malformed-output outcomes;
 - exact `NotFound` fallback with zero, one, and multiple plausible alternatives;
-- structured option validation, authoritative rendering, and explicit selection or
-  confirmation before substitution;
+- structured option validation, preservation of bounded model-authored clarification
+  wording, authoritative choice rendering, and explicit selection or confirmation
+  before substitution;
 - proof that non-`NotFound` failures never trigger discovery fallback;
 - independent rejection of unsupported environment-role and cross-client incident
   combinations; and

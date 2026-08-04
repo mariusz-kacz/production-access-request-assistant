@@ -13,7 +13,9 @@ environment context so no separate role-listing tool is needed. Limit discovery 
 environments; an optional incident must still be provided using its precise stable
 identifier. When a value appears to be an environment identifier but exact lookup
 does not find it, discover and show authoritative plausible environment alternatives
-instead of silently correcting it."
+instead of silently correcting it. For environment clarification, preserve the
+model's bounded conversational wording while the application independently validates
+the model's structured option identifiers and renders authoritative option details."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -61,7 +63,8 @@ developer to supply either identifier.
    without silently replacing the rejected value.
 7. **Given** one plausible authoritative alternative remains after a failed exact
    lookup, **When** the assistant responds, **Then** it asks the developer to confirm
-   that environment before proposing its identifier.
+   that environment using the model's conversational question accompanied by an
+   application-rendered authoritative choice before proposing its identifier.
 
 ---
 
@@ -82,7 +85,8 @@ shown until one environment is selected and deterministically validated.
 **Acceptance Scenarios**:
 
 1. **Given** a phrase matches multiple production environments, **When** the
-   assistant evaluates the request, **Then** it asks one focused question showing
+   assistant evaluates the request, **Then** it asks one focused model-authored
+   question accompanied by application-rendered authoritative choices showing
    readable distinguishing information and does not select an environment on the
    developer's behalf.
 2. **Given** a clarification presents ordered authoritative environment choices,
@@ -97,8 +101,9 @@ shown until one environment is selected and deterministically validated.
    repeats a self-contained environment clarification instead of guessing.
 5. **Given** a failed exact lookup produces several plausible authoritative
    alternatives, **When** the assistant asks for clarification, **Then** it shows
-   readable client and environment information together with each unchanged stable
-   identifier and waits for the developer to select one.
+   the model's focused conversational question plus readable authoritative client and
+   environment information together with each unchanged stable identifier, and waits
+   for the developer to select one.
 
 ---
 
@@ -192,6 +197,10 @@ fails safely without creating or advancing a request.
   confirmation-time validation rejects stale or invalid scope.
 - The environment candidate set contains no records or too many matches to present
   clearly in one clarification.
+- A model clarification message names an environment that is absent from its
+  structured option identifiers; prose is never interpreted as an additional choice.
+- One or more structured environment option identifiers are unknown, duplicated, or
+  excessive; the associated model message and choices are not presented.
 - The model calls an unapproved tool or the available tool catalog differs from the
   fixed allowlist.
 - Two developers resolve similar environment descriptions concurrently; their
@@ -222,8 +231,9 @@ fails safely without creating or advancing a request.
 - **FR-006**: When exactly one valid environment match exists, the assistant MAY
   propose its stable identifier without an identifier-specific follow-up.
 - **FR-007**: When multiple valid environment matches remain, the assistant MUST ask
-  one focused clarification using readable distinguishing information and MUST NOT
-  select an environment on the developer's behalf.
+  one focused clarification and MUST NOT select an environment on the developer's
+  behalf. The model MUST provide the bounded conversational question and the proposed
+  matches as separate structured environment identifiers.
 - **FR-008**: When no valid environment match exists, the assistant MUST reject the
   unresolved value, avoid fabricating an identifier, and provide focused correction
   guidance.
@@ -300,8 +310,22 @@ fails safely without creating or advancing a request.
   client, environment, or location terms MUST be disclosed and MUST prevent automatic
   proposal.
 - **FR-032**: Fallback alternatives MUST be proposed as structured environment
-  identifiers, independently checked against authoritative data, and displayed using
-  authoritative client and environment names rather than untrusted generated values.
+  identifiers and independently checked against authoritative data. The model MAY
+  supply the surrounding conversational question, but every displayed choice label,
+  stable identifier, client relationship, and environment value MUST come from the
+  authoritative records rather than generated prose.
+- **FR-033**: For an environment clarification, the application MUST independently
+  validate and reload every structured option identifier before presenting the
+  model-authored message or any choices. Unknown, duplicate, excessive, or otherwise
+  invalid option sets MUST fail safely and MUST suppress the associated message.
+- **FR-034**: After successful option validation, the application MUST present the
+  model's bounded conversational message as non-authoritative plain text and append
+  choices whose identifiers and readable client and environment values come only
+  from authoritative records. The application MUST NOT synthesize replacement
+  conversational wording merely because valid choices are present.
+- **FR-035**: Identifiers, names, relationships, instructions, or claims appearing
+  only in model prose MUST NOT become choice data, candidate scope, workflow state,
+  approval evidence, or authorization evidence.
 
 ### Governance & Trust Requirements *(mandatory)*
 
@@ -326,7 +350,10 @@ fails safely without creating or advancing a request.
   Environment context provides bounded discovery, exact lookup, authoritative client
   relationships, and assigned roles. Incident context remains precise-identifier-
   only. No separate role tool is exposed. All proposed values remain independently
-  validated, and no capability can authorize or mutate workflow state.
+  validated, and no capability can authorize or mutate workflow state. A bounded
+  model-authored clarification message may be shown only after its structured
+  environment options pass validation; that prose remains informational and is never
+  parsed or trusted as scope, choice data, approval, or authorization.
 - **Provisioning and idempotency**: Provisioning is unaffected and remains unavailable
   to the model. It still begins only after valid human approvals, reloads persisted
   evidence, and uses the immutable request ID as its idempotency identity. Environment
@@ -356,9 +383,10 @@ fails safely without creating or advancing a request.
   relationships; incident descriptions are not resolution candidates.
 - **Environment clarification choice**: A readable representation of one
   authoritative environment used to distinguish multiple matches within the active
-  conversation. Its proposed stable identifier is structured and independently
-  checked before the application renders authoritative display information. It is not
-  approval evidence or a new persistent business record.
+  conversation. The model proposes its stable identifier separately from the bounded
+  conversational message. The identifier is independently checked before the
+  application renders authoritative display information beside that message. It is
+  not approval evidence or a new persistent business record.
 - **Rejected potential environment identifier**: A developer-supplied value that was
   attempted as an exact identifier and authoritatively returned no match. It may be
   used only to identify plausible clarification choices and is never corrected or
@@ -369,15 +397,18 @@ fails safely without creating or advancing a request.
 - **Domain/unit coverage**: Verify unique, zero-, and multiple-environment match
   handling; authoritative client derivation; conflicting client rejection;
   dependent role and incident revalidation after an environment change; exact-only
-  incident requirements; and unchanged confirmation and workflow rules.
+  incident requirements; validated structured choices remaining separate from model
+  prose; and unchanged confirmation and workflow rules.
 - **Integration/contract coverage**: Verify bounded discovery and exact lookup through
   `get_production_environment`, including the authoritative roles assigned to each
   environment; unchanged exact-identifier behavior for `get_incident`; absence of a
   separate role tool; stable identifiers and readable environment data; the exact
   two-tool catalog; explicit typed failures; cancellation and timeout propagation;
   exact-lookup no-match followed by discovery and clarification; absence of fallback
-  for other failures; and final deterministic validation. Automated scenarios use a
-  deterministic fake chat client and require no live model.
+  for other failures; preservation of the bounded model clarification message beside
+  independently rendered authoritative choices; suppression after invalid option
+  sets; and final deterministic validation. Automated scenarios use a deterministic
+  fake chat client and require no live model.
 - **Negative coverage**: Verify invented or absent environment identifiers,
   ambiguous descriptions, no environment match, conflicting client terms, incident
   titles and partial identifiers, nonexistent or inactive exact incident identifiers,
@@ -385,7 +416,9 @@ fails safely without creating or advancing a request.
   missing tools, context failure and timeout, lost conversation history,
   prompt-injection attempts, stale context at confirmation, concurrent conversations,
   replay behavior, silent typo correction, fallback suggestions absent from the
-  authoritative catalog, and fallback despite non-no-match failures.
+  authoritative catalog, identifiers present only in clarification prose, invalid
+  option sets whose associated message must be suppressed, and fallback despite
+  non-no-match failures.
 
 ## Success Criteria *(mandatory)*
 
@@ -427,6 +460,10 @@ fails safely without creating or advancing a request.
 - **SC-011**: In 100% of timeout, cancellation, invalid-input, unavailable-context,
   and malformed-result scenarios, the failure is not converted into discovery-based
   identifier correction.
+- **SC-012**: In 100% of environment clarifications with a valid structured option
+  set, the developer sees the model's focused conversational question together with
+  authoritative choice labels and stable identifiers; generated names or identifiers
+  appearing only in prose never appear as selectable choices.
 
 ## Assumptions
 
@@ -455,6 +492,10 @@ fails safely without creating or advancing a request.
 - Existing bounded process-local conversation history and the durable typed candidate
   support environment-choice follow-ups; candidate lists and transcripts are not new
   durable business records.
+- Environment clarification output separates a bounded model-authored plain-text
+  message from structured option identifiers. The message supplies conversational
+  wording; the application supplies authoritative choice labels and controls after
+  validating those identifiers. No second model call is required for rendering.
 - Existing Teams-only intake, explicit confirmation, human approval, fixed eight-hour
   duration, provisioning, and audit journeys remain dependencies rather than redesign
   scope.
