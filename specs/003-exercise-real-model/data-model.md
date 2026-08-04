@@ -63,10 +63,11 @@ response parsing, and successful MAF session save.
 |------|------|-------|
 | `IntakeId` | GUID | Existing server-generated intake identity and MAF session key |
 | `CorrelationId` | string | Existing server-owned safe operation correlation identifier |
-| `ProfileId` | closed string | Selected process-wide profile; not requester-controlled |
+| `ProfileId` | closed string | `Deterministic`, `FoundryResponses`, or `Unavailable` for invalid/missing selected configuration; not requester-controlled |
 | `DeploymentName` | nullable string | Configured Foundry deployment; absent for deterministic profile |
 | `StartedAt` | timestamp | UTC operational measurement only |
-| `Outcome` | closed enum | `Proposal`, `MalformedModelOutput`, `Timeout`, `Cancelled`, or `Unavailable` |
+| `InterpretationResult` | closed union | `Succeeded(Proposal)` or `Failed(MalformedModelOutput | Timeout | Cancelled | Unavailable)` |
+| `PreparationOutcome` | closed enum | `ClarificationRequired`, `ReadyForConfirmation`, `CandidateRejected`, or `Failed` |
 | `Duration` | duration | Logged without prompt, response, or payload data |
 
 The turn is not stored in SQLite. Structured logs contain only the safe metadata
@@ -77,15 +78,17 @@ existing process-local in-memory store.
 
 ```text
 Started
-  ├── valid schema response ----------------------> Proposal
-  ├── malformed/unsupported response ------------> MalformedModelOutput
-  ├── provider-side timeout ----------------------> Timeout
-  ├── request timeout or caller cancellation -----> Cancelled
-  └── profile/auth/provider/MCP dependency fails -> Unavailable
+  ├── valid schema response ----------------------> Succeeded(Proposal)
+  ├── malformed/unsupported response ------------> Failed(MalformedModelOutput)
+  ├── provider-side timeout ----------------------> Failed(Timeout)
+  ├── request timeout or caller cancellation -----> Failed(Cancelled)
+  └── profile/auth/provider/MCP dependency fails -> Failed(Unavailable)
 ```
 
-Only `Proposal` may proceed to authoritative validation. Failed turns do not save the
-mutated MAF session and do not replace the intake's last accepted candidate.
+Only `Succeeded(Proposal)` may proceed to authoritative candidate assessment. That
+assessment returns rejected, incomplete, or ready and maps to the closed preparation
+outcomes above. Failed interpretation turns do not save the mutated MAF session and
+do not replace the intake's last accepted candidate.
 
 ## Existing Request Proposal
 

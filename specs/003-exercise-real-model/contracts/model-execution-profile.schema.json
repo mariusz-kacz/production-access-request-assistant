@@ -6,8 +6,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "ExecutionProfile",
-    "FoundryResponses"
+    "ExecutionProfile"
   ],
   "properties": {
     "ExecutionProfile": {
@@ -49,6 +48,9 @@
         ]
       },
       "then": {
+        "required": [
+          "FoundryResponses"
+        ],
         "properties": {
           "FoundryResponses": {
             "properties": {

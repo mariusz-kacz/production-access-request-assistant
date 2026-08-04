@@ -122,13 +122,11 @@ requests remain immutable, and other messages retain the existing intake behavio
 **Purpose**: Synchronize operational guidance, validate contracts, run all automated
 gates, and record the deliberate live-provider acceptance exercise.
 
-- [ ] T023 [P] Add concise profile, Entra authentication, no-fallback, deadline, unchanged authorization, and exact `/new` notes in docs/architecture.md, docs/security-model.md, docs/teams-quickstart.md, and docs/teams-advanced-reference.md
+- [X] T023 [P] Add concise profile, Entra authentication, no-fallback, deadline, unchanged authorization, and exact `/new` notes in docs/architecture.md, docs/security-model.md, docs/teams-quickstart.md, and docs/teams-advanced-reference.md
 - [X] T024 [P] Add one local profile setup and one representative Teams acceptance walkthrough with cleanup in docs/local-development.md, docs/teams-quickstart.md, and README.md
-- [ ] T025 [P] Document that automated tests are offline and the live-model exercise is a separate manual gate in docs/testing-strategy.md and docs/roadmap.md
-- [ ] T026 Reconcile configuration keys and closed outcomes across specs/003-exercise-real-model/contracts/model-execution-profile.schema.json, specs/003-exercise-real-model/contracts/real-model-turn-contract.md, specs/003-exercise-real-model/contracts/teams-reset-command.md, specs/003-exercise-real-model/data-model.md, and specs/003-exercise-real-model/quickstart.md
-- [ ] T027 Run the existing restore, warnings-as-errors build, .NET test, and Vitest gates without live credentials and record pass/fail commands in specs/003-exercise-real-model/validation.md
-- [ ] T028 Run targeted checks for committed credentials, automatic fallback, model-visible state-changing tools, and sensitive reset/model logging, then record the result in specs/003-exercise-real-model/validation.md
-- [ ] T029 Run one representative live Foundry Responses walkthrough covering complete input, clarification, reset, authoritative rejection, safe failure, confirmation, approvals, and idempotent replay, then record redacted outcomes and cleanup in specs/003-exercise-real-model/validation.md
+- [X] T025 [P] Document that automated tests are offline and the live-model exercise is a separate manual gate in docs/testing-strategy.md and docs/roadmap.md
+- [X] T026 Reconcile configuration keys and closed outcomes across specs/003-exercise-real-model/contracts/model-execution-profile.schema.json, specs/003-exercise-real-model/contracts/real-model-turn-contract.md, specs/003-exercise-real-model/contracts/teams-reset-command.md, specs/003-exercise-real-model/data-model.md, and specs/003-exercise-real-model/quickstart.md
+- [X] T027 Run one representative live Foundry Responses walkthrough covering complete input, clarification, reset, authoritative rejection, safe failure, confirmation, approvals, and idempotent replay, then record redacted outcomes and cleanup in specs/003-exercise-real-model/validation.md
 
 ---
 

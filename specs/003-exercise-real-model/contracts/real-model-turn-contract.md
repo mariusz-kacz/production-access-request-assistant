@@ -87,13 +87,19 @@ the requester is not expected to repeat a client display name as an identifier.
 
 ## Outcomes
 
-| Boundary outcome | Application outcome | Teams behavior | Durable effect |
-|------------------|---------------------|----------------|----------------|
-| Schema-valid proposal | `Proposal` | Clarification, validation rejection, or confirmation after authoritative validation | Only sanitized validated fields or immutable readiness may be persisted |
-| Malformed or unsupported response | `MalformedModelOutput` | Safe retry guidance | No candidate, ready scope, request, approval, operation, grant, or audit change |
-| Provider-side timeout | `Timeout` | Safe timeout guidance while the request remains active | Last accepted candidate and saved MAF session remain unchanged |
+| Boundary outcome | Interpreter result | Teams behavior | Durable effect |
+|------------------|--------------------|----------------|----------------|
+| Schema-valid proposal | `RequestPreparationInterpretationSucceeded(Proposal)` | Clarification, validation rejection, or confirmation after authoritative validation | Only sanitized validated fields or immutable readiness may be persisted |
+| Malformed or unsupported response | `RequestPreparationInterpretationFailed(MalformedModelOutput)` | Safe retry guidance | No candidate, ready scope, request, approval, operation, grant, or audit change |
+| Provider-side timeout | `RequestPreparationInterpretationFailed(Timeout)` | Safe timeout guidance while the request remains active | Last accepted candidate and saved MAF session remain unchanged |
 | Endpoint timeout or caller disconnect | Native request cancellation | Transport-level safe failure | Last accepted candidate and saved MAF session remain unchanged |
-| Invalid profile, credential failure, provider failure, quota/service failure, MCP failure, or catalog mismatch | `Unavailable` | Safe unavailable guidance | No fallback and no governed workflow state change |
+| Invalid profile, credential failure, provider failure, quota/service failure, MCP failure, or catalog mismatch | `RequestPreparationInterpretationFailed(Unavailable)` | Safe unavailable guidance | No fallback and no governed workflow state change |
+
+`Cancelled` is the fourth closed interpreter failure reason. Native endpoint
+cancellation normally terminates transport handling; if cancellation is translated
+before the response channel closes, the application still fails without changing
+candidate or workflow state. A successful proposal is a payload-bearing result, not
+a failure enum member.
 
 ## Authoritative Validation
 

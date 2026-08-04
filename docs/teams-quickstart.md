@@ -1,7 +1,7 @@
 # Teams quickstart
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-03
+- **Last reviewed**: 2026-08-04
 - **Audience**: Developers running the application from a real personal Teams chat
 
 Use this page in order. The normal daily workflow is only two long-running commands
@@ -148,7 +148,20 @@ Expected flow:
 
 The live model may interpret text and call only the three read-only MCP tools. Its
 output is still schema-validated and checked against authoritative local data. It
-cannot approve or provision access.
+cannot approve or provision access. The existing 100-second Teams request timeout is
+the single overall model/MCP deadline. If the selected live profile fails, the turn
+fails closed and never falls back to the deterministic client.
+
+## 7. Reset an unsubmitted preparation
+
+Send `/new` by itself to abandon the active preparation in this personal
+conversation. Matching is trimmed and case-insensitive, so `/NEW` and `  /new  ` also
+match; `/new please` is ordinary requester text.
+
+The reset calls neither the model nor MCP. It terminally clears an active collecting
+or ready candidate, invalidates an old ready card, creates no access request, and
+leaves every submitted request and approval workflow unchanged. The next ordinary
+message creates a new intake ID with separate model history.
 
 ## Stop and clean up
 

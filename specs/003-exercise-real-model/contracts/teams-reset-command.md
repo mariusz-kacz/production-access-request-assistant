@@ -27,8 +27,8 @@ case-insensitive equality:
 
 ## Core application contract
 
-The implementation adds a provider-neutral command and closed result alongside the
-existing intake contracts. Suggested shape:
+The implementation exposes this provider-neutral command and closed result alongside
+the existing intake contracts:
 
 ```csharp
 ResetRequestIntakeCommand(

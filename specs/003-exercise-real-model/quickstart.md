@@ -31,9 +31,11 @@ From the repository root:
 
 ```powershell
 dotnet restore ProductionAccessRequestAssistant.sln
-dotnet build ProductionAccessRequestAssistant.sln --no-restore -warnaserror
-dotnet test ProductionAccessRequestAssistant.sln --no-build
-npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
+dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 ```
 
 Expected:
@@ -58,6 +60,12 @@ Do not place an access token or API key in application settings.
 ## 3. Select the real-model profile
 
 Set process-local environment variables in the shell that will start the host:
+
+| Configuration key | Required value |
+|---|---|
+| `RequestPreparationModel:ExecutionProfile` | `FoundryResponses` |
+| `RequestPreparationModel:FoundryResponses:Endpoint` | Trusted HTTPS Foundry base ending in `/openai/v1` |
+| `RequestPreparationModel:FoundryResponses:DeploymentName` | Approved deployment name |
 
 ```powershell
 $env:RequestPreparationModel__ExecutionProfile = 'FoundryResponses'

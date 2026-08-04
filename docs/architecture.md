@@ -31,8 +31,9 @@ The implementation is shaped by the following constraints:
 - a thin React application served from that host;
 - local SQLite persistence and a fixed synthetic dataset;
 - synthetic cookie authentication with exactly four demo principals;
-- a deterministic chat client for automated validation, behind the same boundary a
-  live model can later implement;
+- one server-selected request-preparation profile: the checked-in deterministic
+  client or an explicitly configured Foundry Responses client behind the same
+  `IChatClient` boundary;
 - a real, read-only MCP endpoint with exactly three tools;
 - no model-visible approval, workflow, or provisioning capability;
 - immutable submitted requests and request-bound approvals;
@@ -96,8 +97,8 @@ hosts:
 - antiforgery protection;
 - correlation middleware and application instrumentation;
 - the compiled React static assets and SPA fallback;
-- Teams request interpretation, the deterministic `IChatClient`, and MAF's native
-  process-local session store;
+- Teams request interpretation, one process-wide selected `IChatClient`, and MAF's
+  native process-local session store;
 - a real MCP client;
 - the stateless Streamable HTTP `/mcp` server;
 - request validation and workflow application services;
@@ -163,7 +164,8 @@ Web is the composition and infrastructure layer. It contains:
 - synthetic authentication and antiforgery;
 - Teams activity handling, `MafRequestPreparationInterpreter`, MAF's singleton
   `InMemoryAgentSessionStore`, the process-lifetime
-  `MafConversationTurnCoordinator`, and `DeterministicChatClient`;
+  `MafConversationTurnCoordinator`, and the closed deterministic/Foundry Responses
+  chat-client registration;
 - the EF Core database context, request-context reader, workflow store, and seeder;
 - the synthetic provisioner;
 - correlation and activity instrumentation; and
@@ -191,6 +193,22 @@ request and response shapes, call application services, and map typed failures.
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
 
+### Request-preparation model profile
+
+`RequestPreparationModel:ExecutionProfile` is resolved once when the host starts and
+accepts only `Deterministic` or `FoundryResponses`. Checked-in settings select
+`Deterministic`. The live profile requires the configured
+`FoundryResponses:Endpoint` and `FoundryResponses:DeploymentName`, authenticates with
+`DefaultAzureCredential`, and uses the existing 100-second Teams request timeout as
+the single overall model/MCP deadline. Invalid configuration, missing authorization,
+provider failure, and timeout fail closed; the host never substitutes the
+deterministic client after `FoundryResponses` was selected.
+
+Both profiles enter the same strict proposal schema, exact three-tool MCP allowlist,
+authoritative candidate assessment, immutable confirmation, human approvals, and
+protected idempotent provisioning path. Profile choice and model output are not
+authorization or persisted workflow evidence.
+
 ## Teams request preparation and confirmation
 
 Teams confirmation is the only request-creation path. Preparation is model-assisted;
@@ -214,7 +232,7 @@ sequenceDiagram
     User->>Teams: Describe request
     Teams->>Agent: Authenticated personal activity
     Agent->>Intake: PrepareAsync(actor, latest message)
-    Intake->>Draft: Intake ID + complete candidate + validation feedback + latest message
+    Intake->>Draft: Intake ID + complete candidate + latest message
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly three read-only tools
@@ -261,6 +279,17 @@ clears that field, preserves unrelated validated fields, persists the sanitized
 candidate, and returns typed deterministic correction guidance without another model
 call. Only an owned, unexpired ready intake can be confirmed. The model and MCP never
 receive a submit capability.
+
+### Explicit preparation reset
+
+The Teams adapter intercepts only an exact trimmed, case-insensitive `/new` message
+before interpretation. Core resolves the active intake from the authenticated actor
+and exact conversation, marks a collecting or unexpired ready intake `Superseded`
+(or an expired ready intake `Expired`), and clears candidate state through the
+existing terminal transition. The command calls neither the model nor MCP, creates no
+replacement intake or request, and cannot change a submitted request. The next normal
+message receives a new server-generated intake ID and therefore a separate MAF
+session key.
 
 MAF history is history-first but deliberately ephemeral. The singleton native store
 keys sessions by server-generated intake ID, while the singleton coordinator retains

@@ -1,7 +1,7 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-02
+- **Last reviewed**: 2026-08-04
 - **Scope**: Local synthetic Governed Production Access Request Assistant MVP
 
 ## Purpose
@@ -31,7 +31,8 @@ The security model assumes:
 - no supported out-of-band database writers;
 - an exact, fail-fast synthetic reference dataset;
 - four fixed demo principals;
-- no real secrets or provider credentials;
+- no model API key in application configuration; an optional live-model exercise uses
+  the developer's external Microsoft Entra credential chain;
 - no real client production environments;
 - no runtime administration surface for clients, environments, roles, incidents, or
   approver assignments; and
@@ -110,6 +111,7 @@ for real client, incident, identity, credential, or production-access data.
 | Browser and React UI | Untrusted presentation client. It may be modified, bypassed, or send crafted requests. |
 | Microsoft Teams activity | Untrusted payload carried through an authenticated SDK boundary; tenant, actor, channel, and conversation are derived from authenticated context. |
 | Chat model | Untrusted interpreter. Its output and proposed identifiers require schema and authoritative validation. |
+| Foundry Responses provider and Entra credential chain | External dependency used only when the server selects the live profile; authentication or provider failure must fail closed without deterministic fallback. |
 | MCP client and wire data | Untrusted protocol-boundary data until typed parsing and application validation succeed. |
 | MCP server adapter | Trusted only to translate typed read-only requests to the request-context port. It is not an authorization boundary. |
 | Application and domain services | Trusted enforcement boundary for validation, authority, state transitions, and exact scope. |
@@ -181,6 +183,26 @@ description, or provider adapter would not preserve this boundary.
 | Retry cannot replace scope | Retry has no body and reuses the same request, operation, evidence checks, and provider idempotency identity. |
 | Duplicate work cannot create multiple logical grants | Request ID is the idempotency identity; operation and grant constraints are unique per request; concurrent completion is reloaded. |
 | UI action visibility is not authorization | Application services independently authenticate, authorize, and validate every action. |
+
+## Live-model and reset boundaries
+
+The process-wide `RequestPreparationModel` configuration accepts only
+`Deterministic` or `FoundryResponses`. The live profile validates its trusted Foundry
+Responses base URL and deployment name, obtains tokens through
+`DefaultAzureCredential`, and remains subject to the Teams endpoint's single
+100-second request timeout. Endpoint, deployment, credentials, quota, transport, or
+timeout failure returns a closed unavailable/timeout outcome; it never falls back to
+the deterministic client. Provider provenance does not weaken schema validation,
+the exact read-only MCP allowlist, authoritative candidate assessment, authenticated
+confirmation, either human approval, or protected provisioning.
+
+An exact trimmed, case-insensitive `/new` is deterministic authenticated lifecycle
+input, not model intent. The Teams adapter intercepts it before model or MCP work, and
+Core may terminate only the active unsubmitted intake owned by that actor and exact
+conversation. Reset records safe lifecycle metadata, clears the candidate through an
+existing terminal transition, creates no request, and cannot mutate an immutable
+submitted request. Longer messages containing `/new` remain untrusted conversational
+input.
 
 ## Conversation-memory boundary
 

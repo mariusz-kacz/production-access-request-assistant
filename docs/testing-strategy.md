@@ -24,9 +24,16 @@ describe actions the system must reject.
 
 Automated acceptance for the Teams intake is intentionally model-independent. It
 uses the production MAF/session and MCP boundaries with deterministic chat clients
-and fake authenticated activities. A real Teams walkthrough or future live-model
-evaluation is separate deployment, quality, and UX evidence; neither is required to
-establish the application rules below.
+and fake authenticated activities. No automated test may require a Foundry endpoint,
+deployment, Azure credential, quota, provider network call, or Teams tenant.
+
+The live Foundry Responses exercise is a separate deliberate manual acceptance gate.
+It validates provider interoperability, conversational quality, latency, tool use,
+safe failure, and the end-to-end Teams presentation, but it never replaces the
+repeatable deterministic tests that establish authorization and workflow safety. The
+complete manual procedure and cleanup are in the
+[real-model quickstart](../specs/003-exercise-real-model/quickstart.md); redacted run
+evidence belongs in that feature's `validation.md`.
 
 ## Test layers
 
@@ -277,6 +284,15 @@ production environment, or real provisioner. Fixed-mode and scripted chat client
 are injected behind the same `IChatClient` boundary used by the live provider. The
 manual real-model exercise supplies quality, latency, cost, and provider-safety
 evidence without turning natural-language behavior into a hand-written test oracle.
+
+### Separate live-provider gate
+
+Run the live gate only after the complete credential-free suite passes and only from
+an explicitly configured `FoundryResponses` host. It is operator-invoked, may consume
+provider quota, and requires a developer identity authorized through Microsoft
+Entra. Record only redacted outcomes and safe metadata, then clear process-local
+profile settings and complete the documented Teams/tunnel cleanup. CI and routine
+developer validation must never invoke this gate automatically.
 
 The optional Playground or real personal-chat walkthrough validates transport,
 tenant authentication, packaging, and presentation. It cannot replace the automated

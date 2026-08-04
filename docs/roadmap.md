@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-07-30
+- **Last reviewed**: 2026-08-04
 - **Current baseline**:
   [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 
@@ -12,16 +12,19 @@ baseline or expanding the current implementation scope. A roadmap item becomes
 authoritative only after its business requirement is approved and the product
 baseline, specification, contracts, and tests are updated together.
 
-The immediate priority remains completing the Teams access-intake feature with its
-current exact three-tool MCP surface:
+The current Teams access-intake feature retains its exact three-tool MCP surface:
 
 - `get_production_environment`
 - `get_incident`
 - `get_available_roles`
 
-That feature should first demonstrate a bounded incident-to-environment-to-role tool
-chain, history-first multi-turn clarification with durable typed candidate state,
-deterministic validation, and safe failure handling.
+Its automated acceptance remains entirely offline and uses deterministic chat clients
+to prove the bounded incident-to-environment-to-role tool chain, multi-turn
+clarification with durable typed candidate state, deterministic validation, reset,
+and safe failure handling. Live Foundry Responses and personal Teams execution are a
+separate manual gate for provider interoperability and conversational quality. They
+must not become a CI dependency or replace deterministic authorization, negative-path,
+and idempotency evidence.
 
 The active product boundary is Teams-only request creation: an authenticated personal
 Teams preparation becomes a request only through deterministic confirmation. The Web

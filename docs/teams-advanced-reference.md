@@ -1,7 +1,7 @@
 # Teams advanced reference
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-03
+- **Last reviewed**: 2026-08-04
 - **Audience**: Developers administering or permanently removing the local Teams demo
 
 Do not start here for normal setup or daily use. Follow the
@@ -214,6 +214,25 @@ Microsoft documents user-side removal in the
 [custom-app upload guide](https://learn.microsoft.com/en-us/microsoftteams/platform/concepts/deploy-and-publish/apps-upload)
 and app-registration deletion and recovery in the
 [Microsoft Entra removal guide](https://learn.microsoft.com/en-us/entra/identity-platform/howto-remove-app).
+
+## Live-model operating boundaries
+
+The host selects exactly one process-wide request-preparation profile. Checked-in and
+normal daily startup use `Deterministic`; live startup must explicitly select
+`FoundryResponses` and supply the trusted `/openai/v1` endpoint and deployment name.
+The application obtains a token from `DefaultAzureCredential`; do not add an API key,
+token, tenant override, or client secret to model settings.
+
+The selected live provider uses the Teams endpoint's existing 100-second overall
+deadline. Invalid configuration, missing Entra authorization, provider failure, or
+timeout fails closed and never falls back to deterministic responses. The provider
+still receives only the exact three read-only MCP tools and cannot confirm, approve,
+provision, or change workflow state.
+
+An exact `/new` message is handled before the provider boundary. It resets only the
+authenticated conversation's active unsubmitted preparation, invokes no model or MCP
+tool, and cannot alter an already submitted request. Use the quickstart for the
+requester-facing reset walkthrough.
 
 ## Readiness checklist
 
