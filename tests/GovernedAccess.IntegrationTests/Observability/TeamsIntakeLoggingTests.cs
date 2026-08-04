@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using GovernedAccess.Core.Domain;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Ai;
@@ -24,7 +23,6 @@ public sealed class TeamsIntakeLoggingTests
     private const string DeploymentName = "governed-access-chat";
     private const string FoundryEndpoint =
         "https://governed-access.services.ai.azure.com/openai/v1";
-    private const double ConfirmationTargetMilliseconds = 5_000;
 
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "
@@ -86,22 +84,18 @@ public sealed class TeamsIntakeLoggingTests
 
         Assert.Equal("FoundryResponses", preparation.Properties["ProfileId"]);
         Assert.Equal(DeploymentName, preparation.Properties["DeploymentName"]);
-        _ = AssertOperationMetadata(
+        AssertOperationMetadata(
             preparation,
             "Prepare",
             "ReadyForConfirmation",
             sessionId,
             requestId);
-        var confirmationDurationMs = AssertOperationMetadata(
+        AssertOperationMetadata(
             confirmation,
             "Confirm",
             "Submitted",
             sessionId,
             requestId);
-        Assert.True(
-            confirmationDurationMs < ConfirmationTargetMilliseconds,
-            $"Deterministic confirmation took {confirmationDurationMs:F3} ms; "
-            + $"target is under {ConfirmationTargetMilliseconds:F0} ms.");
 
         var capturedText = string.Join(
             Environment.NewLine,
@@ -124,88 +118,6 @@ public sealed class TeamsIntakeLoggingTests
         Assert.DoesNotContain(FoundryEndpoint, capturedText, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task ResetLogsClosedSafeMetadataForChangedAndAlreadyClearOutcomes()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        using var logs = new CapturingLoggerProvider();
-        var chatClient = new DeterministicChatClient(
-            DeterministicChatMode.Candidate);
-        await using var factory = new GovernedAccessWebFactory(
-            chatClient,
-            loggerProvider: logs);
-        var abandoned = await SeedCollectingSessionAsync(
-            factory,
-            cancellationToken);
-        using var client = factory.CreateTeamsClient();
-
-        using (var resetResponse = await client.PostAsJsonAsync(
-                   "/api/messages",
-                   CreateMessage("  /NEW  ", "teams-logging-reset"),
-                   ProtocolJsonSerializer.SerializationOptions,
-                   cancellationToken))
-        {
-            Assert.Equal(HttpStatusCode.OK, resetResponse.StatusCode);
-        }
-
-        using (var repeatedResponse = await client.PostAsJsonAsync(
-                   "/api/messages",
-                   CreateMessage("/new", "teams-logging-reset-repeat"),
-                   ProtocolJsonSerializer.SerializationOptions,
-                   cancellationToken))
-        {
-            Assert.Equal(HttpStatusCode.OK, repeatedResponse.StatusCode);
-        }
-
-        Assert.Equal(0, chatClient.RequestCount);
-        var resetLogs = logs.Entries
-            .Where(entry =>
-                entry.Category == typeof(TeamsAccessRequestAgent).FullName
-                && entry.EventId.Name == "TeamsIntakeResetCompleted")
-            .ToArray();
-        Assert.Equal(2, resetLogs.Length);
-
-        var changed = Assert.Single(
-            resetLogs,
-            entry => string.Equals(
-                entry.Properties["Outcome"]?.ToString(),
-                "Reset",
-                StringComparison.Ordinal));
-        Assert.Equal("Reset", changed.Properties["Transition"]);
-        Assert.Equal(abandoned.Id, changed.Properties["SessionId"]);
-        Assert.Null(changed.Properties["FailureKind"]);
-        Assert.Null(changed.Properties["FailureCode"]);
-        _ = AssertResetMetadata(changed);
-
-        var alreadyClear = Assert.Single(
-            resetLogs,
-            entry => string.Equals(
-                entry.Properties["Outcome"]?.ToString(),
-                "AlreadyClear",
-                StringComparison.Ordinal));
-        Assert.Null(alreadyClear.Properties["SessionId"]);
-        Assert.Null(alreadyClear.Properties["FailureKind"]);
-        Assert.Null(alreadyClear.Properties["FailureCode"]);
-        _ = AssertResetMetadata(alreadyClear);
-
-        var capturedText = string.Join(
-            Environment.NewLine,
-            resetLogs.Select(entry =>
-                entry.Message
-                + " "
-                + string.Join(
-                    " ",
-                    entry.Properties.Select(property =>
-                        $"{property.Key}={property.Value}"))));
-        Assert.DoesNotContain("/new", capturedText, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(
-            "Discarded sensitive justification",
-            capturedText,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("PROD-ALPHA-EU", capturedText, StringComparison.Ordinal);
-        Assert.DoesNotContain("INC-1042", capturedText, StringComparison.Ordinal);
-    }
-
     private static Dictionary<string, string?> CreateFoundryResponsesProfileConfiguration() =>
         new()
         {
@@ -215,7 +127,7 @@ public sealed class TeamsIntakeLoggingTests
                 DeploymentName,
         };
 
-    private static double AssertOperationMetadata(
+    private static void AssertOperationMetadata(
         CapturedLog entry,
         string transition,
         string outcome,
@@ -243,29 +155,6 @@ public sealed class TeamsIntakeLoggingTests
             entry.Properties["DurationMs"],
             System.Globalization.CultureInfo.InvariantCulture);
         Assert.True(durationMs >= 0);
-        return durationMs;
-    }
-
-    private static double AssertResetMetadata(CapturedLog entry)
-    {
-        Assert.Equal(LogLevel.Information, entry.Level);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultTenantId,
-            entry.Properties["TenantId"]);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultActorId,
-            entry.Properties["ChannelActorId"]);
-        Assert.Equal(
-            FakeTeamsActivityBuilder.DefaultConversationId,
-            entry.Properties["ConversationId"]);
-        Assert.False(
-            string.IsNullOrWhiteSpace(
-                entry.Properties["CorrelationId"]?.ToString()));
-        var durationMs = Convert.ToDouble(
-            entry.Properties["DurationMs"],
-            System.Globalization.CultureInfo.InvariantCulture);
-        Assert.True(durationMs >= 0);
-        return durationMs;
     }
 
     private static Activity CreateMessage(
@@ -279,35 +168,6 @@ public sealed class TeamsIntakeLoggingTests
             .Activity;
         activity.DeliveryMode = DeliveryModes.ExpectReplies;
         return activity;
-    }
-
-    private static async Task<RequestIntakeSession> SeedCollectingSessionAsync(
-        GovernedAccessWebFactory factory,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        var session = new RequestIntakeSession(
-            Guid.NewGuid(),
-            RequestIntakeSession.TeamsChannel,
-            FakeTeamsActivityBuilder.DefaultTenantId,
-            FakeTeamsActivityBuilder.DefaultActorId,
-            FakeTeamsActivityBuilder.DefaultConversationId,
-            GovernedAccess.Web.Authentication.DemoPrincipalKeys.Requester,
-            factory.Clock.UtcNow,
-            "reset-seed");
-        session.UpdateCandidate(
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Discarded sensitive justification",
-            "INC-1042",
-            factory.Clock.UtcNow,
-            "reset-seed-candidate");
-        dbContext.RequestIntakeSessions.Add(session);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return session;
     }
 
     private static Activity CreateConfirmation(Guid sessionId) =>

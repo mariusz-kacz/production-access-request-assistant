@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
@@ -16,12 +17,12 @@ public sealed class MafConversationSessionStoreTests
 {
     private const string ClarificationResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-UK."}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"environmentId","message":"Choose PROD-ALPHA-EU or PROD-BETA-UK.","environmentOptionIds":[]}}
         """;
 
     private const string RoleClarificationResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"requestedRoleId","message":"Choose ProductionReadOnly or ProductionSupport."}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"requestedRoleId","message":"Choose ProductionReadOnly or ProductionSupport.","environmentOptionIds":[]}}
         """;
 
     private const string CompleteReadOnlyResponse =
@@ -31,17 +32,17 @@ public sealed class MafConversationSessionStoreTests
 
     private const string IntakeAEnvironmentResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"intake-a-environment-question"}}
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"intake-a-environment-question","environmentOptionIds":[]}}
         """;
 
     private const string IntakeBRoleResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-b-role-question"}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-b-role-question","environmentOptionIds":[]}}
         """;
 
     private const string IntakeARoleResponse =
         """
-        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-a-role-question"}}
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"requestedRoleId","message":"intake-a-role-question","environmentOptionIds":[]}}
         """;
 
     private const string IntakeBCompleteResponse =
@@ -104,6 +105,27 @@ public sealed class MafConversationSessionStoreTests
             activeChatClient.Invocations[1].Messages,
             message => message.Role == ChatRole.Assistant
                 && message.Text == RoleClarificationResponse);
+
+        var currentTurnMessage = activeChatClient.Invocations[1].Messages.Last(
+            message => message.Role == ChatRole.User);
+        using var currentTurn = JsonDocument.Parse(currentTurnMessage.Text!);
+        var serializedCandidate = currentTurn.RootElement
+            .GetProperty("currentCandidate");
+        Assert.Equal(
+            durableCandidate.ClientId,
+            serializedCandidate.GetProperty("clientId").GetString());
+        Assert.Equal(
+            durableCandidate.EnvironmentId,
+            serializedCandidate.GetProperty("environmentId").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            serializedCandidate.GetProperty("requestedRoleId").ValueKind);
+        Assert.Equal(
+            durableCandidate.Justification,
+            serializedCandidate.GetProperty("justification").GetString());
+        Assert.Equal(
+            durableCandidate.IncidentId,
+            serializedCandidate.GetProperty("incidentId").GetString());
 
         var restartedChatClient = new ScriptedChatClient(
             RoleClarificationResponse);

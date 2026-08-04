@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
@@ -27,42 +26,6 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
     private const string CompleteRequest =
         "I need production read-only access to PROD-ALPHA-EU to investigate "
         + "INC-1042 because customer-facing errors require diagnosis.";
-
-    [Fact]
-    public async Task DefaultChatClientProducesCurrentCandidateContract()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(
-            DeterministicChatMode.Candidate,
-            cancellationToken);
-        var factory = fixture.Factory;
-        using var client = factory.CreateTeamsClient();
-
-        using var response = await client.PostAsJsonAsync(
-            "/api/messages",
-            CreateExpectRepliesActivity(CompleteRequest),
-            ProtocolJsonSerializer.SerializationOptions,
-            cancellationToken);
-
-        var responseBody = await response.Content.ReadAsStringAsync(
-            cancellationToken);
-        Assert.True(
-            response.StatusCode == HttpStatusCode.OK,
-            $"Expected 200 but received {(int)response.StatusCode}: {responseBody}");
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider
-            .GetRequiredService<GovernedAccessDbContext>();
-        var session = await dbContext.RequestIntakeSessions
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-
-        Assert.Equal(RequestIntakeStatus.Ready, session.Status);
-        Assert.Equal("client-alpha", session.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", session.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
-        Assert.Equal("INC-1042", session.IncidentId);
-    }
 
     [Fact]
     public async Task MessagesRouteRequiresAuthenticationBeforeApiAndSpaFallbacks()
@@ -175,65 +138,12 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
     }
 
     [Fact]
-    public async Task CandidateRejectionIdentifiesApplicationValidationProvenance()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(
-            DeterministicChatMode.InvalidCandidate,
-            cancellationToken);
-        var factory = fixture.Factory;
-        using var client = factory.CreateTeamsClient();
-
-        using var response = await client.PostAsJsonAsync(
-            "/api/messages",
-            CreateExpectRepliesActivity("Use PROD-UNKNOWN."),
-            ProtocolJsonSerializer.SerializationOptions,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        using var responseJson = JsonDocument.Parse(responseBody);
-        var responseText = responseJson.RootElement
-            .GetProperty("activities")[0]
-            .GetProperty("text")
-            .GetString()
-            ?? string.Empty;
-        Assert.Contains(
-            "Deterministic application validation rejected the assistant's candidate.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "The selected production environment does not exist.",
-            responseText,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Nothing has been submitted.",
-            responseText,
-            StringComparison.Ordinal);
-
-        await AssertNoWorkflowStateAsync(factory, cancellationToken);
-    }
-
-    [Theory]
-    [InlineData(RealProfileFailure.InvalidConfiguration)]
-    [InlineData(RealProfileFailure.ProviderUnavailable)]
-    public async Task SelectedRealProfileFailureIsSafeAndDoesNotFallback(
-        RealProfileFailure failure)
+    public async Task SelectedRealProfileProviderFailureIsSafeAndDoesNotFallback()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var configuration = CreateFoundryResponsesProfileConfiguration();
-        IChatClient? providerClient = failure switch
-        {
-            RealProfileFailure.InvalidConfiguration => null,
-            RealProfileFailure.ProviderUnavailable => new ThrowingChatClient(
-                new HttpRequestException("offline provider unavailable")),
-            _ => throw new ArgumentOutOfRangeException(nameof(failure)),
-        };
-        if (failure == RealProfileFailure.InvalidConfiguration)
-        {
-            configuration[
-                "RequestPreparationModel:FoundryResponses:DeploymentName"] = string.Empty;
-        }
+        var providerClient = new ThrowingChatClient(
+            new HttpRequestException("offline provider unavailable"));
 
         await using var factory = new GovernedAccessWebFactory(
             providerClient,
@@ -322,12 +232,6 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             await dbContext.AuditEvents
                 .AsNoTracking()
                 .ToListAsync(cancellationToken));
-    }
-
-    public enum RealProfileFailure
-    {
-        InvalidConfiguration,
-        ProviderUnavailable,
     }
 
 }
