@@ -69,9 +69,9 @@ public sealed partial class RequestContextTools(
         OpenWorld = false,
         UseStructuredContent = true,
         OutputSchemaType = typeof(IncidentToolResult))]
-    [Description("Gets current stored context for one incident.")]
+    [Description("Gets one incident using the precise stable identifier supplied by the requester.")]
     public Task<CallToolResult> GetIncidentAsync(
-        [Description("Stable incident identifier.")]
+        [Description("Precise stable incident identifier; titles, descriptions, and partial IDs are not accepted.")]
         [MinLength(1)]
         string incidentId,
         CancellationToken cancellationToken)

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using GovernedAccess.Core.Domain;
-using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
@@ -77,16 +76,22 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
     }
 
     [Fact]
-    public async Task PersonalChatClarificationPersistsCandidateForFixedRequester()
+    public async Task PersonalChatClarificationRendersOnlyAuthoritativeEnvironmentChoices()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await fixture.ResetAsync(
-            DeterministicChatMode.Clarification,
-            cancellationToken);
-        var factory = fixture.Factory;
+        const string clarificationMessage =
+            "I found two authoritative matches. PROD-GAMMA-US is only an invented prose example.";
+        const string modelResponse =
+            """
+            {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":"Investigate elevated production error rates.","incidentId":null},"clarification":{"target":"environmentId","message":"I found two authoritative matches. PROD-GAMMA-US is only an invented prose example.","environmentOptionIds":["PROD-BETA-UK","PROD-ALPHA-EU"]}}
+            """;
+
+        await using var factory = new GovernedAccessWebFactory(
+            new ScriptedChatClient(modelResponse));
+        await factory.ResetDatabaseAsync(cancellationToken);
         using var client = factory.CreateTeamsClient();
         var activity = CreateExpectRepliesActivity(
-            "I need read-only access to PROD-ALPHA-EU for INC-1042.");
+            "I need production access, but I am unsure which environment applies.");
 
         using var response = await client.PostAsJsonAsync(
             "/api/messages",
@@ -96,10 +101,31 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        Assert.Contains(clarificationMessage, responseBody, StringComparison.Ordinal);
         Assert.Contains(
-            "What operational justification should be recorded for this request?",
+            "Authoritative environment choices:",
             responseBody,
             StringComparison.Ordinal);
+        Assert.Contains("Client Alpha", responseBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "Client Alpha Production EU",
+            responseBody,
+            StringComparison.Ordinal);
+        Assert.Contains("PROD-ALPHA-EU", responseBody, StringComparison.Ordinal);
+        Assert.Contains("Client Beta", responseBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "Client Beta Production UK",
+            responseBody,
+            StringComparison.Ordinal);
+        Assert.Contains("PROD-BETA-UK", responseBody, StringComparison.Ordinal);
+        Assert.True(
+            responseBody.IndexOf("PROD-ALPHA-EU", StringComparison.Ordinal)
+                < responseBody.IndexOf("PROD-BETA-UK", StringComparison.Ordinal));
+        Assert.Equal(
+            1,
+            responseBody.Split(
+                "PROD-GAMMA-US",
+                StringSplitOptions.None).Length - 1);
 
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider
@@ -120,11 +146,13 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         Assert.Equal(
             RequestIntakeStatus.Collecting,
             session.Status);
-        Assert.Equal("client-alpha", session.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", session.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
-        Assert.Null(session.Justification);
-        Assert.Equal("INC-1042", session.IncidentId);
+        Assert.Null(session.ClientId);
+        Assert.Null(session.EnvironmentId);
+        Assert.Null(session.RequestedRoleId);
+        Assert.Equal(
+            "Investigate elevated production error rates.",
+            session.Justification);
+        Assert.Null(session.IncidentId);
         Assert.Equal(
             GovernedAccessWebFactory.DefaultUtcNow,
             session.CreatedAt);

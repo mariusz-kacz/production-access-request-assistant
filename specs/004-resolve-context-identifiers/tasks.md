@@ -136,12 +136,12 @@ active-history carry and lost-history isolation.
 
 ### Tests for User Story 2
 
-- [ ] T017 [US2] Refocus the single retained Teams clarification test instead of adding a FullHost journey: supply a distinctive bounded model message and multiple validated option IDs, assert the message is preserved beside canonical display values and stable IDs, prove an invented environment mentioned only in prose is not selectable, and verify no request, approval, operation, or grant is created in `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs`
+- [X] T017 [US2] Refocus the single retained Teams clarification test instead of adding a FullHost journey: supply a distinctive bounded model message and multiple validated option IDs, assert the message is preserved beside canonical display values and stable IDs, prove an invented environment mentioned only in prose is not selectable, and verify no request, approval, operation, or grant is created in `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Update ambiguity and history instructions for direct environment discovery, explicit-term conflicts, structured authoritative shortlist IDs, and self-contained clarification after lost history while retaining existing relative-choice rules in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
-- [ ] T019 [US2] Extend environment clarification rendering to preserve the bounded model message for every valid choice cardinality and append authoritative choices with stable IDs and deterministic ordering without synthesizing replacement wording in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
+- [X] T018 [US2] Update ambiguity and history instructions for direct environment discovery, explicit-term conflicts, structured authoritative shortlist IDs, and self-contained clarification after lost history while retaining existing relative-choice rules in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T019 [US2] Extend environment clarification rendering to preserve the bounded model message for every valid choice cardinality and append authoritative choices with stable IDs and deterministic ordering without synthesizing replacement wording in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: Ambiguous and no-match environment responses remain clarifications,
 and the only new end-to-end test proves model-message preservation, authoritative
@@ -169,7 +169,7 @@ titles or partial IDs would test only the programmed fake response.
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Tighten exact-only incident tool descriptions and model instructions without adding discovery or changing deterministic incident validation in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T020 [US3] Tighten exact-only incident tool descriptions and model instructions without adding discovery or changing deterministic incident validation in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 
 **Checkpoint**: Incident handling remains exact-only with no duplicate incident unit,
 MCP, Teams, or scripted-model tests.

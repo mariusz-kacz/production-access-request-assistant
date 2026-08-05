@@ -449,7 +449,9 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             ? "Authoritative environment choice:"
             : "Authoritative environment choices:");
 
-        foreach (var choice in environmentChoices)
+        foreach (var choice in environmentChoices.OrderBy(
+                     static choice => choice.EnvironmentId,
+                     StringComparer.Ordinal))
         {
             message.AppendLine();
             message.Append("- ");
