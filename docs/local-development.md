@@ -1,7 +1,7 @@
 # Local development
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-03
+- **Last reviewed**: 2026-08-05
 - **Audience**: Developers running or changing the local MVP
 
 ## Choose a path
@@ -57,7 +57,8 @@ creation exists only through authenticated Teams messages.
 ## Model modes
 
 The checked-in default is `Deterministic`. It needs no credentials and always returns
-the fixed Client Alpha candidate used by tests and stable demos.
+the fixed Client Alpha candidate used by tests and stable workflow demos. It does not
+measure whether a model understands natural-language environment wording.
 
 The optional `FoundryResponses` mode uses a real Azure AI Foundry deployment. For the
 shortest supported setup, start it through the Teams helper:
@@ -99,18 +100,42 @@ npm ci --prefix src/GovernedAccess.Web/ClientApp
 Build:
 
 ```powershell
-dotnet build ProductionAccessRequestAssistant.sln --no-restore -warnaserror
+dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 ```
 
 Test:
 
 ```powershell
+dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 ```
 
+Run the four backend commands sequentially in exactly that order, never run the
+integration project without one of the two `TestLevel` filters, and give each
+integration command an outer timeout of at least four minutes. If one times out,
+identify and stop only the runner process tree it created before starting another
+run. The frontend command is separate from the required backend gate.
+
 All automated tests use deterministic fake clients. They never call the live model.
+The optional sanitized semantic matrix is documented in the
+[feature-004 validation quickstart](../specs/004-resolve-context-identifiers/quickstart.md#optional-live-model-quality-matrix).
+
+## Local MCP surface
+
+The same host exposes the real streamable HTTP endpoint at
+`http://localhost:5136/mcp`. It advertises exactly:
+
+- `get_production_environment`, using `{}` for a complete bounded environment
+  catalog or one nonblank `environmentId` for exact lookup; and
+- `get_incident`, requiring one precise stable `incidentId`.
+
+Environment results include their authoritative client relationship and assigned
+roles, so no separate role-listing tool exists. Discovery returns no partial catalog:
+more than 20 environments fails closed. The model-facing wire schemas are recorded
+in the [current MCP contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
 
 Publish:
 

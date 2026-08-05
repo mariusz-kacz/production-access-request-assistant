@@ -66,6 +66,37 @@ public sealed class McpFailureTests
     }
 
     [Fact]
+    public async Task CatalogOverflowReturnsTypedUnavailableWithoutPartialResult()
+    {
+        var reader = new StubRequestContextReader
+        {
+            ListProductionEnvironmentContexts = _ => Task.FromResult(
+                ApplicationResult.Failed<
+                    IReadOnlyList<ProductionEnvironmentContext>>(
+                    new ApplicationFailure(
+                        ApplicationFailureKind.DependencyUnavailable,
+                        "environment-candidate-limit-exceeded",
+                        "The production-environment catalog exceeds the supported limit."))),
+        };
+        await using var host = await McpTestHost.CreateAsync(
+            reader,
+            TestContext.Current.CancellationToken);
+        await using var client = await host.CreateClientAsync(
+            "governed-access-overflow-tests",
+            TestContext.Current.CancellationToken);
+        var tool = await GetToolAsync(client, "get_production_environment");
+
+        var result = await tool.CallAsync(
+            new Dictionary<string, object?>(),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        AssertTypedFailure(
+            result,
+            "Unavailable",
+            "environment-candidate-limit-exceeded");
+    }
+
+    [Fact]
     public async Task CallerCancellationPropagatesToTheRequestContextReader()
     {
         var callStarted = new TaskCompletionSource(

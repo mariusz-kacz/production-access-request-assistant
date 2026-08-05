@@ -2,8 +2,11 @@
 
 - **Status**: Accepted
 - **Date**: 2026-07-12
+- **Last reviewed**: 2026-08-05
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/plan.md`
+- **Related artifacts**: `docs/governed-production-access-product-baseline.md`,
+  `specs/001-governed-production-access/plan.md`,
+  `specs/004-resolve-context-identifiers/plan.md`
 
 ## Context
 
@@ -14,7 +17,7 @@ The governed production access application needs to provide:
 - authenticated business and DevOps decisions;
 - local request context and persistence;
 - model-assisted request drafting;
-- one real MCP endpoint containing exactly three read-only context tools; and
+- one real MCP endpoint containing exactly two read-only context tools; and
 - idempotent synthetic provisioning.
 
 These capabilities could be split into separately deployed web, MCP, workflow, and
@@ -64,8 +67,14 @@ will retain these boundaries:
 The model-visible MCP surface is an explicit allowlist containing exactly:
 
 - `get_production_environment`;
-- `get_incident`; and
-- `get_available_roles`.
+- `get_incident`.
+
+`get_production_environment` provides a bounded complete-catalog discovery mode and
+exact lookup through one typed contract. Every returned environment includes its
+authoritative client relationship and assigned roles, so no separate role-listing
+tool is exposed. Potential environment identifiers are looked up exactly first, and
+only typed `NotFound` may permit turn-local discovery fallback. `get_incident`
+remains exact-only for a precise requester-supplied stable identifier.
 
 Approval, provisioning, revocation, workflow-transition, arbitrary-database, and
 generic-query tools will not be registered. Co-hosting does not grant the model access
@@ -121,9 +130,10 @@ the provider-neutral application layer.
 ### Separate MCP service
 
 Under this alternative, a second ASP.NET Core executable would own the MCP endpoint
-and its three tools. The main application would connect to it over Streamable HTTP,
-and the MCP service would obtain production-environment, incident, and role data from
-its own store or from another trusted application interface.
+and its two tools. The main application would connect to it over Streamable HTTP, and
+the MCP service would obtain production-environment context, including client and
+assigned-role data, plus incident data from its own store or from another trusted
+application interface.
 
 This shape could be justified if MCP had a different owner or deployment cadence, if
 several applications consumed the same MCP server, or if MCP traffic needed independent
@@ -214,7 +224,9 @@ claim being demonstrated, not an incidental implementation mechanism. Bypassing 
 endpoint in the actual drafting flow would fail to prove:
 
 - that MCP inputs and results conform to the explicit typed contracts;
-- that the model-visible server advertises exactly the three allowed tools;
+- that the model-visible server advertises exactly the two allowed tools;
+- that bounded environment discovery, exact lookup, embedded role context, and
+  exact-only incident lookup traverse the real protocol boundary;
 - that not-found, invalid-input, unavailable, timeout, and cancellation outcomes are
   translated correctly across the protocol boundary;
 - that stable data identifiers survive serialization and tool invocation;

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
@@ -169,6 +170,36 @@ public sealed class MafToolBoundaryTests
         Assert.Equal(AllowedToolNames, chatClient.ObservedToolNames);
     }
 
+    [Theory]
+    [InlineData("NotFound", true)]
+    [InlineData("InvalidInput", false)]
+    [InlineData("Timeout", false)]
+    [InlineData("Cancelled", false)]
+    [InlineData("Unavailable", false)]
+    public async Task DiscoveryFallbackRequiresTypedExactNotFound(
+        string exactOutcome,
+        bool discoveryExpected)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var host = await BoundaryMcpTestHost.CreateAsync(
+            TestCatalog.Exact,
+            ToolBehavior.TypedExactFailure,
+            cancellationToken,
+            exactOutcome);
+        var chatClient = new ToolBoundaryChatClient(
+            invokeEnvironmentTool: true,
+            attemptDiscoveryFallback: true);
+        var interpreter = CreateInterpreter(chatClient, host.HttpClientFactory);
+
+        var outcome = await interpreter.InterpretAsync(
+            CreateTurn("Attempt exact environment lookup, then discovery."),
+            cancellationToken);
+
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(outcome);
+        Assert.Equal(1, host.ExactEnvironmentCallCount);
+        Assert.Equal(discoveryExpected ? 1 : 0, host.DiscoveryEnvironmentCallCount);
+    }
+
     private static MafRequestPreparationInterpreter CreateInterpreter(
         IChatClient chatClient,
         IHttpClientFactory httpClientFactory) =>
@@ -225,9 +256,12 @@ public sealed class MafToolBoundaryTests
         Success,
         BlockUntilCancelled,
         Unavailable,
+        TypedExactFailure,
     }
 
-    private sealed class ToolBoundaryChatClient(bool invokeEnvironmentTool) : IChatClient
+    private sealed class ToolBoundaryChatClient(
+        bool invokeEnvironmentTool,
+        bool attemptDiscoveryFallback = false) : IChatClient
     {
         private int requestCount;
 
@@ -256,18 +290,25 @@ public sealed class MafToolBoundaryTests
             if (invokeEnvironmentTool)
             {
                 var tool = Assert.Single(
-                    options?.Tools?.OfType<McpClientTool>() ?? [],
+                    options?.Tools?.OfType<AIFunction>() ?? [],
                     candidate => candidate.Name == "get_production_environment");
-                var result = await tool.CallAsync(
-                    new Dictionary<string, object?>
+                _ = await tool.InvokeAsync(
+                    new AIFunctionArguments
                     {
                         ["environmentId"] = "PROD-ALPHA-EU",
                     },
-                    cancellationToken: cancellationToken);
-                if (result.IsError == true)
+                    cancellationToken);
+                if (!attemptDiscoveryFallback)
                 {
                     throw new HttpRequestException(
                         "The MCP tool reported dependency unavailability.");
+                }
+
+                if (attemptDiscoveryFallback)
+                {
+                    _ = await tool.InvokeAsync(
+                        new AIFunctionArguments(),
+                        cancellationToken);
                 }
             }
 
@@ -303,12 +344,14 @@ public sealed class MafToolBoundaryTests
     private sealed class BoundaryMcpTestHost : IAsyncDisposable
     {
         private readonly WebApplication application;
+        private readonly BoundaryTools tools;
 
         private BoundaryMcpTestHost(
             WebApplication application,
             BoundaryTools tools)
         {
             this.application = application;
+            this.tools = tools;
             HttpClientFactory = new TestServerHttpClientFactory(application);
             ToolCallStarted = tools.CallStarted;
             ToolCancellationObserved = tools.CancellationObserved;
@@ -320,15 +363,20 @@ public sealed class MafToolBoundaryTests
 
         public TaskCompletionSource ToolCancellationObserved { get; }
 
+        public int ExactEnvironmentCallCount => tools.ExactEnvironmentCallCount;
+
+        public int DiscoveryEnvironmentCallCount => tools.DiscoveryEnvironmentCallCount;
+
         public static async Task<BoundaryMcpTestHost> CreateAsync(
             TestCatalog catalog,
             ToolBehavior behavior,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? exactFailureOutcome = null)
         {
             var builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
-            var boundaryTools = new BoundaryTools(behavior);
+            var boundaryTools = new BoundaryTools(behavior, exactFailureOutcome);
             builder.Services.AddSingleton(boundaryTools);
             builder.Services
                 .AddMcpServer()
@@ -406,13 +454,24 @@ public sealed class MafToolBoundaryTests
         }
     }
 
-    private sealed class BoundaryTools(ToolBehavior behavior)
+    private sealed class BoundaryTools(
+        ToolBehavior behavior,
+        string? exactFailureOutcome)
     {
+        private int exactEnvironmentCallCount;
+        private int discoveryEnvironmentCallCount;
+
         public TaskCompletionSource CallStarted { get; } = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource CancellationObserved { get; } = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ExactEnvironmentCallCount => Volatile.Read(
+            ref exactEnvironmentCallCount);
+
+        public int DiscoveryEnvironmentCallCount => Volatile.Read(
+            ref discoveryEnvironmentCallCount);
 
         [McpServerTool(
             Name = "get_production_environment",
@@ -421,11 +480,20 @@ public sealed class MafToolBoundaryTests
             Idempotent = true,
             OpenWorld = false)]
         [Description("Discovers test production environments or gets one by stable identifier.")]
-        public async Task<object> GetProductionEnvironmentAsync(
-            string? environmentId = null,
+        public async Task<CallToolResult> GetProductionEnvironmentAsync(
+            string environmentId = null!,
             CancellationToken cancellationToken = default)
         {
             CallStarted.TrySetResult();
+
+            if (environmentId is null)
+            {
+                Interlocked.Increment(ref discoveryEnvironmentCallCount);
+            }
+            else
+            {
+                Interlocked.Increment(ref exactEnvironmentCallCount);
+            }
 
             if (behavior == ToolBehavior.BlockUntilCancelled)
             {
@@ -448,7 +516,13 @@ public sealed class MafToolBoundaryTests
                     "The test MCP context dependency is unavailable.");
             }
 
-            return new
+            if (behavior == ToolBehavior.TypedExactFailure
+                && environmentId is not null)
+            {
+                return CreateTypedFailure(exactFailureOutcome!);
+            }
+
+            return CreateToolResult(new
             {
                 environments = new[]
                 {
@@ -470,6 +544,50 @@ public sealed class MafToolBoundaryTests
                         },
                     },
                 },
+            });
+        }
+
+        private static CallToolResult CreateTypedFailure(string outcome)
+        {
+            var code = outcome switch
+            {
+                "NotFound" => "environment-not-found",
+                "InvalidInput" => "request-context-identifier-required",
+                "Timeout" => "request-context-timeout",
+                "Cancelled" => "request-context-cancelled",
+                "Unavailable" => "request-context-unavailable",
+                _ => throw new InvalidOperationException(
+                    $"Unsupported exact failure outcome '{outcome}'."),
+            };
+
+            return CreateToolResult(
+                new
+                {
+                    outcome,
+                    code,
+                    message = "The exact environment lookup failed.",
+                    correlationId = "fallback-gate-correlation",
+                },
+                isError: true);
+        }
+
+        private static CallToolResult CreateToolResult<T>(
+            T result,
+            bool isError = false)
+            where T : notnull
+        {
+            var content = JsonSerializer.SerializeToElement(result);
+            return new CallToolResult
+            {
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text = content.GetRawText(),
+                    },
+                ],
+                StructuredContent = content,
+                IsError = isError,
             };
         }
 

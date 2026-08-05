@@ -1,7 +1,7 @@
 # Request Intake Orchestration Rules
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Scope**: Teams request preparation before human confirmation
 
 ## Purpose
@@ -37,10 +37,14 @@ interpretation attempt:
 4. Assess the candidate in one authoritative pass: validate every supplied value,
    clear rejected values, canonicalize or derive authoritative values, and determine
    whether the result is rejected, incomplete, or ready.
-5. Persist either the ready candidate, a focused clarification with its sanitized
-   candidate, or the sanitized rejected candidate and deterministic errors.
-6. When a value is rejected, return transparent application-owned correction guidance
-   and wait for the requester to provide new information in a later turn.
+5. For an environment clarification, validate and reload every structured
+   `environmentOptionIds` value before accepting its associated model message.
+6. Persist either the ready candidate, a focused clarification with its sanitized
+   candidate, or the sanitized rejected candidate and deterministic errors. Choice
+   lists and rejected potential identifiers remain turn-local and are not persisted.
+7. When a value or option set is rejected, return transparent application-owned
+   correction guidance and wait for the requester to provide new information in a
+   later turn.
 
 The application never asks the model to reinterpret the same requester message after
 authoritative validation has rejected a value.
@@ -88,28 +92,67 @@ sanitized candidate as its current application context.
 
 ## Model and MCP obligations
 
-The model receives exactly three read-only MCP tools:
+The model receives exactly two read-only MCP tools:
 
-- `get_production_environment`
-- `get_incident`
-- `get_available_roles`
+- `get_production_environment`, which supports bounded discovery with `{}` and exact
+  lookup with one nonblank `environmentId`, returning authoritative client context
+  and the roles assigned to every returned environment; and
+- `get_incident`, which supports only precise requester-supplied stable identifiers.
 
 The model instructions require it to:
 
-- call `get_production_environment` when an environment identifier is supplied or
-  changed;
-- call `get_incident` when an incident identifier is supplied or changed;
-- use `get_available_roles` for the selected environment;
-- copy stable identifiers from authoritative tool results;
-- derive `clientId` from environment or incident results instead of asking the
-  requester to invent it;
-- never invent, normalize, or translate an identifier into an unsupported value;
+- call environment discovery directly when the latest message contains readable
+  client or environment context without a precise or identifier-like value;
+- call exact environment lookup first when a precise or identifier-like value is
+  supplied or changed;
+- use discovery as an exact-lookup fallback only after a typed `NotFound`; invalid
+  input, timeout, cancellation, unavailability, malformed results, success, and any
+  other outcome do not authorize fallback;
+- use only the roles embedded in the applicable environment result; there is no
+  separate role-listing tool;
+- call `get_incident` only when a precise stable incident identifier is supplied or
+  changed, never for a title, description, partial ID, or inferred reference;
+- copy stable identifiers from authoritative tool results and derive `clientId` from
+  the selected environment instead of asking the requester to choose it;
+- return proposed environment clarification choices only in the separate structured
+  `environmentOptionIds` field;
+- never invent, normalize, silently correct, or translate an identifier into an
+  unsupported value;
 - preserve the current candidate unless the requester clearly changes a field; and
 - resolve relative answers only when the restored conversation contains the question
   and ordering they refer to; otherwise ask a self-contained clarification.
 
+`AllowMultipleToolCalls` remains false, so one model response requests at most one
+tool call. The bounded function loop may still make sequential calls: exact
+environment lookup, discovery after typed `NotFound`, and then exact incident lookup.
+A fresh application-controlled gate is created for each turn and prevents discovery
+after every exact result other than typed `NotFound`.
+
 Tool use improves interpretation but is not an authorization boundary. Application
 validation still reloads authoritative data after every proposal.
+
+## Environment clarification boundary
+
+The model owns one bounded conversational `message` and an untrusted shortlist of
+stable IDs. The application owns whether either may be shown:
+
+- `environmentOptionIds` must contain zero to 20 unique IDs and may be non-empty only
+  for an environment clarification;
+- every proposed ID is reloaded from authoritative environment context and ordered by
+  stable ID;
+- only after the complete option set validates does the Teams adapter render the
+  model message as non-authoritative plain text and append authoritative client name,
+  environment name, and stable ID choices;
+- an unknown, duplicate, excessive, or otherwise invalid option set suppresses the
+  associated model message and choices; and
+- identifiers, names, relationships, or instructions appearing only in model prose
+  never become selectable choices, candidate scope, workflow actions, approvals, or
+  authorization evidence.
+
+One fallback alternative requires developer confirmation, several require developer
+selection, and none require focused correction. No alternative replaces a rejected
+potential identifier until the developer responds and deterministic validation
+accepts the new proposal.
 
 ## Readiness and persistence
 
@@ -132,7 +175,9 @@ execution. It does not become requester prompt history.
 - A collecting or ready intake is marked `Superseded` through the domain lifecycle
   method, unless expiration already requires the terminal `Expired` state.
 - A submitted request remains immutable and is not superseded.
-- Process-local model history and the per-intake coordination gate are cleared.
+- Process-local model history is abandoned through the new intake identity. The old
+  per-intake coordination gate remains allocated until process shutdown but is no
+  longer used by the replacement intake.
 - The next normal message creates a new intake identity with no old transcript or
   candidate state.
 - Text that merely contains `/new` is a normal requester message.
@@ -162,8 +207,13 @@ them. Tests assert:
 - preservation of unrelated validated fields;
 - sanitized persistence after rejection;
 - model-history reuse, isolation, failure, and reset behavior;
-- MCP capability boundaries; and
+- the exact two-tool MCP capability boundary, discovery/exact contracts, typed
+  failures, and deterministic fallback gating;
+- structured option validation, model-message suppression for invalid choices, and
+  authoritative choice rendering for valid choices; and
 - cancellation and typed provider failures.
 
 Natural-language interpretation, relative-answer quality, latency, cost, and
-provider safety are evaluated through the deliberate manual live-model exercise.
+provider safety are evaluated through the optional live-model semantic matrix in the
+[feature-004 quickstart](../specs/004-resolve-context-identifiers/quickstart.md). It is
+release evidence, not CI, and cannot confirm or submit a request.

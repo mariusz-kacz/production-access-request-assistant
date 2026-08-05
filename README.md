@@ -7,19 +7,20 @@ client-specific production environments.
 > and execute.
 
 Microsoft Teams is the only request-creation channel. The model may interpret a
-request and call three read-only MCP tools, but it cannot submit, approve, provision,
-retry, revoke, or otherwise change workflow state. Every model proposal is
-schema-validated and checked against authoritative synthetic data.
+request and call two read-only MCP tools, but it cannot submit, approve, provision,
+retry, revoke, or otherwise change workflow state. Environment context supports
+bounded discovery and exact lookup, while incident context remains exact-only. Every
+model proposal is schema-validated and checked against authoritative synthetic data.
 
 ## What the application demonstrates
 
 1. An SDK-authenticated personal Teams chat starts or continues one request intake.
 2. A Microsoft Agent Framework `ChatClientAgent` interprets the message using
    process-local conversation history.
-3. The agent receives exactly three tools from the real loopback MCP endpoint:
-   - `get_production_environment`
-   - `get_incident`
-   - `get_available_roles`
+3. The agent receives exactly two tools from the real loopback MCP endpoint:
+   - `get_production_environment` for bounded discovery or exact lookup, including
+     each environment's authoritative client and assigned roles;
+   - `get_incident` for an exact requester-supplied incident identifier.
 4. Deterministic application code canonicalizes the candidate and alone decides
    whether it is ready.
 5. A ready intake becomes an immutable Adaptive Card with one **Confirm and submit**
@@ -51,7 +52,7 @@ Microsoft Teams personal chat
 |                 MAF ChatClientAgent  EF Core / SQLite                  |
 |                       |                                                |
 |                       v                                                |
-| /mcp -> exact three read-only context tools                            |
+| /mcp -> exact two read-only context tools                              |
 |                                                                       |
 | React UI -> request list/detail, business decision, DevOps decision,  |
 |             protected retry, session, and audit presentation          |
@@ -82,8 +83,11 @@ ambiguous replies are clarified again rather than guessed.
 - Teams confirmation is the only executable request-creation path. The browser has no
   draft endpoint, request-creation POST, route, form, navigation item, or capability.
 - Model output is untrusted, schema-validated, and authoritatively revalidated.
-- The model receives exactly the three read-only MCP tools and no state-changing
-  capability.
+- The model receives exactly the two read-only MCP tools and no state-changing
+  capability. It receives assigned roles with authoritative environment context;
+  there is no separate role-listing tool.
+- Only a typed exact environment `NotFound` permits bounded discovery fallback.
+  Other failures remain explicit and cannot be masked by discovery.
 - Ready and submitted scope is immutable; correction creates a new intake, request
   ID, and approval sequence.
 - A requester cannot select the business approver.
@@ -197,23 +201,25 @@ Run the normal validation gates sequentially from the repository root:
 ```powershell
 dotnet restore ProductionAccessRequestAssistant.sln
 npm ci --prefix src/GovernedAccess.Web/ClientApp
-dotnet build ProductionAccessRequestAssistant.sln --no-restore -warnaserror
+dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 ```
 
-Run the integration project through one test process. Its assembly deliberately
-disables test parallelization because complete-host fixtures and database-reset
-lifecycles are designed to execute serially. Do not run component and full-host
-filters for that assembly concurrently.
+Run the two integration commands sequentially and give each an outer timeout of at
+least four minutes. The split prevents FullHost fixtures and the remaining fixtures
+from sharing one long-lived runner; never run the complete integration project
+without one of these filters, and never run the two filters concurrently.
 
 The suites require no live LLM, Teams tenant, Azure subscription, public tunnel, or
-production system. The latest whole-system validation records:
+production system. The latest backend validation records:
 
-- 75 unit tests passed;
-- 106 integration/component/full-host tests passed; and
-- 6 frontend tests passed.
+- 98 unit tests passed; and
+- 94 integration/component/full-host tests passed.
+
+The frontend suite contains 6 tests and remains a separate validation command.
 
 The heavier 100-way provisioning scenario remains outside the solution and normal
 validation loop. Run it explicitly when high-contention behavior is under review:
@@ -242,6 +248,8 @@ specs/
   001-governed-production-access/
                              Governed workflow baseline artifacts
   002-teams-access-intake/   Teams-only intake design and validation artifacts
+  004-resolve-context-identifiers/
+                             Current environment-resolution design and contracts
 ```
 
 ## Documentation
@@ -259,12 +267,17 @@ specs/
 - [Teams access-intake implementation plan](specs/002-teams-access-intake/plan.md)
 - [Teams access-intake data model](specs/002-teams-access-intake/data-model.md)
 - [Teams activity contract](specs/002-teams-access-intake/contracts/teams-activity-contract.md)
-- [Model proposal schema](specs/002-teams-access-intake/contracts/request-intake-proposal.schema.json)
+- [Environment-resolution specification](specs/004-resolve-context-identifiers/spec.md)
+- [Environment-resolution implementation plan](specs/004-resolve-context-identifiers/plan.md)
+- [Environment-resolution data model](specs/004-resolve-context-identifiers/data-model.md)
+- [Environment-resolution turn contract](specs/004-resolve-context-identifiers/contracts/environment-resolution-turn-contract.md)
+- [Current model proposal schema](specs/004-resolve-context-identifiers/contracts/request-intake-proposal.schema.json)
 - [Prepared-card contract](specs/002-teams-access-intake/contracts/prepared-request-card.json)
 - [Teams access-intake quickstart](specs/002-teams-access-intake/quickstart.md)
 - [Teams access-intake validation](specs/002-teams-access-intake/validation.md)
-- [Current task list](specs/002-teams-access-intake/tasks.md)
-- [MCP tool contract](specs/001-governed-production-access/contracts/mcp-tools.json)
+- [Environment-resolution quickstart](specs/004-resolve-context-identifiers/quickstart.md)
+- [Current task list](specs/004-resolve-context-identifiers/tasks.md)
+- [Current MCP tool contract](specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
 - [Architecture decision index](docs/adr/README.md)
 
 ## Scope

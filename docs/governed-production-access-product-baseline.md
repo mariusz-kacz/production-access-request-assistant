@@ -259,10 +259,11 @@ The Governed Access Host exposes exactly two read-only MCP tools for the MVP.
 
 ### 5.1 `get_production_environment`
 
-Supports bounded discovery from readable production-environment context and exact
-lookup using a stable environment identifier. Discovery returns authoritative
-environment candidates; exact lookup returns the matching authoritative environment.
-Each returned environment includes:
+Accepts `{}` for bounded complete-catalog discovery or one nonblank `environmentId`
+for exact lookup. Both success modes return the same ordered `environments` shape;
+exact lookup contains one matching authoritative environment. Discovery returns an
+empty successful array for an empty catalog and fails closed, without truncation,
+when more than 20 environments exist. Each returned environment includes:
 
 - environment ID,
 - client ID,
@@ -271,10 +272,20 @@ Each returned environment includes:
 - the role identifiers and display names currently assigned to the environment.
 
 Readable environment descriptions, display names, and model-selected candidates are
-interpretation aids rather than authority. The model may propose an environment only
-when one candidate satisfies the supplied context; ambiguous candidates require a
-focused clarification. Deterministic application services independently validate the
-selected environment, its client relationship, and its requested role.
+interpretation aids rather than authority. Readable context uses discovery directly.
+An identifier-like value uses exact lookup first; only typed exact `NotFound` permits
+a discovery fallback. Invalid input, timeout, cancellation, unavailability, malformed
+results, and successful exact lookup do not permit fallback. One fallback alternative
+requires explicit requester confirmation, several require selection, and none require
+focused correction; the rejected value is never silently replaced.
+
+For an environment clarification, the model returns a bounded conversational message
+and a separate structured list of zero to 20 stable option IDs. The application
+validates and reloads every ID before showing that message beside authoritative
+client/environment labels and stable IDs. Invalid option sets suppress the associated
+message and choices. Model prose is never parsed into selectable scope or authority.
+Deterministic application services independently validate the selected environment,
+its client relationship, and its requested role.
 
 ### 5.2 `get_incident`
 
@@ -285,6 +296,10 @@ Returns typed incident data using a stable incident identifier. The result inclu
 - client or environment relationship when applicable,
 - summary suitable for request validation.
 
+The requester must supply the precise stable incident identifier. Listing, title or
+description search, partial-ID matching, reformatted-ID lookup, and inference are not
+supported.
+
 ### 5.3 MCP Constraints
 
 - Tool inputs and outputs use explicit schemas.
@@ -292,6 +307,9 @@ Returns typed incident data using a stable incident identifier. The result inclu
 - Unsupported or missing records return typed failures.
 - Calls use cancellation and explicit timeouts.
 - The model receives only these tools through an explicit allowlist.
+- Only typed exact environment `NotFound` may enable discovery fallback.
+- Environment discovery fails closed above 20 records and never returns a partial
+  catalog.
 - The MCP endpoint exposes no separate role-listing tool.
 - No additional MCP tools are part of the MVP.
 
@@ -458,6 +476,15 @@ produces either:
 - an incomplete candidate with one focused clarification message,
 - an unsupported or malformed result.
 
+Readable environment context uses discovery directly. Identifier-like environment
+input uses exact lookup first and may fall back to discovery only after typed
+`NotFound`. A fallback never silently changes the candidate: one authoritative
+alternative requires confirmation, several require selection, and none require
+correction. Every environment clarification carries the model's bounded question and
+separate structured option IDs. The application reloads those IDs and appends stored
+client/environment names and stable identifiers only after the complete option set
+validates; prose-only or invalid choices never become candidate scope.
+
 The assistant uses bounded process-local conversation history to interpret follow-up
 messages such as "the first one" from its prior questions. The durable intake stores
 the current typed candidate, not clarification options or a transcript. Conversation
@@ -577,9 +604,11 @@ used by confirmation or downstream workflow actions.
 ### FR-02 Restricted MCP Context
 
 The model shall receive only the two approved read-only MCP tools. Each tool shall
-return typed stored data with stable identifiers. Environment results shall include
-the roles assigned to each returned environment; incident lookup shall require a
-precise stable incident identifier.
+return typed stored data with stable identifiers. The environment tool shall support
+bounded complete discovery and exact lookup with one common result shape, include the
+roles assigned to each returned environment, fail closed above 20 candidates, and
+permit exact-to-discovery fallback only after typed `NotFound`. Incident lookup shall
+require a precise stable incident identifier and expose no discovery or inference.
 
 ### FR-03 Trusted Server Validation
 
@@ -697,6 +726,11 @@ Required tests cover:
 
 - valid typed request extraction,
 - malformed model output,
+- the exact two-tool MCP catalog,
+- bounded environment discovery and exact environment lookup with embedded roles,
+- exact-only incident lookup,
+- exact `NotFound` fallback and rejection of fallback after every other outcome,
+- structured environment-option validation and authoritative clarification rendering,
 - environment and client mismatch,
 - unsupported role,
 - crafted requester or approver duration input is rejected or safely ignored,
@@ -719,9 +753,12 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
 
 ### 12.1 Successful Request
 
-1. The requester asks in a personal Teams conversation for four hours of
-   `ProductionReadOnly` access to Client Alpha for `INC-1042`.
-2. The model uses the two read-only MCP tools as needed and produces a typed draft.
+1. The requester asks in a personal Teams conversation for four hours of read-only
+   access to Client Alpha production in Europe for exact incident `INC-1042`, without
+   supplying the environment's stable identifier.
+2. The model uses bounded environment discovery and exact incident lookup as needed,
+   proposes `PROD-ALPHA-EU` with its derived client and assigned role, and produces a
+   typed draft.
 3. Deterministic validation succeeds.
 4. The requester confirms the immutable final request in Teams.
 5. The request appears in the web request register.
@@ -827,19 +864,24 @@ Only after the core MVP is complete, a later change may add one clearly justifie
 
 Deferred extensions must not delay or complicate the core demonstration scenarios.
 
-## 16. Open Design Questions
+## 16. Resolved Design Decisions
 
-The later proposal and design phases should resolve:
+The delivered baseline uses:
 
-1. Which .NET AI abstraction and structured-output mechanism provide the simplest reliable extraction flow.
-2. Which .NET MCP SDK and transport to use for the co-hosted but real `/mcp` endpoint.
-3. How the synthetic authenticated principal is established and propagated without trusting browser claims.
-4. Which logical modules and .NET projects preserve clear boundaries without over-structuring the modular monolith.
-5. Whether the MCP client uses the host's HTTP endpoint or another supported transport while preserving real MCP contracts and integration tests.
-6. How DevOps approval persistence and the immediate provisioning attempt are separated so failure produces a recoverable `ProvisioningFailed` state.
-7. How the provisioning handler reloads evidence and prevents upstream code from bypassing required checks.
-8. How the immutable request ID is translated to a provider idempotency key.
-9. Whether OpenTelemetry can be added as final polish without introducing an external collector.
+1. Microsoft Agent Framework with a closed structured-output schema and one bounded
+   process-local session per intake;
+2. Model Context Protocol streamable HTTP at the co-hosted `/mcp` endpoint, reached
+   through a real MCP client and exact two-tool allowlist;
+3. server-established synthetic principals and claims, never browser-supplied roles;
+4. separate Core, MCP-adapter, Web-host, React, and test projects inside one modular
+   host boundary;
+5. authenticated Teams confirmation as the sole request-creation path;
+6. transactional DevOps decision persistence followed by a protected, recoverable
+   provisioning operation;
+7. a request-ID-only provisioning entry point that reloads persisted evidence;
+8. the immutable request ID as the provider idempotency key; and
+9. structured logs and correlation without requiring an external OpenTelemetry
+   collector for the MVP.
 
 ## 17. Success Criteria
 
@@ -848,6 +890,11 @@ The project is successful when it proves that:
 - natural-language input becomes a schema-valid but untrusted typed draft,
 - the model obtains request context through one real MCP server,
 - the model can access only the two approved read-only tools,
+- readable environment context resolves through bounded discovery while exact lookup
+  and typed-`NotFound`-only fallback remain available,
+- incident descriptions and partial IDs are never inferred into incident scope,
+- clarification prose cannot create selectable scope and every structured option is
+  reloaded authoritatively,
 - every model-proposed identifier is deterministically validated,
 - only authenticated Teams confirmation can create an access request,
 - browser draft and request-creation endpoints, routes, forms, and capabilities are absent,

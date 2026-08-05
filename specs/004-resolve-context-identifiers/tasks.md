@@ -189,12 +189,12 @@ rollback, logging, and workflow-state isolation.
 
 ### Tests for User Story 4
 
-- [ ] T021 [P] [US4] Update existing MCP failure expectations for the new environment list operation and add only the new catalog-overflow-to-typed-failure assertion; retain existing dependency-failure and cancellation cases instead of recreating them for discovery in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
-- [ ] T022 [P] [US4] Adapt the retained cancellation, unavailability, malformed-output, and unexpected-catalog fixtures to the new environment function shape, then add one focused theory proving the application-controlled fallback gate permits discovery after typed exact `NotFound` and rejects it after every other typed outcome; do not repeat T009's catalog contract or add semantic routing cases in `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs` and `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs`
+- [X] T021 [P] [US4] Update existing MCP failure expectations for the new environment list operation and add only the new catalog-overflow-to-typed-failure assertion; retain existing dependency-failure and cancellation cases instead of recreating them for discovery in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
+- [X] T022 [P] [US4] Adapt the retained cancellation, unavailability, malformed-output, and unexpected-catalog fixtures to the new environment function shape, then add one focused theory proving the application-controlled fallback gate permits discovery after typed exact `NotFound` and rejects it after every other typed outcome; do not repeat T009's catalog contract or add semantic routing cases in `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs` and `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T023 [US4] Complete typed MCP failure mapping and deterministic per-turn fallback gating while preserving cancellation, the existing iteration bound, and metadata-only logging in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T023 [US4] Complete typed MCP failure mapping and deterministic per-turn fallback gating while preserving cancellation, the existing iteration bound, and metadata-only logging in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 
 The remaining US4 enforcement is delivered by T007 (bounded persistence), T015
 (invalid-choice rejection, associated-message suppression, and candidate
@@ -212,9 +212,9 @@ test layer, with no duplicate resilience matrix in persistence, MCP, MAF, and Te
 **Purpose**: Synchronize as-built documentation and run repository-wide regression
 validation without expanding feature scope.
 
-- [ ] T024 [P] Update the product overview, runtime architecture, current MCP contract link, and co-hosted MCP ADR from the three-tool exact-only design to feature 004 in `README.md`, `docs/architecture.md`, and `docs/adr/0001-use-one-deployable-service-including-mcp.md`
-- [ ] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
-- [ ] T026 [P] Update operator/developer walkthroughs and reconcile current baseline/roadmap wording with the delivered two-tool runtime in `docs/teams-quickstart.md`, `docs/teams-advanced-reference.md`, `docs/local-development.md`, `docs/governed-production-access-product-baseline.md`, and `docs/roadmap.md`
+- [X] T024 [P] Update the product overview, runtime architecture, current MCP contract link, and co-hosted MCP ADR from the three-tool exact-only design to feature 004 in `README.md`, `docs/architecture.md`, and `docs/adr/0001-use-one-deployable-service-including-mcp.md`
+- [X] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
+- [X] T026 [P] Update operator/developer walkthroughs and reconcile current baseline/roadmap wording with the delivered two-tool runtime in `docs/teams-quickstart.md`, `docs/teams-advanced-reference.md`, `docs/local-development.md`, `docs/governed-production-access-product-baseline.md`, and `docs/roadmap.md`
 - [ ] T027 Run the warnings-as-errors build, unit tests, FullHost integration tests, and remaining integration tests sequentially in the exact order and with the timeout/process-cleanup rules documented in `specs/004-resolve-context-identifiers/quickstart.md`
 
 ---

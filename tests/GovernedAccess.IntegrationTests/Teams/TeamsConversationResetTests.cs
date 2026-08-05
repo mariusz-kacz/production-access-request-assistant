@@ -22,12 +22,12 @@ public sealed class TeamsConversationResetTests
 
     private const string InitialClarification =
         """
-        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Choose an environment: PROD-ALPHA-EU or PROD-BETA-UK."}}
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Choose an environment: PROD-ALPHA-EU or PROD-BETA-UK.","environmentOptionIds":["PROD-ALPHA-EU","PROD-BETA-UK"]}}
         """;
 
     private const string ReplacementClarification =
         """
-        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Please choose an environment explicitly: PROD-ALPHA-EU or PROD-BETA-UK."}}
+        {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":null,"incidentId":null},"clarification":{"target":"environmentId","message":"Please choose an environment explicitly: PROD-ALPHA-EU or PROD-BETA-UK.","environmentOptionIds":["PROD-ALPHA-EU","PROD-BETA-UK"]}}
         """;
 
     [Fact]

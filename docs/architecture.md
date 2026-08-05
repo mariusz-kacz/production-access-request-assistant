@@ -1,7 +1,7 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Scope**: Governed Production Access Request Assistant MVP
 
 The history-first Teams preparation and Teams-only creation boundaries described here
@@ -34,7 +34,7 @@ The implementation is shaped by the following constraints:
 - one server-selected request-preparation profile: the checked-in deterministic
   client or an explicitly configured Foundry Responses client behind the same
   `IChatClient` boundary;
-- a real, read-only MCP endpoint with exactly three tools;
+- a real, read-only MCP endpoint with exactly two tools;
 - no model-visible approval, workflow, or provisioning capability;
 - immutable submitted requests and request-bound approvals;
 - deterministic authorization and validation for every state change;
@@ -149,7 +149,7 @@ cross into Core.
 MCP contains:
 
 - stateless Streamable HTTP server registration;
-- explicit registration of the three allowed tools;
+- explicit registration of the two allowed tools;
 - typed tool input and result records; and
 - translation between MCP-facing contracts and `IRequestContextReader`.
 
@@ -204,7 +204,7 @@ the single overall model/MCP deadline. Invalid configuration, missing authorizat
 provider failure, and timeout fail closed; the host never substitutes the
 deterministic client after `FoundryResponses` was selected.
 
-Both profiles enter the same strict proposal schema, exact three-tool MCP allowlist,
+Both profiles enter the same strict proposal schema, exact two-tool MCP allowlist,
 authoritative candidate assessment, immutable confirmation, human approvals, and
 protected idempotent provisioning path. Profile choice and model output are not
 authorization or persisted workflow evidence.
@@ -235,7 +235,7 @@ sequenceDiagram
     Intake->>Draft: Intake ID + complete candidate + latest message
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
-    McpServer-->>McpClient: Exactly three read-only tools
+    McpServer-->>McpClient: Exactly two read-only tools
     Draft->>Gate: Execute turn under intake ID
     Gate->>Memory: Get or create native AgentSession
     Memory-->>Gate: Session with available prior messages
@@ -253,8 +253,8 @@ sequenceDiagram
     Draft->>Draft: Strict schema parsing and boundary translation
     Draft-->>Gate: Successfully validated outcome
     Gate->>Memory: Save native session
-    Draft-->>Intake: Untrusted complete candidate + optional target/message
-    Intake->>Context: Validate every supplied identifier and relationship
+    Draft-->>Intake: Untrusted candidate + optional message/environment option IDs
+    Intake->>Context: Reload options and validate every identifier and relationship
     Context->>DB: Query authoritative records
     alt Identifier or candidate value is rejected
         Intake->>Intake: Clear rejected fields and preserve validated fields
@@ -273,12 +273,15 @@ sequenceDiagram
 
 The collecting candidate is untrusted and creates no request or approval. Core
 validates every supplied client, environment, role, and incident value before it is
-persisted. A valid environment or active incident supplies canonical client ownership;
-display names never become stable identifiers. When validation rejects a value, Core
-clears that field, preserves unrelated validated fields, persists the sanitized
-candidate, and returns typed deterministic correction guidance without another model
-call. Only an owned, unexpired ready intake can be confirmed. The model and MCP never
-receive a submit capability.
+persisted. It also reloads every structured environment clarification option before
+the Teams adapter may show the model-authored message beside application-rendered
+authoritative choices. A valid environment or active incident supplies canonical
+client ownership; display names and model prose never become stable identifiers.
+When validation rejects a value or option set, Core suppresses the associated unsafe
+proposal, preserves unrelated validated fields, persists the sanitized candidate,
+and returns typed deterministic correction guidance without another model call. Only
+an owned, unexpired ready intake can be confirmed. The model and MCP never receive a
+submit capability.
 
 ### Explicit preparation reset
 
@@ -339,11 +342,19 @@ The adapter defaults to:
 The MCP client rejects a catalog that does not contain exactly:
 
 - `get_production_environment`;
-- `get_incident`; and
-- `get_available_roles`.
+- `get_incident`.
+
+`get_production_environment` accepts `{}` for a complete bounded discovery result or
+one nonblank `environmentId` for exact lookup. Both success modes return the same
+ordered `environments` shape with authoritative client context and each environment's
+assigned ordered roles. Potential identifiers use exact lookup first; only a typed
+`NotFound` unlocks turn-local discovery fallback, and any proposed alternative still
+requires deterministic reload and developer confirmation or selection. Catalog
+overflow fails closed without a partial result. `get_incident` remains an exact-only
+lookup for a precise requester-supplied stable identifier.
 
 The complete wire contract is
-[specs/001-governed-production-access/contracts/mcp-tools.json](../specs/001-governed-production-access/contracts/mcp-tools.json).
+[specs/004-resolve-context-identifiers/contracts/mcp-tools.json](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
 
 ## Governed workflow
 
@@ -534,6 +545,13 @@ translated to the Core request-context port. It exposes no resources, prompts,
 generic queries, arbitrary database access, workflow commands, approvals,
 provisioning, or revocation.
 
+Its exact allowlist contains `get_production_environment`, which provides bounded
+discovery and exact lookup with authoritative client and assigned-role context, and
+exact-only `get_incident`. It exposes no separate role-listing capability. The model
+interprets readable environment wording against the bounded catalog, while Core
+independently validates every proposed environment, derived client, role assignment,
+and optional exact incident identifier.
+
 Tool visibility and annotations are not authorization. Safety comes from the narrow
 capability set, typed schemas, stored-data lookup, and the complete absence of
 state-changing dependencies in the MCP project.
@@ -657,6 +675,6 @@ a new ADR before changing the deployment or trust boundaries.
 - [Teams intake data model](../specs/002-teams-access-intake/data-model.md)
 - [Governed workflow data model](../specs/001-governed-production-access/data-model.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
-- [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)
+- [Current MCP tool contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
 - [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)

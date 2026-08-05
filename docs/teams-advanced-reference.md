@@ -1,7 +1,7 @@
 # Teams advanced reference
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Audience**: Developers administering or permanently removing the local Teams demo
 
 Do not start here for normal setup or daily use. Follow the
@@ -226,8 +226,13 @@ token, tenant override, or client secret to model settings.
 The selected live provider uses the Teams endpoint's existing 100-second overall
 deadline. Invalid configuration, missing Entra authorization, provider failure, or
 timeout fails closed and never falls back to deterministic responses. The provider
-still receives only the exact three read-only MCP tools and cannot confirm, approve,
-provision, or change workflow state.
+still receives only the exact two read-only MCP tools,
+`get_production_environment` and `get_incident`, and cannot confirm, approve,
+provision, or change workflow state. Environment calls use bounded discovery or exact
+lookup and return assigned roles with authoritative client context. Incident calls
+remain exact-identifier-only. For an identifier-like environment value, only typed
+exact `NotFound` permits discovery fallback; timeout, cancellation, invalid input,
+unavailability, or malformed results fail without fallback.
 
 An exact `/new` message is handled before the provider boundary. It resets only the
 authenticated conversation's active unsubmitted preparation, invokes no model or MCP

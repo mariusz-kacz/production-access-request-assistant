@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Current baseline**:
   [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 
@@ -12,26 +12,25 @@ the active baseline. A roadmap item becomes authoritative only after its busines
 requirement is approved and the product baseline, constitution, specification,
 contracts, and tests are updated together.
 
-The approved next increment is
-[feature 004](../specs/004-resolve-context-identifiers/spec.md). It narrows model-
-assisted discovery to production environments and establishes an exact two-tool MCP
-surface:
+The delivered
+[feature 004](../specs/004-resolve-context-identifiers/spec.md) is incorporated into
+the active product baseline. It narrows model-assisted discovery to production
+environments and establishes the exact two-tool MCP surface:
 
 - `get_production_environment`
 - `get_incident`
 
-`get_production_environment` will support bounded environment discovery and exact
-lookup. Each returned environment will include its authoritative client relationship
+`get_production_environment` supports bounded environment discovery and exact
+lookup. Each returned environment includes its authoritative client relationship
 and assigned roles, so a separate role-listing capability is unnecessary.
 `get_incident` remains an exact-identifier lookup. Incident listing, search, title
-matching, and semantic inference are not part of the approved feature.
+matching, and semantic inference are outside the baseline.
 
-The checked-in implementation and as-built guidance continue to describe the former
-three-tool surface until feature 004 is implemented. That delivery must update the
-MCP contracts, model allowlist and instructions, tests, security analysis, runtime
-guidance, and validation evidence together.
+The checked-in runtime, current MCP contract, model allowlist and instructions,
+tests, security analysis, and operator guidance now describe that delivered design.
+No subsequent product increment is currently approved.
 
-## Approved Next Feature: Environment Identifier Resolution
+## Delivered Increment: Environment Identifier Resolution
 
 ### Business problem
 
@@ -39,7 +38,7 @@ Requesters know a client or environment by its familiar name but may not know th
 stable production-environment identifier. Requiring them to leave the conversation
 and find that identifier adds avoidable friction.
 
-### Approved requirement
+### Delivered behavior
 
 The assistant may read a bounded authoritative set of production environments and
 interpret the requester's readable description. One unambiguous environment may be
@@ -64,12 +63,18 @@ or problem description.
 - Authenticated server context remains the only source of acting identity.
 - Confirmation and all subsequent workflow transitions bypass the model.
 
-### Minimum acceptance criteria
+### Delivered acceptance boundaries
 
 - A developer can identify one unambiguous environment without knowing its stable ID.
 - Zero, one, and multiple environment matches produce distinct safe outcomes.
 - Environment choices contain stable identifiers, readable context, authoritative
   client relationships, and assigned roles.
+- Identifier-like environment values use exact lookup first. Only typed `NotFound`
+  permits discovery fallback, and no alternative becomes scope without requester
+  confirmation or selection.
+- A model-authored clarification message is shown only after its separate structured
+  option IDs are reloaded and validated; selectable labels and identifiers come from
+  authoritative records, never prose.
 - Role choices shown to the requester are limited to those assigned to the selected
   environment and are independently validated before submission.
 - Incident descriptions and partial identifiers are never mapped to an incident.
@@ -81,7 +86,7 @@ or problem description.
 
 ## Explicitly Not on This Roadmap
 
-This approved direction does not justify:
+The delivered environment-resolution increment does not justify:
 
 - incident discovery, listing, or semantic search;
 - a separate role-listing tool;

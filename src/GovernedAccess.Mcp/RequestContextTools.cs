@@ -198,6 +198,12 @@ public sealed partial class RequestContextTools(
             ApplicationFailureKind.NotFound => "NotFound",
             ApplicationFailureKind.Timeout => "Timeout",
             ApplicationFailureKind.Cancelled => "Cancelled",
+            ApplicationFailureKind.Unauthenticated
+                or ApplicationFailureKind.Unauthorized
+                or ApplicationFailureKind.InvalidTransition
+                or ApplicationFailureKind.ConcurrencyConflict
+                or ApplicationFailureKind.DependencyUnavailable
+                or ApplicationFailureKind.DependencyFailure => "Unavailable",
             _ => "Unavailable",
         };
 

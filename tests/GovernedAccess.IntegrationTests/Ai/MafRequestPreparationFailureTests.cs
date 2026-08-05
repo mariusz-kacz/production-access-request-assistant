@@ -23,7 +23,7 @@ public sealed class MafRequestPreparationFailureTests
         """,
         // Structurally inconsistent proposal.
         """
-        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"incidentId","message":"This action must not be accepted."}}
+        {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate the active production incident.","incidentId":"INC-1042"},"clarification":{"target":"incidentId","message":"This action must not be accepted.","environmentOptionIds":[]}}
         """,
         // Prompt injection attempts to add a state-changing command outside the schema.
         """

@@ -343,6 +343,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         IReadOnlyList<McpClientTool> tools,
         CancellationToken cancellationToken)
     {
+        var turnTools = CreateTurnTools(tools);
         var runOptions = new ChatClientAgentRunOptions(
             new ChatOptions
             {
@@ -352,7 +353,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                     schemaName: "request_intake_proposal",
                     schemaDescription:
                         "An untrusted structured proposal for one access-request preparation turn."),
-                Tools = tools.Cast<AITool>().ToArray(),
+                Tools = turnTools,
             });
 
         return await turnCoordinator.ExecuteTurnAsync(
@@ -375,6 +376,18 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                 return result;
             },
             cancellationToken);
+    }
+
+    private static AITool[] CreateTurnTools(
+        IReadOnlyList<McpClientTool> tools)
+    {
+        return tools
+            .Select<
+                McpClientTool,
+                AITool>(tool => tool.Name == "get_production_environment"
+                    ? new EnvironmentDiscoveryFallbackGate(tool)
+                    : tool)
+            .ToArray();
     }
 
     private async Task<McpClient> CreateMcpClientAsync(
@@ -487,6 +500,82 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
 
     private sealed class McpCatalogException : Exception
     {
+    }
+
+    private sealed class EnvironmentDiscoveryFallbackGate(AIFunction innerFunction)
+        : DelegatingAIFunction(innerFunction)
+    {
+        private object? exactLookupResult;
+        private bool exactLookupAttempted;
+        private bool discoveryPermitted;
+
+        protected override async ValueTask<object?> InvokeCoreAsync(
+            AIFunctionArguments arguments,
+            CancellationToken cancellationToken)
+        {
+            var isDiscovery = !arguments.ContainsKey("environmentId");
+            if (isDiscovery && exactLookupAttempted && !discoveryPermitted)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return exactLookupResult;
+            }
+
+            var result = await InnerFunction.InvokeAsync(
+                arguments,
+                cancellationToken);
+
+            if (!isDiscovery)
+            {
+                exactLookupAttempted = true;
+                exactLookupResult = result;
+                discoveryPermitted = HasTypedNotFoundOutcome(result);
+            }
+
+            return result;
+        }
+
+        private static bool HasTypedNotFoundOutcome(object? result)
+        {
+            if (result is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var element = result is JsonElement jsonElement
+                    ? jsonElement
+                    : JsonSerializer.SerializeToElement(result, SerializerOptions);
+                return HasTypedNotFoundOutcome(element);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+            catch (NotSupportedException)
+            {
+                return false;
+            }
+        }
+
+        private static bool HasTypedNotFoundOutcome(JsonElement element)
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (element.TryGetProperty("outcome", out var outcome))
+            {
+                return outcome.ValueKind == JsonValueKind.String
+                    && outcome.GetString() == "NotFound";
+            }
+
+            return element.TryGetProperty(
+                    "structuredContent",
+                    out var structuredContent)
+                && HasTypedNotFoundOutcome(structuredContent);
+        }
     }
 
     private sealed class ProposalPayload

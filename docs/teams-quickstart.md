@@ -1,7 +1,7 @@
 # Teams quickstart
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Audience**: Developers running the application from a real personal Teams chat
 
 Use this page in order. The normal daily workflow is only two long-running commands
@@ -136,21 +136,38 @@ reaches the protected bot endpoint without bypassing bearer-token authentication
 In the bot's personal Teams chat, send:
 
 ```text
-I need ProductionReadOnly access to PROD-ALPHA-EU to investigate INC-1042. I need to inspect production logs and configuration to diagnose the active incident.
+I need read-only access to Client Alpha production in Europe to investigate INC-1042. I need to inspect production logs and configuration to diagnose the active incident.
 ```
 
 Expected flow:
 
-1. The assistant shows a confirmation card for Client Alpha and an eight-hour grant.
-2. No access request exists until you select **Confirm and submit**.
-3. Confirmation creates one immutable request in `AwaitingBusinessApproval`.
-4. Open the returned HTTPS link to continue the human approval demo.
+1. With the live profile, the assistant uses bounded environment discovery, resolves
+   the stored `PROD-ALPHA-EU` scope and `client-alpha` relationship, uses
+   `ProductionReadOnly` from that environment's embedded roles, and looks up only the
+   precise `INC-1042` incident identifier.
+2. The assistant shows a confirmation card for Client Alpha and an eight-hour grant.
+3. No access request exists until you select **Confirm and submit**.
+4. Confirmation creates one immutable request in `AwaitingBusinessApproval`.
+5. Open the returned HTTPS link to continue the human approval demo.
 
-The live model may interpret text and call only the three read-only MCP tools. Its
-output is still schema-validated and checked against authoritative local data. It
-cannot approve or provision access. The existing 100-second Teams request timeout is
-the single overall model/MCP deadline. If the selected live profile fails, the turn
-fails closed and never falls back to the deterministic client.
+The deterministic profile always returns its fixed Client Alpha candidate; it proves
+the Teams and governed-workflow path but does not evaluate natural-language matching.
+Use the explicitly selected live profile when evaluating interpretation quality.
+
+The live model may interpret text and call only
+`get_production_environment` and `get_incident`. Environment context supports bounded
+discovery or exact lookup and already contains assigned roles; there is no separate
+role-listing tool. Incident lookup requires a precise stable identifier. Model output
+is still schema-validated and checked against authoritative local data, and the model
+cannot confirm, approve, or provision access. The existing 100-second Teams request
+timeout is the single overall model/MCP deadline. If the selected live profile fails,
+the turn fails closed and never falls back to the deterministic client.
+
+For a live-model fallback check, send an identifier-like value such as
+`PROD-ALPHA`. The assistant must try exact lookup first. Only typed `NotFound` may
+lead to bounded discovery, and even one plausible stored alternative must be shown
+for explicit confirmation rather than silently substituted. Incident titles,
+descriptions, and partial IDs must instead produce an exact-ID-or-omit clarification.
 
 ## 7. Reset an unsubmitted preparation
 

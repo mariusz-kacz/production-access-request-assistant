@@ -1,7 +1,7 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-04
+- **Last reviewed**: 2026-08-05
 - **Scope**: Local synthetic Governed Production Access Request Assistant MVP
 
 ## Purpose
@@ -178,7 +178,9 @@ description, or provider adapter would not preserve this boundary.
 | Model output is not trusted | Closed JSON schema, strict parsing, known-role constraints, identifier revalidation, and full submission validation. |
 | Conversation history cannot authorize or establish candidate truth | Only the canonical typed candidate is durable; native MAF history is process-local, isolated per intake, and never read by confirmation or downstream workflow actions. |
 | Missing history cannot reinterpret a relative answer | After restart the model receives the durable candidate but no prior conversation messages; ambiguous references require self-contained re-clarification and cannot be reconstructed or guessed from persisted options. |
-| MCP cannot mutate workflow | The MCP project has only three read-only context tools and no workflow or provisioning dependency. |
+| MCP cannot mutate workflow | The MCP project has only two read-only context tools and no workflow or provisioning dependency. |
+| Discovery cannot mask an exact-lookup failure | A fresh per-turn gate permits discovery after exact lookup only when the structured outcome is typed `NotFound`; other outcomes retain their explicit correction or retry semantics. |
+| Model prose cannot create selectable scope | Structured environment option IDs are independently validated and reloaded before the bounded model message or authoritative choices are rendered; prose is never parsed into scope or authority. |
 | Provisioning does not trust its caller | The protected service accepts a request ID and reloads request, operation, and both approvals. |
 | Retry cannot replace scope | Retry has no body and reuses the same request, operation, evidence checks, and provider idempotency identity. |
 | Duplicate work cannot create multiple logical grants | Request ID is the idempotency identity; operation and grant constraints are unique per request; concurrent completion is reloaded. |
@@ -332,8 +334,19 @@ The adapter constrains the model interaction with:
 - bounded model iterations and propagated request cancellation; and
 - safe typed failure outcomes.
 
+Readable environment context uses bounded catalog discovery. A potential environment
+identifier uses exact lookup first, and an application-controlled per-turn tool
+wrapper permits discovery fallback only after typed `NotFound`. Prompt instructions
+do not enforce this security-relevant sequencing rule. Timeout, cancellation,
+invalid-input, unavailable, malformed, and successful exact outcomes cannot be
+converted into discovery-based correction.
+
 After parsing, the adapter revalidates client, environment, role, and incident
-relationships against stored data. Deterministic confirmation validates current data
+relationships against stored data. For environment clarification, it also validates
+and reloads the complete structured option set before allowing the bounded
+model-authored message to be displayed beside application-rendered authoritative
+choices. Unknown, duplicate, excessive, or otherwise invalid options suppress the
+associated message and choices. Deterministic confirmation validates current data
 again before creating a request.
 
 A valid-looking proposal is still only untrusted input to deterministic preparation.
@@ -351,8 +364,15 @@ revalidation boundaries.
 The `/mcp` endpoint exposes exactly:
 
 - `get_production_environment`;
-- `get_incident`; and
-- `get_available_roles`.
+- `get_incident`.
+
+`get_production_environment` accepts `{}` for a bounded complete-catalog discovery
+read or a nonblank `environmentId` for exact lookup. Both success modes return the
+same ordered environment shape with authoritative client relationships and assigned
+roles. The server fails closed above 20 candidates and never returns a truncated
+catalog. `get_incident` remains exact-only for a precise requester-supplied stable
+identifier; incident listing, title search, partial-ID lookup, and inference are not
+available. No separate role-listing tool exists.
 
 Inputs use closed schemas. Results contain stable identifiers and typed safe failure
 envelopes. The MCP project has no dependency on the workflow store or provisioner and
@@ -503,8 +523,9 @@ does not receive stack traces, provider credentials, raw exception details, or
 caller-trusted authorization assertions.
 
 Model, MCP, and provisioning logs record operation names, duration, correlation, and
-outcome metadata. Normal logging does not require raw prompts, full MCP payloads, or
-secrets.
+outcome metadata. Normal logging does not record raw requester messages, prompts,
+transcripts, complete environment catalogs, full clarification choices, full MCP
+payloads, or secrets.
 
 The local audit and logs are useful demonstration evidence. They are not a
 tamper-resistant compliance ledger, security information and event management system,
@@ -520,6 +541,8 @@ or long-term retention solution.
 | Insecure direct object reference | User guesses another request UUID. | Server participant calculation; detail returns not found for nonparticipants. | Request metadata is visible to local DB operators. |
 | Prompt injection | Intent tells the model to approve or invoke provisioning. | No such model tools; closed output schema; authoritative revalidation; separate human actions. | Model may produce an unusable draft or availability failure. |
 | Invented identifiers | Model returns a plausible but nonexistent environment or incident. | Direct identifier and relationship revalidation plus submission-time validation. | A future mutable source requires freshness and consistency rules. |
+| Silent environment correction | Exact lookup times out or fails, and the model attempts discovery to substitute another scope. | Per-turn gate permits discovery only after typed exact `NotFound`; every fallback option requires authoritative reload and developer confirmation or selection. | Semantic shortlist quality remains model-dependent and is evaluated separately. |
+| Prose-only choice injection | A model clarification names an environment that is absent from its structured options. | The application validates only structured IDs, renders choices from reloaded records, and never parses prose into scope or authority. | The informational model message may still contain confusing wording. |
 | MCP capability expansion | A server advertises a workflow or provisioning tool. | Explicit server registration and client-side exact-name allowlist check. | An unauthenticated endpoint can be enumerated in the local deployment. |
 | Request tampering after approval | Caller changes client, role, or environment before DevOps. | No update endpoint; immutable scope properties; approval and operation scope checks. | A direct malicious database writer is outside the trust assumption. |
 | DevOps privilege expansion | Crafted approval adds a stronger role or longer duration. | Restricted body; exact stored role; fixed server-owned eight-hour expiry. | Current design has no generalized privilege hierarchy by intent. |
@@ -555,15 +578,23 @@ Security behavior is exercised by automated tests, including:
 - [explicit concurrency tests](../tests/GovernedAccess.ConcurrencyTests/Provisioning/ProvisioningIdempotencyTests.cs):
   concurrent attempts converging on one operation and grant; and
 - [MCP contract tests](../tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs):
-  exact allowlist, closed schemas, typed identifiers, failures, and forbidden
-  capability absence;
+  exact two-tool allowlist, discovery/exact schemas, embedded roles, exact-only
+  incidents, stable identifiers, and forbidden capability absence;
+- [MCP failure and MAF tool-boundary tests](../tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs):
+  typed failure envelopes, fail-closed catalog overflow, cancellation, unexpected
+  catalogs, and exact-`NotFound`-only discovery fallback together with
+  [`MafToolBoundaryTests`](../tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs);
 - [MAF session-store tests](../tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs):
   native session reuse, intake isolation, restart-equivalent loss, exact turn
   serialization, and last-good-session preservation;
 - [Teams actor tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs):
   channel, tenant, personal-conversation, actor, and forged-payload boundaries;
-- [confirmation component tests](../tests/GovernedAccess.IntegrationTests/Teams/RequestIntakeConfirmationComponentTests.cs):
-  ownership, concealment, terminal states, stale context, and typed failure behavior;
+- [request-intake unit tests](../tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs):
+  ownership, terminal states, stale context, deterministic option reload, invalid
+  option rejection, candidate preservation, and confirmation behavior;
+- [Teams preparation tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs):
+  bounded model-message preservation beside authoritative choices, prose-only option
+  exclusion, and zero request/approval/provisioning side effects;
 - [confirmation concurrency tests](../tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakeConfirmationConcurrencyTests.cs):
   one atomic submitted intake, request, and audit result under competing confirmations;
   and
@@ -655,9 +686,11 @@ Review this document and the related tests whenever a change:
 - [Architecture decision index](adr/README.md)
 - [Teams intake feature specification](../specs/002-teams-access-intake/spec.md)
 - [Teams intake data model](../specs/002-teams-access-intake/data-model.md)
+- [Environment-resolution specification](../specs/004-resolve-context-identifiers/spec.md)
+- [Environment-resolution turn contract](../specs/004-resolve-context-identifiers/contracts/environment-resolution-turn-contract.md)
 - [Governed workflow data model](../specs/001-governed-production-access/data-model.md)
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
-- [MCP tool contract](../specs/001-governed-production-access/contracts/mcp-tools.json)
+- [Current MCP tool contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
 - [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
 - [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)
 - [ADR 0002: Validate Persisted Workflow Evidence at Provisioning](adr/0002-validate-persisted-workflow-evidence-at-provisioning.md)
