@@ -15,9 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace GovernedAccess.IntegrationTests.Observability;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsIntakeLoggingTests
 {
     private const string DeploymentName = "governed-access-chat";

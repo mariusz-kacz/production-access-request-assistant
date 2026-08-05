@@ -488,7 +488,7 @@ public sealed class RequestIntakeServiceTests
         Assert.Same(clarification, result.Clarification);
         var choice = Assert.Single(result.EnvironmentChoices);
         Assert.Equal("PROD-ALPHA-EU", choice.EnvironmentId);
-        Assert.Equal("Client Alpha Production EU", choice.EnvironmentDisplayName);
+        Assert.Equal("Primary Production EU", choice.EnvironmentDisplayName);
         Assert.Equal("client-alpha", choice.ClientId);
         Assert.Equal("Client Alpha", choice.ClientDisplayName);
         Assert.Equal(["PROD-ALPHA-EU"], scenario.EnvironmentContextLookupIds);
@@ -1204,7 +1204,7 @@ public sealed class RequestIntakeServiceTests
             Match(
                 clientId,
                 "client-alpha",
-                new Client("client-alpha", "Client Alpha"),
+                new Client("client-alpha", "Client Alpha", "business-approver"),
                 cancellationToken);
 
         public Task<ApplicationResult<ProductionEnvironment>>
@@ -1217,8 +1217,7 @@ public sealed class RequestIntakeServiceTests
                 new ProductionEnvironment(
                     "PROD-ALPHA-EU",
                     "client-alpha",
-                    "Client Alpha Production EU",
-                    "business-approver"),
+                    "Primary Production EU"),
                 cancellationToken);
 
         public Task<ApplicationResult<ProductionEnvironmentContext>>
@@ -1289,8 +1288,7 @@ public sealed class RequestIntakeServiceTests
             var environment = new ProductionEnvironment(
                 "PROD-ALPHA-EU",
                 "client-alpha",
-                "Client Alpha Production EU",
-                "business-approver");
+                "Primary Production EU");
             EnvironmentRole[] assignedRoles = RoleIsAvailable
                 ? [new EnvironmentRole(
                     environment.Id,
@@ -1298,7 +1296,7 @@ public sealed class RequestIntakeServiceTests
                 : [];
             return new ProductionEnvironmentContext(
                 environment,
-                new Client("client-alpha", "Client Alpha"),
+                new Client("client-alpha", "Client Alpha", "business-approver"),
                 assignedRoles);
         }
 

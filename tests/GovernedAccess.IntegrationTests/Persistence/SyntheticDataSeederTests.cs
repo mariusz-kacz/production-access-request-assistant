@@ -9,7 +9,7 @@ namespace GovernedAccess.IntegrationTests.Persistence;
 public sealed class SyntheticDataSeederTests
 {
     [Fact]
-    public async Task SeedAsyncCreatesAConsistentSyntheticDatasetAndIsIdempotent()
+    public async Task SeedAsyncCreatesTheExactSyntheticDatasetAndIsIdempotent()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -29,60 +29,101 @@ public sealed class SyntheticDataSeederTests
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(
             [
-                (DemoDataIds.ClientAlphaId, "Client Alpha"),
-                (DemoDataIds.ClientBetaId, "Client Beta"),
-                (DemoDataIds.ClientGammaId, "Client Gamma"),
-                (DemoDataIds.ClientThetaId, "Client Theta"),
+                (DemoDataIds.ClientAlphaId, "Client Alpha",
+                    DemoDataIds.ClientAlphaApproverPrincipalId),
+                (DemoDataIds.ClientBetaId, "Client Beta",
+                    DemoDataIds.ClientBetaApproverPrincipalId),
+                (DemoDataIds.ClientGammaId, "Client Gamma",
+                    DemoDataIds.ClientGammaApproverPrincipalId),
+                (DemoDataIds.ClientThetaId, "Client Theta",
+                    DemoDataIds.ClientThetaApproverPrincipalId),
             ],
-            clients.Select(client => (client.Id, client.DisplayName)));
+            clients.Select(client => (
+                client.Id,
+                client.DisplayName,
+                client.BusinessApproverPrincipalId)));
 
         var environments = await context.ProductionEnvironments
             .AsNoTracking()
             .OrderBy(environment => environment.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.NotEmpty(environments);
         Assert.Equal(
-            environments.Count,
-            environments.Select(environment => environment.Id)
-                .Distinct(StringComparer.Ordinal)
-                .Count());
-        Assert.All(
-            clients,
-            client =>
-            {
-                Assert.Contains(environments, environment =>
-                    environment.ClientId == client.Id
-                    && !environment.Id.StartsWith("RECOVERY-", StringComparison.Ordinal));
-                Assert.Contains(environments, environment =>
-                    environment.ClientId == client.Id
-                    && environment.Id.StartsWith("RECOVERY-", StringComparison.Ordinal));
-            });
+            [
+                (DemoDataIds.ClientAlphaEnvironmentId, DemoDataIds.ClientAlphaId,
+                    "Primary Production EU"),
+                ("PROD-ALPHA-US", DemoDataIds.ClientAlphaId,
+                    "Primary Production US"),
+                ("PROD-BETA-EU", DemoDataIds.ClientBetaId,
+                    "Primary Production EU"),
+                (DemoDataIds.ClientBetaEnvironmentId, DemoDataIds.ClientBetaId,
+                    "Primary Production UK"),
+                ("PROD-GAMMA-APAC", DemoDataIds.ClientGammaId,
+                    "Primary Production APAC"),
+                (DemoDataIds.ClientGammaEnvironmentId, DemoDataIds.ClientGammaId,
+                    "Primary Production US"),
+                (DemoDataIds.ClientThetaEnvironmentId, DemoDataIds.ClientThetaId,
+                    "Primary Production APAC"),
+                ("PROD-THETA-US", DemoDataIds.ClientThetaId,
+                    "Primary Production US"),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, DemoDataIds.ClientAlphaId,
+                    "Recovery Production EU"),
+                ("RECOVERY-PROD-ALPHA-US", DemoDataIds.ClientAlphaId,
+                    "Recovery Production US"),
+                ("RECOVERY-PROD-BETA-EU", DemoDataIds.ClientBetaId,
+                    "Recovery Production EU"),
+                (DemoDataIds.ClientBetaRecoveryEnvironmentId, DemoDataIds.ClientBetaId,
+                    "Recovery Production UK"),
+                ("RECOVERY-PROD-GAMMA-APAC", DemoDataIds.ClientGammaId,
+                    "Recovery Production APAC"),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, DemoDataIds.ClientGammaId,
+                    "Recovery Production US"),
+                (DemoDataIds.ClientThetaRecoveryEnvironmentId, DemoDataIds.ClientThetaId,
+                    "Recovery Production APAC"),
+                ("RECOVERY-PROD-THETA-US", DemoDataIds.ClientThetaId,
+                    "Recovery Production US"),
+            ],
+            environments.Select(environment => (
+                environment.Id,
+                environment.ClientId,
+                environment.DisplayName)));
 
         var roles = await context.EnvironmentRoles
             .AsNoTracking()
             .OrderBy(role => role.EnvironmentId)
             .ThenBy(role => role.RoleId)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.All(
-            environments,
-            environment => Assert.Contains(roles, role =>
-                role.EnvironmentId == environment.Id
-                && role.RoleId == ProductionRoleIds.ReadOnly));
-        AssertRoleSet(
-            roles,
-            DemoDataIds.ClientAlphaEnvironmentId,
-            ProductionRoleIds.Deployment,
-            ProductionRoleIds.ReadOnly,
-            ProductionRoleIds.Support);
-        AssertRoleSet(
-            roles,
-            DemoDataIds.ClientAlphaRecoveryEnvironmentId,
-            ProductionRoleIds.ReadOnly,
-            ProductionRoleIds.Support);
-        AssertRoleSet(
-            roles,
-            DemoDataIds.ClientBetaEnvironmentId,
-            ProductionRoleIds.ReadOnly);
+        Assert.Equal(
+            [
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.Deployment),
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.Support),
+                ("PROD-ALPHA-US", ProductionRoleIds.Deployment),
+                ("PROD-ALPHA-US", ProductionRoleIds.ReadOnly),
+                ("PROD-ALPHA-US", ProductionRoleIds.Support),
+                ("PROD-BETA-EU", ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly),
+                ("PROD-GAMMA-APAC", ProductionRoleIds.Deployment),
+                ("PROD-GAMMA-APAC", ProductionRoleIds.ReadOnly),
+                ("PROD-GAMMA-APAC", ProductionRoleIds.Support),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.Deployment),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientThetaEnvironmentId, ProductionRoleIds.ReadOnly),
+                ("PROD-THETA-US", ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.Support),
+                ("RECOVERY-PROD-ALPHA-US", ProductionRoleIds.ReadOnly),
+                ("RECOVERY-PROD-ALPHA-US", ProductionRoleIds.Support),
+                ("RECOVERY-PROD-BETA-EU", ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientBetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                ("RECOVERY-PROD-GAMMA-APAC", ProductionRoleIds.ReadOnly),
+                ("RECOVERY-PROD-GAMMA-APAC", ProductionRoleIds.Support),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientThetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                ("RECOVERY-PROD-THETA-US", ProductionRoleIds.ReadOnly),
+            ],
+            roles.Select(role => (role.EnvironmentId, role.RoleId)));
 
         var principals = await context.AuthenticatedPrincipals
             .AsNoTracking()
@@ -135,16 +176,5 @@ public sealed class SyntheticDataSeederTests
         Assert.Empty(context.ProvisioningOperations);
         Assert.Empty(context.AccessGrants);
         Assert.Empty(context.AuditEvents);
-    }
-
-    private static void AssertRoleSet(
-        IEnumerable<EnvironmentRole> roles,
-        string environmentId,
-        params string[] expectedRoleIds)
-    {
-        Assert.Equal(
-            expectedRoleIds,
-            roles.Where(role => role.EnvironmentId == environmentId)
-                .Select(role => role.RoleId));
     }
 }

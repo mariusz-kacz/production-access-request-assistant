@@ -124,21 +124,24 @@ public sealed class AccessRequestWorkflowService
 
         var (request, principal, normalizedCorrelationId) =
             commandContextResult.Value;
-        var environmentResult = await requestContext.GetProductionEnvironmentAsync(
+        var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
             request.EnvironmentId,
             cancellationToken);
-        if (environmentResult.IsFailure)
+        if (environmentContextResult.IsFailure)
         {
             return ApplicationResult.Failed<BusinessDecisionResult>(
-                environmentResult.Failure!);
+                environmentContextResult.Failure!);
         }
 
-        var environment = environmentResult.Value;
+        var environmentContext = environmentContextResult.Value;
+        var environment = environmentContext.Environment;
+        var client = environmentContext.Client;
         var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
             && StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId)
             && StringComparer.Ordinal.Equals(environment.ClientId, request.ClientId)
+            && StringComparer.Ordinal.Equals(client.Id, request.ClientId)
             && StringComparer.Ordinal.Equals(
-                environment.BusinessApproverPrincipalId,
+                client.BusinessApproverPrincipalId,
                 principal.Id);
         if (!isResponsibleApprover)
         {

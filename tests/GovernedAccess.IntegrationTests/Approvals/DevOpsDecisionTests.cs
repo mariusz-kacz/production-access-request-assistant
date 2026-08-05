@@ -17,9 +17,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace GovernedAccess.IntegrationTests.Approvals;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
     : IClassFixture<DefaultWebApplicationFixture>
 {

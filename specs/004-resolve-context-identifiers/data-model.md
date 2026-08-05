@@ -2,10 +2,9 @@
 
 ## Overview
 
-This feature adds no persistent business entity and requires no database migration.
-It reads the existing fixed reference tables through a new provider-neutral projection
-used only for request preparation. The submitted request, approval, provisioning, and
-audit models remain unchanged.
+This feature adds no persistent business entity. It reads the fixed reference tables
+through a provider-neutral projection used only for request preparation. The submitted
+request, approval, provisioning, and audit models remain unchanged.
 
 ## Existing Authoritative Entities
 
@@ -17,6 +16,7 @@ Authoritative owner of one or more production environments.
 |------|------|-------|
 | `Id` | stable identifier | Required, unique, ordinal comparison |
 | `DisplayName` | readable text | Required; interpretation aid, never authority |
+| `BusinessApproverPrincipalId` | principal identifier | Required; server-owned and never requester-selectable |
 
 ### ProductionEnvironment
 
@@ -27,7 +27,6 @@ Authoritative production scope that a request may target.
 | `Id` | stable identifier | Required, unique, ordinal comparison |
 | `ClientId` | client identifier | Required; must reference exactly one `Client` |
 | `DisplayName` | readable text | Required; supplied to the model for interpretation |
-| `BusinessApproverPrincipalId` | principal identifier | Required; server-owned and never requester-selectable |
 
 ### EnvironmentRole
 
@@ -38,9 +37,9 @@ Authoritative assignment of one supported production role to one environment.
 | `EnvironmentId` | environment identifier | Required; part of composite key |
 | `RoleId` | role identifier | Required; part of composite key; must be a supported role |
 
-The current supported role identifiers remain `ProductionReadOnly` and
-`ProductionSupport`. There is no hierarchy, implication, or generalized privilege
-comparison.
+The current supported role identifiers are `ProductionReadOnly`,
+`ProductionSupport`, and `ProductionDeployment`. There is no hierarchy, implication,
+or generalized privilege comparison.
 
 ### Incident
 
@@ -88,7 +87,6 @@ Infrastructure-bound representation of one `ProductionEnvironmentContext`.
 | `clientId` | `Client.Id` | Stable authoritative ID |
 | `clientDisplayName` | `Client.DisplayName` | Readable interpretation aid |
 | `displayName` | `Environment.DisplayName` | Readable interpretation aid |
-| `businessApproverResponsibilityId` | `Environment.BusinessApproverPrincipalId` | Informational context only; not selectable or approval evidence |
 | `roles` | `AssignedRoles` | Stable ordered role IDs with boundary-owned display names |
 
 The MCP candidate is not a domain entity. The MCP adapter translates the Core
@@ -184,8 +182,8 @@ can become `Ready`.
 
 ## Persistence Impact
 
-- No table or column changes.
-- No migration.
+- The fixed reference schema stores business-approver responsibility on `Client`
+  rather than repeating it on every `ProductionEnvironment`.
 - No new durable catalog, alias, confidence, ranking, or clarification-choice data.
 - The rejected potential identifier and its fallback shortlist remain turn-local
   interpretation context and are not new durable fields.

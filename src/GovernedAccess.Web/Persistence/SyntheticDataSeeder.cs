@@ -16,10 +16,10 @@ internal static class SyntheticDataSeeder
 
         Client[] clients =
         [
-            new(ClientAlphaId, "Client Alpha"),
-            new(ClientBetaId, "Client Beta"),
-            new(ClientGammaId, "Client Gamma"),
-            new(ClientThetaId, "Client Theta"),
+            new(ClientAlphaId, "Client Alpha", ClientAlphaApproverPrincipalId),
+            new(ClientBetaId, "Client Beta", ClientBetaApproverPrincipalId),
+            new(ClientGammaId, "Client Gamma", ClientGammaApproverPrincipalId),
+            new(ClientThetaId, "Client Theta", ClientThetaApproverPrincipalId),
         ];
 
         AuthenticatedPrincipal[] principals =
@@ -111,14 +111,14 @@ internal static class SyntheticDataSeeder
     {
         ClientRegion[] clientRegions =
         [
-            new(ClientAlphaId, "Alpha", "EU", ClientAlphaApproverPrincipalId),
-            new(ClientAlphaId, "Alpha", "US", ClientAlphaApproverPrincipalId),
-            new(ClientBetaId, "Beta", "UK", ClientBetaApproverPrincipalId),
-            new(ClientBetaId, "Beta", "EU", ClientBetaApproverPrincipalId),
-            new(ClientGammaId, "Gamma", "US", ClientGammaApproverPrincipalId),
-            new(ClientGammaId, "Gamma", "APAC", ClientGammaApproverPrincipalId),
-            new(ClientThetaId, "Theta", "APAC", ClientThetaApproverPrincipalId),
-            new(ClientThetaId, "Theta", "US", ClientThetaApproverPrincipalId),
+            new(ClientAlphaId, "Alpha", "EU"),
+            new(ClientAlphaId, "Alpha", "US"),
+            new(ClientBetaId, "Beta", "UK"),
+            new(ClientBetaId, "Beta", "EU"),
+            new(ClientGammaId, "Gamma", "US"),
+            new(ClientGammaId, "Gamma", "APAC"),
+            new(ClientThetaId, "Theta", "APAC"),
+            new(ClientThetaId, "Theta", "US"),
         ];
 
         return clientRegions
@@ -128,13 +128,11 @@ internal static class SyntheticDataSeeder
                 new ProductionEnvironment(
                     $"PROD-{definition.ClientCode.ToUpperInvariant()}-{definition.Region}",
                     definition.ClientId,
-                    $"Client {definition.ClientCode} Primary Production {definition.Region}",
-                    definition.ApproverPrincipalId),
+                    $"Primary Production {definition.Region}"),
                 new ProductionEnvironment(
                     $"RECOVERY-PROD-{definition.ClientCode.ToUpperInvariant()}-{definition.Region}",
                     definition.ClientId,
-                    $"Client {definition.ClientCode} Recovery Production {definition.Region}",
-                    definition.ApproverPrincipalId),
+                    $"Recovery Production {definition.Region}"),
             })
             .ToArray();
     }
@@ -202,7 +200,11 @@ internal static class SyntheticDataSeeder
 
     private static void ValidateClient(Client actual, Client expected)
     {
-        EnsureMatches(actual.DisplayName == expected.DisplayName, nameof(Client), actual.Id);
+        EnsureMatches(
+            actual.DisplayName == expected.DisplayName
+            && actual.BusinessApproverPrincipalId == expected.BusinessApproverPrincipalId,
+            nameof(Client),
+            actual.Id);
     }
 
     private static void ValidatePrincipal(
@@ -223,8 +225,7 @@ internal static class SyntheticDataSeeder
     {
         EnsureMatches(
             actual.ClientId == expected.ClientId
-            && actual.DisplayName == expected.DisplayName
-            && actual.BusinessApproverPrincipalId == expected.BusinessApproverPrincipalId,
+            && actual.DisplayName == expected.DisplayName,
             nameof(ProductionEnvironment),
             actual.Id);
     }
@@ -257,6 +258,5 @@ internal static class SyntheticDataSeeder
     private sealed record ClientRegion(
         string ClientId,
         string ClientCode,
-        string Region,
-        string ApproverPrincipalId);
+        string Region);
 }

@@ -252,13 +252,11 @@ After implementation, run these commands sequentially and exactly in this order:
 ```powershell
 dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 ```
 
-Give each integration command an outer shell or tool timeout of at least four
-minutes. Never run the complete integration project without one of the two
-`TestLevel` filters, and do not run the two integration commands in parallel.
+Give the integration command an outer shell or tool timeout of at least four minutes.
+It runs component and FullHost fixtures together in one test runner.
 
 If a command times out, identify and stop only the test-runner process tree created by
 that command before starting another test run. Never terminate unrelated or

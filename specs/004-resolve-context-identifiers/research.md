@@ -47,16 +47,15 @@ for parameterless calls and supports explicit input and output schemas.
 ## R3. Environment result composition
 
 **Decision**: Every environment candidate contains `environmentId`, `clientId`,
-`clientDisplayName`, environment `displayName`,
-`businessApproverResponsibilityId`, and stable ordered `roles[]` entries containing
-`roleId` and `displayName`. Environments are ordered by stable environment ID; roles
-are ordered by stable role ID using ordinal comparison.
+`clientDisplayName`, environment `displayName`, and stable ordered `roles[]` entries
+containing `roleId` and `displayName`. Environments are ordered by stable environment
+ID; roles are ordered by stable role ID using ordinal comparison.
 
 **Rationale**: These fields give the model enough readable authoritative context to
 match a client/environment phrase and present only valid role choices. Stable ordering
 supports deterministic tests and conversational references such as "the first one."
-The business approver responsibility field remains because it is part of the approved
-environment contract, but it is never selectable or authorization evidence.
+Business-approver responsibility is client-owned authorization context and is not
+exposed to the model-facing environment contract.
 
 **Alternatives considered**:
 

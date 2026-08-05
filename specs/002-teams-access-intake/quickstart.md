@@ -54,8 +54,7 @@ Expected:
 ```powershell
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel!=FullHost"
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --filter "TestLevel=FullHost"
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --blame-hang-timeout 3m
 ```
 
 Expected:

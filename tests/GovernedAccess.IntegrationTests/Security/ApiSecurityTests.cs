@@ -14,9 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Security;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
     : IClassFixture<DefaultWebApplicationFixture>
 {

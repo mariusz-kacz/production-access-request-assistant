@@ -15,8 +15,14 @@ internal static class MinimalTestDataSeeder
         await dbContext.Database.EnsureCreatedAsync(cancellationToken);
 
         dbContext.Clients.AddRange(
-            new Client(DemoDataIds.ClientAlphaId, "Client Alpha"),
-            new Client(DemoDataIds.ClientBetaId, "Client Beta"));
+            new Client(
+                DemoDataIds.ClientAlphaId,
+                "Client Alpha",
+                DemoDataIds.ClientAlphaApproverPrincipalId),
+            new Client(
+                DemoDataIds.ClientBetaId,
+                "Client Beta",
+                DemoDataIds.ClientBetaApproverPrincipalId));
 
         dbContext.AuthenticatedPrincipals.AddRange(
             new AuthenticatedPrincipal(
@@ -42,18 +48,15 @@ internal static class MinimalTestDataSeeder
             new ProductionEnvironment(
                 DemoDataIds.ClientAlphaEnvironmentId,
                 DemoDataIds.ClientAlphaId,
-                "Client Alpha Primary Production EU",
-                DemoDataIds.ClientAlphaApproverPrincipalId),
+                "Primary Production EU"),
             new ProductionEnvironment(
                 DemoDataIds.ClientAlphaRecoveryEnvironmentId,
                 DemoDataIds.ClientAlphaId,
-                "Client Alpha Recovery Production EU",
-                DemoDataIds.ClientAlphaApproverPrincipalId),
+                "Recovery Production EU"),
             new ProductionEnvironment(
                 DemoDataIds.ClientBetaEnvironmentId,
                 DemoDataIds.ClientBetaId,
-                "Client Beta Primary Production UK",
-                DemoDataIds.ClientBetaApproverPrincipalId));
+                "Primary Production UK"));
 
         dbContext.EnvironmentRoles.AddRange(
             new EnvironmentRole(

@@ -402,23 +402,27 @@ public sealed class RequestQueryService
             return ApplicationResult.Succeeded(ParticipantAccess.None);
         }
 
-        var environmentResult = await requestContext.GetProductionEnvironmentAsync(
+        var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
             request.EnvironmentId,
             cancellationToken);
-        if (environmentResult.IsFailure)
+        if (environmentContextResult.IsFailure)
         {
-            return environmentResult.Failure!.Kind == ApplicationFailureKind.NotFound
+            return environmentContextResult.Failure!.Kind == ApplicationFailureKind.NotFound
                 ? ApplicationResult.Succeeded(ParticipantAccess.None)
                 : ApplicationResult.Failed<ParticipantAccess>(
-                    environmentResult.Failure);
+                    environmentContextResult.Failure);
         }
 
-        var environment = environmentResult.Value;
+        var environmentContext = environmentContextResult.Value;
+        var environment = environmentContext.Environment;
         var isResponsibleApprover = StringComparer.Ordinal.Equals(
                 environment.ClientId,
                 request.ClientId)
             && StringComparer.Ordinal.Equals(
-                environment.BusinessApproverPrincipalId,
+                environmentContext.Client.Id,
+                request.ClientId)
+            && StringComparer.Ordinal.Equals(
+                environmentContext.Client.BusinessApproverPrincipalId,
                 principal.Id);
         return ApplicationResult.Succeeded(
             isResponsibleApprover

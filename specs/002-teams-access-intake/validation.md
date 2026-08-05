@@ -102,7 +102,7 @@ The suite now uses explicit levels:
 
 - 54 Core unit cases;
 - 52 direct component cases in the integration project;
-- 23 retained cases marked `TestLevel=FullHost`; and
+- 23 retained full-host cases; and
 - 6 Vitest component cases.
 
 Warnings-as-errors build, unit, component, full-host, and Vitest gates all pass with

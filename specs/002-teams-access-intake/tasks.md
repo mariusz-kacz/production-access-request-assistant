@@ -331,9 +331,9 @@ component, and lightweight TestServer contract tests.
 - Keep the existing unit and integration projects. Do not add a third test project,
   a generic fixture framework, or production abstractions created only for tests.
 
-**Independent Test**: Run unit, component, and full-host categories separately after
-the migration. Verify unchanged behavioral coverage, all negative trust-boundary
-requirements, and a median warm no-build integration-project runtime of at most 25
+**Independent Test**: Run unit tests, then the complete integration project in one
+runner after the migration. Verify unchanged behavioral coverage, all negative
+trust-boundary requirements, and a median warm no-build integration-project runtime of at most 25
 seconds across three uncontended runs, or record the measured result and a concrete
 justification for every remaining repeated full-host startup.
 
@@ -343,7 +343,7 @@ been renumbered into execution order. Complete T068-T072 before Phase 7 T073-T08
 - [X] T068 Inventory every automated test by `Unit`, `Component`, or `FullHost`, map each trust-boundary requirement to its lowest faithful coverage plus retained wiring evidence, and record the 78-case/39-second baseline and migration decisions in specs/002-teams-access-intake/test-simplification.md and docs/testing-strategy.md
 - [X] T069 Move business/DevOps decision permutations, retry-state rules, request visibility, action-capability calculation, and immutable-scope negatives to direct Core/application unit tests or real-SQLite component tests; retain only representative HTTP authentication, overposting, antiforgery, and response-contract cases in tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs, tests/GovernedAccess.UnitTests/WorkflowEvidencePolicyTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs, tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs, and tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs
 - [X] T070 Move the representative utterance matrix, candidate validation permutations, and history-sensitive interpretation cases to direct deterministic-chat/MAF component tests; retain one complete and one multi-turn hosted Teams scenario proving transport-to-card wiring in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs, tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
-- [X] T071 Mark full-host classes with an explicit `TestLevel=FullHost` trait, document fast unit/component and complete-suite commands, and ensure future task descriptions use `unit`, `component`, or `full-host` deliberately in tests/GovernedAccess.IntegrationTests/Infrastructure/IntegrationTestCollections.cs, docs/testing-strategy.md, and docs/local-development.md
+- [X] T071 Keep full-host fixtures deliberately bounded, document fast unit/component and complete-suite commands, and ensure future task descriptions use `unit`, `component`, or `full-host` deliberately in docs/testing-strategy.md and docs/local-development.md
 - [X] T072 Run warnings-as-errors build plus unit, component, retained full-host, and Vitest suites; capture per-test durations for three uncontended warm no-build integration runs, verify no coverage requirement was dropped, and record case counts, median duration, remaining host startups, and justified exceptions in specs/002-teams-access-intake/test-simplification.md and specs/002-teams-access-intake/validation.md
 
 **Checkpoint**: Policy and lifecycle permutations execute at unit/component level,
@@ -603,8 +603,8 @@ infrastructure.
 - Tests never call a live model, Teams tenant, Azure Bot, or production system.
 - Task IDs are sequential in documented execution order, including the Phase 6A gate.
 - `IntegrationTests` may contain component tests that require Web infrastructure,
-  SQLite, MAF, or MCP packages, but only tests marked `TestLevel=FullHost` may start
-  the complete `WebApplicationFactory` host after the Phase 6A migration.
+  SQLite, MAF, or MCP packages, but only full-host tests may start the complete
+  `WebApplicationFactory` host after the Phase 6A migration.
 - No task adds Slack, group chat, proactive messages, Graph/SSO, a workflow engine,
   multiple agents, model-visible state changes, or a second executable.
 - Commit after each task or coherent task group and stop at each checkpoint for

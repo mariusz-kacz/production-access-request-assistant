@@ -423,7 +423,7 @@ The workflow service:
 1. loads the authenticated principal from the stored principal dataset;
 2. loads the immutable request and current environment context;
 3. requires a business-approver principal;
-4. compares the principal with the environment's configured approver;
+4. compares the principal with the owning client's configured approver;
 5. applies the business decision state and duplicate-stage policy; and
 6. records rejected authorization or transition attempts.
 

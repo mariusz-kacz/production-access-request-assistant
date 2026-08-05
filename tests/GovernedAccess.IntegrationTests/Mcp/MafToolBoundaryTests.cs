@@ -531,9 +531,7 @@ public sealed class MafToolBoundaryTests
                         environmentId = environmentId ?? "PROD-ALPHA-EU",
                         clientId = "client-alpha",
                         clientDisplayName = "Client Alpha",
-                        displayName = "Client Alpha Production EU",
-                        businessApproverResponsibilityId =
-                            "client-alpha-business-approver",
+                        displayName = "Primary Production EU",
                         roles = new[]
                         {
                             new

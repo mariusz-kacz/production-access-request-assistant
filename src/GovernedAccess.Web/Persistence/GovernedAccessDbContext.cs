@@ -127,6 +127,8 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.HasKey(client => client.Id);
         entity.Property(client => client.Id).HasMaxLength(IdentifierLength);
         entity.Property(client => client.DisplayName).HasMaxLength(DisplayNameLength);
+        entity.Property(client => client.BusinessApproverPrincipalId)
+            .HasMaxLength(IdentifierLength);
     }
 
     private static void ConfigureAuthenticatedPrincipal(
@@ -153,17 +155,9 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.Property(environment => environment.Id).HasMaxLength(IdentifierLength);
         entity.Property(environment => environment.ClientId).HasMaxLength(IdentifierLength);
         entity.Property(environment => environment.DisplayName).HasMaxLength(DisplayNameLength);
-        entity.Property(environment => environment.BusinessApproverPrincipalId)
-            .HasMaxLength(IdentifierLength);
-
         entity.HasOne<Client>()
             .WithMany()
             .HasForeignKey(environment => environment.ClientId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<AuthenticatedPrincipal>()
-            .WithMany()
-            .HasForeignKey(environment => environment.BusinessApproverPrincipalId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 

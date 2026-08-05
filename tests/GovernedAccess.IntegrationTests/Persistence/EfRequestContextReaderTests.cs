@@ -36,7 +36,7 @@ public sealed class EfRequestContextReaderTests
         Assert.Equal(DemoDataIds.ClientAlphaId, alphaProduction.Client.Id);
         Assert.Equal("Client Alpha", alphaProduction.Client.DisplayName);
         Assert.Equal(
-            "Client Alpha Primary Production EU",
+            "Primary Production EU",
             alphaProduction.Environment.DisplayName);
         Assert.Collection(
             alphaProduction.AssignedRoles,
@@ -57,7 +57,7 @@ public sealed class EfRequestContextReaderTests
         Assert.Equal(DemoDataIds.ClientThetaId, thetaRecovery.Client.Id);
         Assert.Equal("Client Theta", thetaRecovery.Client.DisplayName);
         Assert.Equal(
-            "Client Theta Recovery Production APAC",
+            "Recovery Production APAC",
             thetaRecovery.Environment.DisplayName);
         var thetaRecoveryRole = Assert.Single(thetaRecovery.AssignedRoles);
         AssertRole(
@@ -133,8 +133,14 @@ public sealed class EfRequestContextReaderTests
         CancellationToken cancellationToken)
     {
         context.Clients.AddRange(
-            new Client(DemoDataIds.ClientAlphaId, "Client Alpha"),
-            new Client(DemoDataIds.ClientThetaId, "Client Theta"));
+            new Client(
+                DemoDataIds.ClientAlphaId,
+                "Client Alpha",
+                DemoDataIds.ClientAlphaApproverPrincipalId),
+            new Client(
+                DemoDataIds.ClientThetaId,
+                "Client Theta",
+                DemoDataIds.ClientThetaApproverPrincipalId));
         context.AuthenticatedPrincipals.AddRange(
             new AuthenticatedPrincipal(
                 DemoDataIds.ClientAlphaApproverPrincipalId,
@@ -150,13 +156,11 @@ public sealed class EfRequestContextReaderTests
             new ProductionEnvironment(
                 DemoDataIds.ClientThetaRecoveryEnvironmentId,
                 DemoDataIds.ClientThetaId,
-                "Client Theta Recovery Production APAC",
-                DemoDataIds.ClientThetaApproverPrincipalId),
+                "Recovery Production APAC"),
             new ProductionEnvironment(
                 DemoDataIds.ClientAlphaEnvironmentId,
                 DemoDataIds.ClientAlphaId,
-                "Client Alpha Primary Production EU",
-                DemoDataIds.ClientAlphaApproverPrincipalId));
+                "Primary Production EU"));
         context.EnvironmentRoles.AddRange(
             new EnvironmentRole(
                 DemoDataIds.ClientAlphaEnvironmentId,
@@ -180,7 +184,7 @@ public sealed class EfRequestContextReaderTests
     {
         const string clientId = "client-catalog";
         const string approverId = "client-catalog-approver";
-        context.Clients.Add(new Client(clientId, "Catalog Client"));
+        context.Clients.Add(new Client(clientId, "Catalog Client", approverId));
         context.AuthenticatedPrincipals.Add(
             new AuthenticatedPrincipal(
                 approverId,
@@ -192,8 +196,7 @@ public sealed class EfRequestContextReaderTests
                 .Select(index => new ProductionEnvironment(
                     $"PROD-CATALOG-{index:D2}",
                     clientId,
-                    $"Catalog Production {index:D2}",
-                    approverId)));
+                    $"Catalog Production {index:D2}")));
         await context.SaveChangesAsync(cancellationToken);
     }
 

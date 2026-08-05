@@ -215,7 +215,7 @@ validation without expanding feature scope.
 - [X] T024 [P] Update the product overview, runtime architecture, current MCP contract link, and co-hosted MCP ADR from the three-tool exact-only design to feature 004 in `README.md`, `docs/architecture.md`, and `docs/adr/0001-use-one-deployable-service-including-mcp.md`
 - [X] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
 - [X] T026 [P] Update operator/developer walkthroughs and reconcile current baseline/roadmap wording with the delivered two-tool runtime in `docs/teams-quickstart.md`, `docs/teams-advanced-reference.md`, `docs/local-development.md`, `docs/governed-production-access-product-baseline.md`, and `docs/roadmap.md`
-- [ ] T027 Run the warnings-as-errors build, unit tests, FullHost integration tests, and remaining integration tests sequentially in the exact order and with the timeout/process-cleanup rules documented in `specs/004-resolve-context-identifiers/quickstart.md`
+- [ ] T027 Run the warnings-as-errors build, unit tests, and complete integration project sequentially in the exact order and with the timeout/process-cleanup rules documented in `specs/004-resolve-context-identifiers/quickstart.md`
 
 ---
 
@@ -312,5 +312,5 @@ US2 + US3 + US4 -> Polish -> Final validation
 - Historical feature 001-003 artifacts remain historical; current as-built links
   should point to the feature-004 MCP contract after implementation.
 - Complete each story checkpoint before treating that story as independently done.
-- Do not run the integration project without one of the two required `TestLevel`
-  filters, and never run the final validation commands in parallel.
+- Run the complete integration project in one runner, and never run the final
+  validation commands in parallel.

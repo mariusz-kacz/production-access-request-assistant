@@ -92,8 +92,8 @@ serialization. Domain rules should not require a host fixture.
 
 ## Component and full-host architecture
 
-Only tests explicitly marked `TestLevel=FullHost` may create
-`GovernedAccessWebFactory` and start the real `Program` composition with:
+Tests that create `GovernedAccessWebFactory` and start the real `Program` composition
+are full-host tests. They exercise:
 
 - ASP.NET Core authentication, authorization, antiforgery, routing, and middleware;
 - MVC controllers and Problem Details;
@@ -359,14 +359,12 @@ dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 ```powershell
 dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 ```
 
-Run these commands sequentially in exactly this order. Give each integration command
-an outer shell or tool timeout of at least four minutes. Never run the complete
-integration project without one of the two `TestLevel` filters, and never run the two
-integration commands concurrently. If one times out, identify and stop only the test
+Run these commands sequentially in exactly this order. The integration command runs
+component and FullHost fixtures in one test runner; give it an outer shell or tool
+timeout of at least four minutes. If it times out, identify and stop only the test
 runner process tree created by that command before starting another run.
 
 Run the frontend suite separately:
@@ -375,37 +373,41 @@ Run the frontend suite separately:
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 ```
 
-### Fast unit and component layers
+### Fast unit layer
+
+Use this command for the fastest development feedback. Complete validation uses the
+unfiltered integration command above.
 
 ```powershell
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
 ```
 
-The component command includes real-SQLite, direct MAF/session, and lightweight MCP
-or TestServer tests, but excludes every complete `WebApplicationFactory` startup.
+Use a `FullyQualifiedName` filter from the focused-integration examples below when a
+specific component or hosted area is enough during development.
 
-### Retained full-host layer
+### Full-host layer
+
+Full-host tests run inside the same integration project and runner as component tests.
+When diagnosing or changing a particular hosted boundary, target its class or namespace
+by fully qualified name:
 
 ```powershell
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "FullyQualifiedName~TeamsGovernedWorkflowTests" --blame-hang-timeout 3m
 ```
 
-Every class that starts the complete application is marked explicitly with the
-`TestLevel=FullHost` trait. A new test must choose `unit`, `component`, or `full-host`
-in its task description and use the lowest level that faithfully proves the behavior.
+A new test must choose `unit`, `component`, or `full-host` deliberately and use the
+lowest level that faithfully proves the behavior.
 
 ### Complete .NET suite
 
 ```powershell
 dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 ```
 
-Run the four gates sequentially. This makes a failure's architectural level explicit
-and prevents the FullHost and remaining fixtures from sharing one long-lived runner.
+Run the three gates sequentially. The unfiltered integration command executes all
+component and FullHost fixtures in one runner.
 
 ### Explicit concurrency suite
 
@@ -419,9 +421,9 @@ dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTest
 ### Focused integration area
 
 ```powershell
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost&FullyQualifiedName~Provisioning" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost&FullyQualifiedName~Mcp" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost&FullyQualifiedName~Security" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "FullyQualifiedName~Provisioning" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "FullyQualifiedName~Mcp" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "FullyQualifiedName~Security" --blame-hang-timeout 3m
 ```
 
 ### Frontend watch mode
@@ -442,7 +444,7 @@ Feature 004 updates owning tests instead of creating repeated semantic and resil
 matrices at persistence, MCP, MAF, and FullHost layers. The current backend runner
 reports:
 
-- 98 unit cases;
+- 99 unit cases;
 - 71 non-FullHost integration-project cases; and
 - 23 FullHost cases.
 
@@ -463,7 +465,7 @@ For normal development:
 1. run the focused unit or integration test area while editing;
 2. run the frontend suite when UI contracts or presentation change;
 3. run the required backend gates in order: warnings-as-errors build, unit tests,
-   FullHost integration tests, then the remaining integration tests;
+   then the complete integration project in one runner;
 4. reconcile environment-resolution changes with the feature-004 quickstart and
    unchanged workflow behavior with the Teams intake scenarios; and
 5. perform the bounded manual check for UI or workflow changes.

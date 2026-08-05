@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
@@ -13,9 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsRequestConfirmationTests
 {
     [Fact]
@@ -73,7 +71,20 @@ public sealed class TeamsRequestConfirmationTests
                 cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
 
-            Assert.Equal(malformedCase.Status, response.StatusCode);
+            if (malformedCase.Status == HttpStatusCode.NotImplemented)
+            {
+                Assert.Equal(malformedCase.Status, response.StatusCode);
+            }
+            else
+            {
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                using var invokeResponse = JsonDocument.Parse(body);
+                Assert.Equal(
+                    (int)malformedCase.Status,
+                    invokeResponse.RootElement
+                        .GetProperty("statusCode")
+                        .GetInt32());
+            }
             Assert.DoesNotContain(
                 session.ReservedRequestId!.Value.ToString("D"),
                 body,

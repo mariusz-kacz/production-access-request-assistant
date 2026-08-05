@@ -181,8 +181,8 @@ list-only role reader operation if no non-MCP caller remains after migration.
 5. Supersede the old MCP contract with the feature 004 contract and synchronize
    README, architecture, orchestration, security, testing, Teams, and current ADR
    guidance when the runtime implementation changes.
-6. Run the repository's mandatory build and split integration validation in the exact
-   order documented in [quickstart.md](quickstart.md).
+6. Run the repository's mandatory build, unit, and unified integration validation in
+   the exact order documented in [quickstart.md](quickstart.md).
 
 ## Complexity Tracking
 

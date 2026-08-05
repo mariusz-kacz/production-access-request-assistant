@@ -203,20 +203,17 @@ dotnet restore ProductionAccessRequestAssistant.sln
 npm ci --prefix src/GovernedAccess.Web/ClientApp
 dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 ```
 
-Run the two integration commands sequentially and give each an outer timeout of at
-least four minutes. The split prevents FullHost fixtures and the remaining fixtures
-from sharing one long-lived runner; never run the complete integration project
-without one of these filters, and never run the two filters concurrently.
+The integration command runs component and FullHost fixtures together. Give it an
+outer timeout of at least four minutes.
 
 The suites require no live LLM, Teams tenant, Azure subscription, public tunnel, or
 production system. The latest backend validation records:
 
-- 98 unit tests passed; and
+- 99 unit tests passed; and
 - 94 integration/component/full-host tests passed.
 
 The frontend suite contains 6 tests and remains a separate validation command.

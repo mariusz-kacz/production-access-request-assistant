@@ -14,9 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Requests;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class RequestQueriesTests(DefaultWebApplicationFixture fixture)
     : IClassFixture<DefaultWebApplicationFixture>
 {

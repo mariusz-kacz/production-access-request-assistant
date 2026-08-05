@@ -76,8 +76,7 @@ public sealed class McpContractTests
             "PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha",
-            "Client Alpha Primary Production EU",
-            "client-alpha-business-approver",
+            "Primary Production EU",
             ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
 
         var alphaRecovery = Assert.Single(environments, environment =>
@@ -88,8 +87,7 @@ public sealed class McpContractTests
             "RECOVERY-PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha",
-            "Client Alpha Recovery Production EU",
-            "client-alpha-business-approver",
+            "Recovery Production EU",
             ["ProductionReadOnly", "ProductionSupport"]);
 
         result = await tool.CallAsync(
@@ -108,8 +106,7 @@ public sealed class McpContractTests
             "PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha",
-            "Client Alpha Primary Production EU",
-            "client-alpha-business-approver",
+            "Primary Production EU",
             ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
 
         tool = await GetToolAsync(client, "get_incident");
@@ -196,7 +193,6 @@ public sealed class McpContractTests
         string clientId,
         string clientDisplayName,
         string displayName,
-        string businessApproverResponsibilityId,
         string[] expectedRoleIds)
     {
         AssertExactProperties(
@@ -205,7 +201,6 @@ public sealed class McpContractTests
             "clientId",
             "clientDisplayName",
             "displayName",
-            "businessApproverResponsibilityId",
             "roles");
         Assert.Equal(
             environmentId,
@@ -215,10 +210,6 @@ public sealed class McpContractTests
             clientDisplayName,
             environment.GetProperty("clientDisplayName").GetString());
         Assert.Equal(displayName, environment.GetProperty("displayName").GetString());
-        Assert.Equal(
-            businessApproverResponsibilityId,
-            environment.GetProperty("businessApproverResponsibilityId").GetString());
-
         var roles = environment.GetProperty("roles").EnumerateArray().ToArray();
         Assert.Equal(
             expectedRoleIds,

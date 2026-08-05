@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
@@ -16,9 +17,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixture)
     : IClassFixture<ConfigurableTeamsFixture>
 {
@@ -101,37 +99,42 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        Assert.Contains(clarificationMessage, responseBody, StringComparison.Ordinal);
+        using var responseJson = JsonDocument.Parse(responseBody);
+        var responseActivity = Assert.Single(
+            responseJson.RootElement
+                .GetProperty("activities")
+                .EnumerateArray()
+                .ToArray());
+        var responseMessage = Assert.IsType<string>(
+            responseActivity.GetProperty("text").GetString());
+
+        Assert.Contains(clarificationMessage, responseMessage, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "Authoritative environment choices:",
-            responseBody,
+            responseMessage,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
             "Available production environments:",
-            responseBody,
+            responseMessage,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
             "Available production environment:",
-            responseBody,
+            responseMessage,
             StringComparison.Ordinal);
-        Assert.Contains("- Client Alpha", responseBody, StringComparison.Ordinal);
         Assert.Contains(
-            "Client Alpha Primary Production EU",
-            responseBody,
+            "- Client Alpha \u2014 Primary Production EU (PROD-ALPHA-EU)",
+            responseMessage,
             StringComparison.Ordinal);
-        Assert.Contains("PROD-ALPHA-EU", responseBody, StringComparison.Ordinal);
-        Assert.Contains("Client Beta", responseBody, StringComparison.Ordinal);
         Assert.Contains(
-            "Client Beta Primary Production UK",
-            responseBody,
+            "- Client Beta \u2014 Primary Production UK (PROD-BETA-UK)",
+            responseMessage,
             StringComparison.Ordinal);
-        Assert.Contains("PROD-BETA-UK", responseBody, StringComparison.Ordinal);
         Assert.True(
-            responseBody.IndexOf("PROD-ALPHA-EU", StringComparison.Ordinal)
-                < responseBody.IndexOf("PROD-BETA-UK", StringComparison.Ordinal));
+            responseMessage.IndexOf("PROD-ALPHA-EU", StringComparison.Ordinal)
+                < responseMessage.IndexOf("PROD-BETA-UK", StringComparison.Ordinal));
         Assert.Equal(
             1,
-            responseBody.Split(
+            responseMessage.Split(
                 "PROD-GAMMA-US",
                 StringSplitOptions.None).Length - 1);
 

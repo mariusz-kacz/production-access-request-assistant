@@ -105,13 +105,9 @@ Additional MCP tools are outside the current baseline.
 
   1. `dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror`
   2. `dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore`
-  3. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m`
-  4. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m`
+  3. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m`
 
-- Do not run the complete integration-test project without one of the two `TestLevel`
-  filters above. The split prevents the full-host fixtures and the remaining fixtures
-  from sharing one long-lived test runner.
-- Give each integration-test command an outer shell or tool timeout of at least four
+- Give the integration-test command an outer shell or tool timeout of at least four
   minutes. A shorter outer timeout can abandon the command while its child test runner
   remains alive.
 - If a test command times out, do not immediately start another test run. First identify

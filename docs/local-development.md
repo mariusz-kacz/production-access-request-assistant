@@ -108,16 +108,15 @@ Test:
 ```powershell
 dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
 dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel=FullHost" --blame-hang-timeout 3m
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --filter "TestLevel!=FullHost" --blame-hang-timeout 3m
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
 ```
 
-Run the four backend commands sequentially in exactly that order, never run the
-integration project without one of the two `TestLevel` filters, and give each
-integration command an outer timeout of at least four minutes. If one times out,
-identify and stop only the runner process tree it created before starting another
-run. The frontend command is separate from the required backend gate.
+Run the three backend commands sequentially in exactly that order. The integration
+command runs component and FullHost fixtures together; give it an outer timeout of at
+least four minutes. If it times out, identify and stop only the runner process tree it
+created before starting another run. The frontend command is separate from the
+required backend gate.
 
 All automated tests use deterministic fake clients. They never call the live model.
 The optional sanitized semantic matrix is documented in the

@@ -82,8 +82,8 @@ T072 completed on 2026-08-01 with these gates:
 |---|---|
 | Warnings-as-errors solution build | PASS: 0 warnings, 0 errors |
 | Core unit | PASS: 54/54 |
-| Integration-project component (`TestLevel!=FullHost`) | PASS: 52/52 |
-| Retained full-host (`TestLevel=FullHost`) | PASS: 23/23 in 21 seconds |
+| Integration-project component | PASS: 52/52 |
+| Retained full-host | PASS: 23/23 in 21 seconds |
 | React/Vitest component | PASS: 6/6 in 2 files |
 
 The post-migration integration project contains **75 cases**: 52 component and 23

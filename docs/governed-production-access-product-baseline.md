@@ -267,8 +267,8 @@ when more than 20 environments exist. Each returned environment includes:
 
 - environment ID,
 - client ID,
+- client display name,
 - display name,
-- business approver group identifier,
 - the role identifiers and display names currently assigned to the environment.
 
 Readable environment descriptions, display names, and model-selected candidates are
@@ -656,7 +656,8 @@ The system shall derive the acting principal and authority from authenticated se
 
 ### FR-05 Business Approver Resolution
 
-The system shall resolve the required business approver from the target environment and reject a wrong-client approver.
+The system shall resolve the required business approver from the target environment's
+owning client and reject a wrong-client approver.
 
 ### FR-06 Request-Bound Two-Stage Approval
 

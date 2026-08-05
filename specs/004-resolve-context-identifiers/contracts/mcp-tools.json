@@ -43,7 +43,6 @@
                 "clientId",
                 "clientDisplayName",
                 "displayName",
-                "businessApproverResponsibilityId",
                 "roles"
               ],
               "properties": {
@@ -63,10 +62,6 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "businessApproverResponsibilityId": {
-                  "type": "string",
-                  "minLength": 1
-                },
                 "roles": {
                   "type": "array",
                   "items": {
@@ -81,7 +76,8 @@
                         "type": "string",
                         "enum": [
                           "ProductionReadOnly",
-                          "ProductionSupport"
+                          "ProductionSupport",
+                          "ProductionDeployment"
                         ]
                       },
                       "displayName": {

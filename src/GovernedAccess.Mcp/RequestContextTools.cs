@@ -154,7 +154,6 @@ public sealed partial class RequestContextTools(
                     context.Client.Id,
                     context.Client.DisplayName,
                     context.Environment.DisplayName,
-                    context.Environment.BusinessApproverPrincipalId,
                     context.AssignedRoles
                         .OrderBy(role => role.RoleId, StringComparer.Ordinal)
                         .Select(role => new ProductionEnvironmentToolRole(
@@ -274,7 +273,6 @@ public sealed record ProductionEnvironmentToolEnvironment(
     string ClientId,
     string ClientDisplayName,
     string DisplayName,
-    string BusinessApproverResponsibilityId,
     IReadOnlyList<ProductionEnvironmentToolRole> Roles);
 
 public sealed record ProductionEnvironmentToolRole(string RoleId, string DisplayName);

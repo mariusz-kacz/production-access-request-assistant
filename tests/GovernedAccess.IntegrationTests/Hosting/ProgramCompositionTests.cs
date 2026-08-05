@@ -21,9 +21,6 @@ using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class ProgramCompositionTests(
     DefaultWebApplicationFixture applicationFixture)
     : IClassFixture<DefaultWebApplicationFixture>

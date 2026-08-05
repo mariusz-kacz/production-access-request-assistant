@@ -391,18 +391,22 @@ public sealed class RequestValidationTests
 
         public StubRequestContextReader()
         {
-            var alphaClient = new Client("client-alpha", "Client Alpha");
-            var betaClient = new Client("client-beta", "Client Beta");
+            var alphaClient = new Client(
+                "client-alpha",
+                "Client Alpha",
+                "alpha-approver");
+            var betaClient = new Client(
+                "client-beta",
+                "Client Beta",
+                "beta-approver");
             AlphaEnvironment = new ProductionEnvironment(
                 "PROD-ALPHA-EU",
                 alphaClient.Id,
-                "Client Alpha Production EU",
-                "alpha-approver");
+                "Primary Production EU");
             var betaEnvironment = new ProductionEnvironment(
                 "PROD-BETA-UK",
                 betaClient.Id,
-                "Client Beta Production UK",
-                "beta-approver");
+                "Primary Production UK");
             var alphaReadOnlyRole = new EnvironmentRole(
                 AlphaEnvironment.Id,
                 ProductionRoleIds.ReadOnly);

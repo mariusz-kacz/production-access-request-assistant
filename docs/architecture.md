@@ -392,7 +392,7 @@ immutable request aggregate consumed by that flow; it does not bypass or duplica
 
 1. `AccessRequestWorkflowService` loads the authenticated principal and request.
 2. It validates current stored request context.
-3. It resolves the environment's configured business approver.
+3. It resolves the owning client's configured business approver.
 4. `BusinessDecisionPolicy` validates state, authority, duplicate-stage prevention,
    and exact-role binding.
 5. The decision, workflow transition, and audit evidence are saved together.

@@ -14,9 +14,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
-[Trait(
-    IntegrationTestCollections.TestLevelTrait,
-    IntegrationTestCollections.FullHostLevel)]
 public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
     : IClassFixture<DefaultWebApplicationFixture>
 {
