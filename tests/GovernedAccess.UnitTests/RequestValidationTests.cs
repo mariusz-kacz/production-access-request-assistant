@@ -224,13 +224,16 @@ public sealed class RequestValidationTests
         AssertFieldError(result, "environmentId", "environment_client_mismatch");
     }
 
-    [Fact]
-    public async Task ValidateAsyncRejectsARoleThatIsNotAllowedForTheEnvironment()
+    [Theory]
+    [InlineData(ProductionRoleIds.Support)]
+    [InlineData(ProductionRoleIds.Deployment)]
+    public async Task ValidateAsyncRejectsASupportedRoleThatIsNotAllowedForTheEnvironment(
+        string roleId)
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
-            ValidInput(requestedRoleId: ProductionRoleIds.Support),
+            ValidInput(requestedRoleId: roleId),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "requestedRoleId", "role_unavailable");

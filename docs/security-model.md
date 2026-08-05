@@ -30,7 +30,7 @@ The security model assumes:
 - one application-owned local SQLite database;
 - no supported out-of-band database writers;
 - an exact, fail-fast synthetic reference dataset;
-- four fixed demo principals;
+- six fixed demo principals;
 - no model API key in application configuration; an optional live-model exercise uses
   the developer's external Microsoft Entra credential chain;
 - no real client production environments;

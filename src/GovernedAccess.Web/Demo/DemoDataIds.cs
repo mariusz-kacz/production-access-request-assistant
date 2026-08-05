@@ -9,15 +9,27 @@ internal static class DemoDataIds
 {
     internal const string ClientAlphaId = "client-alpha";
     internal const string ClientBetaId = "client-beta";
+    internal const string ClientGammaId = "client-gamma";
+    internal const string ClientThetaId = "client-theta";
 
     internal const string ClientAlphaEnvironmentId = "PROD-ALPHA-EU";
+    internal const string ClientAlphaRecoveryEnvironmentId = "RECOVERY-PROD-ALPHA-EU";
     internal const string ClientBetaEnvironmentId = "PROD-BETA-UK";
+    internal const string ClientBetaRecoveryEnvironmentId = "RECOVERY-PROD-BETA-UK";
+    internal const string ClientGammaEnvironmentId = "PROD-GAMMA-US";
+    internal const string ClientGammaRecoveryEnvironmentId = "RECOVERY-PROD-GAMMA-US";
+    internal const string ClientThetaEnvironmentId = "PROD-THETA-APAC";
+    internal const string ClientThetaRecoveryEnvironmentId = "RECOVERY-PROD-THETA-APAC";
 
     internal const string RequesterPrincipalId = "requester";
     internal const string ClientAlphaApproverPrincipalId =
         "client-alpha-business-approver";
     internal const string ClientBetaApproverPrincipalId =
         "client-beta-business-approver";
+    internal const string ClientGammaApproverPrincipalId =
+        "client-gamma-business-approver";
+    internal const string ClientThetaApproverPrincipalId =
+        "client-theta-business-approver";
     internal const string DevOpsApproverPrincipalId = "devops-approver";
 
     internal const string PrimaryIncidentId = "INC-1042";

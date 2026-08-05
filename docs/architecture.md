@@ -30,7 +30,7 @@ The implementation is shaped by the following constraints:
 - one executable ASP.NET Core host;
 - a thin React application served from that host;
 - local SQLite persistence and a fixed synthetic dataset;
-- synthetic cookie authentication with exactly four demo principals;
+- synthetic cookie authentication with exactly six demo principals;
 - one server-selected request-preparation profile: the checked-in deterministic
   client or an explicitly configured Foundry Responses client behind the same
   `IChatClient` boundary;
@@ -44,8 +44,8 @@ The implementation is shaped by the following constraints:
 
 ## System context
 
-The system has four human roles represented by fixed synthetic principals: requester,
-Client Alpha business approver, Client Beta business approver, and DevOps approver.
+The system has fixed synthetic principals for the requester, the Client Alpha, Beta,
+Gamma, and Theta business approvers, and the DevOps approver.
 The browser never supplies authoritative identity or role claims. It selects a known
 demo principal, and the server issues an HttpOnly authentication cookie containing
 server-defined claims.

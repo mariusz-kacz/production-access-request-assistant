@@ -45,6 +45,14 @@ const demoIdentities: ReadonlyArray<{
     key: demoPrincipalKeys.clientBetaApprover,
     label: "Client Beta Business Approver",
   },
+  {
+    key: demoPrincipalKeys.clientGammaApprover,
+    label: "Client Gamma Business Approver",
+  },
+  {
+    key: demoPrincipalKeys.clientThetaApprover,
+    label: "Client Theta Business Approver",
+  },
   { key: demoPrincipalKeys.devOpsApprover, label: "DevOps Approver" },
 ];
 

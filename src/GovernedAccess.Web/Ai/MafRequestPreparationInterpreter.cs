@@ -142,6 +142,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
                   "enum": [
                     "ProductionReadOnly",
                     "ProductionSupport",
+                    "ProductionDeployment",
                     null
                   ]
                 },

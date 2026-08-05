@@ -232,6 +232,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         {
             ProductionRoleIds.ReadOnly => "Production read-only",
             ProductionRoleIds.Support => "Production support",
+            ProductionRoleIds.Deployment => "Production deployment",
             _ => throw new InvalidOperationException(
                 "The persisted prepared role is unsupported."),
         };

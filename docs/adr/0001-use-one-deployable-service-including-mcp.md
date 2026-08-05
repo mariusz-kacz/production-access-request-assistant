@@ -23,7 +23,7 @@ The governed production access application needs to provide:
 These capabilities could be split into separately deployed web, MCP, workflow, and
 provisioning services. The current product, however, is a portfolio-grade local
 reference implementation maintained by one developer. It has two clients, two
-environments, four fixed demonstration principals, synthetic data, no real production
+environments, six fixed demonstration principals, synthetic data, no real production
 access, and no independent scaling or ownership requirements.
 
 Splitting the application at this stage would introduce service-to-service identity,

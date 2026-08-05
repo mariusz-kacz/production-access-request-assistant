@@ -116,13 +116,13 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             StringComparison.Ordinal);
         Assert.Contains("- Client Alpha", responseBody, StringComparison.Ordinal);
         Assert.Contains(
-            "Client Alpha Production EU",
+            "Client Alpha Primary Production EU",
             responseBody,
             StringComparison.Ordinal);
         Assert.Contains("PROD-ALPHA-EU", responseBody, StringComparison.Ordinal);
         Assert.Contains("Client Beta", responseBody, StringComparison.Ordinal);
         Assert.Contains(
-            "Client Beta Production UK",
+            "Client Beta Primary Production UK",
             responseBody,
             StringComparison.Ordinal);
         Assert.Contains("PROD-BETA-UK", responseBody, StringComparison.Ordinal);

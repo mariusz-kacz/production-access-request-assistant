@@ -24,49 +24,51 @@ public sealed class EfRequestContextReaderTests
             cancellationToken);
 
         Assert.True(result.IsSuccess);
+        Assert.Equal(
+            [
+                DemoDataIds.ClientAlphaEnvironmentId,
+                DemoDataIds.ClientBetaEnvironmentId,
+                DemoDataIds.ClientGammaEnvironmentId,
+                DemoDataIds.ClientThetaEnvironmentId,
+                DemoDataIds.ClientAlphaRecoveryEnvironmentId,
+                DemoDataIds.ClientBetaRecoveryEnvironmentId,
+                DemoDataIds.ClientGammaRecoveryEnvironmentId,
+                DemoDataIds.ClientThetaRecoveryEnvironmentId,
+            ],
+            result.Value.Select(context => context.Environment.Id));
+
+        var alphaProduction = result.Value[0];
+        Assert.Equal(DemoDataIds.ClientAlphaId, alphaProduction.Client.Id);
+        Assert.Equal("Client Alpha", alphaProduction.Client.DisplayName);
+        Assert.Equal(
+            "Client Alpha Primary Production EU",
+            alphaProduction.Environment.DisplayName);
         Assert.Collection(
-            result.Value,
-            environmentContext =>
-            {
-                Assert.Equal(
-                    DemoDataIds.ClientAlphaEnvironmentId,
-                    environmentContext.Environment.Id);
-                Assert.Equal(
-                    DemoDataIds.ClientAlphaId,
-                    environmentContext.Client.Id);
-                Assert.Equal("Client Alpha", environmentContext.Client.DisplayName);
-                Assert.Equal(
-                    "Client Alpha Production EU",
-                    environmentContext.Environment.DisplayName);
-                Assert.Collection(
-                    environmentContext.AssignedRoles,
-                    role => AssertRole(
-                        role,
-                        DemoDataIds.ClientAlphaEnvironmentId,
-                        ProductionRoleIds.ReadOnly),
-                    role => AssertRole(
-                        role,
-                        DemoDataIds.ClientAlphaEnvironmentId,
-                        ProductionRoleIds.Support));
-            },
-            environmentContext =>
-            {
-                Assert.Equal(
-                    DemoDataIds.ClientBetaEnvironmentId,
-                    environmentContext.Environment.Id);
-                Assert.Equal(
-                    DemoDataIds.ClientBetaId,
-                    environmentContext.Client.Id);
-                Assert.Equal("Client Beta", environmentContext.Client.DisplayName);
-                Assert.Equal(
-                    "Client Beta Production UK",
-                    environmentContext.Environment.DisplayName);
-                var role = Assert.Single(environmentContext.AssignedRoles);
-                AssertRole(
-                    role,
-                    DemoDataIds.ClientBetaEnvironmentId,
-                    ProductionRoleIds.ReadOnly);
-            });
+            alphaProduction.AssignedRoles,
+            role => AssertRole(
+                role,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.Deployment),
+            role => AssertRole(
+                role,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly),
+            role => AssertRole(
+                role,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.Support));
+
+        var thetaRecovery = result.Value[^1];
+        Assert.Equal(DemoDataIds.ClientThetaId, thetaRecovery.Client.Id);
+        Assert.Equal("Client Theta", thetaRecovery.Client.DisplayName);
+        Assert.Equal(
+            "Client Theta Recovery Production APAC",
+            thetaRecovery.Environment.DisplayName);
+        var thetaRecoveryRole = Assert.Single(thetaRecovery.AssignedRoles);
+        AssertRole(
+            thetaRecoveryRole,
+            DemoDataIds.ClientThetaRecoveryEnvironmentId,
+            ProductionRoleIds.ReadOnly);
         Assert.Empty(context.ChangeTracker.Entries());
     }
 

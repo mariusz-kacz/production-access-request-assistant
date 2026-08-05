@@ -27,67 +27,72 @@ public sealed class SyntheticDataSeederTests
             .AsNoTracking()
             .OrderBy(client => client.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Collection(
-            clients,
-            client =>
-            {
-                Assert.Equal(DemoDataIds.ClientAlphaId, client.Id);
-                Assert.Equal("Client Alpha", client.DisplayName);
-            },
-            client =>
-            {
-                Assert.Equal(DemoDataIds.ClientBetaId, client.Id);
-                Assert.Equal("Client Beta", client.DisplayName);
-            });
+        Assert.Equal(
+            [
+                (DemoDataIds.ClientAlphaId, "Client Alpha"),
+                (DemoDataIds.ClientBetaId, "Client Beta"),
+                (DemoDataIds.ClientGammaId, "Client Gamma"),
+                (DemoDataIds.ClientThetaId, "Client Theta"),
+            ],
+            clients.Select(client => (client.Id, client.DisplayName)));
 
         var environments = await context.ProductionEnvironments
             .AsNoTracking()
             .OrderBy(environment => environment.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Collection(
-            environments,
-            environment =>
-            {
-                Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, environment.Id);
-                Assert.Equal(DemoDataIds.ClientAlphaId, environment.ClientId);
-                Assert.Equal(
-                    DemoDataIds.ClientAlphaApproverPrincipalId,
-                    environment.BusinessApproverPrincipalId);
-            },
-            environment =>
-            {
-                Assert.Equal(DemoDataIds.ClientBetaEnvironmentId, environment.Id);
-                Assert.Equal(DemoDataIds.ClientBetaId, environment.ClientId);
-                Assert.Equal(
-                    DemoDataIds.ClientBetaApproverPrincipalId,
-                    environment.BusinessApproverPrincipalId);
-            });
+        Assert.Equal(
+            [
+                (DemoDataIds.ClientAlphaEnvironmentId, DemoDataIds.ClientAlphaId,
+                    DemoDataIds.ClientAlphaApproverPrincipalId),
+                (DemoDataIds.ClientBetaEnvironmentId, DemoDataIds.ClientBetaId,
+                    DemoDataIds.ClientBetaApproverPrincipalId),
+                (DemoDataIds.ClientGammaEnvironmentId, DemoDataIds.ClientGammaId,
+                    DemoDataIds.ClientGammaApproverPrincipalId),
+                (DemoDataIds.ClientThetaEnvironmentId, DemoDataIds.ClientThetaId,
+                    DemoDataIds.ClientThetaApproverPrincipalId),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, DemoDataIds.ClientAlphaId,
+                    DemoDataIds.ClientAlphaApproverPrincipalId),
+                (DemoDataIds.ClientBetaRecoveryEnvironmentId, DemoDataIds.ClientBetaId,
+                    DemoDataIds.ClientBetaApproverPrincipalId),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, DemoDataIds.ClientGammaId,
+                    DemoDataIds.ClientGammaApproverPrincipalId),
+                (DemoDataIds.ClientThetaRecoveryEnvironmentId, DemoDataIds.ClientThetaId,
+                    DemoDataIds.ClientThetaApproverPrincipalId),
+            ],
+            environments.Select(environment => (
+                environment.Id,
+                environment.ClientId,
+                environment.BusinessApproverPrincipalId)));
 
         var roles = await context.EnvironmentRoles
             .AsNoTracking()
             .OrderBy(role => role.EnvironmentId)
             .ThenBy(role => role.RoleId)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Collection(
-            roles,
-            role => AssertRole(
-                role,
-                DemoDataIds.ClientAlphaEnvironmentId,
-                ProductionRoleIds.ReadOnly),
-            role => AssertRole(
-                role,
-                DemoDataIds.ClientAlphaEnvironmentId,
-                ProductionRoleIds.Support),
-            role => AssertRole(
-                role,
-                DemoDataIds.ClientBetaEnvironmentId,
-                ProductionRoleIds.ReadOnly));
+        Assert.Equal(
+            [
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.Deployment),
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.Deployment),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientThetaEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientBetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+                (DemoDataIds.ClientGammaRecoveryEnvironmentId, ProductionRoleIds.Support),
+                (DemoDataIds.ClientThetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+            ],
+            roles.Select(role => (role.EnvironmentId, role.RoleId)));
 
         var principals = await context.AuthenticatedPrincipals
             .AsNoTracking()
             .OrderBy(principal => principal.Id)
             .ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(4, principals.Count);
+        Assert.Equal(6, principals.Count);
         Assert.Contains(principals, principal =>
             principal.Id == DemoDataIds.RequesterPrincipalId
             && principal.Kind == PrincipalKind.Requester
@@ -100,6 +105,14 @@ public sealed class SyntheticDataSeederTests
             principal.Id == DemoDataIds.ClientBetaApproverPrincipalId
             && principal.Kind == PrincipalKind.BusinessApprover
             && principal.ClientId == DemoDataIds.ClientBetaId);
+        Assert.Contains(principals, principal =>
+            principal.Id == DemoDataIds.ClientGammaApproverPrincipalId
+            && principal.Kind == PrincipalKind.BusinessApprover
+            && principal.ClientId == DemoDataIds.ClientGammaId);
+        Assert.Contains(principals, principal =>
+            principal.Id == DemoDataIds.ClientThetaApproverPrincipalId
+            && principal.Kind == PrincipalKind.BusinessApprover
+            && principal.ClientId == DemoDataIds.ClientThetaId);
         Assert.Contains(principals, principal =>
             principal.Id == DemoDataIds.DevOpsApproverPrincipalId
             && principal.Kind == PrincipalKind.DevOpsApprover
@@ -126,11 +139,5 @@ public sealed class SyntheticDataSeederTests
         Assert.Empty(context.ProvisioningOperations);
         Assert.Empty(context.AccessGrants);
         Assert.Empty(context.AuditEvents);
-    }
-
-    private static void AssertRole(EnvironmentRole role, string environmentId, string roleId)
-    {
-        Assert.Equal(environmentId, role.EnvironmentId);
-        Assert.Equal(roleId, role.RoleId);
     }
 }

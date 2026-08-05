@@ -18,6 +18,8 @@ internal static class SyntheticDataSeeder
         [
             new(ClientAlphaId, "Client Alpha"),
             new(ClientBetaId, "Client Beta"),
+            new(ClientGammaId, "Client Gamma"),
+            new(ClientThetaId, "Client Theta"),
         ];
 
         AuthenticatedPrincipal[] principals =
@@ -33,6 +35,16 @@ internal static class SyntheticDataSeeder
                 "Client Beta Business Approver",
                 PrincipalKind.BusinessApprover,
                 ClientBetaId),
+            new(
+                ClientGammaApproverPrincipalId,
+                "Client Gamma Business Approver",
+                PrincipalKind.BusinessApprover,
+                ClientGammaId),
+            new(
+                ClientThetaApproverPrincipalId,
+                "Client Theta Business Approver",
+                PrincipalKind.BusinessApprover,
+                ClientThetaId),
             new(DevOpsApproverPrincipalId, "DevOps Approver", PrincipalKind.DevOpsApprover),
         ];
 
@@ -41,20 +53,61 @@ internal static class SyntheticDataSeeder
             new(
                 ClientAlphaEnvironmentId,
                 ClientAlphaId,
-                "Client Alpha Production EU",
+                "Client Alpha Primary Production EU",
+                ClientAlphaApproverPrincipalId),
+            new(
+                ClientAlphaRecoveryEnvironmentId,
+                ClientAlphaId,
+                "Client Alpha Recovery Production EU",
                 ClientAlphaApproverPrincipalId),
             new(
                 ClientBetaEnvironmentId,
                 ClientBetaId,
-                "Client Beta Production UK",
+                "Client Beta Primary Production UK",
                 ClientBetaApproverPrincipalId),
+            new(
+                ClientBetaRecoveryEnvironmentId,
+                ClientBetaId,
+                "Client Beta Recovery Production UK",
+                ClientBetaApproverPrincipalId),
+            new(
+                ClientGammaEnvironmentId,
+                ClientGammaId,
+                "Client Gamma Primary Production US",
+                ClientGammaApproverPrincipalId),
+            new(
+                ClientGammaRecoveryEnvironmentId,
+                ClientGammaId,
+                "Client Gamma Recovery Production US",
+                ClientGammaApproverPrincipalId),
+            new(
+                ClientThetaEnvironmentId,
+                ClientThetaId,
+                "Client Theta Primary Production APAC",
+                ClientThetaApproverPrincipalId),
+            new(
+                ClientThetaRecoveryEnvironmentId,
+                ClientThetaId,
+                "Client Theta Recovery Production APAC",
+                ClientThetaApproverPrincipalId),
         ];
 
         EnvironmentRole[] roles =
         [
             new(ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly),
             new(ClientAlphaEnvironmentId, ProductionRoleIds.Support),
+            new(ClientAlphaEnvironmentId, ProductionRoleIds.Deployment),
+            new(ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.Support),
             new(ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientBetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientGammaEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientGammaEnvironmentId, ProductionRoleIds.Support),
+            new(ClientGammaEnvironmentId, ProductionRoleIds.Deployment),
+            new(ClientGammaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientGammaRecoveryEnvironmentId, ProductionRoleIds.Support),
+            new(ClientThetaEnvironmentId, ProductionRoleIds.ReadOnly),
+            new(ClientThetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
         ];
 
         Incident[] incidents =

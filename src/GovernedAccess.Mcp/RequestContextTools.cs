@@ -249,6 +249,7 @@ public sealed partial class RequestContextTools(
         {
             ProductionRoleIds.ReadOnly => "Production read-only",
             ProductionRoleIds.Support => "Production support",
+            ProductionRoleIds.Deployment => "Production deployment",
             _ => throw new InvalidOperationException(
                 $"Unsupported stored role identifier '{roleId}'."),
         };

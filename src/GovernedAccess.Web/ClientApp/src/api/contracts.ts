@@ -1,6 +1,7 @@
 export const productionRoles = [
   "ProductionReadOnly",
   "ProductionSupport",
+  "ProductionDeployment",
 ] as const;
 
 export type ProductionRole = (typeof productionRoles)[number];
@@ -125,6 +126,8 @@ export const demoPrincipalKeys = {
   requester: "requester",
   clientAlphaApprover: "client-alpha-business-approver",
   clientBetaApprover: "client-beta-business-approver",
+  clientGammaApprover: "client-gamma-business-approver",
+  clientThetaApprover: "client-theta-business-approver",
   devOpsApprover: "devops-approver",
 } as const;
 

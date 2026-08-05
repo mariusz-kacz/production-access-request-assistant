@@ -13,6 +13,8 @@ public static class DemoPrincipalKeys
     public const string Requester = DemoDataIds.RequesterPrincipalId;
     public const string ClientAlphaApprover = DemoDataIds.ClientAlphaApproverPrincipalId;
     public const string ClientBetaApprover = DemoDataIds.ClientBetaApproverPrincipalId;
+    public const string ClientGammaApprover = DemoDataIds.ClientGammaApproverPrincipalId;
+    public const string ClientThetaApprover = DemoDataIds.ClientThetaApproverPrincipalId;
     public const string DevOpsApprover = DemoDataIds.DevOpsApproverPrincipalId;
 }
 
@@ -44,6 +46,16 @@ public static class DemoAuthentication
                 "Client Beta Business Approver",
                 PrincipalKind.BusinessApprover,
                 DemoDataIds.ClientBetaId),
+            [DemoPrincipalKeys.ClientGammaApprover] = new(
+                DemoDataIds.ClientGammaApproverPrincipalId,
+                "Client Gamma Business Approver",
+                PrincipalKind.BusinessApprover,
+                DemoDataIds.ClientGammaId),
+            [DemoPrincipalKeys.ClientThetaApprover] = new(
+                DemoDataIds.ClientThetaApproverPrincipalId,
+                "Client Theta Business Approver",
+                PrincipalKind.BusinessApprover,
+                DemoDataIds.ClientThetaId),
             [DemoPrincipalKeys.DevOpsApprover] = new(
                 DemoDataIds.DevOpsApproverPrincipalId,
                 "DevOps Approver",

@@ -41,8 +41,8 @@ public sealed class ProgramCompositionTests(
         var clientCount = await dbContext.Clients.CountAsync(cancellationToken);
         var principalCount = await dbContext.AuthenticatedPrincipals.CountAsync(cancellationToken);
 
-        Assert.Equal(2, clientCount);
-        Assert.Equal(4, principalCount);
+        Assert.Equal(4, clientCount);
+        Assert.Equal(6, principalCount);
         Assert.Same(factory.Clock, factory.Services.GetRequiredService<IClock>());
     }
 

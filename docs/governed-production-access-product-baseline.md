@@ -317,19 +317,39 @@ supported.
 
 ### 6.1 Clients and Environments
 
+Each client has a primary production environment and a second recovery production
+environment. Existing primary IDs remain stable; recovery IDs use the
+`RECOVERY-PROD-` prefix so the tiers are lexically distinct.
+
 #### Client Alpha
 
 - Client ID: `client-alpha`
-- Environment ID: `PROD-ALPHA-EU`
+- Environment IDs: `PROD-ALPHA-EU`, `RECOVERY-PROD-ALPHA-EU`
 - Business approver group: `ClientAlphaBusinessOwners`
-- Allowed roles: `ProductionReadOnly`, `ProductionSupport`
+- Primary roles: `ProductionReadOnly`, `ProductionSupport`, `ProductionDeployment`
+- Recovery roles: `ProductionReadOnly`, `ProductionSupport`
 
 #### Client Beta
 
 - Client ID: `client-beta`
-- Environment ID: `PROD-BETA-UK`
+- Environment IDs: `PROD-BETA-UK`, `RECOVERY-PROD-BETA-UK`
 - Business approver group: `ClientBetaBusinessOwners`
-- Allowed roles: `ProductionReadOnly`
+- Primary and recovery roles: `ProductionReadOnly`
+
+#### Client Gamma
+
+- Client ID: `client-gamma`
+- Environment IDs: `PROD-GAMMA-US`, `RECOVERY-PROD-GAMMA-US`
+- Business approver group: `ClientGammaBusinessOwners`
+- Primary roles: `ProductionReadOnly`, `ProductionSupport`, `ProductionDeployment`
+- Recovery roles: `ProductionReadOnly`, `ProductionSupport`
+
+#### Client Theta
+
+- Client ID: `client-theta`
+- Environment IDs: `PROD-THETA-APAC`, `RECOVERY-PROD-THETA-APAC`
+- Business approver group: `ClientThetaBusinessOwners`
+- Primary and recovery roles: `ProductionReadOnly`
 
 ### 6.2 Roles
 
@@ -337,6 +357,12 @@ The MVP supports only:
 
 - `ProductionReadOnly`
 - `ProductionSupport`
+- `ProductionDeployment`
+
+`ProductionReadOnly` supports inspection, `ProductionSupport` supports diagnosis and
+bounded remediation, and `ProductionDeployment` supports deployment and rollback.
+Deployment access is assigned only to the Alpha and Gamma primary environments;
+recovery releases must flow through the controlled delivery path.
 
 There is no generalized role ordering or entitlement comparison.
 
@@ -346,11 +372,13 @@ Every successful access grant lasts exactly eight hours. Requesters and approver
 
 ### 6.3 Synthetic Principals
 
-The MVP contains exactly four fixed principals:
+The MVP contains exactly six fixed principals:
 
 - requester,
 - Client Alpha business approver,
 - Client Beta business approver,
+- Client Gamma business approver,
+- Client Theta business approver,
 - DevOps approver.
 
 A local identity switcher may authenticate one of these principals for demonstration. The server maps the selected principal to immutable server-side claims; browser-submitted roles are not trusted.
