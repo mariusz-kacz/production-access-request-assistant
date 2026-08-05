@@ -317,14 +317,16 @@ supported.
 
 ### 6.1 Clients and Environments
 
-Each client has a primary production environment and a second recovery production
-environment. Existing primary IDs remain stable; recovery IDs use the
-`RECOVERY-PROD-` prefix so the tiers are lexically distinct.
+Each client has two regional production scopes. Every region has a primary
+environment and a recovery environment. Existing IDs remain stable; recovery IDs use
+the `RECOVERY-PROD-` prefix so the tiers are lexically distinct.
 
 #### Client Alpha
 
 - Client ID: `client-alpha`
-- Environment IDs: `PROD-ALPHA-EU`, `RECOVERY-PROD-ALPHA-EU`
+- Regions: `EU`, `US`
+- Environment IDs: `PROD-ALPHA-EU`, `RECOVERY-PROD-ALPHA-EU`,
+  `PROD-ALPHA-US`, `RECOVERY-PROD-ALPHA-US`
 - Business approver group: `ClientAlphaBusinessOwners`
 - Primary roles: `ProductionReadOnly`, `ProductionSupport`, `ProductionDeployment`
 - Recovery roles: `ProductionReadOnly`, `ProductionSupport`
@@ -332,14 +334,18 @@ environment. Existing primary IDs remain stable; recovery IDs use the
 #### Client Beta
 
 - Client ID: `client-beta`
-- Environment IDs: `PROD-BETA-UK`, `RECOVERY-PROD-BETA-UK`
+- Regions: `UK`, `EU`
+- Environment IDs: `PROD-BETA-UK`, `RECOVERY-PROD-BETA-UK`,
+  `PROD-BETA-EU`, `RECOVERY-PROD-BETA-EU`
 - Business approver group: `ClientBetaBusinessOwners`
 - Primary and recovery roles: `ProductionReadOnly`
 
 #### Client Gamma
 
 - Client ID: `client-gamma`
-- Environment IDs: `PROD-GAMMA-US`, `RECOVERY-PROD-GAMMA-US`
+- Regions: `US`, `APAC`
+- Environment IDs: `PROD-GAMMA-US`, `RECOVERY-PROD-GAMMA-US`,
+  `PROD-GAMMA-APAC`, `RECOVERY-PROD-GAMMA-APAC`
 - Business approver group: `ClientGammaBusinessOwners`
 - Primary roles: `ProductionReadOnly`, `ProductionSupport`, `ProductionDeployment`
 - Recovery roles: `ProductionReadOnly`, `ProductionSupport`
@@ -347,7 +353,9 @@ environment. Existing primary IDs remain stable; recovery IDs use the
 #### Client Theta
 
 - Client ID: `client-theta`
-- Environment IDs: `PROD-THETA-APAC`, `RECOVERY-PROD-THETA-APAC`
+- Regions: `APAC`, `US`
+- Environment IDs: `PROD-THETA-APAC`, `RECOVERY-PROD-THETA-APAC`,
+  `PROD-THETA-US`, `RECOVERY-PROD-THETA-US`
 - Business approver group: `ClientThetaBusinessOwners`
 - Primary and recovery roles: `ProductionReadOnly`
 

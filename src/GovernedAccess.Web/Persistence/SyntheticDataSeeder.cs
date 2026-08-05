@@ -48,67 +48,8 @@ internal static class SyntheticDataSeeder
             new(DevOpsApproverPrincipalId, "DevOps Approver", PrincipalKind.DevOpsApprover),
         ];
 
-        ProductionEnvironment[] environments =
-        [
-            new(
-                ClientAlphaEnvironmentId,
-                ClientAlphaId,
-                "Client Alpha Primary Production EU",
-                ClientAlphaApproverPrincipalId),
-            new(
-                ClientAlphaRecoveryEnvironmentId,
-                ClientAlphaId,
-                "Client Alpha Recovery Production EU",
-                ClientAlphaApproverPrincipalId),
-            new(
-                ClientBetaEnvironmentId,
-                ClientBetaId,
-                "Client Beta Primary Production UK",
-                ClientBetaApproverPrincipalId),
-            new(
-                ClientBetaRecoveryEnvironmentId,
-                ClientBetaId,
-                "Client Beta Recovery Production UK",
-                ClientBetaApproverPrincipalId),
-            new(
-                ClientGammaEnvironmentId,
-                ClientGammaId,
-                "Client Gamma Primary Production US",
-                ClientGammaApproverPrincipalId),
-            new(
-                ClientGammaRecoveryEnvironmentId,
-                ClientGammaId,
-                "Client Gamma Recovery Production US",
-                ClientGammaApproverPrincipalId),
-            new(
-                ClientThetaEnvironmentId,
-                ClientThetaId,
-                "Client Theta Primary Production APAC",
-                ClientThetaApproverPrincipalId),
-            new(
-                ClientThetaRecoveryEnvironmentId,
-                ClientThetaId,
-                "Client Theta Recovery Production APAC",
-                ClientThetaApproverPrincipalId),
-        ];
-
-        EnvironmentRole[] roles =
-        [
-            new(ClientAlphaEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientAlphaEnvironmentId, ProductionRoleIds.Support),
-            new(ClientAlphaEnvironmentId, ProductionRoleIds.Deployment),
-            new(ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientAlphaRecoveryEnvironmentId, ProductionRoleIds.Support),
-            new(ClientBetaEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientBetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientGammaEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientGammaEnvironmentId, ProductionRoleIds.Support),
-            new(ClientGammaEnvironmentId, ProductionRoleIds.Deployment),
-            new(ClientGammaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientGammaRecoveryEnvironmentId, ProductionRoleIds.Support),
-            new(ClientThetaEnvironmentId, ProductionRoleIds.ReadOnly),
-            new(ClientThetaRecoveryEnvironmentId, ProductionRoleIds.ReadOnly),
-        ];
+        var environments = CreateEnvironments();
+        var roles = CreateEnvironmentRoles(environments);
 
         Incident[] incidents =
         [
@@ -164,6 +105,63 @@ internal static class SyntheticDataSeeder
             cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static ProductionEnvironment[] CreateEnvironments()
+    {
+        ClientRegion[] clientRegions =
+        [
+            new(ClientAlphaId, "Alpha", "EU", ClientAlphaApproverPrincipalId),
+            new(ClientAlphaId, "Alpha", "US", ClientAlphaApproverPrincipalId),
+            new(ClientBetaId, "Beta", "UK", ClientBetaApproverPrincipalId),
+            new(ClientBetaId, "Beta", "EU", ClientBetaApproverPrincipalId),
+            new(ClientGammaId, "Gamma", "US", ClientGammaApproverPrincipalId),
+            new(ClientGammaId, "Gamma", "APAC", ClientGammaApproverPrincipalId),
+            new(ClientThetaId, "Theta", "APAC", ClientThetaApproverPrincipalId),
+            new(ClientThetaId, "Theta", "US", ClientThetaApproverPrincipalId),
+        ];
+
+        return clientRegions
+            .SelectMany(static definition =>
+            new ProductionEnvironment[]
+            {
+                new ProductionEnvironment(
+                    $"PROD-{definition.ClientCode.ToUpperInvariant()}-{definition.Region}",
+                    definition.ClientId,
+                    $"Client {definition.ClientCode} Primary Production {definition.Region}",
+                    definition.ApproverPrincipalId),
+                new ProductionEnvironment(
+                    $"RECOVERY-PROD-{definition.ClientCode.ToUpperInvariant()}-{definition.Region}",
+                    definition.ClientId,
+                    $"Client {definition.ClientCode} Recovery Production {definition.Region}",
+                    definition.ApproverPrincipalId),
+            })
+            .ToArray();
+    }
+
+    private static EnvironmentRole[] CreateEnvironmentRoles(
+        IEnumerable<ProductionEnvironment> environments)
+    {
+        return environments
+            .SelectMany(static environment => GetRoleIds(environment)
+                .Select(roleId => new EnvironmentRole(environment.Id, roleId)))
+            .ToArray();
+    }
+
+    private static IEnumerable<string> GetRoleIds(ProductionEnvironment environment)
+    {
+        yield return ProductionRoleIds.ReadOnly;
+
+        if (environment.ClientId is not (ClientAlphaId or ClientGammaId))
+        {
+            yield break;
+        }
+
+        yield return ProductionRoleIds.Support;
+        if (!environment.Id.StartsWith("RECOVERY-", StringComparison.Ordinal))
+        {
+            yield return ProductionRoleIds.Deployment;
+        }
     }
 
     private static async Task SeedExactAsync<TEntity, TKey>(
@@ -255,4 +253,10 @@ internal static class SyntheticDataSeeder
     {
         public override string ToString() => $"{EnvironmentId}/{RoleId}";
     }
+
+    private sealed record ClientRegion(
+        string ClientId,
+        string ClientCode,
+        string Region,
+        string ApproverPrincipalId);
 }

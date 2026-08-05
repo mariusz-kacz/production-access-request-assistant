@@ -57,7 +57,7 @@ public sealed class McpTestHost : IAsyncDisposable
                 await using var scope = serviceProvider.CreateAsyncScope();
                 var dbContext = scope.ServiceProvider
                     .GetRequiredService<GovernedAccessDbContext>();
-                await SyntheticDataSeeder.SeedAsync(
+                await MinimalTestDataSeeder.SeedAsync(
                     dbContext,
                     operationCancellationToken);
             },

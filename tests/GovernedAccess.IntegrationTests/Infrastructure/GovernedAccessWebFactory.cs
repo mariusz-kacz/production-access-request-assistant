@@ -97,7 +97,7 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
 
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
             await ClearDatabaseAsync(dbContext, cancellationToken);
-            await SyntheticDataSeeder.SeedAsync(dbContext, cancellationToken);
+            await MinimalTestDataSeeder.SeedAsync(dbContext, cancellationToken);
         }
         finally
         {

@@ -36,7 +36,7 @@ public sealed class ProvisioningTestFixture : IAsyncDisposable
         try
         {
             await using var dbContext = fixture.CreateDbContext();
-            await SyntheticDataSeeder.SeedAsync(dbContext, cancellationToken);
+            await MinimalTestDataSeeder.SeedAsync(dbContext, cancellationToken);
             return fixture;
         }
         catch

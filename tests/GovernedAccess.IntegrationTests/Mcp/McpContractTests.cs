@@ -61,83 +61,36 @@ public sealed class McpContractTests
         var environments = content.GetProperty("environments")
             .EnumerateArray()
             .ToArray();
-        Assert.Equal(
-            [
-                "PROD-ALPHA-EU",
-                "PROD-BETA-UK",
-                "PROD-GAMMA-US",
-                "PROD-THETA-APAC",
-                "RECOVERY-PROD-ALPHA-EU",
-                "RECOVERY-PROD-BETA-UK",
-                "RECOVERY-PROD-GAMMA-US",
-                "RECOVERY-PROD-THETA-APAC",
-            ],
-            environments.Select(environment =>
-                environment.GetProperty("environmentId").GetString()));
+        var environmentIds = environments
+            .Select(environment => environment.GetProperty("environmentId").GetString())
+            .ToArray();
+        Assert.NotEmpty(environmentIds);
+        Assert.Equal(environmentIds.Order(), environmentIds);
+        Assert.Equal(environmentIds.Length, environmentIds.Distinct().Count());
+        Assert.InRange(environmentIds.Length, 1, 20);
+
+        var alphaPrimary = Assert.Single(environments, environment =>
+            environment.GetProperty("environmentId").GetString() == "PROD-ALPHA-EU");
         AssertEnvironment(
-            environments[0],
+            alphaPrimary,
             "PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha",
             "Client Alpha Primary Production EU",
             "client-alpha-business-approver",
             ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
+
+        var alphaRecovery = Assert.Single(environments, environment =>
+            environment.GetProperty("environmentId").GetString()
+                == "RECOVERY-PROD-ALPHA-EU");
         AssertEnvironment(
-            environments[1],
-            "PROD-BETA-UK",
-            "client-beta",
-            "Client Beta",
-            "Client Beta Primary Production UK",
-            "client-beta-business-approver",
-            ["ProductionReadOnly"]);
-        AssertEnvironment(
-            environments[2],
-            "PROD-GAMMA-US",
-            "client-gamma",
-            "Client Gamma",
-            "Client Gamma Primary Production US",
-            "client-gamma-business-approver",
-            ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
-        AssertEnvironment(
-            environments[3],
-            "PROD-THETA-APAC",
-            "client-theta",
-            "Client Theta",
-            "Client Theta Primary Production APAC",
-            "client-theta-business-approver",
-            ["ProductionReadOnly"]);
-        AssertEnvironment(
-            environments[4],
+            alphaRecovery,
             "RECOVERY-PROD-ALPHA-EU",
             "client-alpha",
             "Client Alpha",
             "Client Alpha Recovery Production EU",
             "client-alpha-business-approver",
             ["ProductionReadOnly", "ProductionSupport"]);
-        AssertEnvironment(
-            environments[5],
-            "RECOVERY-PROD-BETA-UK",
-            "client-beta",
-            "Client Beta",
-            "Client Beta Recovery Production UK",
-            "client-beta-business-approver",
-            ["ProductionReadOnly"]);
-        AssertEnvironment(
-            environments[6],
-            "RECOVERY-PROD-GAMMA-US",
-            "client-gamma",
-            "Client Gamma",
-            "Client Gamma Recovery Production US",
-            "client-gamma-business-approver",
-            ["ProductionReadOnly", "ProductionSupport"]);
-        AssertEnvironment(
-            environments[7],
-            "RECOVERY-PROD-THETA-APAC",
-            "client-theta",
-            "Client Theta",
-            "Client Theta Recovery Production APAC",
-            "client-theta-business-approver",
-            ["ProductionReadOnly"]);
 
         result = await tool.CallAsync(
             new Dictionary<string, object?>

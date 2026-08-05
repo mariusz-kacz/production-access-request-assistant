@@ -115,7 +115,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         {
             var options = CreateOptions(connection.ConnectionString);
             await using var context = new GovernedAccessDbContext(options);
-            await SyntheticDataSeeder.SeedAsync(context, cancellationToken);
+            await MinimalTestDataSeeder.SeedAsync(context, cancellationToken);
 
             var session = new RequestIntakeSession(
                 SessionId,

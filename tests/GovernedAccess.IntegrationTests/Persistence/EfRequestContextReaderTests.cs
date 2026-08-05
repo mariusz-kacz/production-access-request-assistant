@@ -16,7 +16,8 @@ public sealed class EfRequestContextReaderTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(cancellationToken);
         await using var context = CreateContext(connection);
-        await SyntheticDataSeeder.SeedAsync(context, cancellationToken);
+        await context.Database.EnsureCreatedAsync(cancellationToken);
+        await SeedProjectionCatalogAsync(context, cancellationToken);
         context.ChangeTracker.Clear();
         var reader = new EfRequestContextReader(context);
 
@@ -27,12 +28,6 @@ public sealed class EfRequestContextReaderTests
         Assert.Equal(
             [
                 DemoDataIds.ClientAlphaEnvironmentId,
-                DemoDataIds.ClientBetaEnvironmentId,
-                DemoDataIds.ClientGammaEnvironmentId,
-                DemoDataIds.ClientThetaEnvironmentId,
-                DemoDataIds.ClientAlphaRecoveryEnvironmentId,
-                DemoDataIds.ClientBetaRecoveryEnvironmentId,
-                DemoDataIds.ClientGammaRecoveryEnvironmentId,
                 DemoDataIds.ClientThetaRecoveryEnvironmentId,
             ],
             result.Value.Select(context => context.Environment.Id));
@@ -131,6 +126,51 @@ public sealed class EfRequestContextReaderTests
             .UseSqlite(connection)
             .Options;
         return new GovernedAccessDbContext(options);
+    }
+
+    private static async Task SeedProjectionCatalogAsync(
+        GovernedAccessDbContext context,
+        CancellationToken cancellationToken)
+    {
+        context.Clients.AddRange(
+            new Client(DemoDataIds.ClientAlphaId, "Client Alpha"),
+            new Client(DemoDataIds.ClientThetaId, "Client Theta"));
+        context.AuthenticatedPrincipals.AddRange(
+            new AuthenticatedPrincipal(
+                DemoDataIds.ClientAlphaApproverPrincipalId,
+                "Client Alpha Business Approver",
+                PrincipalKind.BusinessApprover,
+                DemoDataIds.ClientAlphaId),
+            new AuthenticatedPrincipal(
+                DemoDataIds.ClientThetaApproverPrincipalId,
+                "Client Theta Business Approver",
+                PrincipalKind.BusinessApprover,
+                DemoDataIds.ClientThetaId));
+        context.ProductionEnvironments.AddRange(
+            new ProductionEnvironment(
+                DemoDataIds.ClientThetaRecoveryEnvironmentId,
+                DemoDataIds.ClientThetaId,
+                "Client Theta Recovery Production APAC",
+                DemoDataIds.ClientThetaApproverPrincipalId),
+            new ProductionEnvironment(
+                DemoDataIds.ClientAlphaEnvironmentId,
+                DemoDataIds.ClientAlphaId,
+                "Client Alpha Primary Production EU",
+                DemoDataIds.ClientAlphaApproverPrincipalId));
+        context.EnvironmentRoles.AddRange(
+            new EnvironmentRole(
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.Deployment),
+            new EnvironmentRole(
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly),
+            new EnvironmentRole(
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.Support),
+            new EnvironmentRole(
+                DemoDataIds.ClientThetaRecoveryEnvironmentId,
+                ProductionRoleIds.ReadOnly));
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task SeedEnvironmentCatalogAsync(

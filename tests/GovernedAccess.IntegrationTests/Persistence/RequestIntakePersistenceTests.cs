@@ -248,7 +248,7 @@ public sealed class RequestIntakePersistenceTests
         {
             var options = CreateOptions(connection, saveCounter);
             await using var context = new GovernedAccessDbContext(options);
-            await SyntheticDataSeeder.SeedAsync(context, cancellationToken);
+            await MinimalTestDataSeeder.SeedAsync(context, cancellationToken);
 
             var session = new RequestIntakeSession(
                 SessionId,
