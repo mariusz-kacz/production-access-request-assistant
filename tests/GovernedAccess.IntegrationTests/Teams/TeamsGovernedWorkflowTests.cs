@@ -63,6 +63,32 @@ public sealed class TeamsGovernedWorkflowTests
                 ProtocolJsonSerializer.SerializationOptions,
                 cancellationToken);
             confirmationResponse.EnsureSuccessStatusCode();
+            var confirmationBody = await confirmationResponse.Content
+                .ReadAsStringAsync(cancellationToken);
+            Assert.Contains(
+                PreparedRequestCardFactory.AdaptiveCardContentType,
+                confirmationBody,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "Request submitted",
+                confirmationBody,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                intake.ReservedRequestId.Value.ToString("D"),
+                confirmationBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Open request",
+                confirmationBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Action.OpenUrl",
+                confirmationBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Confirm and submit",
+                confirmationBody,
+                StringComparison.Ordinal);
         }
 
         var requestId = intake.ReservedRequestId!.Value;

@@ -43,7 +43,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         its authoritative choices, and their ordering. If that history is missing or insufficient, never
         apply the relative expression to a newly discovered or assumed ordering. Repeat a self-contained
         focused clarification instead. For a missing environment-choice history, call environment discovery
-        when current context is needed, explain that a fresh selection is required, and return the current
+        when current context is needed, and return the current
         plausible choices in environmentOptionIds. Keep environmentOptionIds empty for a non-environment
         clarification.
 
@@ -75,6 +75,12 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         applicable tool result, and keep environmentId unresolved until the requester confirms or selects
         one. Never shortlist a result that conflicts with an explicit readable scope term. Use an empty
         environmentOptionIds array for other clarification targets and when no plausible environment exists.
+        When environmentOptionIds contains one or more choices, the service will append an authoritative
+        bullet list of those environments immediately below message. Write only a short question or
+        instruction that naturally introduces the following list. Do not add a heading for the list, and do
+        not repeat, enumerate, or paraphrase client names, environment names, stable identifiers, option
+        labels, or role details in message. Use plain user-facing language and do not describe the list as
+        authoritative in message.
         Make each clarification understandable from its current message and structured options rather than
         depending on unavailable history. Do not treat identifiers or display values that appear only in the
         clarification message as choices or candidate scope.

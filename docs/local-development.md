@@ -170,7 +170,7 @@ ASP.NET Core configuration uses `__` instead of `:` in environment variable name
 | `RequestPreparationModel:FoundryResponses:Endpoint` | empty | Trusted project URL ending in `/openai/v1` |
 | `RequestPreparationModel:FoundryResponses:DeploymentName` | empty | Selected Foundry deployment |
 | `TeamsAccessRequest:AllowedTenantId` | empty, fail closed | Accepted Teams tenant |
-| `TeamsAccessRequest:TrustedWebBaseUri` | empty, fail closed | HTTPS origin used in returned links |
+| `TeamsAccessRequest:TrustedWebBaseUri` | empty, fail closed | HTTPS host origin used to derive the co-hosted loopback MCP endpoint |
 | `TeamsAccessRequest:RequestTimeout` | `00:01:40` | Total Teams request deadline |
 | `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Confirmation window |
 

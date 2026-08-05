@@ -102,11 +102,19 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         Assert.Contains(clarificationMessage, responseBody, StringComparison.Ordinal);
-        Assert.Contains(
+        Assert.DoesNotContain(
             "Authoritative environment choices:",
             responseBody,
             StringComparison.Ordinal);
-        Assert.Contains("Client Alpha", responseBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Available production environments:",
+            responseBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Available production environment:",
+            responseBody,
+            StringComparison.Ordinal);
+        Assert.Contains("- Client Alpha", responseBody, StringComparison.Ordinal);
         Assert.Contains(
             "Client Alpha Production EU",
             responseBody,

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
@@ -10,7 +11,6 @@ using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Builder.App.AdaptiveCards;
 using Microsoft.Agents.Builder.State;
 using Microsoft.Agents.Core.Models;
-using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.Web.Teams;
 
@@ -39,7 +39,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     private readonly PreparedRequestCardFactory cardFactory;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
     private readonly RequestPreparationModelMetadata modelMetadata;
-    private readonly Uri trustedWebBaseUri;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
@@ -47,7 +46,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         RequestIntakeService intakeService,
         PreparedRequestCardFactory cardFactory,
         ILogger<TeamsAccessRequestAgent> logger,
-        IOptions<TeamsAccessRequestOptions> teamsOptions,
         RequestPreparationModelMetadata modelMetadata)
         : base(options)
     {
@@ -55,7 +53,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         ArgumentNullException.ThrowIfNull(intakeService);
         ArgumentNullException.ThrowIfNull(cardFactory);
         ArgumentNullException.ThrowIfNull(logger);
-        ArgumentNullException.ThrowIfNull(teamsOptions);
         ArgumentNullException.ThrowIfNull(modelMetadata);
 
         this.actorResolver = actorResolver;
@@ -63,9 +60,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         this.cardFactory = cardFactory;
         this.logger = logger;
         this.modelMetadata = modelMetadata;
-        trustedWebBaseUri = teamsOptions.Value.TrustedWebBaseUri
-            ?? throw new InvalidOperationException(
-                "A trusted Web base URI is required for Teams request links.");
 
         AdaptiveCards.OnActionExecute(
             ConfirmAndSubmitVerb,
@@ -308,8 +302,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         {
             RequestConfirmationResultKind.Submitted
                 or RequestConfirmationResultKind.AlreadySubmitted =>
-                AdaptiveCardInvokeResponseFactory.Message(
-                    CreateConfirmationMessage(outcome)),
+                AdaptiveCardInvokeResponseFactory.AdaptiveCard(
+                    CreateSubmittedCard(outcome)),
             RequestConfirmationResultKind.Failed =>
                 AdaptiveCardInvokeResponseFactory.Message(
                     CreateConfirmationFailureMessage(outcome.Failure!)),
@@ -444,10 +438,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         var message = new StringBuilder(clarification.Message);
         message.AppendLine();
-        message.AppendLine();
-        message.Append(environmentChoices.Count == 1
-            ? "Authoritative environment choice:"
-            : "Authoritative environment choices:");
 
         foreach (var choice in environmentChoices.OrderBy(
                      static choice => choice.EnvironmentId,
@@ -466,17 +456,38 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         return message.ToString();
     }
 
-    private string CreateConfirmationMessage(
+    private static string CreateSubmittedCard(
         RequestConfirmationResult outcome)
     {
-        var requestUri = new Uri(
-            trustedWebBaseUri,
-            $"requests/{outcome.RequestId:D}");
-        var status = outcome.WasAlreadySubmitted
-            ? "was already submitted"
-            : "was submitted";
+        var title = outcome.WasAlreadySubmitted
+            ? "Request already submitted"
+            : "Request submitted";
+        var card = new JsonObject
+        {
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["type"] = "AdaptiveCard",
+            ["version"] = "1.5",
+            ["body"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["type"] = "TextBlock",
+                    ["size"] = "Medium",
+                    ["weight"] = "Bolder",
+                    ["text"] = title,
+                    ["wrap"] = true,
+                },
+                new JsonObject
+                {
+                    ["type"] = "TextBlock",
+                    ["text"] =
+                        $"Request {outcome.RequestId:D} is awaiting business approval. Access is not yet approved or granted.",
+                    ["wrap"] = true,
+                },
+            },
+        };
 
-        return $"Request {outcome.RequestId:D} {status} and is awaiting business approval. Access is not yet approved or granted. Open the request: {requestUri.AbsoluteUri}";
+        return card.ToJsonString();
     }
 
     private static string CreateConfirmationFailureMessage(

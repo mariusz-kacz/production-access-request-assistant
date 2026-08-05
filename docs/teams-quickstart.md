@@ -148,7 +148,8 @@ Expected flow:
 2. The assistant shows a confirmation card for Client Alpha and an eight-hour grant.
 3. No access request exists until you select **Confirm and submit**.
 4. Confirmation creates one immutable request in `AwaitingBusinessApproval`.
-5. Open the returned HTTPS link to continue the human approval demo.
+5. The confirmation card is replaced with a non-actionable submitted-status card.
+   Continue the human approval demo from the Web request register.
 
 The deterministic profile always returns its fixed Client Alpha candidate; it proves
 the Teams and governed-workflow path but does not evaluate natural-language matching.
