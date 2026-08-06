@@ -1,6 +1,6 @@
 # Tasks: Bounded Live-Model Outcome Evaluation
 
-**Input**: Design documents from `/specs/005-live-model-evaluation/`
+**Input**: Design documents from `/specs/006-live-model-evaluation/`
 
 **Prerequisites**: [plan.md](plan.md), [spec.md](spec.md),
 [research.md](research.md), [data-model.md](data-model.md),
@@ -151,8 +151,8 @@ sanitized artifacts without prompts, transcripts, model internals, or MCP traces
 **Purpose**: Synchronize runtime guidance and capture final validation evidence.
 
 - [ ] T016 [P] Document the evaluation command, final-outcome-only grading, informational latency, black-box model/MCP boundary, disposable state, credential-free tests, and canonical quickstart in `docs/architecture.md`, `docs/local-development.md`, and `docs/testing-strategy.md`
-- [ ] T017 Run the required warnings-as-errors build, unit tests, and integration tests sequentially in the exact order from `specs/005-live-model-evaluation/quickstart.md`, then record command outcomes and focused evaluation fixture results in `specs/005-live-model-evaluation/validation.md`
-- [ ] T018 Run the optional fixed 18-case command with an approved live profile when available and record only its sanitized status, score, safety result, latency summary, and artifact paths—or the explicit unavailable prerequisite—in `specs/005-live-model-evaluation/validation.md`
+- [ ] T017 Run the required warnings-as-errors build, unit tests, and integration tests sequentially in the exact order from `specs/006-live-model-evaluation/quickstart.md`, then record command outcomes and focused evaluation fixture results in `specs/006-live-model-evaluation/validation.md`
+- [ ] T018 Run the optional fixed 18-case command with an approved live profile when available and record only its sanitized status, score, safety result, latency summary, and artifact paths—or the explicit unavailable prerequisite—in `specs/006-live-model-evaluation/validation.md`
 
 ---
 

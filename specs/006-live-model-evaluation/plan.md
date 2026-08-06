@@ -1,8 +1,8 @@
 # Implementation Plan: Bounded Live-Model Outcome Evaluation
 
-**Branch**: `005-live-model-evaluation` | **Date**: 2026-08-06 | **Spec**: [spec.md](spec.md)
+**Branch**: `006-live-model-evaluation` | **Date**: 2026-08-06 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/005-live-model-evaluation/spec.md`
+**Input**: Feature specification from `specs/006-live-model-evaluation/spec.md`
 
 ## Summary
 
@@ -63,7 +63,7 @@ No constitution violation requires Complexity Tracking.
 ### Documentation (this feature)
 
 ```text
-specs/005-live-model-evaluation/
+specs/006-live-model-evaluation/
 |-- spec.md
 |-- plan.md
 |-- research.md

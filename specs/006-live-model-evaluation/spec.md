@@ -1,6 +1,6 @@
 # Feature Specification: Bounded Live-Model Outcome Evaluation
 
-**Feature Branch**: `005-live-model-evaluation`
+**Feature Branch**: `006-live-model-evaluation`
 
 **Created**: 2026-08-06
 
