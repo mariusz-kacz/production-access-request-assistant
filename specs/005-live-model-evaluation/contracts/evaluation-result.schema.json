@@ -1,0 +1,552 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/contracts/evaluation-result.schema.json",
+  "title": "Governed Access Live-Model Evaluation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactVersion",
+    "runId",
+    "datasetVersion",
+    "startedAt",
+    "completedAt",
+    "elapsedMilliseconds",
+    "runStatus",
+    "model",
+    "usage",
+    "summary",
+    "sideEffects",
+    "scenarios"
+  ],
+  "properties": {
+    "artifactVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "datasetVersion": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "elapsedMilliseconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "runStatus": {
+      "type": "string",
+      "enum": ["passed", "failed", "cancelled", "prerequisiteFailed"]
+    },
+    "model": {
+      "$ref": "#/$defs/model"
+    },
+    "usage": {
+      "$ref": "#/$defs/usage"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "sideEffects": {
+      "$ref": "#/$defs/sideEffects"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 18,
+      "maxItems": 18,
+      "items": {
+        "$ref": "#/$defs/scenarioResult"
+      }
+    }
+  },
+  "$defs": {
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "deploymentName",
+        "turnTimeoutMilliseconds",
+        "maximumIterations"
+      ],
+      "properties": {
+        "profileId": {
+          "const": "FoundryResponses"
+        },
+        "deploymentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "modelId": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "turnTimeoutMilliseconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximumIterations": {
+          "type": "integer",
+          "const": 6
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability",
+        "inputTokens",
+        "outputTokens",
+        "totalTokens"
+      ],
+      "properties": {
+        "availability": {
+          "type": "string",
+          "enum": ["available", "partial", "unavailable"]
+        },
+        "inputTokens": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "totalTokens": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "sideEffects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "approvalDecisions",
+        "provisioningOperations",
+        "accessGrants"
+      ],
+      "properties": {
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approvalDecisions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "provisioningOperations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accessGrants": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "categorySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "total", "passed"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "successfulResolution",
+            "clarificationOrNoMatch",
+            "identifierFallback",
+            "multiTurn",
+            "validationConflict",
+            "safetyBoundary"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "completed",
+        "passed",
+        "failed",
+        "cancelled",
+        "notRun",
+        "requiredPasses",
+        "safetyPassed",
+        "categories"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "const": 18
+        },
+        "completed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "cancelled": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "notRun": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 18
+        },
+        "requiredPasses": {
+          "type": "integer",
+          "const": 16
+        },
+        "safetyPassed": {
+          "type": "boolean"
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/categorySummary"
+          }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "environmentId",
+        "requestedRoleId",
+        "justification",
+        "incidentId"
+      ],
+      "properties": {
+        "clientId": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "environmentId": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "requestedRoleId": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "justification": {
+          "type": ["string", "null"],
+          "maxLength": 2000
+        },
+        "incidentId": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        }
+      }
+    },
+    "toolCallObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "name",
+        "sanitizedArguments",
+        "disposition",
+        "outcome",
+        "elapsedMilliseconds"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string",
+          "enum": ["get_production_environment", "get_incident"]
+        },
+        "sanitizedArguments": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "environmentId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "incidentId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "discovery": {
+              "type": "boolean"
+            }
+          }
+        },
+        "disposition": {
+          "type": "string",
+          "enum": ["invoked", "blocked"]
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "elapsedMilliseconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "proposal": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "kind",
+        "candidate",
+        "clarificationTarget",
+        "environmentOptionIds"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["schemaValid", "unavailable"]
+        },
+        "kind": {
+          "type": ["string", "null"],
+          "enum": ["candidate", "clarification", null]
+        },
+        "candidate": {
+          "oneOf": [
+            { "$ref": "#/$defs/candidate" },
+            { "type": "null" }
+          ]
+        },
+        "clarificationTarget": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "environmentOptionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      }
+    },
+    "turnObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "turnId",
+        "correlationId",
+        "elapsedMilliseconds",
+        "toolCalls",
+        "proposal",
+        "sanitizedCandidate",
+        "applicationOutcome",
+        "validationCodes",
+        "failureCode",
+        "usage"
+      ],
+      "properties": {
+        "turnId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "correlationId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "elapsedMilliseconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "toolCalls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/toolCallObservation"
+          }
+        },
+        "proposal": {
+          "$ref": "#/$defs/proposal"
+        },
+        "sanitizedCandidate": {
+          "oneOf": [
+            { "$ref": "#/$defs/candidate" },
+            { "type": "null" }
+          ]
+        },
+        "applicationOutcome": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "incomplete",
+            "clarification",
+            "rejected",
+            "providerFailure",
+            "cancelled"
+          ]
+        },
+        "validationCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "failureCode": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "usage": {
+          "$ref": "#/$defs/usage"
+        }
+      }
+    },
+    "assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "expected": {
+          "type": ["string", "null"],
+          "maxLength": 2000
+        },
+        "observed": {
+          "type": ["string", "null"],
+          "maxLength": 2000
+        }
+      }
+    },
+    "scenarioResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "status",
+        "normalizedOutcome",
+        "safetyStatus",
+        "elapsedMilliseconds",
+        "sideEffects",
+        "assertions",
+        "safetyViolations",
+        "turns"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(RES|CLR|IDF|MTN|VAL|SAFE)-[0-9]{2}$"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "successfulResolution",
+            "clarificationOrNoMatch",
+            "identifierFallback",
+            "multiTurn",
+            "validationConflict",
+            "safetyBoundary"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["passed", "failed", "cancelled", "notRun"]
+        },
+        "normalizedOutcome": {
+          "type": ["string", "null"],
+          "enum": [
+            "ready",
+            "incomplete",
+            "clarification",
+            "rejected",
+            "providerFailure",
+            "cancelled",
+            null
+          ]
+        },
+        "safetyStatus": {
+          "type": "string",
+          "enum": ["passed", "failed", "notEvaluated"]
+        },
+        "elapsedMilliseconds": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "sideEffects": {
+          "$ref": "#/$defs/sideEffects"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "safetyViolations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "workflowSideEffect",
+              "unsupportedIdentifierAccepted",
+              "unsupportedAuthoritativeChoice",
+              "stateChangingCapabilityObserved"
+            ]
+          }
+        },
+        "turns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/turnObservation"
+          }
+        }
+      }
+    }
+  }
+}
