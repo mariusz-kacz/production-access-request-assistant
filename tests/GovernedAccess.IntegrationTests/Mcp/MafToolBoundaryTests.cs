@@ -5,7 +5,6 @@ using System.Text.Json;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
@@ -13,7 +12,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -205,14 +203,11 @@ public sealed class MafToolBoundaryTests
         IHttpClientFactory httpClientFactory) =>
         new(
             chatClient,
-            Options.Create(
-                new TeamsAccessRequestOptions
-                {
-                    TrustedWebBaseUri = new Uri("https://localhost/"),
-                }),
             NullLoggerFactory.Instance,
             new InMemoryAgentSessionStore(),
             new MafConversationTurnCoordinator(),
+            new RequestPreparationMcpEndpoint(
+                () => new Uri("https://localhost/")),
             httpClientFactory);
 
     private static IChatClient CreateRealProfileClient(IChatClient providerClient)

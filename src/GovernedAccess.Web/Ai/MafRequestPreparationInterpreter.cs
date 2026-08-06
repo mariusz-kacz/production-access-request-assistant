@@ -3,11 +3,9 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
-using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 
@@ -193,21 +191,21 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
     private readonly AIHostAgent agent;
     private readonly IHttpClientFactory? httpClientFactory;
     private readonly MafConversationTurnCoordinator turnCoordinator;
-    private readonly Uri? mcpEndpoint;
+    private readonly RequestPreparationMcpEndpoint? mcpEndpoint;
 
-    public MafRequestPreparationInterpreter(
+    internal MafRequestPreparationInterpreter(
         IChatClient chatClient,
-        IOptions<TeamsAccessRequestOptions> options,
         ILoggerFactory loggerFactory,
         AgentSessionStore sessionStore,
         MafConversationTurnCoordinator turnCoordinator,
+        RequestPreparationMcpEndpoint mcpEndpoint,
         IHttpClientFactory httpClientFactory)
         : this(
             chatClient,
-            options,
             loggerFactory,
             sessionStore,
             turnCoordinator,
+            mcpEndpoint,
             httpClientFactory,
             requireMcp: true)
     {
@@ -215,16 +213,15 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
 
     internal MafRequestPreparationInterpreter(
         IChatClient chatClient,
-        IOptions<TeamsAccessRequestOptions> options,
         ILoggerFactory loggerFactory,
         AgentSessionStore sessionStore,
         MafConversationTurnCoordinator turnCoordinator)
         : this(
             chatClient,
-            options,
             loggerFactory,
             sessionStore,
             turnCoordinator,
+            mcpEndpoint: null,
             httpClientFactory: null,
             requireMcp: false)
     {
@@ -232,27 +229,23 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
 
     private MafRequestPreparationInterpreter(
         IChatClient chatClient,
-        IOptions<TeamsAccessRequestOptions> options,
         ILoggerFactory loggerFactory,
         AgentSessionStore sessionStore,
         MafConversationTurnCoordinator turnCoordinator,
+        RequestPreparationMcpEndpoint? mcpEndpoint,
         IHttpClientFactory? httpClientFactory,
         bool requireMcp)
     {
         ArgumentNullException.ThrowIfNull(chatClient);
-        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(sessionStore);
         ArgumentNullException.ThrowIfNull(turnCoordinator);
 
         if (requireMcp)
         {
+            ArgumentNullException.ThrowIfNull(mcpEndpoint);
             ArgumentNullException.ThrowIfNull(httpClientFactory);
-            var trustedWebBaseUri = options.Value.TrustedWebBaseUri
-                ?? throw new ArgumentException(
-                    "A trusted Web base URI is required for the loopback MCP endpoint.",
-                    nameof(options));
-            mcpEndpoint = new Uri(trustedWebBaseUri, "mcp");
+            this.mcpEndpoint = mcpEndpoint;
             this.httpClientFactory = httpClientFactory;
         }
 
@@ -404,7 +397,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         var transport = new HttpClientTransport(
             new HttpClientTransportOptions
             {
-                Endpoint = mcpEndpoint!,
+                Endpoint = mcpEndpoint!.Resolve(),
                 Name = "governed-access-request-preparation",
                 TransportMode = HttpTransportMode.StreamableHttp,
             },

@@ -1,4 +1,4 @@
-# Tasks: Bounded Live-Model Evaluation
+# Tasks: Bounded Live-Model Outcome Evaluation
 
 **Input**: Design documents from `/specs/005-live-model-evaluation/`
 
@@ -6,16 +6,16 @@
 [research.md](research.md), [data-model.md](data-model.md),
 [contracts/](contracts/), [quickstart.md](quickstart.md)
 
-**Tests**: Credential-free tests are required because the feature observes model
-output and MCP interactions, applies deterministic safety assertions, and must prove
-that no workflow state is created. Tests use scripted or blocking chat clients and
-must never invoke a live model.
+**Tests**: Credential-free integration tests are required for dataset validation,
+final-outcome grading, latency capture, command failure behavior, isolation, artifact
+agreement, and zero workflow side effects. Tests use a deterministic fake chat client
+and never invoke a live model.
 
 **Organization**: Tasks are grouped by user story. Evaluation-specific automated
-coverage is consolidated into exactly three fixtures:
-`EvaluationEngineTests`, `EvaluationRunnerTests`, and `EvaluationCommandTests`.
-Their deterministic fixture inputs validate the evaluation harness and do not add
-live-model scenarios beyond the fixed 18-case dataset.
+coverage is consolidated into exactly two fixtures: `EvaluationEngineTests` and
+`EvaluationCommandTests`. Existing `ProgramCompositionTests` covers the normal-host
+non-regression boundary. Test inputs do not add live scenarios beyond the fixed
+18-case dataset.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -28,14 +28,15 @@ live-model scenarios beyond the fixed 18-case dataset.
 
 - No new domain authorization, approval, immutable-request, workflow-transition,
   provisioning, or idempotency rule is introduced. Existing domain tests remain
-  authoritative; evaluator tests assert zero requests, decisions, operations, and
-  grants.
+  authoritative; evaluator integration tests assert zero requests, decisions,
+  operations, and grants.
 - The production MCP contract remains exactly the existing two-tool read-only
-  contract. Existing MCP contract/failure tests remain authoritative; the new runner
-  fixture covers only evaluation observation through the real loopback transport.
+  contract. Existing MCP and interpreter integration tests remain authoritative for
+  MCP contracts, fallback, malformed results, timeouts, and tool behavior. The
+  evaluator deliberately treats model and MCP execution as a black box.
 - No React behavior changes, so frontend tests are not added.
-- No migration or persistent evaluation store is added; temporary SQLite ownership
-  and cleanup are covered by the runner fixture.
+- No migration or persistent evaluation store is added. Evaluation tests cover
+  disposable SQLite ownership and cleanup through the command fixture.
 - The optional live run is manual evidence only and is never invoked by automated
   build or test commands.
 
@@ -44,146 +45,114 @@ live-model scenarios beyond the fixed 18-case dataset.
 **Purpose**: Prepare the existing Web project for a checked-in evaluation dataset
 without adding a project, package, or deployable.
 
-- [ ] T001 Configure `src/GovernedAccess.Web/GovernedAccess.Web.csproj` to include `Evaluation/Datasets/intake-v1.json` as runtime content while preserving the existing single-executable project structure
+- [X] T001 Configure `src/GovernedAccess.Web/GovernedAccess.Web.csproj` to include `Evaluation/Datasets/intake-v1.json` as runtime content while preserving the existing single-executable project structure
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Add shared provider-neutral evaluation records and reusable request-
-preparation composition required by every user story.
+**Purpose**: Establish the minimal black-box evaluation records, shared request-
+preparation composition, and strict dataset loading required by every user story.
 
 **Critical**: No user story work begins until this phase is complete.
 
-- [ ] T002 [P] Define strict dataset, scenario, turn, expectation, normalized outcome, result, summary, side-effect, and safety records in `src/GovernedAccess.Web/Evaluation/EvaluationDataset.cs` and `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`
-- [ ] T003 [P] Implement the inactive-by-default typed observation scope and safe tool/proposal/usage records in `src/GovernedAccess.Web/Evaluation/EvaluationObservationScope.cs`
-- [ ] T004 [P] Extract shared MAF session, coordinator, interpreter, EF intake-store, and `RequestIntakeService` registration into `src/GovernedAccess.Web/Ai/RequestPreparationRegistration.cs` and update `src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs` to consume it without changing normal Teams behavior
-- [ ] T005 Add lazy normal-host and evaluation-loopback MCP endpoint resolution in `src/GovernedAccess.Web/Ai/RequestPreparationMcpEndpoint.cs` and refactor `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs` to use it instead of Teams options
-- [ ] T006 Implement closed case-sensitive JSON loading plus dataset version, exact ID set, 5/4/3/3/2/1 distribution, turn, tool, role, and expectation validation in `src/GovernedAccess.Web/Evaluation/EvaluationDatasetLoader.cs`
+- [X] T002 [P] Replace the preliminary evaluation records with the final dataset, scenario, expectation, final application-outcome, scenario-result, run-result, category-summary, and workflow-side-effect records in `src/GovernedAccess.Web/Evaluation/EvaluationDataset.cs` and `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and remove the obsolete `src/GovernedAccess.Web/Evaluation/EvaluationObservationScope.cs`
+- [X] T003 [P] Extract shared MAF session, coordinator, interpreter, EF intake-store, and `RequestIntakeService` registration into `src/GovernedAccess.Web/Ai/RequestPreparationRegistration.cs` and update `src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs` to consume it without changing normal Teams behavior
+- [X] T004 Add one mode-neutral lazy MCP endpoint resolver in `src/GovernedAccess.Web/Ai/RequestPreparationMcpEndpoint.cs`, have normal and evaluation host composition supply their respective validated base URIs, and refactor `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs` to use it without depending on Teams options or adding evaluation observations
+- [ ] T005 Implement closed case-sensitive JSON loading plus dataset version, exact ID set, 5/4/3/3/2/1 category distribution, turn, starting-candidate, and final-expectation validation in `src/GovernedAccess.Web/Evaluation/EvaluationDatasetLoader.cs`
 
-**Checkpoint**: Shared models load a valid fixed dataset, request preparation can be
-registered without Teams authentication, and evaluation observations remain inert in
-normal mode.
+**Checkpoint**: The final minimal models load a valid fixed dataset, request
+preparation can be registered without Teams authentication, and neither normal nor
+evaluation mode contains an observation layer.
 
 ---
 
-## Phase 3: User Story 1 - Run a Bounded Live Intake Evaluation (Priority: P1) MVP
+## Phase 3: User Story 1 - Run the Fixed Evaluation Safely (Priority: P1) MVP
 
 **Goal**: Provide one explicit command that runs the real pre-confirmation intake path
-against isolated state, writes two artifacts, and cannot create workflow state.
+against isolated state and cannot create workflow state.
 
-**Independent Test**: With a scripted chat client and a small valid in-process dataset,
-run evaluation mode through the real MAF, loopback MCP, validator, and disposable
-SQLite boundary; verify both artifacts, typed command status, cancellation behavior,
+**Independent Test**: With a deterministic fake chat client and a small valid
+in-process dataset, run evaluation mode through the real request-intake boundary and
+loopback MCP; verify command status, cancellation and timeout behavior, state cleanup,
 and zero requests, decisions, operations, or grants.
 
 ### Tests for User Story 1
 
 > Write these tests first and verify they fail before implementation.
 
-- [ ] T007 [P] [US1] Add fail-closed live-profile validation, command parsing, exit-code, evaluation-only surface, and normal-host non-regression cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationCommandTests.cs` and `tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs`
-- [ ] T008 [P] [US1] Add the deterministic happy-path runner, disposable SQLite cleanup, 100-second linked deadline, cancellation, two-artifact, and zero-workflow-side-effect cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationRunnerTests.cs`
+- [ ] T006 [US1] Add live-profile failure, command parsing, exit-code, evaluation-only route surface, deterministic small-dataset execution, cancellation, turn-timeout, disposable SQLite cleanup, and zero-workflow-side-effect cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationCommandTests.cs`, plus normal-host non-regression coverage in `tests/GovernedAccess.IntegrationTests/Hosting/ProgramCompositionTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Implement strict `evaluate-live-model` argument parsing, trusted output-parent resolution, live-profile prerequisite checks, and exit-code mapping in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
-- [ ] T010 [P] [US1] Implement loopback-only evaluation host composition, unique temporary SQLite ownership, synthetic seeding, host disposal, and exact database/sidecar cleanup in `src/GovernedAccess.Web/Evaluation/EvaluationHosting.cs`
-- [ ] T011 [US1] Select normal or evaluation composition before service registration, map only `/mcp` in evaluation mode, start the host before resolving the runner, and stop with the command exit code in `src/GovernedAccess.Web/Program.cs`
-- [ ] T012 [US1] Implement sequential scenario/turn execution through `RequestIntakeService.PrepareAsync`, unique actor/conversation/correlation identities, starting-candidate setup without model history, linked per-turn timeout, cancellation classification, and per-scenario workflow-table counts in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
-- [ ] T013 [US1] Implement initial `result.json` and concise `report.md` creation from one run result and wire safe progress/final artifact paths through `src/GovernedAccess.Web/Evaluation/EvaluationArtifactWriter.cs` and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
+- [ ] T007 [P] [US1] Implement strict `evaluate-live-model` argument parsing, trusted output-parent resolution, live-profile prerequisite checks, cancellation handling, and exit-code mapping in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
+- [ ] T008 [P] [US1] Implement loopback-only evaluation host composition, unique temporary SQLite ownership, synthetic seeding, host disposal, and exact database/sidecar cleanup in `src/GovernedAccess.Web/Evaluation/EvaluationHosting.cs`
+- [ ] T009 [US1] Select normal or evaluation composition before service registration, map only the read-only `/mcp` endpoint in evaluation mode, start the host before resolving the command, and stop with the command exit code in `src/GovernedAccess.Web/Program.cs`
+- [ ] T010 [US1] Implement sequential scenario and turn execution through `RequestIntakeService.PrepareAsync`, isolated actor/conversation/correlation identities, starting-candidate setup, linked per-turn timeout, cancellation classification, scenario-level elapsed time, final typed result capture, and workflow-table counts in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
 
-**Checkpoint**: The command path is independently runnable with deterministic test
-configuration, never exposes confirmation/workflow endpoints, and produces isolated
-pre-confirmation evidence.
+**Checkpoint**: The command is independently runnable with deterministic test
+configuration, exposes no confirmation or workflow endpoints, and returns isolated
+pre-confirmation outcomes without collecting model or MCP execution details.
 
 ---
 
-## Phase 4: User Story 2 - Measure Semantic Intake Quality (Priority: P2)
+## Phase 4: User Story 2 - Measure Outcome Correctness and Latency (Priority: P2)
 
-**Goal**: Execute the fixed 18 semantic conversations and grade application-owned
-facts with the accepted 16-of-18 policy.
+**Goal**: Execute the fixed 18 conversations and grade only their final
+application-owned outcomes and facts, with latency recorded as a non-gating metric.
 
-**Independent Test**: Load dataset version 1, verify the exact scenario inventory and
-distribution, feed deterministic turn observations into the engine, and confirm
-canonical, clarification, preservation/clearing, category, and 16-of-18 outcomes
-without comparing assistant prose.
+**Independent Test**: Load dataset version 1, verify the exact inventory and category
+distribution, feed scripted final application results and durations into the grader,
+and confirm fact comparison, category totals, the 16-of-18 policy, and zero-tolerance
+workflow-side-effect handling.
 
 ### Tests for User Story 2
 
-> Extend the consolidated engine fixture first and verify new cases fail.
+> Add these cases first and verify they fail before implementation.
 
-- [ ] T014 [US2] Add dataset contract/semantic validation, proposal and sanitized-candidate assertions, clarification options, preserved/cleared fields, normalized outcomes, category counts, and 16-of-18 aggregation cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`
+- [ ] T011 [US2] Add strict dataset contract and exact-inventory cases; final outcome, canonical fact, clarification target, validation code, preserved/cleared field, category-count, 16-of-18 threshold, workflow-side-effect, and latency-non-gating cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Populate all `RES-01` through `SAFE-01` requester turns and deterministic expectations with the exact 5/4/3/3/2/1 distribution in `src/GovernedAccess.Web/Evaluation/Datasets/intake-v1.json`
-- [ ] T016 [US2] Implement proposal, tool expectation, application outcome, canonical candidate, clarification option, validation-code, preservation, and clearing assertions without exact prose or an LLM judge in `src/GovernedAccess.Web/Evaluation/EvaluationAssertions.cs`
-- [ ] T017 [US2] Implement scenario/category aggregation and the 16-of-18 semantic threshold in `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, then connect dataset expectations and assertion results in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
+- [ ] T012 [US2] Populate `RES-01` through `SAFE-01` with ordered requester turns, optional starting candidates, and only deterministic final application-owned expectations using the exact 5/4/3/3/2/1 distribution in `src/GovernedAccess.Web/Evaluation/Datasets/intake-v1.json`
+- [ ] T013 [US2] Implement final-outcome and declared-fact grading, scenario and category aggregation, the 16-of-18 semantic threshold, zero-tolerance side-effect failure, and runner integration in `src/GovernedAccess.Web/Evaluation/EvaluationGrader.cs`, `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
 
-**Checkpoint**: All 18 cases are versioned and deterministically gradable; semantic
-failures are distinct from safe unresolved outcomes and from safety violations.
+**Checkpoint**: All 18 cases are versioned and deterministically gradable from final
+application results; latency is recorded but does not alter semantic grading.
 
 ---
 
-## Phase 5: User Story 3 - Verify Tool and Safety Boundaries (Priority: P3)
+## Phase 5: User Story 3 - Review Concise Results (Priority: P3)
 
-**Goal**: Capture sanitized attempted tool behavior and enforce zero-tolerance safety
-invariants without collecting raw provider or MCP traffic.
+**Goal**: Produce one complete JSON result and one concise Markdown summary showing
+score, category results, safety, per-scenario latency, and focused failure details.
 
-**Independent Test**: Run representative identifier fallback, descriptive incident,
-validation-conflict, and bypass scenarios with scripted chat responses; verify exact
-lookup/discovery ordering, invoked-versus-blocked calls, exact-only incident behavior,
-unsupported identifier handling, and zero workflow state.
+**Independent Test**: Render one synthetic completed run containing passing and
+failing scenarios, then verify JSON/Markdown agreement, failure-only diagnostics,
+scenario latency, and sentinel-secret exclusion.
 
 ### Tests for User Story 3
 
-> Extend the consolidated runner fixture first and verify new cases fail.
+> Extend the consolidated engine fixture first and verify the new case fails.
 
-- [ ] T018 [US3] Add exact-lookup-before-discovery, typed-`NotFound` fallback, blocked discovery, descriptive-incident no-call, repeated/unexpected call, unsupported identifier, authoritative-choice, state-changing capability, and zero-side-effect cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationRunnerTests.cs`
+- [ ] T014 [US3] Add one synthetic completed-run case for JSON/Markdown status, score, category, safety, scenario-status, and latency agreement; failure-only expected-versus-observed details; and sentinel secret exclusion in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T019 [P] [US3] Record safe proposal facts and attempted environment/incident tool sequence, allowlisted identifier arguments, invoked-or-blocked disposition, typed outcome, and duration inside `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs` without changing the fallback gate or normal result behavior
-- [ ] T020 [P] [US3] Implement an evaluation-aware chat-client decorator that records only elapsed time and typed provider-reported usage while excluding messages and raw representations in `src/GovernedAccess.Web/Evaluation/ObservingChatClient.cs`, then register it in `src/GovernedAccess.Web/Ai/RequestPreparationChatRegistration.cs`
-- [ ] T021 [US3] Add tool-order/compliance assertions and closed safety classification for workflow side effects, accepted unsupported identifiers, unsupported authoritative choices, and observed state-changing capabilities in `src/GovernedAccess.Web/Evaluation/EvaluationAssertions.cs` and integrate observation scopes in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
+- [ ] T015 [US3] Implement JSON serialization and concise Markdown rendering from the same run result, including safe model/dataset metadata, score, category and scenario tables, per-scenario latency, failure-only final-fact diagnostics, and final console status with artifact paths in `src/GovernedAccess.Web/Evaluation/EvaluationArtifactWriter.cs` and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
 
-**Checkpoint**: Semantic accuracy is accompanied by diagnosable, sanitized tool and
-safety evidence, and any safety violation fails the run regardless of pass count.
+**Checkpoint**: A reviewer can understand the run and each failure from two matching
+sanitized artifacts without prompts, transcripts, model internals, or MCP traces.
 
 ---
 
-## Phase 6: User Story 4 - Diagnose and Compare Evaluation Results (Priority: P4)
-
-**Goal**: Produce one complete JSON result and one concise Markdown summary with
-actionable failure details and no sensitive model traffic.
-
-**Independent Test**: Render one completed synthetic run with passing and failing
-scenarios, then verify JSON/Markdown score, category, and safety agreement;
-failures-only expected-versus-observed details; and sentinel secret exclusion. This
-is one reporting test and adds no live scenarios.
-
-### Tests for User Story 4
-
-> Extend the consolidated engine fixture first and verify new cases fail.
-
-- [ ] T022 [US4] Add one completed synthetic-run test for JSON/Markdown score, category, and safety agreement; 18 scenario statuses; failure-only expected-versus-observed details; and sentinel secret exclusion in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`
-
-### Implementation for User Story 4
-
-- [ ] T023 [US4] Complete JSON serialization and the concise Markdown summary from the same run result, including model/dataset metadata, score, category and 18-scenario status tables, failure-only sanitized expected-versus-observed details, and final status/count/safety/path console output in `src/GovernedAccess.Web/Evaluation/EvaluationArtifactWriter.cs`, `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
-
-**Checkpoint**: A reviewer can understand the run and every failure from the two
-matching sanitized artifacts without raw prompts, transcripts, or payloads.
-
----
-
-## Phase 7: Polish & Cross-Cutting Concerns
+## Phase 6: Polish & Cross-Cutting Concerns
 
 **Purpose**: Synchronize runtime guidance and capture final validation evidence.
 
-- [ ] T024 [P] Document the evaluation command, loopback-only trust boundary, disposable state, credential-free test ownership, and canonical quickstart in `docs/architecture.md`, `docs/local-development.md`, and `docs/testing-strategy.md`
-- [ ] T025 Run the required warnings-as-errors build, unit tests, and unified integration tests sequentially in the exact order from `specs/005-live-model-evaluation/quickstart.md`, then record command outcomes and the focused evaluation fixture results in `specs/005-live-model-evaluation/validation.md`
-- [ ] T026 Run the optional 18-case command with an approved live profile when available and record only its sanitized status, counts, safety result, and artifact paths—or the explicit unavailable prerequisite—in `specs/005-live-model-evaluation/validation.md`
+- [ ] T016 [P] Document the evaluation command, final-outcome-only grading, informational latency, black-box model/MCP boundary, disposable state, credential-free tests, and canonical quickstart in `docs/architecture.md`, `docs/local-development.md`, and `docs/testing-strategy.md`
+- [ ] T017 Run the required warnings-as-errors build, unit tests, and integration tests sequentially in the exact order from `specs/005-live-model-evaluation/quickstart.md`, then record command outcomes and focused evaluation fixture results in `specs/005-live-model-evaluation/validation.md`
+- [ ] T018 Run the optional fixed 18-case command with an approved live profile when available and record only its sanitized status, score, safety result, latency summary, and artifact paths—or the explicit unavailable prerequisite—in `specs/005-live-model-evaluation/validation.md`
 
 ---
 
@@ -191,64 +160,49 @@ matching sanitized artifacts without raw prompts, transcripts, or payloads.
 
 ### Phase Dependencies
 
-- **Phase 1 (Setup)**: No dependencies.
+- **Phase 1 (Setup)**: Complete.
 - **Phase 2 (Foundational)**: Depends on T001 and blocks every user story.
-- **Phase 3 (US1)**: Depends on Phase 2; provides the evaluation command and runner
+- **Phase 3 (US1)**: Depends on Phase 2 and provides the safe command and execution
   shell used by later stories.
-- **Phase 4 (US2)**: Depends on US1 for executable runner integration; its dataset and
-  engine remain independently testable through `EvaluationEngineTests`.
-- **Phase 5 (US3)**: Depends on US1 and the applicable v1 scenarios from US2 so tool
-  and safety evidence can be evaluated end to end.
-- **Phase 6 (US4)**: Depends on US1 result publication and the semantic/safety facts
-  produced by US2 and US3.
-- **Phase 7 (Polish)**: Depends on all desired user stories.
+- **Phase 4 (US2)**: Depends on US1 for runner integration; the dataset loader and
+  grader remain independently testable through `EvaluationEngineTests`.
+- **Phase 5 (US3)**: Depends on the run result and grading facts produced by US1 and
+  US2.
+- **Phase 6 (Polish)**: Depends on all desired user stories.
 
 ### User Story Dependency Graph
 
 ```text
-Setup -> Foundation -> US1 (P1) -> US2 (P2) -> US3 (P3) -> US4 (P4) -> Polish
+Setup -> Foundation -> US1 (P1) -> US2 (P2) -> US3 (P3) -> Polish
 ```
 
 ### Within Each User Story
 
-- Write and run the story's additions to one of the three consolidated fixtures
-  before implementation; verify the new cases fail for the intended reason.
-- Implement models and boundary records before orchestration that consumes them.
-- Preserve cancellation tokens and typed failures through each new async boundary.
-- Finish the independent checkpoint before advancing to the next priority.
+- Add the story's cases to one of the two consolidated evaluation fixtures before
+  implementation and verify the intended failure.
+- Implement boundary records before orchestration that consumes them.
+- Preserve cancellation tokens and typed failures through every new async boundary.
+- Complete the independent checkpoint before advancing to the next priority.
 
 ### Parallel Opportunities
 
-- After T001, T002, T003, and T004 can proceed in parallel; T005 follows T004, and
-  T006 follows T002.
-- In US1, T007 and T008 can proceed in parallel; after their expected failures, T009
-  and T010 can proceed in parallel before T011-T013 converge.
-- In US3, T019 and T020 can proceed in parallel after T018 establishes failing
-  observation tests; T021 then integrates both streams.
-- T024 documentation can proceed alongside final code review after all public command
-  and artifact behavior is stable.
+- After T001, T002 and T003 can proceed in parallel; T004 follows T003 and T005
+  follows T002.
+- After T006 establishes failing US1 coverage, T007 and T008 can proceed in parallel
+  before T009 and T010 converge.
+- T016 documentation can proceed alongside final review after public command and
+  artifact behavior is stable.
 
 ---
 
-## Parallel Examples
-
-### User Story 1
+## Parallel Example: User Story 1
 
 ```text
-Task T007: Command/configuration/composition tests
-Task T008: Runner/isolation/cancellation tests
+Task T006: Command, isolation, cancellation, timeout, and composition tests
 
-After both tests fail as expected:
-Task T009: Command parsing and exit mapping
-Task T010: Evaluation host and temporary database ownership
-```
-
-### User Story 3
-
-```text
-After T018 fails as expected:
-Task T019: MAF proposal and tool observation
-Task T020: Provider usage/latency observation
+After T006 fails as expected:
+Task T007: Command parsing, prerequisites, and exit mapping
+Task T008: Evaluation host and temporary database ownership
 ```
 
 ---
@@ -257,36 +211,39 @@ Task T020: Provider usage/latency observation
 
 ### MVP First: User Story 1
 
-1. Complete Setup and Foundational phases.
+1. Complete the minimal Foundation phase.
 2. Implement US1 with a small deterministic in-process dataset.
-3. Stop and validate the command, real pre-confirmation path, isolation, cancellation,
-   two artifacts, and zero workflow side effects.
-4. Do not claim semantic quality coverage until US2 adds the fixed 18-case dataset and
-   grading.
+3. Stop and validate command isolation, cancellation, timeout behavior, and zero
+   workflow side effects.
+4. Do not claim 18-case correctness coverage until US2 adds the fixed dataset and
+   final-outcome grading.
 
 ### Incremental Delivery
 
 1. **US1**: Safe runnable command and isolated intake execution.
-2. **US2**: Fixed semantic dataset and deterministic 16-of-18 grading.
-3. **US3**: Typed tool observations and zero-tolerance safety evidence.
-4. **US4**: Complete concise, matching, diagnosable artifacts.
-5. **Polish**: Documentation plus mandatory deterministic and optional live evidence.
+2. **US2**: Fixed 18-case dataset, final-outcome correctness, and latency capture.
+3. **US3**: Concise matching artifacts with focused failure diagnostics.
+4. **Polish**: Documentation plus mandatory deterministic and optional live evidence.
 
 ### Single-Developer Sequence
 
-Implement phases in priority order. Use the marked parallel opportunities only for
-independent file work; do not run the repository's final build and test commands in
+Implement phases in priority order. Use marked parallel opportunities only for
+independent file work; never run the repository's final build and test commands in
 parallel.
 
 ---
 
 ## Notes
 
+- T001 remains complete from the earlier setup pass.
+- T002 replaces the earlier preliminary model work and explicitly removes the
+  observation scope; the earlier T003 observation task is no longer part of the
+  feature.
 - `[P]` marks independent file work, not permission to run final validation commands
   concurrently.
 - Automated tests must never resolve a real Foundry client or require Azure
   credentials.
 - The live command must never use the checked-in deterministic profile as fallback.
-- Generated artifacts and temporary databases are local data, not product workflow
-  audit evidence.
+- Evaluation artifacts and temporary databases are local disposable evidence, not
+  product workflow audit records.
 - Commit after each task or cohesive task group.

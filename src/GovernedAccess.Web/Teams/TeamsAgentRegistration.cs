@@ -1,11 +1,7 @@
-using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Persistence;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Hosting.AspNetCore;
-using Microsoft.Agents.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
@@ -43,16 +39,13 @@ public static class TeamsAgentRegistration
 
         AddActivityAuthentication(builder.Services, builder.Configuration);
 
-        builder.Services.AddSingleton<IStorage, MemoryStorage>();
-        builder.Services.AddSingleton<InMemoryAgentSessionStore>();
-        builder.Services.AddSingleton<AgentSessionStore>(static serviceProvider =>
-            serviceProvider.GetRequiredService<InMemoryAgentSessionStore>());
-        builder.Services.AddSingleton<MafConversationTurnCoordinator>();
-        builder.Services.AddScoped<IRequestIntakeStore, EfRequestIntakeStore>();
-        builder.Services.AddSingleton<
-            IRequestPreparationInterpreter,
-            MafRequestPreparationInterpreter>();
-        builder.Services.AddScoped<RequestIntakeService>();
+        builder.Services.AddSingleton(static serviceProvider =>
+            new RequestPreparationMcpEndpoint(
+                () => serviceProvider.GetRequiredService<
+                        IOptions<TeamsAccessRequestOptions>>()
+                    .Value
+                    .TrustedWebBaseUri));
+        builder.Services.AddRequestPreparation();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();

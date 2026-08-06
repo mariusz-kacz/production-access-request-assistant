@@ -5,11 +5,9 @@ using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Teams;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.IntegrationTests.Ai;
 
@@ -353,10 +351,6 @@ public sealed class MafConversationSessionStoreTests
         MafConversationTurnCoordinator coordinator) =>
         new(
             chatClient,
-            Options.Create(
-                new TeamsAccessRequestOptions
-                {
-                }),
             NullLoggerFactory.Instance,
             sessionStore,
             coordinator);

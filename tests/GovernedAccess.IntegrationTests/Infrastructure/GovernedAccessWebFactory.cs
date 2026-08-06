@@ -286,8 +286,6 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             services.AddSingleton<IRequestPreparationInterpreter>(serviceProvider =>
                 new MafRequestPreparationInterpreter(
                     serviceProvider.GetRequiredService<IChatClient>(),
-                    serviceProvider.GetRequiredService<
-                        IOptions<TeamsAccessRequestOptions>>(),
                     serviceProvider.GetRequiredService<ILoggerFactory>(),
                     serviceProvider.GetRequiredService<AgentSessionStore>(),
                     serviceProvider.GetRequiredService<

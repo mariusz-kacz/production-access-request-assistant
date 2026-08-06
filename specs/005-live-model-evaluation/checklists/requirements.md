@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Bounded Live-Model Evaluation
+# Specification Quality Checklist: Bounded Live-Model Outcome Evaluation
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-08-06
@@ -31,8 +31,6 @@
 
 ## Notes
 
-- Validation iteration 1: all items passed; no clarification markers remain.
-- Microsoft Agent Framework, Azure AI Foundry Responses, and the two existing MCP
-  tool names are retained only as user-mandated current-system constraints. The
-  specification does not prescribe projects, classes, storage layouts, or runner
-  implementation choices.
+- Validation iteration 1: all items passed and no clarification markers remain.
+- Product names and existing boundary names are retained only as current-system
+  constraints; the specification does not prescribe implementation structure.

@@ -28,6 +28,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Evaluation\Datasets\intake-v1.json"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrontendSource Include="$(SpaRoot)src\**\*" />
     <FrontendSource Include="$(SpaRoot)index.html" />
     <FrontendSource Include="$(SpaRoot)package.json" />
