@@ -76,13 +76,13 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(RequestStatus.Active, storedRequest.Status);
         Assert.Equal(ApprovalOutcome.Approved, devOpsDecision.Decision);
         Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, devOpsDecision.ApproverId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, devOpsDecision.ApprovedRoleId);
         Assert.Equal("Approved for production support.", devOpsDecision.Comment);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, operation.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, operation.RoleId);
-        Assert.Equal(DemoDataIds.RequesterPrincipalId, grant.RequesterId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, grant.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, grant.RoleId);
+        Assert.Equal(
+            DemoDataIds.ClientAlphaEnvironmentId,
+            storedRequest.Details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.Details.RoleId);
+        Assert.Equal(requestId, operation.RequestId);
+        Assert.Equal(requestId, grant.RequestId);
         Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
         Assert.Equal(grant.ActivatedAt.AddHours(8), grant.ExpiresAt);
     }

@@ -10,13 +10,6 @@ public sealed record RequestValidationInput(
     string? Justification,
     string? IncidentId);
 
-public sealed record ValidatedRequestFields(
-    string ClientId,
-    string EnvironmentId,
-    string RequestedRoleId,
-    string Justification,
-    string? IncidentId);
-
 public sealed class FieldValidationError
 {
     public FieldValidationError(string field, string code, string message)
@@ -39,7 +32,7 @@ public sealed class FieldValidationError
 
 public abstract record RequestValidationOutcome;
 
-public sealed record RequestValidationSucceeded(ValidatedRequestFields Fields)
+public sealed record RequestValidationSucceeded(ValidatedRequestDetails Details)
     : RequestValidationOutcome;
 
 public sealed record RequestValidationRejected : RequestValidationOutcome
@@ -127,7 +120,7 @@ public sealed record RequestCandidateAssessmentIncomplete
 }
 
 public sealed record RequestCandidateAssessmentReady(
-    ValidatedRequestFields Fields)
+    ValidatedRequestDetails Details)
     : RequestCandidateAssessment;
 
 /// <summary>
@@ -520,7 +513,7 @@ public sealed class RequestValidator
 
         return ApplicationResult.Succeeded<RequestCandidateAssessment>(
             new RequestCandidateAssessmentReady(
-                new ValidatedRequestFields(
+                new ValidatedRequestDetails(
                     candidate.ClientId!,
                     candidate.EnvironmentId!,
                     candidate.RequestedRoleId!,
@@ -708,7 +701,7 @@ public sealed class RequestValidator
         }
 
         return new RequestValidationSucceeded(
-            new ValidatedRequestFields(
+            new ValidatedRequestDetails(
                 client.Id,
                 environment.Id,
                 role.RoleId,

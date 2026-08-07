@@ -5,7 +5,6 @@ public enum DevOpsDecisionPolicyError
     InvalidTransition,
     DuplicateStage,
     InvalidBusinessApproval,
-    BusinessApprovalScopeMismatch,
 }
 
 public sealed record DevOpsDecisionCommand(
@@ -50,29 +49,19 @@ public static class DevOpsDecisionPolicy
                 DevOpsDecisionPolicyError.InvalidTransition);
         }
 
-        var businessApprovalError = WorkflowEvidencePolicy.ValidateBusinessApproval(
-            request,
-            businessApproval);
-        if (businessApprovalError is not null)
+        if (businessApproval.Decision != ApprovalOutcome.Approved)
         {
             return new DevOpsDecisionNotApplied(
-                businessApprovalError ==
-                    WorkflowEvidencePolicyError.BusinessApprovalScopeMismatch
-                    ? DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch
-                    : DevOpsDecisionPolicyError.InvalidBusinessApproval);
+                DevOpsDecisionPolicyError.InvalidBusinessApproval);
         }
 
         var isApproval = command.Decision == ApprovalOutcome.Approved;
-        var approvedRoleId = isApproval
-            ? businessApproval.ApprovedRoleId
-            : null;
         var decision = new ApprovalDecision(
             command.DecisionId,
             request.Id,
             ApprovalStage.DevOps,
             command.Decision,
             command.ApproverId,
-            approvedRoleId,
             command.Comment,
             command.DecidedAt,
             command.CorrelationId);
@@ -82,8 +71,6 @@ public static class DevOpsDecisionPolicy
         {
             operation = new ProvisioningOperation(
                 request.Id,
-                request.EnvironmentId,
-                approvedRoleId!,
                 command.DecidedAt);
         }
 

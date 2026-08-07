@@ -142,10 +142,10 @@ public sealed class RequestValidationTests
         Assert.True(result.IsSuccess);
         var assessment = Assert.IsType<RequestCandidateAssessmentReady>(
             result.Value);
-        Assert.Equal("client-alpha", assessment.Fields.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", assessment.Fields.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, assessment.Fields.RequestedRoleId);
-        Assert.Equal("INC-1042", assessment.Fields.IncidentId);
+        Assert.Equal("client-alpha", assessment.Details.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", assessment.Details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, assessment.Details.RoleId);
+        Assert.Equal("INC-1042", assessment.Details.IncidentId);
         Assert.Equal(1, requestContext.ClientLookupCount);
         Assert.Equal(1, requestContext.EnvironmentLookupCount);
         Assert.Equal(1, requestContext.RoleLookupCount);
@@ -153,7 +153,7 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task ValidateAsyncReturnsNormalizedFieldsForAValidRequest()
+    public async Task ValidateAsyncReturnsCanonicalDetailsForAValidRequest()
     {
         var requestContext = new StubRequestContextReader();
         var validator = new RequestValidator(requestContext);
@@ -167,12 +167,12 @@ public sealed class RequestValidationTests
                 " INC-1042 "),
             TestContext.Current.CancellationToken);
 
-        var fields = AssertValid(result);
-        Assert.Equal("client-alpha", fields.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", fields.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, fields.RequestedRoleId);
-        Assert.Equal("Investigate the active production incident.", fields.Justification);
-        Assert.Equal("INC-1042", fields.IncidentId);
+        var details = AssertValid(result);
+        Assert.Equal("client-alpha", details.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, details.RoleId);
+        Assert.Equal("Investigate the active production incident.", details.Justification);
+        Assert.Equal("INC-1042", details.IncidentId);
     }
 
     [Fact]
@@ -184,8 +184,8 @@ public sealed class RequestValidationTests
             ValidInput(incidentId: "   "),
             TestContext.Current.CancellationToken);
 
-        var fields = AssertValid(result);
-        Assert.Null(fields.IncidentId);
+        var details = AssertValid(result);
+        Assert.Null(details.IncidentId);
     }
 
     [Fact]
@@ -377,9 +377,9 @@ public sealed class RequestValidationTests
             error => error.Field == expectedField && error.Code == expectedCode);
     }
 
-    private static ValidatedRequestFields AssertValid(RequestValidationOutcome result)
+    private static ValidatedRequestDetails AssertValid(RequestValidationOutcome result)
     {
-        return Assert.IsType<RequestValidationSucceeded>(result).Fields;
+        return Assert.IsType<RequestValidationSucceeded>(result).Details;
     }
 
     private sealed class StubRequestContextReader : IRequestContextReader

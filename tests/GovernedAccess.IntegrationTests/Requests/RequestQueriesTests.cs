@@ -555,7 +555,6 @@ public sealed class RequestQueryComponentTests
         return new RequestQueryService(
             requestContext,
             new EfWorkflowStore(dbContext),
-            new RequestValidator(requestContext),
             clock);
     }
 
@@ -582,11 +581,12 @@ public sealed class RequestQueryComponentTests
         new(
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
-            clientId,
-            environmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            incidentId,
+            new ValidatedRequestDetails(
+                clientId,
+                environmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                incidentId),
             createdAt,
             "request-correlation");
 
@@ -600,7 +600,7 @@ public sealed class RequestQueryComponentTests
                 new BusinessDecisionCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
-                    request.ClientId == DemoDataIds.ClientAlphaId
+                    request.Details.ClientId == DemoDataIds.ClientAlphaId
                         ? DemoDataIds.ClientAlphaApproverPrincipalId
                         : DemoDataIds.ClientBetaApproverPrincipalId,
                     null,

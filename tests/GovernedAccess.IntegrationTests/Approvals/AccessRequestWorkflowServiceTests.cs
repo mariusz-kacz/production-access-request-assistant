@@ -217,11 +217,12 @@ public sealed class AccessRequestWorkflowServiceTests
         var request = new AccessRequest(
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
-            DemoDataIds.ClientAlphaId,
-            DemoDataIds.ClientAlphaEnvironmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            DemoDataIds.PrimaryIncidentId,
+            new ValidatedRequestDetails(
+                DemoDataIds.ClientAlphaId,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
         var policyResult = BusinessDecisionPolicy.Apply(
@@ -250,11 +251,12 @@ public sealed class AccessRequestWorkflowServiceTests
         var request = new AccessRequest(
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
-            DemoDataIds.ClientAlphaId,
-            DemoDataIds.ClientAlphaEnvironmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            DemoDataIds.PrimaryIncidentId,
+            new ValidatedRequestDetails(
+                DemoDataIds.ClientAlphaId,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
         dbContext.AccessRequests.Add(request);

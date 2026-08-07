@@ -36,7 +36,6 @@ builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
 builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
 builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
 builder.Services.AddScoped<RequestValidator>();
-builder.Services.AddScoped<RequestSubmissionService>();
 builder.Services.AddScoped<RequestQueryService>();
 builder.Services.AddScoped<ProtectedProvisioningService>();
 builder.Services.AddScoped<AccessRequestWorkflowService>();

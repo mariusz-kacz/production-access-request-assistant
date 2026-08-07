@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-07-22
-- **Last updated**: 2026-07-23
+- **Last updated**: 2026-08-07
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/spec.md`, `specs/001-governed-production-access/plan.md`, `docs/adr/0001-use-one-deployable-service-including-mcp.md`
 
@@ -10,7 +10,7 @@
 
 Requests are validated against authoritative client, environment, role, and incident
 data before submission. Business and DevOps actions authenticate their actors and bind
-insert-only decisions to the immutable request ID and exact role. The provisioning
+insert-only decisions to the immutable request ID. The provisioning
 handler originally repeated all reference-data and approver lookups before every
 initial attempt and retry.
 
@@ -26,7 +26,7 @@ reference records change. Repeating those lookups in provisioning adds a depende
 failure branches, and tests for a state the executable MVP cannot produce.
 
 Persisted workflow evidence can change and remains security-relevant. A provisioning
-attempt or retry must not trust caller assertions about approval, scope, or workflow
+attempt or retry must not trust caller assertions about approval or workflow
 state.
 
 ## Decision
@@ -34,20 +34,21 @@ state.
 The provisioning handler will reload and validate only the persisted evidence needed
 to authorize the stored operation:
 
-- the provisioning operation exists and uses the canonical request UUID;
+- the provisioning operation exists through a request-keyed lookup;
 - the immutable request exists and is in a provisionable or completed state;
-- the operation environment and role match the immutable request;
-- one approved business decision and one approved DevOps decision exist for the same
-  request in the correct order;
-- both approvals cover the immutable requested role; and
-- an already completed operation has one matching stored grant.
+- one approved business decision and one approved DevOps decision exist through
+  request-and-stage-keyed lookups;
+- the operation is in the expected pending, failed, or completed state; and
+- an already completed operation has one grant for the same request.
 
-The handler will construct the provider request exclusively from that stored evidence.
+The handler will construct the provider request exclusively from the reloaded
+`AccessRequest.Details`. Decisions, the operation, and the grant do not store parallel
+scope that must be synchronized with the request.
 It will not depend on `IRequestContextReader` or repeat client, environment, role,
 incident, business-principal, or DevOps-principal lookups.
 
 Authoritative reference validation remains at the points where the MVP can accept or
-record those facts: request submission and authenticated human decisions. Retry uses
+record those facts: request confirmation and authenticated human decisions. Retry uses
 the same persisted-evidence validation as the initial attempt.
 
 The SQLite database is application-owned and has no supported out-of-band writers.
@@ -59,7 +60,10 @@ validation to be restored before that writer is released.
 
 This keeps a real authorization boundary without implementing behavior for a mutable
 reference system that does not exist. The handler still distrusts callers and detects
-missing, mismatched, rejected, out-of-order, or wrong-scope workflow evidence.
+missing, rejected, or invalid-state workflow evidence. Request identity
+is established by keyed queries and foreign keys rather than rechecked in application
+policies. Scope-copy mismatches are impossible because the request is its sole
+persisted owner.
 
 The decision is deliberately tied to the fixed, fail-fast synthetic dataset. It is not
 a claim that production environment, role, incident, or identity data is generally

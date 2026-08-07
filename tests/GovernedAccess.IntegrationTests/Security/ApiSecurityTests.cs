@@ -195,9 +195,11 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
             .SingleAsync(cancellationToken);
 
         Assert.Equal(DemoDataIds.RequesterPrincipalId, storedRequest.RequesterId);
-        Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.ClientId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, storedRequest.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.RequestedRoleId);
+        Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.Details.ClientId);
+        Assert.Equal(
+            DemoDataIds.ClientAlphaEnvironmentId,
+            storedRequest.Details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.Details.RoleId);
         Assert.Equal(RequestStatus.Active, storedRequest.Status);
 
         Assert.Collection(
@@ -208,7 +210,6 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
                 Assert.Equal(
                     DemoDataIds.ClientAlphaApproverPrincipalId,
                     businessDecision.ApproverId);
-                Assert.Equal(ProductionRoleIds.ReadOnly, businessDecision.ApprovedRoleId);
             },
             devOpsDecision =>
             {
@@ -216,15 +217,10 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
                 Assert.Equal(
                     DemoDataIds.DevOpsApproverPrincipalId,
                     devOpsDecision.ApproverId);
-                Assert.Equal(ProductionRoleIds.ReadOnly, devOpsDecision.ApprovedRoleId);
             });
 
         Assert.Equal(requestId, operation.RequestId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, operation.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, operation.RoleId);
-        Assert.Equal(DemoDataIds.RequesterPrincipalId, grant.RequesterId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, grant.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, grant.RoleId);
+        Assert.Equal(requestId, grant.RequestId);
         Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
     }
 

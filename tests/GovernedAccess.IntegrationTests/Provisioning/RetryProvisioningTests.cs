@@ -267,56 +267,6 @@ public sealed class RetryProvisioningComponentTests
             item => item.EventType == AuditEventType.InvalidTransitionRejected);
     }
 
-    [Fact]
-    public async Task RetryRejectsPersistedOperationScopeMismatchBeforeNewAttempt()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var fixture = await ProvisioningTestFixture.CreateAsync(
-            cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
-        var provisioner = new LostResponseProvisioner(fixture.Clock);
-        var service = CreateService(dbContext, provisioner, fixture.Clock);
-        var request = await SeedBusinessApprovedRequestAsync(
-            dbContext,
-            fixture.Clock.UtcNow,
-            cancellationToken);
-        var initial = await service.DecideDevOpsAsync(
-            request.Id,
-            DemoDataIds.DevOpsApproverPrincipalId,
-            ApprovalOutcome.Approved,
-            null,
-            "initial-provisioning",
-            cancellationToken);
-        Assert.True(initial.IsFailure);
-
-        dbContext.ChangeTracker.Clear();
-        _ = await dbContext.ProvisioningOperations
-            .Where(item => item.RequestId == request.Id)
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    item => item.RoleId,
-                    ProductionRoleIds.Support),
-                cancellationToken);
-
-        var retry = await service.RetryProvisioningAsync(
-            request.Id,
-            DemoDataIds.DevOpsApproverPrincipalId,
-            "mismatched-scope-retry",
-            cancellationToken);
-
-        Assert.True(retry.IsFailure);
-        Assert.Equal(
-            ProtectedProvisioningService.OperationScopeMismatchCode,
-            retry.Failure!.Code);
-        var operation = await dbContext.ProvisioningOperations
-            .AsNoTracking()
-            .SingleAsync(cancellationToken);
-        Assert.Equal(ProductionRoleIds.Support, operation.RoleId);
-        Assert.Equal(1, operation.AttemptCount);
-        Assert.Equal(1, provisioner.InvocationCount);
-        Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
-    }
-
     private static AccessRequestWorkflowService CreateService(
         GovernedAccessDbContext dbContext,
         IAccessProvisioner provisioner,
@@ -340,11 +290,12 @@ public sealed class RetryProvisioningComponentTests
         var request = new AccessRequest(
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
-            DemoDataIds.ClientAlphaId,
-            DemoDataIds.ClientAlphaEnvironmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            DemoDataIds.PrimaryIncidentId,
+            new ValidatedRequestDetails(
+                DemoDataIds.ClientAlphaId,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
         var applied = Assert.IsType<BusinessDecisionApplied>(

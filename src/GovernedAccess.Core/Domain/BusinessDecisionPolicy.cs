@@ -51,7 +51,6 @@ public static class BusinessDecisionPolicy
             ApprovalStage.Business,
             command.Decision,
             command.ApproverId,
-            isApproval ? request.RequestedRoleId : null,
             command.Comment,
             command.DecidedAt,
             command.CorrelationId);

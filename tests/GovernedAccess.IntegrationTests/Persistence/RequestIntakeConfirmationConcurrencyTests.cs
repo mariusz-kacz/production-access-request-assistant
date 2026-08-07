@@ -173,10 +173,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
-            new RequestSubmissionService(
-                validator,
-                requestContext,
-                new EfWorkflowStore(context)),
+            new EfWorkflowStore(context),
             new DeterministicClock(ConfirmedAt));
     }
 

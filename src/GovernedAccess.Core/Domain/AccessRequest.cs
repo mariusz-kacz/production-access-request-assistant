@@ -35,14 +35,17 @@ public sealed class AccessRequest
 
     public const int MaximumJustificationLength = 2000;
 
+    private AccessRequest()
+    {
+        RequesterId = null!;
+        Details = null!;
+        CorrelationId = null!;
+    }
+
     public AccessRequest(
         Guid id,
         string requesterId,
-        string clientId,
-        string environmentId,
-        string requestedRoleId,
-        string justification,
-        string? incidentId,
+        ValidatedRequestDetails details,
         DateTimeOffset createdAt,
         string correlationId)
     {
@@ -52,36 +55,12 @@ public sealed class AccessRequest
         }
 
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
-        clientId = AccessRequestNormalization.NormalizeIdentifier(clientId);
-        environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
-        requestedRoleId = AccessRequestNormalization.NormalizeIdentifier(requestedRoleId);
-        justification = AccessRequestNormalization.NormalizeJustification(justification);
-        incidentId = AccessRequestNormalization.NormalizeOptionalIdentifier(incidentId);
+        ArgumentNullException.ThrowIfNull(details);
         correlationId = AccessRequestNormalization.NormalizeIdentifier(correlationId);
-
-        if (!ProductionRoleIds.IsSupported(requestedRoleId))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(requestedRoleId),
-                requestedRoleId,
-                "The requested role is not supported by this feature.");
-        }
-
-        if (justification.Length is < MinimumJustificationLength or > MaximumJustificationLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(justification),
-                justification.Length,
-                $"The justification must be between {MinimumJustificationLength} and {MaximumJustificationLength} characters.");
-        }
 
         Id = id;
         RequesterId = requesterId;
-        ClientId = clientId;
-        EnvironmentId = environmentId;
-        RequestedRoleId = requestedRoleId;
-        Justification = justification;
-        IncidentId = incidentId;
+        Details = details;
         Status = RequestStatus.AwaitingBusinessApproval;
         CreatedAt = createdAt.ToUniversalTime();
         LastModifiedAt = CreatedAt;
@@ -93,15 +72,7 @@ public sealed class AccessRequest
 
     public string RequesterId { get; private set; }
 
-    public string ClientId { get; private set; }
-
-    public string EnvironmentId { get; private set; }
-
-    public string RequestedRoleId { get; private set; }
-
-    public string Justification { get; private set; }
-
-    public string? IncidentId { get; private set; }
+    public ValidatedRequestDetails Details { get; private set; }
 
     public RequestStatus Status { get; internal set; }
 

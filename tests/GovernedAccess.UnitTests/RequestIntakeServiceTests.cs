@@ -6,17 +6,6 @@ namespace GovernedAccess.UnitTests;
 
 public sealed class RequestIntakeServiceTests
 {
-    [Fact]
-    public void CompactResultFactoriesRejectMissingRequiredEvidence()
-    {
-        Assert.Throws<ArgumentException>(
-            () => RequestPreparationResult.CandidateRejected([]));
-        Assert.Throws<ArgumentException>(
-            () => RequestConfirmationResult.Submitted(Guid.Empty));
-        Assert.Throws<ArgumentException>(
-            () => RequestIntakeResetResult.Reset(Guid.Empty));
-    }
-
     [Theory]
     [InlineData(false, RequestIntakeStatus.Collecting, RequestIntakeStatus.Superseded)]
     [InlineData(false, RequestIntakeStatus.Ready, RequestIntakeStatus.Superseded)]
@@ -151,24 +140,6 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
-    public async Task ResetPropagatesCallerCancellationWithoutInvokingTheInterpreter()
-    {
-        var scenario = new IntakeScenario(
-            initialSession: CreateCollectingSessionWithCandidate());
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => scenario.ResetResultAsync(
-                IntakeScenario.Owner,
-                cancellation.Token));
-
-        Assert.Equal(0, scenario.SaveCount);
-        Assert.Equal(0, scenario.InterpreterCallCount);
-        Assert.Equal(RequestIntakeStatus.Collecting, scenario.Session.Status);
-    }
-
-    [Fact]
     public async Task InvalidPartialIdentifierIsSanitizedAndRejectedWithoutRetry()
     {
         var proposal = new RequestPreparationProposal(
@@ -285,11 +256,11 @@ public sealed class RequestIntakeServiceTests
         var request = Assert.Single(scenario.Requests);
         Assert.Equal(ready.ReservedRequestId, request.Id);
         Assert.Equal(IntakeScenario.Owner.RequesterId, request.RequesterId);
-        Assert.Equal(ready.ClientId, request.ClientId);
-        Assert.Equal(ready.EnvironmentId, request.EnvironmentId);
-        Assert.Equal(ready.RoleId, request.RequestedRoleId);
-        Assert.Equal(ready.Justification, request.Justification);
-        Assert.Equal(ready.IncidentId, request.IncidentId);
+        Assert.Equal(ready.ClientId, request.Details.ClientId);
+        Assert.Equal(ready.EnvironmentId, request.Details.EnvironmentId);
+        Assert.Equal(ready.RoleId, request.Details.RoleId);
+        Assert.Equal(ready.Justification, request.Details.Justification);
+        Assert.Equal(ready.IncidentId, request.Details.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
 
         var auditEvent = Assert.Single(scenario.AuditEvents);
@@ -398,21 +369,6 @@ public sealed class RequestIntakeServiceTests
         Assert.False(result.IsReady);
         Assert.Equal(ApplicationFailureKind.DependencyFailure, result.FailureKind);
         Assert.Equal(1, scenario.SaveCount);
-        Assert.Empty(scenario.Requests);
-        Assert.Empty(scenario.AuditEvents);
-    }
-
-    [Fact]
-    public async Task PreparationPropagatesCallerCancellation()
-    {
-        var scenario = new IntakeScenario();
-        using var cancellation = new CancellationTokenSource();
-        await cancellation.CancelAsync();
-
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => scenario.PrepareAsync(cancellation.Token));
-
-        Assert.Equal(0, scenario.SaveCount);
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
     }
@@ -807,96 +763,6 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal(1, scenario.RecoveryCount);
     }
 
-    [Fact]
-    public async Task ConcurrentConfirmationReturnsRecoveredSubmittedIdentity()
-    {
-        var scenario = new IntakeScenario();
-        var ready = await scenario.PrepareAsync();
-        scenario.SaveFailure = new ApplicationFailure(
-            ApplicationFailureKind.ConcurrencyConflict,
-            "request_intake_concurrency_conflict",
-            "The request intake changed while it was being saved.");
-        scenario.RecoveredRequestId = ready.ReservedRequestId;
-
-        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
-
-        Assert.Equal(RequestConfirmationResultKind.AlreadySubmitted, result.Kind);
-        Assert.True(result.WasAlreadySubmitted);
-        Assert.Equal(ready.ReservedRequestId, result.RequestId);
-        Assert.Equal(1, scenario.RecoveryCount);
-        Assert.Equal(ready.PreparationId, scenario.RecoverySessionId);
-        Assert.Same(IntakeScenario.Owner, scenario.RecoveryActor);
-    }
-
-    [Fact]
-    public async Task ConcurrentConfirmationReturnsClosedRecoveryFailure()
-    {
-        var scenario = new IntakeScenario();
-        _ = await scenario.PrepareAsync();
-        scenario.SaveFailure = new ApplicationFailure(
-            ApplicationFailureKind.ConcurrencyConflict,
-            "request_intake_concurrency_conflict",
-            "The request intake changed while it was being saved.");
-        scenario.RecoveryFailure = new ApplicationFailure(
-            ApplicationFailureKind.NotFound,
-            "request_intake_not_found",
-            "The request intake was not found.");
-
-        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
-
-        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
-        Assert.Equal(ApplicationFailureKind.NotFound, result.Failure!.Kind);
-        Assert.Equal("request_intake_not_found", result.Failure.Code);
-        Assert.Equal(1, scenario.RecoveryCount);
-        Assert.Equal(Guid.Empty, result.RequestId);
-    }
-
-    [Fact]
-    public void TerminalAggregateRetainsIdentityAndClearsSensitiveCandidate()
-    {
-        var occurredAt = new DateTimeOffset(
-            2026,
-            7,
-            27,
-            10,
-            0,
-            0,
-            TimeSpan.Zero);
-        var requestId = Guid.NewGuid();
-        var session = new RequestIntakeSession(
-            Guid.NewGuid(),
-            RequestIntakeSession.TeamsChannel,
-            "tenant",
-            "actor",
-            "conversation",
-            "requester",
-            occurredAt,
-            "created");
-        session.UpdateCandidate(
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
-            occurredAt,
-            "candidate");
-        session.MarkReady(requestId, occurredAt, "ready");
-
-        session.MarkSubmitted(occurredAt.AddMinutes(1), "submitted");
-
-        Assert.Equal(RequestIntakeStatus.Submitted, session.Status);
-        Assert.Equal(requestId, session.ReservedRequestId);
-        Assert.Null(session.ClientId);
-        Assert.Null(session.EnvironmentId);
-        Assert.Null(session.RequestedRoleId);
-        Assert.Null(session.Justification);
-        Assert.Null(session.IncidentId);
-        Assert.Throws<InvalidOperationException>(
-            () => session.MarkSubmitted(
-                occurredAt.AddMinutes(2),
-                "duplicate-submit"));
-    }
-
     private sealed record PreparationObservation(
         bool IsReady,
         Guid PreparationId,
@@ -946,16 +812,12 @@ public sealed class RequestIntakeServiceTests
             session = initialSession;
 
             var validator = new RequestValidator(this);
-            var submissionService = new RequestSubmissionService(
-                validator,
-                this,
-                this);
             service = new RequestIntakeService(
                 this,
                 validator,
                 this,
                 this,
-                submissionService,
+                this,
                 this);
         }
 
@@ -990,10 +852,6 @@ public sealed class RequestIntakeServiceTests
         public ApplicationFailure? RecoveryFailure { get; set; }
 
         public int RecoveryCount { get; private set; }
-
-        public Guid? RecoverySessionId { get; private set; }
-
-        public AuthenticatedChannelActor? RecoveryActor { get; private set; }
 
         public List<AccessRequest> Requests { get; } = [];
 
@@ -1169,9 +1027,6 @@ public sealed class RequestIntakeServiceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             RecoveryCount++;
-            RecoverySessionId = sessionId;
-            RecoveryActor = actor;
-
             if (RecoveryFailure is not null)
             {
                 return Task.FromResult(

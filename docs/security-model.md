@@ -58,7 +58,7 @@ The MVP protects the following properties:
 ### Workflow integrity
 
 - submitted request scope is immutable;
-- approvals bind to one immutable request ID and exact role;
+- approvals bind to one immutable request ID whose validated details cannot change;
 - decisions occur in the required order;
 - invalid and duplicate transitions do not alter protected state;
 - provisioning uses stored evidence rather than caller assertions; and
@@ -92,8 +92,8 @@ There is no rate limiting, edge protection, or production capacity design.
 | Intake binding and canonical candidate | Integrity, actor/conversation isolation, and safe restart recovery |
 | Authenticated actor identity | Integrity |
 | Business and DevOps decisions | Integrity, ordering, attribution, and request binding |
-| Provisioning operation | Integrity, idempotency, and exact-scope binding |
-| Access grant | Integrity, uniqueness, exact role/environment binding, and fixed expiry |
+| Provisioning operation | Integrity, request binding, lifecycle state, and retry metadata |
+| Access grant | Integrity, request binding, uniqueness, and fixed expiry |
 | Audit history | Attribution, ordering, and application-level insert-only behavior |
 | Synthetic reference context | Integrity within the fixed dataset |
 | Correlation and outcome metadata | Integrity and safe disclosure |
@@ -173,7 +173,7 @@ description, or provider adapter would not preserve this boundary.
 | Requester cannot choose the business approver | Environment context stores the responsible approver; business decision logic reloads it. |
 | Client Alpha approval cannot authorize Client Beta | Principal client responsibility, environment client, and request client must agree. |
 | Submitted scope cannot change | Request scope properties have no workflow mutation path; correction creates a new request ID. |
-| Business approval binds exact scope | The decision references the immutable request ID and approved role. |
+| Business approval binds exact scope | The decision references the immutable request ID; compatibility views project scope from that request. |
 | DevOps cannot change role or duration | The decision body contains no scope or duration; policy uses persisted role; grant lifetime is server-owned. |
 | Model output is not trusted | Closed JSON schema, strict parsing, known-role constraints, identifier revalidation, and full submission validation. |
 | Conversation history cannot authorize or establish candidate truth | Only the canonical typed candidate is durable; native MAF history is process-local, isolated per intake, and never read by confirmation or downstream workflow actions. |
@@ -405,12 +405,12 @@ fixed synthetic requester. The action carries only a schema version and opaque i
 ID; payload identity, role, duration, approval, and scope fields are rejected.
 
 `RequestIntakeService` reloads the intake, verifies exact actor/conversation ownership,
-readiness, expiry, and supersession, and revalidates immutable canonical scope.
-`RequestSubmissionService` requires the reserved server-generated request ID and
-stages the immutable request plus request-created audit evidence without saving
-independently. One shared `SaveChangesAsync` commits the `Ready -> Submitted` intake
-transition, `AwaitingBusinessApproval` request, and audit event. Confirmation does not
-read MAF history and cannot approve or provision access.
+readiness, expiry, and supersession, and revalidates the prepared canonical details.
+The same confirmation use case constructs `AccessRequest` with the reserved
+server-generated request ID and stages request-created audit evidence. One shared
+`SaveChangesAsync` commits the `Ready -> Submitted` intake transition,
+`AwaitingBusinessApproval` request, and audit event. Confirmation does not read MAF
+history and cannot approve or provision access.
 
 After creation, the request follows the unchanged browser-driven business approval,
 DevOps approval, protected provisioning, retry, and audit path. Teams supplies no
@@ -433,9 +433,8 @@ comment.
 ### DevOps decision
 
 The workflow service requires a DevOps principal, current validated request context,
-a valid prior business approval, the correct workflow state, and exact role
-consistency. The browser cannot provide a role, environment, client, duration, or
-approval assertion.
+a valid request-bound business approval, and the correct workflow state. The browser
+cannot provide a role, environment, client, duration, or approval assertion.
 
 DevOps approval first commits the authenticated decision and pending request-keyed
 operation. It then passes only the request ID into protected provisioning.
@@ -459,15 +458,21 @@ accepts no body, so it cannot express replacement scope.
 Before provider invocation it checks:
 
 - request and operation state compatibility;
-- operation-to-request identity;
-- environment and role scope equality;
-- both approvals refer to the same request;
-- approval stages and order are valid;
-- both approvals cover the exact immutable role; and
-- a completed grant matches the stored operation.
+- required decisions and the operation were loaded by request-keyed persistence
+  queries;
+- both persisted approval outcomes authorize provisioning; and
+- a completed grant belongs to the same request-keyed operation.
 
-The provider request is constructed only from this stored evidence. Caller-supplied
-approval assertions do not exist in the interface.
+The provider request's requester, environment, and role are constructed exclusively
+from the reloaded `AccessRequest.Details`. Approval, operation, and grant records do
+not carry independently writable scope. Caller-supplied approval assertions do not
+exist in the interface.
+
+The application trusts structural relationships established by its own keyed queries,
+foreign keys, unique constraints, and constructors. It does not repeat request-ID,
+stage, scope, or audit-projection comparisons after those guarantees apply. Checks are
+reserved for external input, authenticated authority, mutable workflow state,
+persistence/concurrency outcomes, and the separate provider boundary.
 
 The synthetic provider has a ten-second deadline and get-or-create semantics keyed by
 the immutable request ID. The access grant expiry is always activation plus eight
@@ -544,7 +549,7 @@ or long-term retention solution.
 | Silent environment correction | Exact lookup times out or fails, and the model attempts discovery to substitute another scope. | Per-turn gate permits discovery only after typed exact `NotFound`; every fallback option requires authoritative reload and developer confirmation or selection. | Semantic shortlist quality remains model-dependent and is evaluated separately. |
 | Prose-only choice injection | A model clarification names an environment that is absent from its structured options. | The application validates only structured IDs, renders choices from reloaded records, and never parses prose into scope or authority. | The informational model message may still contain confusing wording. |
 | MCP capability expansion | A server advertises a workflow or provisioning tool. | Explicit server registration and client-side exact-name allowlist check. | An unauthenticated endpoint can be enumerated in the local deployment. |
-| Request tampering after approval | Caller changes client, role, or environment before DevOps. | No update endpoint; immutable scope properties; approval and operation scope checks. | A direct malicious database writer is outside the trust assumption. |
+| Request tampering after approval | Caller changes client, role, or environment before DevOps. | No update endpoint; immutable `AccessRequest.Details`; decisions and operations bind to the request ID. | A direct malicious database writer is outside the trust assumption. |
 | DevOps privilege expansion | Crafted approval adds a stronger role or longer duration. | Restricted body; exact stored role; fixed server-owned eight-hour expiry. | Current design has no generalized privilege hierarchy by intent. |
 | Forged approval assertion | Caller tells provisioner both stages approved. | Protected service accepts only request ID and reloads persisted evidence. | A compromised application process can bypass in-process controls. |
 | Replay or concurrent retry | Many retries attempt to create duplicate grants. | Request-keyed get-or-create, unique grant constraint, concurrency recovery. | No distributed provider guarantee exists beyond the adapter contract. |
@@ -602,8 +607,8 @@ Security behavior is exercised by automated tests, including:
   authenticated Teams creation, wrong-client rejection, human approvals, exact scope,
   fixed lifetime, and persisted provisioning evidence.
 
-Unit tests separately exercise request validation, exact-scope decision policies, and
-workflow evidence rules without infrastructure dependencies.
+Unit tests separately exercise request validation, decision policies, and
+request-identity/sequence evidence rules without infrastructure dependencies.
 
 Automated tests do not prove the security of hosting infrastructure, browsers,
 external identity, a live model provider, or a real access provider because those

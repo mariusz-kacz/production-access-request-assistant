@@ -505,9 +505,6 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 "This prepared request is no longer valid against current production context. No request was submitted; start a new request in this chat.",
             RequestIntakeService.NotReadyCode =>
                 "This preparation is not ready for confirmation. No request was submitted; continue the request in this chat.",
-            RequestIntakeService.ScopeMismatchCode
-                or RequestIntakeService.SubmissionEvidenceInvalidCode =>
-                "The request could not be confirmed safely. No request was submitted; start a new request in this chat.",
             _ => CreateGenericConfirmationFailureMessage(failure.Kind),
         };
     }
