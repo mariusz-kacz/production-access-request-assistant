@@ -90,6 +90,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .HasMaxLength(AccessRequest.MaximumJustificationLength);
         entity.Property(session => session.IncidentId)
             .HasMaxLength(IdentifierLength);
+        entity.Ignore(session => session.PreparedDetails);
         entity.Property(session => session.CorrelationId)
             .HasMaxLength(CorrelationIdLength);
         entity.Property(session => session.PersistenceVersion)

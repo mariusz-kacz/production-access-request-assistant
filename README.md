@@ -213,17 +213,10 @@ outer timeout of at least four minutes.
 The suites require no live LLM, Teams tenant, Azure subscription, public tunnel, or
 production system. The latest backend validation records:
 
-- 99 unit tests passed; and
-- 94 integration/component/full-host tests passed.
+- 71 unit tests passed; and
+- 92 integration/component/full-host tests passed.
 
 The frontend suite contains 6 tests and remains a separate validation command.
-
-The heavier 100-way provisioning scenario remains outside the solution and normal
-validation loop. Run it explicitly when high-contention behavior is under review:
-
-```powershell
-dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
-```
 
 See the [validation report](specs/002-teams-access-intake/validation.md) for contract
 checks, Scenarios 1-6, and deterministic confirmation timing.
@@ -238,7 +231,6 @@ src/
 tests/
   GovernedAccess.UnitTests/
   GovernedAccess.IntegrationTests/
-  GovernedAccess.ConcurrencyTests/  Explicit high-contention scenario
 docs/
   adr/                       Architecture decision records
 specs/

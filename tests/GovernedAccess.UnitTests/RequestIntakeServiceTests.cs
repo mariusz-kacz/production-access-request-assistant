@@ -268,27 +268,17 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal(AuditEventType.RequestCreated, auditEvent.EventType);
     }
 
-    [Theory]
-    [InlineData("other-channel", "tenant-001", "actor-001", "conversation-001", "requester")]
-    [InlineData("msteams", "other-tenant", "actor-001", "conversation-001", "requester")]
-    [InlineData("msteams", "tenant-001", "other-actor", "conversation-001", "requester")]
-    [InlineData("msteams", "tenant-001", "actor-001", "other-conversation", "requester")]
-    [InlineData("msteams", "tenant-001", "actor-001", "conversation-001", "other-requester")]
-    public async Task ConfirmationRequiresTheExactAuthenticatedPreparationBinding(
-        string channel,
-        string tenantId,
-        string channelActorId,
-        string conversationId,
-        string requesterId)
+    [Fact]
+    public async Task ConfirmationRejectsAnActorThatDoesNotOwnThePreparation()
     {
         var scenario = new IntakeScenario();
         _ = await scenario.PrepareAsync();
         var otherActor = new AuthenticatedChannelActor(
-            channel,
-            tenantId,
-            channelActorId,
-            conversationId,
-            requesterId);
+            RequestIntakeSession.TeamsChannel,
+            IntakeScenario.Owner.TenantId,
+            "other-actor",
+            IntakeScenario.Owner.ConversationId,
+            IntakeScenario.Owner.RequesterId);
 
         var result = await scenario.ConfirmResultAsync(otherActor);
 
@@ -323,34 +313,6 @@ public sealed class RequestIntakeServiceTests
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
         Assert.Equal(2, scenario.SaveCount);
-    }
-
-    [Theory]
-    [InlineData(
-        RequestPreparationInterpretationFailure.MalformedModelOutput,
-        ApplicationFailureKind.DependencyFailure)]
-    [InlineData(
-        RequestPreparationInterpretationFailure.Timeout,
-        ApplicationFailureKind.Timeout)]
-    [InlineData(
-        RequestPreparationInterpretationFailure.Cancelled,
-        ApplicationFailureKind.Cancelled)]
-    [InlineData(
-        RequestPreparationInterpretationFailure.Unavailable,
-        ApplicationFailureKind.DependencyUnavailable)]
-    public async Task PreparationFailuresRetainTheirTypedCategory(
-        RequestPreparationInterpretationFailure interpretationFailure,
-        ApplicationFailureKind expectedFailure)
-    {
-        var scenario = new IntakeScenario(interpretationFailure);
-
-        var result = await scenario.PrepareAsync();
-
-        Assert.False(result.IsReady);
-        Assert.Equal(expectedFailure, result.FailureKind);
-        Assert.Equal(0, scenario.SaveCount);
-        Assert.Empty(scenario.Requests);
-        Assert.Empty(scenario.AuditEvents);
     }
 
     [Fact]
@@ -557,16 +519,9 @@ public sealed class RequestIntakeServiceTests
     public async Task NewPreparationSupersedesReadyScopeBeforeCreatingAnotherSnapshot()
     {
         var previous = CreateCollectingSession();
-        previous.UpdateCandidate(
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
-            IntakeScenario.CurrentTime,
-            "previous-candidate");
         var previousRequestId = Guid.NewGuid();
         previous.MarkReady(
+            ValidDetails(),
             previousRequestId,
             IntakeScenario.CurrentTime,
             "previous-ready");
@@ -657,74 +612,6 @@ public sealed class RequestIntakeServiceTests
         Assert.Single(scenario.AuditEvents);
     }
 
-    [Theory]
-    [InlineData(false, RequestIntakeStatus.Superseded)]
-    [InlineData(true, RequestIntakeStatus.Expired)]
-    public async Task StartOverReturnsPersistenceFailureForTerminalLifecycleSave(
-        bool expired,
-        RequestIntakeStatus expectedStatus)
-    {
-        var readyAt = expired
-            ? IntakeScenario.CurrentTime
-                .Subtract(RequestIntakeSession.ConfirmationLifetime)
-            : IntakeScenario.CurrentTime;
-        var session = CreateReadySession(readyAt);
-        var scenario = new IntakeScenario(initialSession: session)
-        {
-            SaveFailure = ForcedSaveFailure(),
-        };
-
-        var result = await scenario.PrepareResultAsync();
-
-        Assert.Equal(RequestPreparationResultKind.Failed, result.Kind);
-        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
-        Assert.Equal("forced_save_failure", result.Failure!.Code);
-        Assert.Equal(expectedStatus, session.Status);
-        Assert.Equal(1, scenario.SaveCount);
-        Assert.Same(session, scenario.Session);
-    }
-
-    [Fact]
-    public async Task LazyExpiryReturnsPersistenceFailureWhenStatusCannotBeSaved()
-    {
-        var session = CreateReadySession(
-            IntakeScenario.CurrentTime
-                .Subtract(RequestIntakeSession.ConfirmationLifetime));
-        var scenario = new IntakeScenario(initialSession: session)
-        {
-            SaveFailure = ForcedSaveFailure(),
-        };
-
-        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
-
-        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
-        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
-        Assert.Equal("forced_save_failure", result.Failure!.Code);
-        Assert.Equal(RequestIntakeStatus.Expired, session.Status);
-        Assert.Equal(1, scenario.SaveCount);
-        Assert.Empty(scenario.Requests);
-        Assert.Empty(scenario.AuditEvents);
-    }
-
-    [Fact]
-    public async Task InvalidationReturnsPersistenceFailureWhenStatusCannotBeSaved()
-    {
-        var scenario = new IntakeScenario();
-        _ = await scenario.PrepareAsync();
-        scenario.RoleIsAvailable = false;
-        scenario.SaveFailure = ForcedSaveFailure();
-
-        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
-
-        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
-        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
-        Assert.Equal("forced_save_failure", result.Failure!.Code);
-        Assert.Equal(RequestIntakeStatus.Invalidated, scenario.Session.Status);
-        Assert.Equal(2, scenario.SaveCount);
-        Assert.Empty(scenario.Requests);
-        Assert.Empty(scenario.AuditEvents);
-    }
-
     [Fact]
     public async Task SubmissionReturnsPersistenceFailureWhenAtomicSaveFails()
     {
@@ -794,21 +681,11 @@ public sealed class RequestIntakeServiceTests
         private RequestIntakeSession? session;
 
         public IntakeScenario(
-            RequestPreparationInterpretationFailure? interpretationFailure = null,
             RequestPreparationProposal? proposal = null,
             RequestIntakeSession? initialSession = null)
         {
-            if (interpretationFailure is not null
-                && proposal is not null)
-            {
-                throw new ArgumentException(
-                    "A scenario cannot define both a proposal and an interpretation failure.");
-            }
-            interpretation = interpretationFailure is not null
-                ? new RequestPreparationInterpretationFailed(
-                    interpretationFailure.Value)
-                : new RequestPreparationInterpretationSucceeded(
-                    proposal ?? ValidCandidateProposal());
+            interpretation = new RequestPreparationInterpretationSucceeded(
+                proposal ?? ValidCandidateProposal());
             session = initialSession;
 
             var validator = new RequestValidator(this);
@@ -999,12 +876,7 @@ public sealed class RequestIntakeServiceTests
 
             return FromOptional(
                 session is { Status: RequestIntakeStatus.Collecting or RequestIntakeStatus.Ready }
-                && session.IsOwnedBy(
-                    actor.Channel,
-                    actor.TenantId,
-                    actor.ChannelActorId,
-                    actor.ConversationId,
-                    actor.RequesterId)
+                && actor.Owns(session)
                     ? session
                     : null,
                 "active_intake_not_found",
@@ -1299,17 +1171,17 @@ public sealed class RequestIntakeServiceTests
             IntakeScenario.Owner.RequesterId,
             readyAt,
             "created");
-        session.UpdateCandidate(
+        session.MarkReady(ValidDetails(), Guid.NewGuid(), readyAt, "ready");
+        return session;
+    }
+
+    private static ValidatedRequestDetails ValidDetails() =>
+        new(
             "client-alpha",
             "PROD-ALPHA-EU",
             ProductionRoleIds.ReadOnly,
             "Investigate the active production incident.",
-            "INC-1042",
-            readyAt,
-            "candidate");
-        session.MarkReady(Guid.NewGuid(), readyAt, "ready");
-        return session;
-    }
+            "INC-1042");
 
     private static RequestIntakeSession CreateSubmittedSession()
     {

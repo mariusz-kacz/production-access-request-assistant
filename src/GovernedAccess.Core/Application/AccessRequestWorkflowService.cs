@@ -131,15 +131,11 @@ public sealed class AccessRequestWorkflowService
         }
 
         var environmentContext = environmentContextResult.Value;
-        var environment = environmentContext.Environment;
         var client = environmentContext.Client;
-        var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
-            && StringComparer.Ordinal.Equals(principal.ClientId, request.Details.ClientId)
-            && StringComparer.Ordinal.Equals(environment.ClientId, request.Details.ClientId)
-            && StringComparer.Ordinal.Equals(client.Id, request.Details.ClientId)
-            && StringComparer.Ordinal.Equals(
-                client.BusinessApproverPrincipalId,
-                principal.Id);
+        var isResponsibleApprover = StringComparer.Ordinal.Equals(
+                client.Id,
+                request.Details.ClientId)
+            && principal.IsResponsibleBusinessApproverFor(client);
         if (!isResponsibleApprover)
         {
             var failure = new ApplicationFailure(
@@ -614,13 +610,8 @@ public sealed class AccessRequestWorkflowService
         AccessRequest request,
         CancellationToken cancellationToken)
     {
-        var validationOutcome = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                request.Details.ClientId,
-                request.Details.EnvironmentId,
-                request.Details.RoleId,
-                request.Details.Justification,
-                request.Details.IncidentId),
+        var validationOutcome = await requestValidator.RevalidateAsync(
+            request.Details,
             cancellationToken);
 
         if (validationOutcome is RequestValidationFailed validationFailed)

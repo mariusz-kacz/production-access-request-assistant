@@ -88,6 +88,32 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(originalPersistenceVersion, request.PersistenceVersion);
     }
 
+    [Theory]
+    [InlineData(PrincipalKind.Requester, null, "business-alpha", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-beta", "business-alpha", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-alpha", "business-beta", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-alpha", "business-alpha", true)]
+    public void ResponsibleBusinessApproverRequiresRoleClientAndAssignment(
+        PrincipalKind kind,
+        string? principalClientId,
+        string configuredApproverId,
+        bool expected)
+    {
+        var client = new Client(
+            "client-alpha",
+            "Client Alpha",
+            configuredApproverId);
+        var principal = new AuthenticatedPrincipal(
+            "business-alpha",
+            "Business Alpha",
+            kind,
+            principalClientId);
+
+        Assert.Equal(
+            expected,
+            principal.IsResponsibleBusinessApproverFor(client));
+    }
+
     private static BusinessDecisionCommand ValidCommand()
     {
         return new BusinessDecisionCommand(

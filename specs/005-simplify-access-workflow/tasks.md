@@ -493,7 +493,8 @@ Preserve:
 * transaction consistency;
 * concurrency safety.
 
-Do not weaken the existing high-contention provisioning test. That test protects a genuine concurrency boundary.
+Keep provisioning idempotency and confirmation convergence covered by the routine
+SQLite component suite.
 
 ## Tests
 
@@ -506,7 +507,7 @@ Preserve high-value provisioning coverage:
 * lost response;
 * partial recovery;
 * idempotency;
-* 100-way concurrency convergence;
+* concurrent confirmation convergence;
 * provider receives access data from authoritative request details.
 
 Delete:

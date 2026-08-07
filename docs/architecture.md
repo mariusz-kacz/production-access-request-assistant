@@ -199,10 +199,13 @@ when it contains every field. `RequestValidator` reloads the fixed reference con
 checks identifier relationships, role assignment, justification, and optional
 incident, and is the only path that constructs `ValidatedRequestDetails` from that
 input. A ready intake persists one immutable validated snapshot so the requester can
-confirm exactly what was prepared.
+confirm exactly what was prepared. The aggregate exposes that flattened persistence
+state only as `PreparedDetails`, so downstream code continues with the canonical
+value instead of rebuilding another validation DTO.
 
-Confirmation reloads the ready intake, verifies authenticated ownership and expiry,
-and revalidates the snapshot. The resulting `AccessRequest.Details` is the sole
+Confirmation reloads the ready intake, asks the authenticated channel actor to verify
+the complete persisted ownership binding, checks expiry, and calls `RevalidateAsync`
+with the canonical snapshot. The resulting `AccessRequest.Details` is the sole
 durable authority for client, environment, role, justification, and incident after
 submission. Approval decisions, the provisioning operation, and the access grant are
 request-bound evidence; they do not own parallel copies of those details. HTTP and UI
@@ -424,8 +427,8 @@ stateDiagram-v2
 
 1. The Teams boundary derives actor, tenant, and conversation from authenticated
    activity context.
-2. `RequestIntakeService` reloads the ready intake, verifies ownership/status/expiry,
-   and revalidates its immutable details.
+2. `RequestIntakeService` reloads the ready intake, verifies the typed actor ownership
+   binding plus status/expiry, and revalidates its immutable `PreparedDetails`.
 3. The same confirmation use case constructs the request with the server-reserved ID
    and canonical `ValidatedRequestDetails`, then stages request-created audit evidence.
 4. The intake transition, immutable `AwaitingBusinessApproval` request, and audit

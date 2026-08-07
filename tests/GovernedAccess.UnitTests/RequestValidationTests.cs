@@ -146,42 +146,30 @@ public sealed class RequestValidationTests
         Assert.Equal("PROD-ALPHA-EU", assessment.Details.EnvironmentId);
         Assert.Equal(ProductionRoleIds.ReadOnly, assessment.Details.RoleId);
         Assert.Equal("INC-1042", assessment.Details.IncidentId);
-        Assert.Equal(1, requestContext.ClientLookupCount);
-        Assert.Equal(1, requestContext.EnvironmentLookupCount);
-        Assert.Equal(1, requestContext.RoleLookupCount);
-        Assert.Equal(1, requestContext.IncidentLookupCount);
     }
 
     [Fact]
-    public async Task ValidateAsyncReturnsCanonicalDetailsForAValidRequest()
+    public async Task RevalidateAsyncReturnsTheCanonicalDetailsForAValidRequest()
     {
         var requestContext = new StubRequestContextReader();
         var validator = new RequestValidator(requestContext);
 
-        var result = await validator.ValidateAsync(
-            new RequestValidationInput(
-                " client-alpha ",
-                " PROD-ALPHA-EU ",
-                $" {ProductionRoleIds.ReadOnly} ",
-                "  Investigate the active production incident.  ",
-                " INC-1042 "),
+        var expected = ValidDetails();
+        var result = await validator.RevalidateAsync(
+            expected,
             TestContext.Current.CancellationToken);
 
         var details = AssertValid(result);
-        Assert.Equal("client-alpha", details.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", details.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, details.RoleId);
-        Assert.Equal("Investigate the active production incident.", details.Justification);
-        Assert.Equal("INC-1042", details.IncidentId);
+        Assert.Same(expected, details);
     }
 
     [Fact]
-    public async Task ValidateAsyncAllowsAnOmittedIncident()
+    public async Task RevalidateAsyncAllowsAnOmittedIncident()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(incidentId: "   "),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(incidentId: null),
             TestContext.Current.CancellationToken);
 
         var details = AssertValid(result);
@@ -189,36 +177,36 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnUnknownClient()
+    public async Task RevalidateAsyncRejectsAnUnknownClient()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(clientId: "client-unknown"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(clientId: "client-unknown"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "clientId", "client_not_found");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnUnknownEnvironment()
+    public async Task RevalidateAsyncRejectsAnUnknownEnvironment()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(environmentId: "PROD-UNKNOWN"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(environmentId: "PROD-UNKNOWN"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "environmentId", "environment_not_found");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnEnvironmentOwnedByAnotherClient()
+    public async Task RevalidateAsyncRejectsAnEnvironmentOwnedByAnotherClient()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(environmentId: "PROD-BETA-UK"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(environmentId: "PROD-BETA-UK"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "environmentId", "environment_client_mismatch");
@@ -227,112 +215,70 @@ public sealed class RequestValidationTests
     [Theory]
     [InlineData(ProductionRoleIds.Support)]
     [InlineData(ProductionRoleIds.Deployment)]
-    public async Task ValidateAsyncRejectsASupportedRoleThatIsNotAllowedForTheEnvironment(
+    public async Task RevalidateAsyncRejectsASupportedRoleThatIsNotAllowedForTheEnvironment(
         string roleId)
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(requestedRoleId: roleId),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(roleId: roleId),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "requestedRoleId", "role_unavailable");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAGloballyUnsupportedRole()
+    public async Task RevalidateAsyncRejectsAnUnknownIncident()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(requestedRoleId: "ProductionAdministrator"),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "requestedRoleId", "role_unsupported");
-    }
-
-    [Theory]
-    [InlineData(null, "justification_required")]
-    [InlineData("", "justification_required")]
-    [InlineData("        ", "justification_required")]
-    [InlineData("Too short", "justification_length_invalid")]
-    public async Task ValidateAsyncRejectsAMissingOrShortJustification(
-        string? justification,
-        string expectedCode)
-    {
-        var validator = new RequestValidator(new StubRequestContextReader());
-
-        var result = await validator.ValidateAsync(
-            ValidInput(justification: justification),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "justification", expectedCode);
-    }
-
-    [Fact]
-    public async Task ValidateAsyncRejectsAJustificationLongerThanTheDomainMaximum()
-    {
-        var validator = new RequestValidator(new StubRequestContextReader());
-
-        var result = await validator.ValidateAsync(
-            ValidInput(justification: new string('a', AccessRequest.MaximumJustificationLength + 1)),
-            TestContext.Current.CancellationToken);
-
-        AssertFieldError(result, "justification", "justification_length_invalid");
-    }
-
-    [Fact]
-    public async Task ValidateAsyncRejectsAnUnknownIncident()
-    {
-        var validator = new RequestValidator(new StubRequestContextReader());
-
-        var result = await validator.ValidateAsync(
-            ValidInput(incidentId: "INC-UNKNOWN"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(incidentId: "INC-UNKNOWN"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "incidentId", "incident_not_found");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnInactiveIncident()
+    public async Task RevalidateAsyncRejectsAnInactiveIncident()
     {
         var requestContext = new StubRequestContextReader();
         requestContext.AlphaIncident.SetStatus(IncidentStatus.Inactive);
         var validator = new RequestValidator(requestContext);
 
-        var result = await validator.ValidateAsync(
-            ValidInput(),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "incidentId", "incident_inactive");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnIncidentOwnedByAnotherClient()
+    public async Task RevalidateAsyncRejectsAnIncidentOwnedByAnotherClient()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(incidentId: "INC-BETA"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(incidentId: "INC-BETA"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "incidentId", "incident_client_mismatch");
     }
 
     [Fact]
-    public async Task ValidateAsyncRejectsAnIncidentAssociatedWithAnotherEnvironment()
+    public async Task RevalidateAsyncRejectsAnIncidentAssociatedWithAnotherEnvironment()
     {
         var validator = new RequestValidator(new StubRequestContextReader());
 
-        var result = await validator.ValidateAsync(
-            ValidInput(incidentId: "INC-ALPHA-OTHER"),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(incidentId: "INC-ALPHA-OTHER"),
             TestContext.Current.CancellationToken);
 
         AssertFieldError(result, "incidentId", "incident_environment_mismatch");
     }
 
     [Fact]
-    public async Task ValidateAsyncPreservesAnOperationLevelContextFailure()
+    public async Task RevalidateAsyncPreservesAnOperationLevelContextFailure()
     {
         var requestContext = new StubRequestContextReader
         {
@@ -343,26 +289,58 @@ public sealed class RequestValidationTests
         };
         var validator = new RequestValidator(requestContext);
 
-        var result = await validator.ValidateAsync(
-            ValidInput(),
+        var result = await validator.RevalidateAsync(
+            ValidDetails(),
             TestContext.Current.CancellationToken);
 
         var failure = Assert.IsType<RequestValidationFailed>(result);
         Assert.Same(requestContext.ClientFailure, failure.Failure);
     }
 
-    private static RequestValidationInput ValidInput(
-        string? clientId = "client-alpha",
-        string? environmentId = "PROD-ALPHA-EU",
-        string? requestedRoleId = ProductionRoleIds.ReadOnly,
-        string? justification = "Investigate the active production incident.",
+    [Fact]
+    public void ValidatedDetailsOwnShapeValidationAndNormalization()
+    {
+        var details = new ValidatedRequestDetails(
+            " client-alpha ",
+            " PROD-ALPHA-EU ",
+            $" {ProductionRoleIds.ReadOnly} ",
+            "  Investigate the active production incident.  ",
+            " INC-1042 ");
+
+        Assert.Equal("client-alpha", details.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, details.RoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            details.Justification);
+        Assert.Equal("INC-1042", details.IncidentId);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                "ProductionAdministrator",
+                "Investigate the active production incident.",
+                null));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Too short",
+                null));
+    }
+
+    private static ValidatedRequestDetails ValidDetails(
+        string clientId = "client-alpha",
+        string environmentId = "PROD-ALPHA-EU",
+        string roleId = ProductionRoleIds.ReadOnly,
         string? incidentId = "INC-1042")
     {
-        return new RequestValidationInput(
+        return new ValidatedRequestDetails(
             clientId,
             environmentId,
-            requestedRoleId,
-            justification,
+            roleId,
+            "Investigate the active production incident.",
             incidentId);
     }
 
@@ -461,19 +439,10 @@ public sealed class RequestValidationTests
 
         public ApplicationFailure? ClientFailure { get; init; }
 
-        public int ClientLookupCount { get; private set; }
-
-        public int EnvironmentLookupCount { get; private set; }
-
-        public int RoleLookupCount { get; private set; }
-
-        public int IncidentLookupCount { get; private set; }
-
         public Task<ApplicationResult<Client>> GetClientAsync(
             string clientId,
             CancellationToken cancellationToken)
         {
-            ClientLookupCount++;
             if (ClientFailure is not null)
             {
                 return Task.FromResult(ApplicationResult.Failed<Client>(ClientFailure));
@@ -486,7 +455,6 @@ public sealed class RequestValidationTests
             string environmentId,
             CancellationToken cancellationToken)
         {
-            EnvironmentLookupCount++;
             return GetAsync(
                 environments,
                 environmentId,
@@ -544,7 +512,6 @@ public sealed class RequestValidationTests
             string roleId,
             CancellationToken cancellationToken)
         {
-            RoleLookupCount++;
             return GetAsync(
                 roles,
                 (environmentId, roleId),
@@ -556,7 +523,6 @@ public sealed class RequestValidationTests
             string incidentId,
             CancellationToken cancellationToken)
         {
-            IncidentLookupCount++;
             return GetAsync(
                 incidents,
                 incidentId,

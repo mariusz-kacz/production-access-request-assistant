@@ -198,15 +198,8 @@ public sealed class RequestIntakeService
         cancellationToken.ThrowIfCancellationRequested();
 
         var occurredAt = clock.UtcNow.ToUniversalTime();
-        session.UpdateCandidate(
-            details.ClientId,
-            details.EnvironmentId,
-            details.RoleId,
-            details.Justification,
-            details.IncidentId,
-            occurredAt,
-            correlationId);
         session.MarkReady(
+            details,
             Guid.NewGuid(),
             occurredAt,
             correlationId);
@@ -267,12 +260,7 @@ public sealed class RequestIntakeService
         }
 
         var session = sessionResult.Value;
-        if (!session.IsOwnedBy(
-                command.Actor.Channel,
-                command.Actor.TenantId,
-                command.Actor.ChannelActorId,
-                command.Actor.ConversationId,
-                command.Actor.RequesterId))
+        if (!command.Actor.Owns(session))
         {
             return ConfirmationFailed(
                 ApplicationFailureKind.Unauthorized,
@@ -312,13 +300,22 @@ public sealed class RequestIntakeService
             return ConfirmationFailed(requesterResult.Failure!);
         }
 
-        var validation = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                session.ClientId!,
-                session.EnvironmentId!,
-                session.RequestedRoleId!,
-                session.Justification!,
-                session.IncidentId),
+        var preparedDetails = session.PreparedDetails;
+        if (preparedDetails is null)
+        {
+            session.MarkInvalidated(occurredAt, command.CorrelationId);
+            var invalidSnapshotSave = await intakeStore.SaveChangesAsync(
+                cancellationToken);
+            return invalidSnapshotSave.IsFailure
+                ? ConfirmationFailed(invalidSnapshotSave.Failure!)
+                : ConfirmationFailed(
+                    ApplicationFailureKind.InvalidTransition,
+                    InvalidatedCode,
+                    "The prepared request snapshot is invalid.");
+        }
+
+        var validation = await requestValidator.RevalidateAsync(
+            preparedDetails,
             cancellationToken);
 
         if (validation is RequestValidationRejected)

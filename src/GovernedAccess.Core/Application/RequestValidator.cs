@@ -3,13 +3,6 @@ using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.Core.Application;
 
-public sealed record RequestValidationInput(
-    string? ClientId,
-    string? EnvironmentId,
-    string? RequestedRoleId,
-    string? Justification,
-    string? IncidentId);
-
 public sealed class FieldValidationError
 {
     public FieldValidationError(string field, string code, string message)
@@ -583,30 +576,20 @@ public sealed class RequestValidator
                 IncidentId);
     }
 
-    public async Task<RequestValidationOutcome> ValidateAsync(
-        RequestValidationInput input,
+    /// <summary>
+    /// Revalidates an already canonical request snapshot against mutable
+    /// authoritative context. Shape validation belongs to candidate assessment and
+    /// <see cref="ValidatedRequestDetails"/> construction.
+    /// </summary>
+    public async Task<RequestValidationOutcome> RevalidateAsync(
+        ValidatedRequestDetails details,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(details);
 
-        var clientId = NormalizeRequired(input.ClientId);
-        var environmentId = NormalizeRequired(input.EnvironmentId);
-        var requestedRoleId = NormalizeRequired(input.RequestedRoleId);
-        var justification = NormalizeRequired(input.Justification);
-        var incidentId = AccessRequestNormalization.NormalizeOptionalIdentifier(input.IncidentId);
-
-        var fieldErrors = ValidateRequiredFields(
-            clientId,
-            environmentId,
-            requestedRoleId,
-            justification);
-
-        if (fieldErrors.Count > 0)
-        {
-            return Invalid(fieldErrors);
-        }
-
-        var clientResult = await requestContext.GetClientAsync(clientId!, cancellationToken);
+        var clientResult = await requestContext.GetClientAsync(
+            details.ClientId,
+            cancellationToken);
         if (clientResult.IsFailure)
         {
             return MapLookupFailure(
@@ -617,9 +600,10 @@ public sealed class RequestValidator
         }
 
         var client = clientResult.Value;
-        var environmentResult = await requestContext.GetProductionEnvironmentAsync(
-            environmentId!,
-            cancellationToken);
+        var environmentResult =
+            await requestContext.GetProductionEnvironmentContextAsync(
+                details.EnvironmentId,
+                cancellationToken);
         if (environmentResult.IsFailure)
         {
             return MapLookupFailure(
@@ -629,8 +613,12 @@ public sealed class RequestValidator
                 "The selected production environment does not exist.");
         }
 
-        var environment = environmentResult.Value;
-        if (!string.Equals(environment.ClientId, client.Id, StringComparison.Ordinal))
+        var environmentContext = environmentResult.Value;
+        var environment = environmentContext.Environment;
+        if (!string.Equals(
+                environmentContext.Client.Id,
+                client.Id,
+                StringComparison.Ordinal))
         {
             return Invalid(
                 new FieldValidationError(
@@ -639,23 +627,21 @@ public sealed class RequestValidator
                     "The selected production environment does not belong to the client."));
         }
 
-        var roleResult = await requestContext.GetEnvironmentRoleAsync(
-            environment.Id,
-            requestedRoleId!,
-            cancellationToken);
-        if (roleResult.IsFailure)
+        var hasAssignedRole = environmentContext.AssignedRoles.Any(
+            candidate => string.Equals(
+                candidate.RoleId,
+                details.RoleId,
+                StringComparison.Ordinal));
+        if (!hasAssignedRole)
         {
-            return roleResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? Invalid(RoleUnavailableError())
-                : new RequestValidationFailed(roleResult.Failure);
+            return Invalid(RoleUnavailableError());
         }
 
-        var role = roleResult.Value;
-
-        string? canonicalIncidentId = null;
-        if (incidentId is not null)
+        if (details.IncidentId is not null)
         {
-            var incidentResult = await requestContext.GetIncidentAsync(incidentId, cancellationToken);
+            var incidentResult = await requestContext.GetIncidentAsync(
+                details.IncidentId,
+                cancellationToken);
             if (incidentResult.IsFailure)
             {
                 return MapLookupFailure(
@@ -696,17 +682,9 @@ public sealed class RequestValidator
                         "incident_environment_mismatch",
                         "The supplied incident is associated with another environment."));
             }
-
-            canonicalIncidentId = incident.Id;
         }
 
-        return new RequestValidationSucceeded(
-            new ValidatedRequestDetails(
-                client.Id,
-                environment.Id,
-                role.RoleId,
-                justification!,
-                canonicalIncidentId));
+        return new RequestValidationSucceeded(details);
     }
 
     private static List<FieldValidationError> ValidateRequiredFields(
@@ -802,10 +780,5 @@ public sealed class RequestValidator
         IEnumerable<FieldValidationError> errors)
     {
         return new RequestValidationRejected(errors);
-    }
-
-    private static string? NormalizeRequired(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 }

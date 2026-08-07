@@ -53,6 +53,28 @@ public sealed record ValidatedRequestDetails
         IncidentId = incidentId;
     }
 
+    internal static ValidatedRequestDetails? RestorePreparedSnapshot(
+        string? clientId,
+        string? environmentId,
+        string? roleId,
+        string? justification,
+        string? incidentId)
+    {
+        try
+        {
+            return new ValidatedRequestDetails(
+                clientId!,
+                environmentId!,
+                roleId!,
+                justification!,
+                incidentId);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
     public string ClientId { get; private set; }
 
     public string EnvironmentId { get; private set; }

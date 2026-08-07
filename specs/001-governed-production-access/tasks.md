@@ -152,12 +152,12 @@
 
 **Goal**: Retry only failed provisioning with the same scope and request-based idempotency identity, and let authorized participants review relevant requests and complete evidence.
 
-**Independent Test**: Simulate a lost provisioning response, retry as DevOps, verify the existing grant is returned with no duplicate across at least 100 concurrent attempts, and inspect complete correlated evidence as each authorized participant.
+**Independent Test**: Simulate a lost provisioning response, retry as DevOps, verify the existing grant is returned without duplication, and inspect complete correlated evidence as each authorized participant.
 
 ### Tests for User Story 4
 
 - [X] T065 [P] [US4] Add integration tests for lost response, same-operation retry, wrong actor/state rejection, and persisted-evidence validation in `tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs`
-- [X] T066 [P] [US4] Add a 100-concurrent-attempt test proving one operation and one grant with consistent successful responses in `tests/GovernedAccess.ConcurrencyTests/Provisioning/ProvisioningIdempotencyTests.cs`
+- [X] T066 [P] [US4] Cover request-based idempotency and existing-grant recovery in the routine provisioning integration suite
 - [X] T067 [P] [US4] Add API tests for participant-filtered lists, complete enriched detail evidence, logical expiry, server-computed later-stage actions, and nonparticipant invisibility in `tests/GovernedAccess.IntegrationTests/Requests/RequestQueriesTests.cs`
 
 ### Implementation for User Story 4

@@ -267,15 +267,13 @@ public sealed class RequestIntakePersistenceTests
                 DemoPrincipalKeys.Requester,
                 PreparedAt,
                 "prepare-correlation");
-            session.UpdateCandidate(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042",
-                PreparedAt,
-                "prepare-correlation");
             session.MarkReady(
+                new ValidatedRequestDetails(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
                 ReservedRequestId,
                 PreparedAt,
                 "prepare-correlation");

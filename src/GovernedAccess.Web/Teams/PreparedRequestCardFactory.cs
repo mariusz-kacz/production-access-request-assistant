@@ -28,12 +28,9 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (session.Status != RequestIntakeStatus.Ready
+        var details = session.PreparedDetails;
+        if (details is null
             || session.ReservedRequestId is null
-            || session.ClientId is null
-            || session.EnvironmentId is null
-            || session.RequestedRoleId is null
-            || session.Justification is null
             || session.ExpiresAt is null)
         {
             return Failed(
@@ -42,17 +39,9 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 "Only a ready prepared request can be rendered for confirmation.");
         }
 
-        var clientResult = await requestContext.GetClientAsync(
-            session.ClientId,
-            cancellationToken);
-        if (clientResult.IsFailure)
-        {
-            return ApplicationResult.Failed<Attachment>(clientResult.Failure!);
-        }
-
         var environmentResult =
-            await requestContext.GetProductionEnvironmentAsync(
-                session.EnvironmentId,
+            await requestContext.GetProductionEnvironmentContextAsync(
+                details.EnvironmentId,
                 cancellationToken);
         if (environmentResult.IsFailure)
         {
@@ -60,33 +49,22 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 environmentResult.Failure!);
         }
 
-        var roleResult = await requestContext.GetEnvironmentRoleAsync(
-            session.EnvironmentId,
-            session.RequestedRoleId,
-            cancellationToken);
-        if (roleResult.IsFailure)
-        {
-            return ApplicationResult.Failed<Attachment>(roleResult.Failure!);
-        }
+        var environmentContext = environmentResult.Value;
+        var client = environmentContext.Client;
+        var environment = environmentContext.Environment;
+        var role = environmentContext.AssignedRoles.SingleOrDefault(
+            candidate => Matches(details.RoleId, candidate.RoleId));
 
-        var client = clientResult.Value;
-        var environment = environmentResult.Value;
-        var role = roleResult.Value;
-
-        if (!Matches(session.ClientId, client.Id)
-            || !Matches(session.EnvironmentId, environment.Id)
-            || !Matches(session.ClientId, environment.ClientId)
-            || !Matches(session.EnvironmentId, role.EnvironmentId)
-            || !Matches(session.RequestedRoleId, role.RoleId))
+        if (!Matches(details.ClientId, client.Id) || role is null)
         {
             return ContextMismatch();
         }
 
         Incident? incident = null;
-        if (session.IncidentId is not null)
+        if (details.IncidentId is not null)
         {
             var incidentResult = await requestContext.GetIncidentAsync(
-                session.IncidentId,
+                details.IncidentId,
                 cancellationToken);
             if (incidentResult.IsFailure)
             {
@@ -95,11 +73,11 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
             }
 
             incident = incidentResult.Value;
-            if (!Matches(session.IncidentId, incident.Id)
-                || !Matches(session.ClientId, incident.ClientId)
+            if (!Matches(details.IncidentId, incident.Id)
+                || !Matches(details.ClientId, incident.ClientId)
                 || (incident.EnvironmentId is not null
                     && !Matches(
-                        session.EnvironmentId,
+                        details.EnvironmentId,
                         incident.EnvironmentId)))
             {
                 return ContextMismatch();
@@ -115,17 +93,17 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 "Client",
                 FormatDisplayValue(
                     client.DisplayName,
-                    session.ClientId)),
+                    details.ClientId)),
             CreateFact(
                 "Environment",
                 FormatDisplayValue(
                     environment.DisplayName,
-                    session.EnvironmentId)),
+                    details.EnvironmentId)),
             CreateFact(
                 "Requested role",
                 FormatDisplayValue(
-                    GetRoleDisplayName(session.RequestedRoleId),
-                    session.RequestedRoleId)),
+                    GetRoleDisplayName(details.RoleId),
+                    details.RoleId)),
         };
 
         if (incident is not null)
@@ -135,7 +113,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                     "Incident",
                     FormatDisplayValue(
                         incident.Title,
-                        session.IncidentId!)));
+                        details.IncidentId!)));
         }
 
         facts.Add(CreateFact("Access lifetime", "8 hours after provisioning"));
@@ -183,7 +161,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 new JsonObject
                 {
                     ["type"] = "TextBlock",
-                    ["text"] = session.Justification,
+                    ["text"] = details.Justification,
                     ["wrap"] = true,
                 },
             },

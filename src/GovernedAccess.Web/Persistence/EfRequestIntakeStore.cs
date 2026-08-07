@@ -77,12 +77,7 @@ internal sealed class EfRequestIntakeStore(
         }
 
         var session = reload.Value;
-        if (!session.IsOwnedBy(
-                actor.Channel,
-                actor.TenantId,
-                actor.ChannelActorId,
-                actor.ConversationId,
-                actor.RequesterId))
+        if (!actor.Owns(session))
         {
             return ApplicationResult.Failed<Guid>(NotFoundFailure());
         }

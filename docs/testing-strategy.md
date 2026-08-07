@@ -157,8 +157,7 @@ test level.
 | Business decisions | Unit/component: state policy, configured approver, duplicate/invalid transitions, and audit state. Full host: authenticated overposting/response contract |
 | DevOps decisions | Unit/component: authorization, prior request-bound business approval, rejection, and provisioning state. Full host: authenticated overposting/failure response contract |
 | Protected provisioning | Persisted request/approval/operation reload, missing or invalid evidence rejection, canonical provider input, and grant finalization |
-| Retry and idempotency | Component: failed-state restriction, lost response, and existing-grant recovery. Full host: representative actor rejection |
-| Explicit concurrency | 100 concurrent retry attempts producing one operation and one grant; intentionally outside the routine integration suite |
+| Retry and idempotency | Component: failed-state restriction, lost response, existing-grant recovery, and SQLite confirmation convergence. Full host: representative actor rejection |
 | Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
@@ -427,15 +426,6 @@ dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTest
 Run the three gates sequentially. The unfiltered integration command executes all
 component and FullHost fixtures in one runner.
 
-### Explicit concurrency suite
-
-The high-contention suite is not included in `ProductionAccessRequestAssistant.sln`
-and therefore does not run as part of routine unit and integration validation:
-
-```powershell
-dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
-```
-
 ### Focused integration area
 
 ```powershell
@@ -461,10 +451,9 @@ npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 The suite updates owning tests instead of creating repeated semantic and resilience
 matrices at persistence, MCP, MAF, and full-host layers. The current runners report:
 
-- 89 unit cases;
+- 71 unit cases;
 - 92 integration-project cases spanning component and full-host boundaries;
-- 6 frontend component cases in 2 files; and
-- 1 explicit 100-way provisioning-concurrency case outside the solution.
+- 6 frontend component cases in 2 files.
 
 Counts are diagnostic, not acceptance criteria. The important consolidation rules
 are that session/history behavior lives in one MAF session suite, typed MCP contracts

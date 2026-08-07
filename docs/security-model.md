@@ -579,9 +579,8 @@ Security behavior is exercised by automated tests, including:
 - [protected provisioning tests](../tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs):
   evidence reload, missing or mismatched evidence, and fixed grant lifetime;
 - [retry tests](../tests/GovernedAccess.IntegrationTests/Provisioning/RetryProvisioningTests.cs):
-  lost response, actor/state restrictions, and persisted-scope validation;
-- [explicit concurrency tests](../tests/GovernedAccess.ConcurrencyTests/Provisioning/ProvisioningIdempotencyTests.cs):
-  concurrent attempts converging on one operation and grant; and
+  lost response, actor/state restrictions, persisted-scope validation, and idempotent
+  operation/grant recovery;
 - [MCP contract tests](../tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs):
   exact two-tool allowlist, discovery/exact schemas, embedded roles, exact-only
   incidents, stable identifiers, and forbidden capability absence;

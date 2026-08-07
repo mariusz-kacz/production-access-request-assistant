@@ -34,11 +34,24 @@ public sealed record AuthenticatedChannelActor
 
     public string RequesterId { get; }
 
+    public bool Owns(RequestIntakeSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return Matches(Channel, session.Channel)
+            && Matches(TenantId, session.TenantId)
+            && Matches(ChannelActorId, session.ChannelActorId)
+            && Matches(ConversationId, session.ConversationId)
+            && Matches(RequesterId, session.RequesterId);
+    }
+
     private static string NormalizeRequired(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         return value.Trim();
     }
+
+    private static bool Matches(string expected, string actual) =>
+        string.Equals(expected, actual, StringComparison.Ordinal);
 }
 
 /// <summary>

@@ -47,7 +47,7 @@ includes every `[Fact]` and every discovered `[Theory]` row.
 | Integration / `TeamsConversationQualityTests` | 5 | FullHost | Move representative utterance matrix to direct MAF components |
 | Integration / `TeamsRequestConfirmationTests` | 1 | FullHost | Retain complete transport/card/confirmation scenario |
 | Integration / `TeamsRequestPreparationTests` | 4 | FullHost | Retain authentication and representative transport/card wiring only |
-| Concurrency / `ProvisioningIdempotencyTests` | 1 | Component | Keep explicit high-contention SQLite/provider suite outside the solution |
+| Integration / confirmation concurrency | 2 | Component | Keep SQLite confirmation convergence in the routine integration suite |
 | React / `AppSession.test.tsx` | 3 | Component | Keep session/route/navigation behavior |
 | React / `UiWiringSmoke.test.tsx` | 3 | Component | Keep retained list/detail/approval/retry presentation contracts |
 

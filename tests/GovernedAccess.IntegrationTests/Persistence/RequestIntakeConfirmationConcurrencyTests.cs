@@ -126,15 +126,13 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
                 DemoPrincipalKeys.Requester,
                 PreparedAt,
                 "concurrency-preparation");
-            session.UpdateCandidate(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042",
-                PreparedAt,
-                "concurrency-candidate");
             session.MarkReady(
+                new ValidatedRequestDetails(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
                 ReservedRequestId,
                 PreparedAt,
                 "concurrency-ready");

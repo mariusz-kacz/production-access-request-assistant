@@ -201,15 +201,13 @@ public sealed class TeamsRequestConfirmationTests
             DemoPrincipalKeys.Requester,
             factory.Clock.UtcNow,
             "hosted-boundary-preparation");
-        session.UpdateCandidate(
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
-            factory.Clock.UtcNow,
-            "hosted-boundary-candidate");
         session.MarkReady(
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
             Guid.NewGuid(),
             factory.Clock.UtcNow,
             "hosted-boundary-ready");

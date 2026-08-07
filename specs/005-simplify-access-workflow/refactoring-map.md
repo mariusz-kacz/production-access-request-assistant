@@ -80,10 +80,10 @@ the query/controller path derives them from `AccessRequest.Details`.
 
 ### Confirmation boundary
 
-- `RequestIntakeService` reloads the ready intake and verifies exact authenticated
-  actor, tenant, channel, conversation, requester, status, and expiry.
-- It revalidates the complete prepared details and requester against authoritative
-  data.
+- `RequestIntakeService` reloads the ready intake; `AuthenticatedChannelActor` verifies
+  its exact tenant, channel, conversation, actor, and requester ownership binding.
+- The aggregate restores the flattened ready snapshot as `PreparedDetails`, and the
+  validator revalidates that canonical value and requester against authoritative data.
 - It constructs `AccessRequest` directly from the resulting
   `ValidatedRequestDetails` and commits request, terminal intake transition, and audit
   evidence atomically.
@@ -91,8 +91,8 @@ the query/controller path derives them from `AccessRequest.Details`.
 ### Approval authorization boundary
 
 - The workflow service reloads the authenticated principal and request.
-- Business approval reloads current environment/client ownership and configured
-  approver assignment.
+- Business approval reloads current environment/client ownership; the authenticated
+  principal owns the client-role and configured-approver assignment check.
 - DevOps approval requires the DevOps principal, current valid request context, a
   request-bound approved business decision, and valid workflow state. The state
   transition owns decision order.
@@ -132,7 +132,6 @@ instead of revalidating the fixed reference dataset.
 | Reconstruction, transactions, uniqueness, confirmation concurrency, provisioning recovery | SQLite component tests in the integration project |
 | Authentication, authorization integration, antiforgery, routes, serialization, Teams, and MCP | Full-host integration tests |
 | Session/action presentation and safe browser wiring | Six React component tests |
-| High-contention request-ID convergence | Dedicated 100-way concurrency test |
 
 A rule is repeated at another layer only when that layer introduces a distinct failure
 mode. For example, role assignment permutations belong to `RequestValidationTests`,
@@ -166,7 +165,6 @@ models. Their factories no longer revalidate values produced by the application.
 Validated on 2026-08-07:
 
 - warnings-as-errors solution build: passed with 0 warnings and 0 errors;
-- unit tests: 86 passed;
+- unit tests: 71 passed;
 - integration tests: 92 passed;
-- frontend tests: 6 passed; and
-- explicit 100-way provisioning concurrency test: passed.
+- frontend tests: 6 passed.

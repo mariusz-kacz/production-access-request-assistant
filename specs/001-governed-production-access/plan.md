@@ -169,7 +169,7 @@ Presentation acceptance:
 
 **Project Type**: Single deployable web application with a React SPA build nested in the sole ASP.NET Core executable
 
-**Performance Goals**: Normal local list/detail/action feedback within 2 seconds; primary demonstrations within 15 minutes; 100 concurrent duplicate provisioning attempts create exactly one grant; frontend production assets use hashed Vite output
+**Performance Goals**: Normal local list/detail/action feedback within 2 seconds; primary demonstrations within 15 minutes; provisioning retries converge on one grant; frontend production assets use hashed Vite output
 
 **Constraints**: No live model in tests; one executable and one production origin; exactly three read-only model-visible MCP tools; no public provisioning endpoint; authenticated actor comes from server cookie context; every unsafe `/api` request requires antiforgery validation; model/MCP/provisioning timeouts are 30/5/10 seconds; cancellation crosses async boundaries; raw prompts, secrets, and full MCP payloads are not logged; presentation remains usable at 200% zoom and 360px width, exposes visible keyboard focus, and never relies on color alone
 
