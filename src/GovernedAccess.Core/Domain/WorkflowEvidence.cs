@@ -49,14 +49,6 @@ public sealed record RequestCreatedAuditDetails
 
     public RequestCreatedAuditDetails(RequestStatus status)
     {
-        if (status != RequestStatus.AwaitingBusinessApproval)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(status),
-                status,
-                "A newly submitted request must await business approval.");
-        }
-
         SchemaVersion = CurrentSchemaVersion;
         ValidationOutcomeCode = SuccessfulValidationOutcomeCode;
         Status = status;
@@ -71,7 +63,7 @@ public sealed record RequestCreatedAuditDetails
 
 public sealed record BusinessDecisionAuditDetails
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public BusinessDecisionAuditDetails(
         ApprovalDecision decision,
@@ -79,28 +71,9 @@ public sealed record BusinessDecisionAuditDetails
     {
         ArgumentNullException.ThrowIfNull(decision);
 
-        if (decision.Stage != ApprovalStage.Business)
-        {
-            throw new ArgumentException(
-                "Business decision audit details require a business-stage decision.",
-                nameof(decision));
-        }
-
-        var expectedStatus = decision.Decision == ApprovalOutcome.Approved
-            ? RequestStatus.AwaitingDevOpsApproval
-            : RequestStatus.Rejected;
-        if (status != expectedStatus)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(status),
-                status,
-                "The audit status must match the business decision outcome.");
-        }
-
         SchemaVersion = CurrentSchemaVersion;
         Decision = decision.Decision;
         Status = status;
-        ApprovedRoleId = decision.ApprovedRoleId;
     }
 
     public int SchemaVersion { get; }
@@ -108,14 +81,11 @@ public sealed record BusinessDecisionAuditDetails
     public ApprovalOutcome Decision { get; }
 
     public RequestStatus Status { get; }
-
-    public string? ApprovedRoleId { get; }
-
 }
 
 public sealed record DevOpsDecisionAuditDetails
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public DevOpsDecisionAuditDetails(
         ApprovalDecision decision,
@@ -123,28 +93,9 @@ public sealed record DevOpsDecisionAuditDetails
     {
         ArgumentNullException.ThrowIfNull(decision);
 
-        if (decision.Stage != ApprovalStage.DevOps)
-        {
-            throw new ArgumentException(
-                "DevOps decision audit details require a DevOps-stage decision.",
-                nameof(decision));
-        }
-
-        var expectedStatus = decision.Decision == ApprovalOutcome.Approved
-            ? RequestStatus.AwaitingDevOpsApproval
-            : RequestStatus.Rejected;
-        if (status != expectedStatus)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(status),
-                status,
-                "The audit status must match the DevOps decision outcome.");
-        }
-
         SchemaVersion = CurrentSchemaVersion;
         Decision = decision.Decision;
         Status = status;
-        ApprovedRoleId = decision.ApprovedRoleId;
     }
 
     public int SchemaVersion { get; }
@@ -152,8 +103,6 @@ public sealed record DevOpsDecisionAuditDetails
     public ApprovalOutcome Decision { get; }
 
     public RequestStatus Status { get; }
-
-    public string? ApprovedRoleId { get; }
 }
 
 public sealed record DecisionAttemptRejectedAuditDetails
@@ -164,9 +113,6 @@ public sealed record DecisionAttemptRejectedAuditDetails
         ApprovalStage stage,
         RequestStatus status)
     {
-        WorkflowEvidenceValidation.EnsureDefined(stage, nameof(stage));
-        WorkflowEvidenceValidation.EnsureDefined(status, nameof(status));
-
         SchemaVersion = CurrentSchemaVersion;
         Stage = stage;
         Status = status;
@@ -181,7 +127,7 @@ public sealed record DecisionAttemptRejectedAuditDetails
 
 public sealed record ProvisioningAuditDetails
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public ProvisioningAuditDetails(
         ProvisioningOperation operation,
@@ -189,18 +135,9 @@ public sealed record ProvisioningAuditDetails
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        if (grant is not null && grant.RequestId != operation.RequestId)
-        {
-            throw new ArgumentException(
-                "The grant must belong to the provisioning operation.",
-                nameof(grant));
-        }
-
         SchemaVersion = CurrentSchemaVersion;
         Status = operation.Status;
         AttemptCount = operation.AttemptCount;
-        EnvironmentId = operation.EnvironmentId;
-        RoleId = operation.RoleId;
         GrantId = grant?.Id;
     }
 
@@ -209,10 +146,6 @@ public sealed record ProvisioningAuditDetails
     public ProvisioningOperationStatus Status { get; }
 
     public int AttemptCount { get; }
-
-    public string EnvironmentId { get; }
-
-    public string RoleId { get; }
 
     public Guid? GrantId { get; }
 }
@@ -227,7 +160,6 @@ public sealed class ApprovalDecision
         ApprovalStage stage,
         ApprovalOutcome decision,
         string approverId,
-        string? approvedRoleId,
         string? comment,
         DateTimeOffset decidedAt,
         string correlationId)
@@ -244,30 +176,11 @@ public sealed class ApprovalDecision
             MaximumCommentLength,
             nameof(comment));
 
-        if (decision == ApprovalOutcome.Approved)
-        {
-            approvedRoleId = AccessRequestNormalization.NormalizeIdentifier(approvedRoleId!);
-
-            if (!ProductionRoleIds.IsSupported(approvedRoleId))
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(approvedRoleId),
-                    approvedRoleId,
-                    "The approved role is not supported by this feature.");
-            }
-
-        }
-        else if (approvedRoleId is not null)
-        {
-            throw new ArgumentException("A rejection must not carry an approved role.");
-        }
-
         Id = id;
         RequestId = requestId;
         Stage = stage;
         Decision = decision;
         ApproverId = approverId;
-        ApprovedRoleId = approvedRoleId;
         Comment = comment;
         DecidedAt = decidedAt.ToUniversalTime();
         CorrelationId = correlationId;
@@ -283,8 +196,6 @@ public sealed class ApprovalDecision
 
     public string ApproverId { get; private set; }
 
-    public string? ApprovedRoleId { get; private set; }
-
     public string? Comment { get; private set; }
 
     public DateTimeOffset DecidedAt { get; private set; }
@@ -296,24 +207,11 @@ public sealed class ProvisioningOperation
 {
     public ProvisioningOperation(
         Guid requestId,
-        string environmentId,
-        string roleId,
         DateTimeOffset createdAt)
     {
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
-        roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
-        if (!ProductionRoleIds.IsSupported(roleId))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(roleId),
-                roleId,
-                "The provisioning role is not supported by this feature.");
-        }
 
         RequestId = requestId;
-        EnvironmentId = environmentId;
-        RoleId = roleId;
         Status = ProvisioningOperationStatus.Pending;
         AttemptCount = 1;
         CreatedAt = createdAt.ToUniversalTime();
@@ -321,10 +219,6 @@ public sealed class ProvisioningOperation
     }
 
     public Guid RequestId { get; private set; }
-
-    public string EnvironmentId { get; private set; }
-
-    public string RoleId { get; private set; }
 
     public ProvisioningOperationStatus Status { get; internal set; }
 
@@ -344,32 +238,15 @@ public sealed class AccessGrant
     public AccessGrant(
         Guid id,
         Guid requestId,
-        string requesterId,
-        string environmentId,
-        string roleId,
         DateTimeOffset activatedAt,
         string correlationId)
     {
         WorkflowEvidenceValidation.EnsureNotEmpty(id, nameof(id));
         WorkflowEvidenceValidation.EnsureNotEmpty(requestId, nameof(requestId));
-        requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
-        environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
-        roleId = AccessRequestNormalization.NormalizeIdentifier(roleId);
         correlationId = AccessRequestNormalization.NormalizeIdentifier(correlationId);
-
-        if (!ProductionRoleIds.IsSupported(roleId))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(roleId),
-                roleId,
-                "The granted role is not supported by this feature.");
-        }
 
         Id = id;
         RequestId = requestId;
-        RequesterId = requesterId;
-        EnvironmentId = environmentId;
-        RoleId = roleId;
         ActivatedAt = activatedAt.ToUniversalTime();
         ExpiresAt = ActivatedAt.Add(FixedLifetime);
         Outcome = AccessGrantOutcome.Succeeded;
@@ -379,12 +256,6 @@ public sealed class AccessGrant
     public Guid Id { get; private set; }
 
     public Guid RequestId { get; private set; }
-
-    public string RequesterId { get; private set; }
-
-    public string EnvironmentId { get; private set; }
-
-    public string RoleId { get; private set; }
 
     public DateTimeOffset ActivatedAt { get; private set; }
 
@@ -450,13 +321,6 @@ public sealed class AuditEvent
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(details);
 
-        if (request.Status != details.Status)
-        {
-            throw new ArgumentException(
-                "The audit details status must match the submitted request status.",
-                nameof(details));
-        }
-
         return new AuditEvent(
             id,
             request.Id,
@@ -475,13 +339,6 @@ public sealed class AuditEvent
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(decision);
-
-        if (decision.RequestId != request.Id)
-        {
-            throw new ArgumentException(
-                "The decision must belong to the audited request.",
-                nameof(decision));
-        }
 
         var details = new BusinessDecisionAuditDetails(decision, request.Status);
         var outcomeCode = decision.Decision == ApprovalOutcome.Approved
@@ -507,13 +364,6 @@ public sealed class AuditEvent
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(decision);
 
-        if (decision.RequestId != request.Id)
-        {
-            throw new ArgumentException(
-                "The decision must belong to the audited request.",
-                nameof(decision));
-        }
-
         var details = new DevOpsDecisionAuditDetails(decision, request.Status);
         var outcomeCode = decision.Decision == ApprovalOutcome.Approved
             ? "devops_decision_approved"
@@ -537,14 +387,9 @@ public sealed class AuditEvent
         ProvisioningOperation operation,
         DateTimeOffset occurredAt)
     {
-        ValidateProvisioningEvidence(request, devOpsDecision, operation);
-
-        if (operation.Status == ProvisioningOperationStatus.Succeeded)
-        {
-            throw new ArgumentException(
-                "A completed operation cannot record a new provisioning attempt.",
-                nameof(operation));
-        }
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(devOpsDecision);
+        ArgumentNullException.ThrowIfNull(operation);
 
         return new AuditEvent(
             id,
@@ -567,25 +412,10 @@ public sealed class AuditEvent
         AccessGrant grant,
         DateTimeOffset occurredAt)
     {
-        ValidateProvisioningEvidence(request, devOpsDecision, operation);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(devOpsDecision);
+        ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(grant);
-
-        if (request.Status != RequestStatus.Active ||
-            operation.Status != ProvisioningOperationStatus.Succeeded)
-        {
-            throw new ArgumentException(
-                "Successful provisioning evidence requires an active request and succeeded operation.");
-        }
-
-        if (WorkflowEvidencePolicy.ValidateGrantScope(
-                request,
-                operation,
-                grant) is not null)
-        {
-            throw new ArgumentException(
-                "The grant scope must match the successful provisioning operation.",
-                nameof(grant));
-        }
 
         return new AuditEvent(
             id,
@@ -608,15 +438,9 @@ public sealed class AuditEvent
         DateTimeOffset occurredAt,
         string outcomeCode)
     {
-        ValidateProvisioningEvidence(request, devOpsDecision, operation);
-
-        if (request.Status != RequestStatus.ProvisioningFailed ||
-            operation.Status != ProvisioningOperationStatus.Failed ||
-            operation.LastOutcomeCode != outcomeCode)
-        {
-            throw new ArgumentException(
-                "Failed provisioning evidence requires matching failed request and operation state.");
-        }
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(devOpsDecision);
+        ArgumentNullException.ThrowIfNull(operation);
 
         return new AuditEvent(
             id,
@@ -683,15 +507,6 @@ public sealed class AuditEvent
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (eventType is not AuditEventType.AuthorizationRejected
-            and not AuditEventType.InvalidTransitionRejected)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(eventType),
-                eventType,
-                "The event type is not a rejected decision attempt.");
-        }
-
         var details = new DecisionAttemptRejectedAuditDetails(stage, request.Status);
         return new AuditEvent(
             id,
@@ -702,21 +517,6 @@ public sealed class AuditEvent
             correlationId,
             outcomeCode,
             JsonSerializer.Serialize(details, DetailsSerializerOptions));
-    }
-
-    private static void ValidateProvisioningEvidence(
-        AccessRequest request,
-        ApprovalDecision devOpsDecision,
-        ProvisioningOperation operation)
-    {
-        if (WorkflowEvidencePolicy.ValidateProvisioningEvidence(
-                request,
-                devOpsDecision,
-                operation) is not null)
-        {
-            throw new ArgumentException(
-                "Provisioning evidence must match the approved immutable request scope.");
-        }
     }
 
     public Guid Id { get; private set; }

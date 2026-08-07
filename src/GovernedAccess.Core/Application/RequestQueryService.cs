@@ -12,6 +12,10 @@ public sealed record RequestListItemView(
     DateTimeOffset LastModifiedAt,
     bool Actionable);
 
+/// <summary>
+/// Compatibility projection of the validation invariant established at confirmation.
+/// It is not a live reference-data health check.
+/// </summary>
 public sealed record RequestValidationView(
     bool IsValid,
     IReadOnlyList<FieldValidationError> FieldErrors);
@@ -90,23 +94,19 @@ public sealed class RequestQueryService
 
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
-    private readonly RequestValidator requestValidator;
     private readonly IClock clock;
 
     public RequestQueryService(
         IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
-        RequestValidator requestValidator,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
-        ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
-        this.requestValidator = requestValidator;
         this.clock = clock;
     }
 
@@ -172,8 +172,8 @@ public sealed class RequestQueryService
             items.Add(new RequestListItemView(
                 request.Id,
                 request.RequesterId,
-                request.ClientId,
-                request.EnvironmentId,
+                request.Details.ClientId,
+                request.Details.EnvironmentId,
                 request.Status,
                 request.LastModifiedAt,
                 availableActions.Count > 0));
@@ -240,22 +240,13 @@ public sealed class RequestQueryService
             return NotFound<RequestDetailView>();
         }
 
-        var validationResult = await GetCurrentValidationAsync(
-            request,
-            cancellationToken);
-        if (validationResult.IsFailure)
-        {
-            return ApplicationResult.Failed<RequestDetailView>(
-                validationResult.Failure!);
-        }
-
         var operationResult = await workflowStore.GetProvisioningOperationAsync(
             requestId,
             cancellationToken);
         ProvisioningOperationView? operation = null;
         if (operationResult.IsSuccess)
         {
-            operation = ToView(operationResult.Value);
+            operation = ToView(operationResult.Value, request);
         }
         else if (operationResult.Failure!.Kind != ApplicationFailureKind.NotFound)
         {
@@ -269,7 +260,7 @@ public sealed class RequestQueryService
         AccessGrantView? grant = null;
         if (grantResult.IsSuccess)
         {
-            grant = ToView(grantResult.Value, clock.UtcNow);
+            grant = ToView(grantResult.Value, request, clock.UtcNow);
         }
         else if (grantResult.Failure!.Kind != ApplicationFailureKind.NotFound)
         {
@@ -293,21 +284,23 @@ public sealed class RequestQueryService
             new RequestDetailView(
                 request.Id,
                 request.RequesterId,
-                request.ClientId,
-                request.EnvironmentId,
-                request.RequestedRoleId,
-                request.Justification,
-                request.IncidentId,
+                request.Details.ClientId,
+                request.Details.EnvironmentId,
+                request.Details.RoleId,
+                request.Details.Justification,
+                request.Details.IncidentId,
                 request.Status,
                 request.CreatedAt,
                 request.LastModifiedAt,
                 availableActions,
-                validationResult.Value,
+                new RequestValidationView(
+                    IsValid: true,
+                    FieldErrors: []),
                 decisionsResult.Value
                     .OrderBy(decision => decision.DecidedAt)
                     .ThenBy(decision => decision.Stage)
                     .ThenBy(decision => decision.Id)
-                    .Select(ToView)
+                    .Select(decision => ToView(decision, request))
                     .ToArray(),
                 operation,
                 grant,
@@ -397,13 +390,15 @@ public sealed class RequestQueryService
         }
 
         if (principal.Kind != PrincipalKind.BusinessApprover
-            || !StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId))
+            || !StringComparer.Ordinal.Equals(
+                principal.ClientId,
+                request.Details.ClientId))
         {
             return ApplicationResult.Succeeded(ParticipantAccess.None);
         }
 
         var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
-            request.EnvironmentId,
+            request.Details.EnvironmentId,
             cancellationToken);
         if (environmentContextResult.IsFailure)
         {
@@ -417,10 +412,10 @@ public sealed class RequestQueryService
         var environment = environmentContext.Environment;
         var isResponsibleApprover = StringComparer.Ordinal.Equals(
                 environment.ClientId,
-                request.ClientId)
+                request.Details.ClientId)
             && StringComparer.Ordinal.Equals(
                 environmentContext.Client.Id,
-                request.ClientId)
+                request.Details.ClientId)
             && StringComparer.Ordinal.Equals(
                 environmentContext.Client.BusinessApproverPrincipalId,
                 principal.Id);
@@ -430,66 +425,6 @@ public sealed class RequestQueryService
                     IsParticipant: true,
                     IsResponsibleBusinessApprover: true)
                 : ParticipantAccess.None);
-    }
-
-    private async Task<ApplicationResult<RequestValidationView>>
-        GetCurrentValidationAsync(
-            AccessRequest request,
-            CancellationToken cancellationToken)
-    {
-        var validationOutcome = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                request.ClientId,
-                request.EnvironmentId,
-                request.RequestedRoleId,
-                request.Justification,
-                request.IncidentId),
-            cancellationToken);
-
-        return validationOutcome switch
-        {
-            RequestValidationSucceeded succeeded
-                when MatchesImmutableScope(request, succeeded.Fields) =>
-                ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: true,
-                    FieldErrors: [])),
-            RequestValidationSucceeded => ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: false,
-                    FieldErrors:
-                    [
-                        new FieldValidationError(
-                            "request",
-                            "request_context_mismatch",
-                            "Current stored context does not match the immutable request."),
-                    ])),
-            RequestValidationRejected rejected => ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: false,
-                    rejected.Errors)),
-            RequestValidationFailed failed =>
-                ApplicationResult.Failed<RequestValidationView>(failed.Failure),
-            _ => throw new InvalidOperationException(
-                "The request validation outcome is unsupported."),
-        };
-    }
-
-    private static bool MatchesImmutableScope(
-        AccessRequest request,
-        ValidatedRequestFields fields)
-    {
-        return StringComparer.Ordinal.Equals(request.ClientId, fields.ClientId)
-            && StringComparer.Ordinal.Equals(
-                request.EnvironmentId,
-                fields.EnvironmentId)
-            && StringComparer.Ordinal.Equals(
-                request.RequestedRoleId,
-                fields.RequestedRoleId)
-            && StringComparer.Ordinal.Equals(
-                request.Justification,
-                fields.Justification)
-            && StringComparer.Ordinal.Equals(request.IncidentId, fields.IncidentId);
     }
 
     private static IReadOnlyList<string> GetAvailableActions(
@@ -524,7 +459,9 @@ public sealed class RequestQueryService
             && StringComparer.Ordinal.Equals(principal.Id, request.RequesterId);
     }
 
-    private static ApprovalDecisionView ToView(ApprovalDecision decision)
+    private static ApprovalDecisionView ToView(
+        ApprovalDecision decision,
+        AccessRequest request)
     {
         return new ApprovalDecisionView(
             decision.Id,
@@ -532,19 +469,22 @@ public sealed class RequestQueryService
             decision.Stage,
             decision.Decision,
             decision.ApproverId,
-            decision.ApprovedRoleId,
+            decision.Decision == ApprovalOutcome.Approved
+                ? request.Details.RoleId
+                : null,
             decision.Comment,
             decision.DecidedAt,
             decision.CorrelationId);
     }
 
     private static ProvisioningOperationView ToView(
-        ProvisioningOperation operation)
+        ProvisioningOperation operation,
+        AccessRequest request)
     {
         return new ProvisioningOperationView(
             operation.RequestId,
-            operation.EnvironmentId,
-            operation.RoleId,
+            request.Details.EnvironmentId,
+            request.Details.RoleId,
             operation.Status,
             operation.AttemptCount,
             operation.LastOutcomeCode,
@@ -554,14 +494,15 @@ public sealed class RequestQueryService
 
     private static AccessGrantView ToView(
         AccessGrant grant,
+        AccessRequest request,
         DateTimeOffset currentTime)
     {
         return new AccessGrantView(
             grant.Id,
             grant.RequestId,
-            grant.RequesterId,
-            grant.EnvironmentId,
-            grant.RoleId,
+            request.RequesterId,
+            request.Details.EnvironmentId,
+            request.Details.RoleId,
             grant.ActivatedAt,
             grant.ExpiresAt,
             grant.Outcome,

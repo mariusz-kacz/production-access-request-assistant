@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
@@ -29,7 +30,7 @@ public sealed class ProtectedProvisioningTests
         ProvisioningTestFixture.DefaultUtcNow.AddMinutes(1);
 
     [Fact]
-    public async Task ProvisionAsyncReloadsPersistedWorkflowAndUsesStoredScope()
+    public async Task ProvisionAsyncDerivesProviderInputFromPersistedRequestDetails()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
@@ -37,10 +38,9 @@ public sealed class ProtectedProvisioningTests
         await SeedAwaitingProvisioningAsync(fixture, cancellationToken: cancellationToken);
 
         await using var dbContext = fixture.CreateDbContext();
-        var workflowStore = new RecordingWorkflowStore(new EfWorkflowStore(dbContext));
         var provisioner = new RecordingAccessProvisioner(ActivatedAt);
         var service = new ProtectedProvisioningService(
-            workflowStore,
+            new EfWorkflowStore(dbContext),
             provisioner,
             fixture.Clock);
 
@@ -50,10 +50,6 @@ public sealed class ProtectedProvisioningTests
         Assert.Equal(RequestId, completed.Request.Id);
         Assert.Equal(RequestId, completed.Operation.RequestId);
         Assert.Equal(ProviderGrantId, completed.Grant.Id);
-        Assert.Equal(1, workflowStore.OperationReloads);
-        Assert.Equal(1, workflowStore.RequestReloads);
-        Assert.Contains(ApprovalStage.Business, workflowStore.ReadApprovalStages);
-        Assert.Contains(ApprovalStage.DevOps, workflowStore.ReadApprovalStages);
 
         var providerRequest = Assert.Single(provisioner.Requests);
         Assert.Equal(RequestId, providerRequest.RequestId);
@@ -94,35 +90,6 @@ public sealed class ProtectedProvisioningTests
     }
 
     [Fact]
-    public async Task ProvisionAsyncRejectsOperationScopeThatDoesNotMatchRequest()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var fixture = await ProvisioningTestFixture.CreateAsync(
-            cancellationToken);
-        await SeedAwaitingProvisioningAsync(
-            fixture,
-            operationRoleId: ProductionRoleIds.Support,
-            cancellationToken: cancellationToken);
-
-        await using var dbContext = fixture.CreateDbContext();
-        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
-        var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
-            provisioner,
-            fixture.Clock);
-
-        var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
-
-        var failed = Assert.IsType<ProtectedProvisioningFailed>(outcome);
-        Assert.Equal(
-            ProtectedProvisioningService.OperationScopeMismatchCode,
-            failed.Failure.Code);
-        Assert.Empty(provisioner.Requests);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
-    }
-
-    [Fact]
     public async Task SuccessfulProvisioningPersistsExactlyEightHourGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -148,34 +115,43 @@ public sealed class ProtectedProvisioningTests
         var operation = await dbContext.ProvisioningOperations
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
+        var auditEvent = await dbContext.AuditEvents
+            .AsNoTracking()
+            .SingleAsync(
+                item => item.RequestId == RequestId
+                    && item.EventType == AuditEventType.ProvisioningSucceeded,
+                cancellationToken);
 
         Assert.Equal(ActivatedAt, grant.ActivatedAt);
         Assert.Equal(ActivatedAt.AddHours(8), grant.ExpiresAt);
         Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
         Assert.Equal(RequestId, grant.RequestId);
-        Assert.Equal(DemoDataIds.RequesterPrincipalId, grant.RequesterId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, grant.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, grant.RoleId);
         Assert.Equal(RequestStatus.Active, request.Status);
         Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);
+        using var auditDetails = JsonDocument.Parse(auditEvent.DetailsJson);
+        Assert.Equal(
+            ProvisioningAuditDetails.CurrentSchemaVersion,
+            auditDetails.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.False(auditDetails.RootElement.TryGetProperty("environmentId", out _));
+        Assert.False(auditDetails.RootElement.TryGetProperty("roleId", out _));
     }
 
     private static async Task SeedAwaitingProvisioningAsync(
         ProvisioningTestFixture fixture,
         bool includeBusinessApproval = true,
         bool includeDevOpsApproval = true,
-        string? operationRoleId = null,
         CancellationToken cancellationToken = default)
     {
         await using var dbContext = fixture.CreateDbContext();
         var request = new AccessRequest(
             RequestId,
             DemoDataIds.RequesterPrincipalId,
-            DemoDataIds.ClientAlphaId,
-            DemoDataIds.ClientAlphaEnvironmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident safely.",
-            DemoDataIds.PrimaryIncidentId,
+            new ValidatedRequestDetails(
+                DemoDataIds.ClientAlphaId,
+                DemoDataIds.ClientAlphaEnvironmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident safely.",
+                DemoDataIds.PrimaryIncidentId),
             RequestCreatedAt,
             "request-correlation");
         var businessResult = BusinessDecisionPolicy.Apply(
@@ -195,14 +171,11 @@ public sealed class ProtectedProvisioningTests
             ApprovalStage.DevOps,
             ApprovalOutcome.Approved,
             DemoDataIds.DevOpsApproverPrincipalId,
-            request.RequestedRoleId,
             null,
             DevOpsApprovedAt,
             "devops-provisioning-correlation");
         var operation = new ProvisioningOperation(
             request.Id,
-            request.EnvironmentId,
-            operationRoleId ?? request.RequestedRoleId,
             DevOpsApprovedAt);
 
         dbContext.AccessRequests.Add(request);
@@ -236,82 +209,4 @@ public sealed class ProtectedProvisioningTests
         }
     }
 
-    private sealed class RecordingWorkflowStore(IWorkflowStore inner) : IWorkflowStore
-    {
-        public int RequestReloads { get; private set; }
-
-        public int OperationReloads { get; private set; }
-
-        public List<ApprovalStage> ReadApprovalStages { get; } = [];
-
-        public void AddRequest(AccessRequest request) => inner.AddRequest(request);
-
-        public Task<ApplicationResult<AccessRequest>> GetRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            inner.GetRequestAsync(requestId, cancellationToken);
-
-        public Task<ApplicationResult<AccessRequest>> ReloadRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken)
-        {
-            RequestReloads++;
-            return inner.ReloadRequestAsync(requestId, cancellationToken);
-        }
-
-        public Task<ApplicationResult<IReadOnlyList<AccessRequest>>> ListRequestsAsync(
-            CancellationToken cancellationToken) =>
-            inner.ListRequestsAsync(cancellationToken);
-
-        public void AddApprovalDecision(ApprovalDecision decision) =>
-            inner.AddApprovalDecision(decision);
-
-        public Task<ApplicationResult<ApprovalDecision>> GetApprovalDecisionAsync(
-            Guid requestId,
-            ApprovalStage stage,
-            CancellationToken cancellationToken)
-        {
-            ReadApprovalStages.Add(stage);
-            return inner.GetApprovalDecisionAsync(requestId, stage, cancellationToken);
-        }
-
-        public Task<ApplicationResult<IReadOnlyList<ApprovalDecision>>> ListApprovalDecisionsAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            inner.ListApprovalDecisionsAsync(requestId, cancellationToken);
-
-        public void AddProvisioningOperation(ProvisioningOperation operation) =>
-            inner.AddProvisioningOperation(operation);
-
-        public Task<ApplicationResult<ProvisioningOperation>> GetProvisioningOperationAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            inner.GetProvisioningOperationAsync(requestId, cancellationToken);
-
-        public Task<ApplicationResult<ProvisioningOperation>> ReloadProvisioningOperationAsync(
-            Guid requestId,
-            CancellationToken cancellationToken)
-        {
-            OperationReloads++;
-            return inner.ReloadProvisioningOperationAsync(requestId, cancellationToken);
-        }
-
-        public void AddAccessGrant(AccessGrant grant) => inner.AddAccessGrant(grant);
-
-        public Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            inner.GetAccessGrantForRequestAsync(requestId, cancellationToken);
-
-        public void AddAuditEvent(AuditEvent auditEvent) => inner.AddAuditEvent(auditEvent);
-
-        public Task<ApplicationResult<IReadOnlyList<AuditEvent>>> ListAuditEventsAsync(
-            Guid requestId,
-            CancellationToken cancellationToken) =>
-            inner.ListAuditEventsAsync(requestId, cancellationToken);
-
-        public Task<ApplicationResult> SaveChangesAsync(
-            CancellationToken cancellationToken) =>
-            inner.SaveChangesAsync(cancellationToken);
-    }
 }

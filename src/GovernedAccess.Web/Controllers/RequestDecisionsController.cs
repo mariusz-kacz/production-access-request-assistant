@@ -102,8 +102,8 @@ public sealed class RequestDecisionsController : ControllerBase
                 ? null
                 : new DevOpsAccessGrantResponse(
                     completed.Grant.Id,
-                    completed.Grant.EnvironmentId,
-                    completed.Grant.RoleId,
+                    completed.Request.Details.EnvironmentId,
+                    completed.Request.Details.RoleId,
                     completed.Grant.ActivatedAt,
                     completed.Grant.ExpiresAt)));
     }

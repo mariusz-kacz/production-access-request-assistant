@@ -75,20 +75,38 @@ Representative coverage:
   justification, and incident rules;
 - `RequestIntakeServiceTests`: authenticated ownership, deterministic readiness,
   structured environment-option validation and authoritative reload, candidate
-  preservation, reserved identity, confirmation revalidation, exact immutable scope,
-  and one-save staging outcomes;
+  preservation, reserved identity, confirmation revalidation, and request creation
+  from canonical details;
 - `RequestPreparationTests`: clarification target and bounded unique option-list
   invariants independent of provider or transport contracts;
-- `BusinessDecisionPolicyTests`: state, exact-role binding, rejection, and duplicate
-  business decisions;
-- `DevOpsDecisionPolicyTests`: prior approval, exact role, fixed scope, rejection, and
-  operation creation;
-- `WorkflowEvidencePolicyTests`: request, approval, operation, and grant consistency;
-  and
-- `AccessGrantTests`: activation, fixed eight-hour expiry, and scope construction.
+- `BusinessDecisionPolicyTests`: state, rejection, and duplicate business decisions;
+- `DevOpsDecisionPolicyTests`: prior approval, state, rejection, and request-keyed
+  operation creation; and
+- `AccessGrantTests`: request binding, activation, and fixed eight-hour expiry.
 
 Use a unit test when the behavior can be proved without ASP.NET Core, EF Core, MCP, or
 serialization. Domain rules should not require a host fixture.
+
+### Primary test ownership
+
+Rules intentionally have one primary owner. Unit tests own deterministic domain and
+canonical-validation permutations. SQLite component tests own reconstruction,
+transactions, uniqueness, idempotency recovery, and real optimistic concurrency.
+Full-host tests repeat only behavior whose failure mode belongs to authentication,
+authorization integration, antiforgery, routing, serialization, Teams, or MCP.
+Frontend tests protect a small set of user-visible wiring and accessibility outcomes.
+
+This means an immutable-scope rule is not independently replayed at every layer.
+Instead, domain tests prove construction and transitions, persistence tests prove that
+the representation and constraints survive storage, and one representative host
+journey proves the external boundary. Duplicate tests are retained only when a new
+boundary introduces a distinct way for the rule to fail.
+
+Tests do not manufacture wrong-request approvals, operations, grants, audit inputs,
+impossible timestamp orderings, or invalid internal result-factory arguments.
+Request-keyed queries, domain construction, workflow transitions, and SQLite
+constraints own those structural guarantees. Tests instead cover rejected or missing
+approvals, legal state transitions, transaction failures, and real concurrency.
 
 ## Component and full-host architecture
 
@@ -136,11 +154,10 @@ test level.
 | Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
 | Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact two-tool advertisement, `{}` discovery and exact environment lookup, embedded ordered roles, exact-only incident lookup, closed schemas, fail-closed overflow, typed failures, cancellation, forbidden capability absence, and exact-`NotFound`-only fallback gating |
-| Business decisions | Unit/component: approver, duplicate/invalid transitions, and audit state. Full host: authenticated overposting/response contract |
-| DevOps decisions | Unit/component: authorization, exact role, fixed scope, rejection, and provisioning state. Full host: authenticated overposting/failure response contract |
-| Protected provisioning | Persisted evidence reload, missing/mismatched evidence rejection, operation scope, and grant finalization |
-| Retry and idempotency | Component: failed-state restriction, lost response, scope mismatch, and existing-grant recovery. Full host: representative actor rejection |
-| Explicit concurrency | 100 concurrent retry attempts producing one operation and one grant; intentionally outside the routine integration suite |
+| Business decisions | Unit/component: state policy, configured approver, duplicate/invalid transitions, and audit state. Full host: authenticated overposting/response contract |
+| DevOps decisions | Unit/component: authorization, prior request-bound business approval, rejection, and provisioning state. Full host: authenticated overposting/failure response contract |
+| Protected provisioning | Persisted request/approval/operation reload, missing or invalid evidence rejection, canonical provider input, and grant finalization |
+| Retry and idempotency | Component: failed-state restriction, lost response, existing-grant recovery, and SQLite confirmation convergence. Full host: representative actor rejection |
 | Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
@@ -409,15 +426,6 @@ dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTest
 Run the three gates sequentially. The unfiltered integration command executes all
 component and FullHost fixtures in one runner.
 
-### Explicit concurrency suite
-
-The high-contention suite is not included in `ProductionAccessRequestAssistant.sln`
-and therefore does not run as part of routine unit and integration validation:
-
-```powershell
-dotnet test tests/GovernedAccess.ConcurrencyTests/GovernedAccess.ConcurrencyTests.csproj
-```
-
 ### Focused integration area
 
 ```powershell
@@ -440,16 +448,12 @@ npm run test:run --prefix src/GovernedAccess.Web/ClientApp
 
 ## Consolidated test inventory
 
-Feature 004 updates owning tests instead of creating repeated semantic and resilience
-matrices at persistence, MCP, MAF, and FullHost layers. The current backend runner
-reports:
+The suite updates owning tests instead of creating repeated semantic and resilience
+matrices at persistence, MCP, MAF, and full-host layers. The current runners report:
 
-- 99 unit cases;
-- 71 non-FullHost integration-project cases; and
-- 23 FullHost cases.
-
-The frontend retains 6 component cases in 2 files. The explicit high-contention
-provisioning case remains outside the solution and routine validation.
+- 71 unit cases;
+- 92 integration-project cases spanning component and full-host boundaries;
+- 6 frontend component cases in 2 files.
 
 Counts are diagnostic, not acceptance criteria. The important consolidation rules
 are that session/history behavior lives in one MAF session suite, typed MCP contracts

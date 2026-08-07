@@ -9,59 +9,6 @@ public sealed class RequestPreparationTests
         new(2026, 7, 31, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void ProposalKindRequiresExactlyItsMatchingClarificationPayload()
-    {
-        var candidate = EmptyCandidate();
-        var clarification = new RequestClarificationProposal(
-            RequestClarificationTarget.EnvironmentId,
-            "Which production environment requires access?");
-
-        Assert.Throws<ArgumentException>(
-            () => new RequestPreparationProposal(
-                RequestPreparationProposalKind.Clarification,
-                candidate,
-                clarification: null));
-        Assert.Throws<ArgumentException>(
-            () => new RequestPreparationProposal(
-                RequestPreparationProposalKind.Candidate,
-                candidate,
-                clarification));
-
-        var clarificationProposal = new RequestPreparationProposal(
-            RequestPreparationProposalKind.Clarification,
-            candidate,
-            clarification);
-        var candidateProposal = new RequestPreparationProposal(
-            RequestPreparationProposalKind.Candidate,
-            candidate,
-            clarification: null);
-
-        Assert.Same(clarification, clarificationProposal.Clarification);
-        Assert.Null(candidateProposal.Clarification);
-    }
-
-    [Fact]
-    public void InterpretationResultSeparatesSuccessPayloadFromFailureReason()
-    {
-        var proposal = new RequestPreparationProposal(
-            RequestPreparationProposalKind.Candidate,
-            EmptyCandidate(),
-            clarification: null);
-
-        var succeeded = new RequestPreparationInterpretationSucceeded(proposal);
-        var failed = new RequestPreparationInterpretationFailed(
-            RequestPreparationInterpretationFailure.MalformedModelOutput);
-
-        Assert.Same(proposal, succeeded.Proposal);
-        Assert.Equal(
-            RequestPreparationInterpretationFailure.MalformedModelOutput,
-            failed.Failure);
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new RequestPreparationInterpretationFailed(
-                (RequestPreparationInterpretationFailure)int.MaxValue));
-    }
-
-    [Fact]
     public void ClarificationProposalRequiresAClosedTargetAndBoundedMessage()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
@@ -185,6 +132,7 @@ public sealed class RequestPreparationTests
         if (terminalStatus != RequestIntakeStatus.Superseded)
         {
             session.MarkReady(
+                ValidDetails(),
                 reservedRequestId,
                 CreatedAt.AddMinutes(2),
                 "ready");
@@ -256,34 +204,26 @@ public sealed class RequestPreparationTests
         var session = CreateCollectingSession();
 
         Assert.True(
-            session.IsOwnedBy(
+            new AuthenticatedChannelActor(
                 " msteams ",
                 " tenant-001 ",
                 " actor-001 ",
                 " conversation-001 ",
-                " requester "));
+                " requester ").Owns(session));
         Assert.False(
-            session.IsOwnedBy(
+            new AuthenticatedChannelActor(
                 channel,
                 tenantId,
                 channelActorId,
                 conversationId,
-                requesterId));
+                requesterId).Owns(session));
     }
 
     [Fact]
     public void ReadyLifecycleFailsClosedAtTheExactExpiryDeadline()
     {
         var session = CreateCollectingSession();
-        session.UpdateCandidate(
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
-            CreatedAt,
-            "candidate");
-        session.MarkReady(Guid.NewGuid(), CreatedAt, "ready");
+        session.MarkReady(ValidDetails(), Guid.NewGuid(), CreatedAt, "ready");
         var deadline = Assert.IsType<DateTimeOffset>(session.ExpiresAt);
 
         Assert.False(session.IsExpired(deadline.AddTicks(-1)));
@@ -336,7 +276,11 @@ public sealed class RequestPreparationTests
                 occurredAt,
                 "candidate"));
         Assert.Throws<InvalidOperationException>(
-            () => session.MarkReady(Guid.NewGuid(), occurredAt, "ready"));
+            () => session.MarkReady(
+                ValidDetails(),
+                Guid.NewGuid(),
+                occurredAt,
+                "ready"));
         Assert.Throws<InvalidOperationException>(
             () => session.MarkSubmitted(occurredAt, "submitted"));
         Assert.Throws<InvalidOperationException>(
@@ -346,4 +290,12 @@ public sealed class RequestPreparationTests
         Assert.Throws<InvalidOperationException>(
             () => session.MarkInvalidated(occurredAt, "invalidated"));
     }
+
+    private static ValidatedRequestDetails ValidDetails() =>
+        new(
+            "client-alpha",
+            "PROD-ALPHA-EU",
+            ProductionRoleIds.ReadOnly,
+            "Investigate the active production incident.",
+            "INC-1042");
 }

@@ -130,9 +130,13 @@ Before creating an access grant, the handler reloads persisted workflow evidence
 * the request exists and is in the expected workflow state,
 * both approvals reference the same immutable request,
 * valid business and DevOps approvals exist in the correct order,
-* the approved role matches the request,
-* the provisioning operation matches the immutable request scope,
-* the operation is keyed by the immutable request ID.
+* the provisioning operation is keyed by the immutable request ID and is in the
+  expected lifecycle state,
+* any completed grant belongs to that same request.
+
+The requester's environment and role are read only from the reloaded
+`AccessRequest.Details`. Approval, operation, and grant records do not maintain a
+second writable copy of request scope.
 
 Client, environment, role, incident, and approver context is validated when the
 request and human decisions are recorded. The fixed synthetic reference dataset has
@@ -570,8 +574,8 @@ A successful DevOps approval immediately triggers:
 1. request-state validation,
 2. business approval validation,
 3. DevOps approval validation,
-4. approved-scope validation,
-5. request-bound operation validation,
+4. request-bound operation validation,
+5. provider-input derivation from the immutable request details,
 6. idempotent synthetic provisioning.
 
 There is no separate human provisioning action or provisioning role.
@@ -681,7 +685,7 @@ A successful DevOps approval shall immediately initiate deterministic persisted-
 
 ### FR-11 Independent Provisioning Validation
 
-The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify persisted request, approval, operation, workflow-state, and immutable-scope evidence before creating a grant. It shall not repeat authoritative reference-data lookups while the synthetic dataset remains fixed and fail-fast validated at startup.
+The internal provisioning handler shall accept request references rather than approval assertions. It shall reload and independently verify persisted request, approval, operation, and workflow-state evidence before creating a grant, and shall derive provider input exclusively from the immutable request details. It shall not repeat authoritative reference-data lookups while the synthetic dataset remains fixed and fail-fast validated at startup.
 
 ### FR-12 Idempotent Provisioning
 

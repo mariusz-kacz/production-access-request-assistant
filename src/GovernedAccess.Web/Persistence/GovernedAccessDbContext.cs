@@ -90,6 +90,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .HasMaxLength(AccessRequest.MaximumJustificationLength);
         entity.Property(session => session.IncidentId)
             .HasMaxLength(IdentifierLength);
+        entity.Ignore(session => session.PreparedDetails);
         entity.Property(session => session.CorrelationId)
             .HasMaxLength(CorrelationIdLength);
         entity.Property(session => session.PersistenceVersion)
@@ -200,12 +201,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.ToTable("AccessRequests");
         entity.HasKey(request => request.Id);
         entity.Property(request => request.RequesterId).HasMaxLength(IdentifierLength);
-        entity.Property(request => request.ClientId).HasMaxLength(IdentifierLength);
-        entity.Property(request => request.EnvironmentId).HasMaxLength(IdentifierLength);
-        entity.Property(request => request.RequestedRoleId).HasMaxLength(IdentifierLength);
-        entity.Property(request => request.Justification)
-            .HasMaxLength(AccessRequest.MaximumJustificationLength);
-        entity.Property(request => request.IncidentId).HasMaxLength(IdentifierLength);
         entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(32);
         entity.Property(request => request.CorrelationId).HasMaxLength(CorrelationIdLength);
         entity.Property(request => request.PersistenceVersion)
@@ -220,25 +215,45 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .HasForeignKey(request => request.RequesterId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        entity.HasOne<Client>()
-            .WithMany()
-            .HasForeignKey(request => request.ClientId)
-            .OnDelete(DeleteBehavior.Restrict);
+        entity.OwnsOne(request => request.Details, details =>
+        {
+            details.Property(value => value.ClientId)
+                .HasColumnName("ClientId")
+                .HasMaxLength(IdentifierLength);
+            details.Property(value => value.EnvironmentId)
+                .HasColumnName("EnvironmentId")
+                .HasMaxLength(IdentifierLength);
+            details.Property(value => value.RoleId)
+                .HasColumnName("RequestedRoleId")
+                .HasMaxLength(IdentifierLength);
+            details.Property(value => value.Justification)
+                .HasColumnName("Justification")
+                .HasMaxLength(AccessRequest.MaximumJustificationLength);
+            details.Property(value => value.IncidentId)
+                .HasColumnName("IncidentId")
+                .HasMaxLength(IdentifierLength);
 
-        entity.HasOne<ProductionEnvironment>()
-            .WithMany()
-            .HasForeignKey(request => request.EnvironmentId)
-            .OnDelete(DeleteBehavior.Restrict);
+            details.HasOne<Client>()
+                .WithMany()
+                .HasForeignKey(value => value.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        entity.HasOne<EnvironmentRole>()
-            .WithMany()
-            .HasForeignKey(request => new { request.EnvironmentId, request.RequestedRoleId })
-            .OnDelete(DeleteBehavior.Restrict);
+            details.HasOne<ProductionEnvironment>()
+                .WithMany()
+                .HasForeignKey(value => value.EnvironmentId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        entity.HasOne<Incident>()
-            .WithMany()
-            .HasForeignKey(request => request.IncidentId)
-            .OnDelete(DeleteBehavior.Restrict);
+            details.HasOne<EnvironmentRole>()
+                .WithMany()
+                .HasForeignKey(value => new { value.EnvironmentId, value.RoleId })
+                .OnDelete(DeleteBehavior.Restrict);
+
+            details.HasOne<Incident>()
+                .WithMany()
+                .HasForeignKey(value => value.IncidentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+        entity.Navigation(request => request.Details).IsRequired();
     }
 
     private static void ConfigureApprovalDecision(EntityTypeBuilder<ApprovalDecision> entity)
@@ -248,7 +263,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.Property(decision => decision.Stage).HasConversion<string>().HasMaxLength(16);
         entity.Property(decision => decision.Decision).HasConversion<string>().HasMaxLength(16);
         entity.Property(decision => decision.ApproverId).HasMaxLength(IdentifierLength);
-        entity.Property(decision => decision.ApprovedRoleId).HasMaxLength(IdentifierLength);
         entity.Property(decision => decision.Comment)
             .HasMaxLength(ApprovalDecision.MaximumCommentLength);
         entity.Property(decision => decision.CorrelationId).HasMaxLength(CorrelationIdLength);
@@ -277,8 +291,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     {
         entity.ToTable("ProvisioningOperations");
         entity.HasKey(operation => operation.RequestId);
-        entity.Property(operation => operation.EnvironmentId).HasMaxLength(IdentifierLength);
-        entity.Property(operation => operation.RoleId).HasMaxLength(IdentifierLength);
         entity.Property(operation => operation.Status).HasConversion<string>().HasMaxLength(16);
         entity.Property(operation => operation.LastOutcomeCode).HasMaxLength(OutcomeCodeLength);
 
@@ -289,25 +301,12 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
             .WithMany()
             .HasForeignKey(operation => operation.RequestId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<ProductionEnvironment>()
-            .WithMany()
-            .HasForeignKey(operation => operation.EnvironmentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<EnvironmentRole>()
-            .WithMany()
-            .HasForeignKey(operation => new { operation.EnvironmentId, operation.RoleId })
-            .OnDelete(DeleteBehavior.Restrict);
     }
 
     private static void ConfigureAccessGrant(EntityTypeBuilder<AccessGrant> entity)
     {
         entity.ToTable("AccessGrants");
         entity.HasKey(grant => grant.Id);
-        entity.Property(grant => grant.RequesterId).HasMaxLength(IdentifierLength);
-        entity.Property(grant => grant.EnvironmentId).HasMaxLength(IdentifierLength);
-        entity.Property(grant => grant.RoleId).HasMaxLength(IdentifierLength);
         entity.Property(grant => grant.Outcome).HasConversion<string>().HasMaxLength(16);
         entity.Property(grant => grant.CorrelationId).HasMaxLength(CorrelationIdLength);
         entity.HasIndex(grant => grant.RequestId).IsUnique();
@@ -323,21 +322,6 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.HasOne<AccessRequest>()
             .WithMany()
             .HasForeignKey(grant => grant.RequestId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<AuthenticatedPrincipal>()
-            .WithMany()
-            .HasForeignKey(grant => grant.RequesterId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<ProductionEnvironment>()
-            .WithMany()
-            .HasForeignKey(grant => grant.EnvironmentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        entity.HasOne<EnvironmentRole>()
-            .WithMany()
-            .HasForeignKey(grant => new { grant.EnvironmentId, grant.RoleId })
             .OnDelete(DeleteBehavior.Restrict);
     }
 

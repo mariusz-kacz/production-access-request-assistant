@@ -29,15 +29,11 @@ public sealed class RequestIntakeService
     public const string SupersededCode = "prepared_request_superseded";
     public const string InvalidatedCode = "prepared_request_invalidated";
     public const string NotReadyCode = "prepared_request_not_ready";
-    public const string ScopeMismatchCode = "prepared_request_scope_mismatch";
-    public const string SubmissionEvidenceInvalidCode =
-        "prepared_request_submission_evidence_invalid";
-
     private readonly IRequestPreparationInterpreter interpreter;
     private readonly RequestValidator requestValidator;
     private readonly IRequestContextReader requestContext;
     private readonly IRequestIntakeStore intakeStore;
-    private readonly RequestSubmissionService submissionService;
+    private readonly IWorkflowStore workflowStore;
     private readonly IClock clock;
 
     public RequestIntakeService(
@@ -45,21 +41,21 @@ public sealed class RequestIntakeService
         RequestValidator requestValidator,
         IRequestContextReader requestContext,
         IRequestIntakeStore intakeStore,
-        RequestSubmissionService submissionService,
+        IWorkflowStore workflowStore,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(interpreter);
         ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(intakeStore);
-        ArgumentNullException.ThrowIfNull(submissionService);
+        ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.interpreter = interpreter;
         this.requestValidator = requestValidator;
         this.requestContext = requestContext;
         this.intakeStore = intakeStore;
-        this.submissionService = submissionService;
+        this.workflowStore = workflowStore;
         this.clock = clock;
     }
 
@@ -158,7 +154,7 @@ public sealed class RequestIntakeService
         {
             return await PersistReadyAsync(
                 session,
-                ready.Fields,
+                ready.Details,
                 command.CorrelationId,
                 cancellationToken);
         }
@@ -195,22 +191,15 @@ public sealed class RequestIntakeService
 
     private async Task<RequestPreparationResult> PersistReadyAsync(
         RequestIntakeSession session,
-        ValidatedRequestFields fields,
+        ValidatedRequestDetails details,
         string correlationId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         var occurredAt = clock.UtcNow.ToUniversalTime();
-        session.UpdateCandidate(
-            fields.ClientId,
-            fields.EnvironmentId,
-            fields.RequestedRoleId,
-            fields.Justification,
-            fields.IncidentId,
-            occurredAt,
-            correlationId);
         session.MarkReady(
+            details,
             Guid.NewGuid(),
             occurredAt,
             correlationId);
@@ -271,12 +260,7 @@ public sealed class RequestIntakeService
         }
 
         var session = sessionResult.Value;
-        if (!session.IsOwnedBy(
-                command.Actor.Channel,
-                command.Actor.TenantId,
-                command.Actor.ChannelActorId,
-                command.Actor.ConversationId,
-                command.Actor.RequesterId))
+        if (!command.Actor.Owns(session))
         {
             return ConfirmationFailed(
                 ApplicationFailureKind.Unauthorized,
@@ -306,32 +290,35 @@ public sealed class RequestIntakeService
                 "The prepared request has expired and cannot be confirmed.");
         }
 
-        if (session.ReservedRequestId is not { } reservedRequestId
-            || session.ClientId is null
-            || session.EnvironmentId is null
-            || session.RequestedRoleId is null
-            || session.Justification is null)
+        var reservedRequestId = session.ReservedRequestId!.Value;
+
+        var requesterResult = await LoadRequesterAsync(
+            session.RequesterId,
+            cancellationToken);
+        if (requesterResult.IsFailure)
         {
-            return ConfirmationFailed(
-                ApplicationFailureKind.DependencyFailure,
-                SubmissionEvidenceInvalidCode,
-                "Persisted intake evidence is incomplete.");
+            return ConfirmationFailed(requesterResult.Failure!);
         }
 
-        var submission = await submissionService.StageAsync(
-            session.RequesterId,
-            new RequestValidationInput(
-                session.ClientId,
-                session.EnvironmentId,
-                session.RequestedRoleId,
-                session.Justification,
-                session.IncidentId),
-            reservedRequestId,
-            command.CorrelationId,
-            occurredAt,
+        var preparedDetails = session.PreparedDetails;
+        if (preparedDetails is null)
+        {
+            session.MarkInvalidated(occurredAt, command.CorrelationId);
+            var invalidSnapshotSave = await intakeStore.SaveChangesAsync(
+                cancellationToken);
+            return invalidSnapshotSave.IsFailure
+                ? ConfirmationFailed(invalidSnapshotSave.Failure!)
+                : ConfirmationFailed(
+                    ApplicationFailureKind.InvalidTransition,
+                    InvalidatedCode,
+                    "The prepared request snapshot is invalid.");
+        }
+
+        var validation = await requestValidator.RevalidateAsync(
+            preparedDetails,
             cancellationToken);
 
-        if (submission is RequestSubmissionValidationRejected)
+        if (validation is RequestValidationRejected)
         {
             session.MarkInvalidated(occurredAt, command.CorrelationId);
             var invalidationSave = await intakeStore.SaveChangesAsync(
@@ -347,30 +334,36 @@ public sealed class RequestIntakeService
                 "Authoritative context no longer accepts the prepared scope.");
         }
 
-        if (submission is RequestSubmissionFailed submissionFailed)
+        if (validation is RequestValidationFailed validationFailed)
         {
-            return ConfirmationFailed(submissionFailed.Failure);
+            return ConfirmationFailed(validationFailed.Failure);
         }
 
-        if (submission is not RequestSubmitted submitted)
+        if (validation is not RequestValidationSucceeded validationSucceeded)
         {
             throw new InvalidOperationException(
-                "The intake submission outcome is unsupported.");
+                "The request validation outcome is unsupported.");
         }
 
-        if (!MatchesScope(session, submitted.Request))
-        {
-            return ConfirmationFailed(
-                ApplicationFailureKind.DependencyFailure,
-                ScopeMismatchCode,
-                "The staged request does not match the immutable intake scope.");
-        }
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var request = new AccessRequest(
+            reservedRequestId,
+            requesterResult.Value.Id,
+            validationSucceeded.Details,
+            occurredAt,
+            command.CorrelationId);
+        workflowStore.AddRequest(request);
+        workflowStore.AddAuditEvent(AuditEvent.CreateRequestCreated(
+            Guid.NewGuid(),
+            request,
+            new RequestCreatedAuditDetails(request.Status)));
 
         session.MarkSubmitted(occurredAt, command.CorrelationId);
         var saveResult = await intakeStore.SaveChangesAsync(cancellationToken);
         if (saveResult.IsSuccess)
         {
-            return RequestConfirmationResult.Submitted(submitted.Request.Id);
+            return RequestConfirmationResult.Submitted(request.Id);
         }
 
         var saveFailure = saveResult.Failure!;
@@ -401,12 +394,8 @@ public sealed class RequestIntakeService
         {
             RequestIntakeStatus.Ready => null,
             RequestIntakeStatus.Submitted =>
-                session.ReservedRequestId is { } requestId
-                    ? RequestConfirmationResult.AlreadySubmitted(requestId)
-                    : ConfirmationFailed(
-                        ApplicationFailureKind.DependencyFailure,
-                        SubmissionEvidenceInvalidCode,
-                        "Persisted submission evidence is incomplete."),
+                RequestConfirmationResult.AlreadySubmitted(
+                    session.ReservedRequestId!.Value),
             RequestIntakeStatus.Superseded => ConfirmationFailed(
                 ApplicationFailureKind.InvalidTransition,
                 SupersededCode,
@@ -599,32 +588,32 @@ public sealed class RequestIntakeService
                 "The preparation interpretation failure is unsupported."),
         };
 
-    private static bool MatchesScope(
-        RequestIntakeSession session,
-        AccessRequest request) =>
-        request.Id == session.ReservedRequestId
-        && string.Equals(
-            request.RequesterId,
-            session.RequesterId,
-            StringComparison.Ordinal)
-        && string.Equals(request.ClientId, session.ClientId, StringComparison.Ordinal)
-        && string.Equals(
-            request.EnvironmentId,
-            session.EnvironmentId,
-            StringComparison.Ordinal)
-        && string.Equals(
-            request.RequestedRoleId,
-            session.RequestedRoleId,
-            StringComparison.Ordinal)
-        && string.Equals(
-            request.Justification,
-            session.Justification,
-            StringComparison.Ordinal)
-        && string.Equals(
-            request.IncidentId,
-            session.IncidentId,
-            StringComparison.Ordinal)
-        && request.Status == RequestStatus.AwaitingBusinessApproval;
+    private async Task<ApplicationResult<AuthenticatedPrincipal>> LoadRequesterAsync(
+        string requesterId,
+        CancellationToken cancellationToken)
+    {
+        var principalResult = await requestContext.GetPrincipalAsync(
+            requesterId,
+            cancellationToken);
+        if (principalResult.IsFailure)
+        {
+            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
+                ? ApplicationResult.Failed<AuthenticatedPrincipal>(
+                    new ApplicationFailure(
+                        ApplicationFailureKind.Unauthenticated,
+                        "authenticated_principal_not_found",
+                        "The authenticated principal is unavailable."))
+                : principalResult;
+        }
+
+        return principalResult.Value.Kind == PrincipalKind.Requester
+            ? principalResult
+            : ApplicationResult.Failed<AuthenticatedPrincipal>(
+                new ApplicationFailure(
+                    ApplicationFailureKind.Unauthorized,
+                    "requester_required",
+                    "Only an authenticated requester can submit an access request."));
+    }
 
     private static RequestConfirmationResult ConfirmationFailed(
         ApplicationFailure failure) =>

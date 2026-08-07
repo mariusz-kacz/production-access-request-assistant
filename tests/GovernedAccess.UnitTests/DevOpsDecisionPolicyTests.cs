@@ -17,7 +17,7 @@ public sealed class DevOpsDecisionPolicyTests
         new(2026, 7, 20, 9, 30, 0, TimeSpan.Zero);
 
     [Fact]
-    public void ApplyApprovalBindsTheExactBusinessRole()
+    public void ApplyApprovalRecordsDecisionAndUsesTheImmutableRequestScope()
     {
         var (request, businessApproval) = CreateBusinessApprovedRequest();
         var decisionId = Guid.Parse("5c270790-e989-4277-a835-f7f5365aefd8");
@@ -46,54 +46,34 @@ public sealed class DevOpsDecisionPolicyTests
         Assert.Equal(ApprovalStage.DevOps, decision.Stage);
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal("devops-approver", decision.ApproverId);
-        Assert.Equal(businessApproval.ApprovedRoleId, decision.ApprovedRoleId);
         Assert.Equal("Approved for the fixed eight-hour access period.", decision.Comment);
         Assert.Equal(DevOpsDecisionTime, decision.DecidedAt);
         Assert.Equal("devops-correlation", decision.CorrelationId);
 
         Assert.Equal(request.Id, operation.RequestId);
-        Assert.Equal(request.EnvironmentId, operation.EnvironmentId);
-        Assert.Equal(businessApproval.ApprovedRoleId, operation.RoleId);
         Assert.Equal(ProvisioningOperationStatus.Pending, operation.Status);
         Assert.Equal(1, operation.AttemptCount);
         Assert.Equal(DevOpsDecisionTime, operation.CreatedAt);
     }
 
     [Fact]
-    public void ApplyApprovalRejectsABusinessRoleThatDoesNotMatchTheImmutableRequest()
+    public void ApplyApprovalRequiresAnApprovedBusinessDecision()
     {
         var (request, _) = CreateBusinessApprovedRequest();
-        var mismatchedBusinessApproval = CreateBusinessApproval(
-            request,
-            ProductionRoleIds.Support);
+        var rejectedBusinessDecision = new ApprovalDecision(
+            Guid.Parse("0ff40f0c-17d7-429c-bab8-716b95928a7d"),
+            request.Id,
+            ApprovalStage.Business,
+            ApprovalOutcome.Rejected,
+            "business-alpha",
+            null,
+            BusinessDecisionTime,
+            "business-correlation");
         var snapshot = RequestSnapshot.Capture(request);
 
         var result = DevOpsDecisionPolicy.Apply(
             request,
-            mismatchedBusinessApproval,
-            ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false);
-
-        var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
-        Assert.Equal(
-            DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch,
-            notApplied.Error);
-        snapshot.AssertUnchanged(request);
-    }
-
-    [Fact]
-    public void ApplyApprovalRejectsBusinessEvidenceThatPredatesTheRequest()
-    {
-        var (request, _) = CreateBusinessApprovedRequest();
-        var invalidBusinessApproval = CreateBusinessApproval(
-            request,
-            request.RequestedRoleId,
-            request.CreatedAt.AddTicks(-1));
-        var snapshot = RequestSnapshot.Capture(request);
-
-        var result = DevOpsDecisionPolicy.Apply(
-            request,
-            invalidBusinessApproval,
+            rejectedBusinessDecision,
             ValidApprovalCommand(),
             hasExistingDevOpsDecision: false);
 
@@ -127,7 +107,6 @@ public sealed class DevOpsDecisionPolicyTests
         Assert.Equal(3, request.PersistenceVersion);
         Assert.Equal(ApprovalStage.DevOps, applied.Decision.Stage);
         Assert.Equal(ApprovalOutcome.Rejected, applied.Decision.Decision);
-        Assert.Null(applied.Decision.ApprovedRoleId);
         Assert.Equal("Current risk is too high.", applied.Decision.Comment);
         Assert.Null(applied.Operation);
     }
@@ -136,7 +115,7 @@ public sealed class DevOpsDecisionPolicyTests
     public void ApplyRejectsARequestThatIsNotAwaitingDevOpsApproval()
     {
         var request = CreateSubmittedRequest();
-        var businessApproval = CreateBusinessApproval(request, request.RequestedRoleId);
+        var businessApproval = CreateBusinessApproval(request);
         var snapshot = RequestSnapshot.Capture(request);
 
         var result = DevOpsDecisionPolicy.Apply(
@@ -148,27 +127,6 @@ public sealed class DevOpsDecisionPolicyTests
         var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
         Assert.Equal(DevOpsDecisionPolicyError.InvalidTransition, notApplied.Error);
         snapshot.AssertUnchanged(request);
-    }
-
-    [Fact]
-    public void OperationUsesTheRequestIdAsItsIdentity()
-    {
-        var (firstRequest, firstBusinessApproval) = CreateBusinessApprovedRequest();
-        var (secondRequest, secondBusinessApproval) = CreateBusinessApprovedRequest();
-
-        var first = Assert.IsType<DevOpsDecisionApplied>(DevOpsDecisionPolicy.Apply(
-            firstRequest,
-            firstBusinessApproval,
-            ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false));
-        var second = Assert.IsType<DevOpsDecisionApplied>(DevOpsDecisionPolicy.Apply(
-            secondRequest,
-            secondBusinessApproval,
-            ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false));
-
-        Assert.Equal(RequestId, first.Operation?.RequestId);
-        Assert.Equal(first.Operation?.RequestId, second.Operation?.RequestId);
     }
 
     private static DevOpsDecisionCommand ValidApprovalCommand()
@@ -206,19 +164,17 @@ public sealed class DevOpsDecisionPolicyTests
         return new AccessRequest(
             RequestId,
             "requester",
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
             RequestCreatedAt,
             "request-correlation");
     }
 
-    private static ApprovalDecision CreateBusinessApproval(
-        AccessRequest request,
-        string approvedRoleId,
-        DateTimeOffset? decidedAt = null)
+    private static ApprovalDecision CreateBusinessApproval(AccessRequest request)
     {
         return new ApprovalDecision(
             Guid.Parse("0ff40f0c-17d7-429c-bab8-716b95928a7d"),
@@ -226,9 +182,8 @@ public sealed class DevOpsDecisionPolicyTests
             ApprovalStage.Business,
             ApprovalOutcome.Approved,
             "business-alpha",
-            approvedRoleId,
             null,
-            decidedAt ?? BusinessDecisionTime,
+            BusinessDecisionTime,
             "business-correlation");
     }
 

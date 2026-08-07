@@ -124,11 +124,12 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         var request = new AccessRequest(
             Guid.NewGuid(),
             DemoPrincipalKeys.Requester,
-            clientId,
-            environmentId,
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            incidentId,
+            new ValidatedRequestDetails(
+                clientId,
+                environmentId,
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                incidentId),
             Clock.UtcNow,
             $"fixture-{Guid.NewGuid():N}");
         var auditEvent = AuditEvent.CreateRequestCreated(

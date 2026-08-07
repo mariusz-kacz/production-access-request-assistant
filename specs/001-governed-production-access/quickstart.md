@@ -152,7 +152,7 @@ retry from any other state are rejected.
 | AI adapter | Valid/incomplete/malformed schema, deterministic fake, timeout, cancellation, no live model. |
 | MCP integration | Exact allowlist, typed schemas/outcomes, stable IDs, not-found/unavailable/timeout/cancellation. |
 | Persistence | Insert-only audit behavior, optimistic conflict, approval uniqueness, operation/grant uniqueness. |
-| Provisioning | Persisted-evidence reload, inconsistent operation or approval data, idempotent success, lost response, 100 concurrent duplicates. |
+| Provisioning | Persisted-evidence reload, inconsistent operation or approval data, idempotent success, and lost-response recovery. |
 | React/UI host | Three routes, typed errors, abort handling, relevant list, action visibility plus server enforcement, no MCP/provisioning browser calls, responsive presentation check, visible keyboard focus, and non-color status meaning. |
 | API security | Cookie actor, antiforgery on unsafe methods, over-posting resistance, participant visibility. |
 

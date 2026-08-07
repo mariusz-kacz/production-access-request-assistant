@@ -50,4 +50,15 @@ public sealed class AuthenticatedPrincipal
     public PrincipalKind Kind { get; private set; }
 
     public string? ClientId { get; private set; }
+
+    public bool IsResponsibleBusinessApproverFor(Client client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        return Kind == PrincipalKind.BusinessApprover
+            && string.Equals(ClientId, client.Id, StringComparison.Ordinal)
+            && string.Equals(
+                Id,
+                client.BusinessApproverPrincipalId,
+                StringComparison.Ordinal);
+    }
 }

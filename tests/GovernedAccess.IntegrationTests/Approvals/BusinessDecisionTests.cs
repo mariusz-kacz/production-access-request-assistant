@@ -65,15 +65,16 @@ public sealed class BusinessDecisionTests(DefaultWebApplicationFixture fixture)
                 cancellationToken);
 
         Assert.Equal(RequestStatus.AwaitingDevOpsApproval, storedRequest.Status);
-        Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.ClientId);
-        Assert.Equal(DemoDataIds.ClientAlphaEnvironmentId, storedRequest.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.RequestedRoleId);
+        Assert.Equal(DemoDataIds.ClientAlphaId, storedRequest.Details.ClientId);
+        Assert.Equal(
+            DemoDataIds.ClientAlphaEnvironmentId,
+            storedRequest.Details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.Details.RoleId);
         Assert.Equal(2, storedRequest.PersistenceVersion);
         Assert.Equal(requestId, decision.RequestId);
         Assert.Equal(ApprovalStage.Business, decision.Stage);
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal(DemoDataIds.ClientAlphaApproverPrincipalId, decision.ApproverId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, decision.ApprovedRoleId);
         Assert.Equal("Approved for incident response.", decision.Comment);
         Assert.Equal(GovernedAccessWebFactory.DefaultUtcNow, decision.DecidedAt);
         Assert.Equal(actionCorrelationId, decision.CorrelationId);
@@ -128,6 +129,10 @@ public sealed class BusinessDecisionTests(DefaultWebApplicationFixture fixture)
         Assert.False(string.IsNullOrWhiteSpace(auditEvent.OutcomeCode));
         using var details = JsonDocument.Parse(auditEvent.DetailsJson);
         Assert.Equal(JsonValueKind.Object, details.RootElement.ValueKind);
+        Assert.Equal(
+            BusinessDecisionAuditDetails.CurrentSchemaVersion,
+            details.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.False(details.RootElement.TryGetProperty("approvedRoleId", out _));
     }
 
     private static string ReadCorrelationId(HttpResponseMessage response)

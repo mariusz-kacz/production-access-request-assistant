@@ -133,8 +133,8 @@ Core contains:
 - domain entities and workflow evidence;
 - business and DevOps decision policies;
 - workflow evidence validation;
-- request validation, intake, confirmation-only submission staging, query, workflow,
-  and protected provisioning
+- request validation, intake and confirmation, query, human-decision workflow, and
+  protected provisioning
   services;
 - explicit application and provider outcomes; and
 - ports for request context, workflow persistence, intake persistence, time,
@@ -186,12 +186,65 @@ request and response shapes, call application services, and map typed failures.
 | `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
 | `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
 | `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
-| `RequestSubmissionService` | Revalidate and stage a reserved-ID request and request-created audit event for confirmation; never save independently. | Public/browser submission or later approval/provisioning transitions. |
 | `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
-| `ProtectedProvisioningService` | Reload persisted workflow evidence, validate exact scope, call the provider, and persist the operation outcome. | Business or DevOps approval. |
+| `ProtectedProvisioningService` | Reload request-bound workflow evidence, derive provider input from `AccessRequest.Details`, call the provider, and persist the operation outcome. | Business or DevOps approval. |
 | `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
+
+## Authority, validation, and invariant ownership
+
+Model output first becomes a mutable `RequestCandidate`. It is not authority, even
+when it contains every field. `RequestValidator` reloads the fixed reference context,
+checks identifier relationships, role assignment, justification, and optional
+incident, and is the only path that constructs `ValidatedRequestDetails` from that
+input. A ready intake persists one immutable validated snapshot so the requester can
+confirm exactly what was prepared. The aggregate exposes that flattened persistence
+state only as `PreparedDetails`, so downstream code continues with the canonical
+value instead of rebuilding another validation DTO.
+
+Confirmation reloads the ready intake, asks the authenticated channel actor to verify
+the complete persisted ownership binding, checks expiry, and calls `RevalidateAsync`
+with the canonical snapshot. The resulting `AccessRequest.Details` is the sole
+durable authority for client, environment, role, justification, and incident after
+submission. Approval decisions, the provisioning operation, and the access grant are
+request-bound evidence; they do not own parallel copies of those details. HTTP and UI
+contracts that expose role or environment values project them from the request.
+
+Validation is intentionally placed at distinct boundaries:
+
+- the model adapter schema-validates output and deterministic candidate assessment
+  rejects or clears unknown and inconsistent proposed values;
+- confirmation revalidates the prepared snapshot and authenticated requester before
+  atomically creating the request;
+- approval commands reload authenticated principals, current approver assignment,
+  current reference context, workflow state, and prior decisions; and
+- protected provisioning uses request-keyed persistence queries to reload request,
+  approval, operation, and grant evidence, validates approval outcomes and mutable
+  workflow state, then builds provider input exclusively from
+  `AccessRequest.Details`.
+
+Read models trust a submitted `AccessRequest.Details`; they do not rerun reference
+validation against the fixed startup-validated dataset. The compatibility
+`validation` response therefore reports the invariant established at confirmation,
+not a second live validation pass.
+
+Invariant ownership is similarly explicit:
+
+- domain construction and transition policies own non-empty values, supported roles,
+  immutable request details, legal decision order, operation lifecycle, and the fixed
+  eight-hour grant lifetime;
+- application services own authenticated authorization, current assignments,
+  fail-closed validation, and transaction sequencing;
+- SQLite owns foreign keys, one decision per request/stage, one request-keyed
+  operation, at most one grant per request, and optimistic concurrency; and
+- the provider boundary owns request-ID get-or-create idempotency, while retry and
+  local uniqueness let partial outcomes converge.
+
+Application code does not recompare request IDs, stages, or scope after those
+relationships have been selected by request-keyed queries and enforced by persistence.
+Audit factories project already-authorized transitions; they do not re-authorize or
+revalidate the objects supplied by the workflow service.
 
 ### Request-preparation model profile
 
@@ -374,10 +427,10 @@ stateDiagram-v2
 
 1. The Teams boundary derives actor, tenant, and conversation from authenticated
    activity context.
-2. `RequestIntakeService` reloads the ready intake, verifies ownership/status/expiry,
-   and revalidates its immutable scope.
-3. `RequestSubmissionService` requires the server-reserved request ID and confirmation
-   timestamp and stages the request plus request-created audit event.
+2. `RequestIntakeService` reloads the ready intake, verifies the typed actor ownership
+   binding plus status/expiry, and revalidates its immutable `PreparedDetails`.
+3. The same confirmation use case constructs the request with the server-reserved ID
+   and canonical `ValidatedRequestDetails`, then stages request-created audit evidence.
 4. The intake transition, immutable `AwaitingBusinessApproval` request, and audit
    event commit in one shared `SaveChangesAsync`.
 
@@ -391,10 +444,10 @@ immutable request aggregate consumed by that flow; it does not bypass or duplica
 ### Business decision
 
 1. `AccessRequestWorkflowService` loads the authenticated principal and request.
-2. It validates current stored request context.
+2. It reloads the current environment/client relationship.
 3. It resolves the owning client's configured business approver.
-4. `BusinessDecisionPolicy` validates state, authority, duplicate-stage prevention,
-   and exact-role binding.
+4. `BusinessDecisionPolicy` validates state and duplicate-stage prevention for the
+   immutable request ID.
 5. The decision, workflow transition, and audit evidence are saved together.
 
 The requester cannot nominate or replace the business approver.
@@ -405,15 +458,16 @@ The requester cannot nominate or replace the business approver.
    business approval.
 2. It validates current request context and applies `DevOpsDecisionPolicy`.
 3. Rejection records the decision and moves the request to `Rejected`.
-4. Approval records the exact-role DevOps decision and creates the request-keyed
-   pending provisioning operation.
+4. Approval records the request-bound DevOps decision and creates the request-keyed
+   pending provisioning operation; neither record copies request scope.
 5. The decision, operation, request version, and audit evidence are committed before
    provider invocation.
 6. The workflow service passes only the request ID to
    `ProtectedProvisioningService`.
 7. The protected service reloads the operation, immutable request, business approval,
    and DevOps approval.
-8. It validates workflow state, operation scope, approval order, and exact role.
+8. It validates workflow/operation state and approval outcomes. Request-keyed
+   lookups and persistence constraints own the record relationships.
 9. It persists the provisioning-attempt audit event.
 10. It calls the synthetic provider with server-constructed scope.
 11. Provider success finalizes the request, operation, grant, and success audit event
@@ -561,7 +615,7 @@ state-changing dependencies in the MCP project.
 Core depends on focused interfaces:
 
 - `IRequestContextReader`;
-- `IWorkflowStore` and `IAuditStore`;
+- `IWorkflowStore`;
 - `IRequestPreparationInterpreter` and `IRequestIntakeStore`;
 - `IAccessProvisioner`; and
 - `IClock`.

@@ -82,6 +82,20 @@ public sealed class RequestIntakeSession
 
     public string? IncidentId { get; private set; }
 
+    /// <summary>
+    /// The canonical prepared snapshot when this intake is ready. Collecting and
+    /// terminal sessions deliberately expose no validated details.
+    /// </summary>
+    public ValidatedRequestDetails? PreparedDetails =>
+        Status == RequestIntakeStatus.Ready
+            ? ValidatedRequestDetails.RestorePreparedSnapshot(
+                ClientId,
+                EnvironmentId,
+                RequestedRoleId,
+                Justification,
+                IncidentId)
+            : null;
+
     public Guid? ReservedRequestId { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -95,18 +109,6 @@ public sealed class RequestIntakeSession
     public string CorrelationId { get; private set; }
 
     public long PersistenceVersion { get; private set; }
-
-    public bool IsOwnedBy(
-        string? channel,
-        string? tenantId,
-        string? channelActorId,
-        string? conversationId,
-        string? requesterId) =>
-        Matches(Channel, channel)
-        && Matches(TenantId, tenantId)
-        && Matches(ChannelActorId, channelActorId)
-        && Matches(ConversationId, conversationId)
-        && Matches(RequesterId, requesterId);
 
     public bool IsExpired(DateTimeOffset currentTime) =>
         Status == RequestIntakeStatus.Ready
@@ -153,31 +155,21 @@ public sealed class RequestIntakeSession
     }
 
     public void MarkReady(
+        ValidatedRequestDetails details,
         Guid reservedRequestId,
         DateTimeOffset occurredAt,
         string correlationId)
     {
         EnsureStatus(RequestIntakeStatus.Collecting);
+        ArgumentNullException.ThrowIfNull(details);
         EnsureNotEmpty(reservedRequestId, nameof(reservedRequestId));
 
-        if (ClientId is null
-            || EnvironmentId is null
-            || RequestedRoleId is null
-            || Justification is null)
-        {
-            throw new InvalidOperationException(
-                "An incomplete intake session cannot become ready.");
-        }
-
-        if (Justification.Length is
-            < AccessRequest.MinimumJustificationLength
-            or > AccessRequest.MaximumJustificationLength)
-        {
-            throw new InvalidOperationException(
-                "The ready justification length is invalid.");
-        }
-
         var operation = PrepareRecord(occurredAt, correlationId);
+        ClientId = details.ClientId;
+        EnvironmentId = details.EnvironmentId;
+        RequestedRoleId = details.RoleId;
+        Justification = details.Justification;
+        IncidentId = details.IncidentId;
         ReservedRequestId = reservedRequestId;
         Status = RequestIntakeStatus.Ready;
         Record(operation);
@@ -301,10 +293,6 @@ public sealed class RequestIntakeSession
 
     private InvalidOperationException InvalidTransition() =>
         new($"An intake session in status '{Status}' cannot perform this transition.");
-
-    private static bool Matches(string expected, string? actual) =>
-        !string.IsNullOrWhiteSpace(actual)
-        && string.Equals(expected, actual.Trim(), StringComparison.Ordinal);
 
     private static void EnsureNotEmpty(Guid value, string parameterName)
     {

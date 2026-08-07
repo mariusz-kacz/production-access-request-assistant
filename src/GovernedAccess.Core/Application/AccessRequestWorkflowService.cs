@@ -46,9 +46,6 @@ public sealed class AccessRequestWorkflowService
     public const string DevOpsInvalidBusinessApprovalCode =
         "devops_business_approval_invalid";
 
-    public const string DevOpsBusinessApprovalScopeMismatchCode =
-        "devops_business_approval_scope_mismatch";
-
     public const string DevOpsRequestContextInvalidCode =
         "devops_request_context_invalid";
 
@@ -125,7 +122,7 @@ public sealed class AccessRequestWorkflowService
         var (request, principal, normalizedCorrelationId) =
             commandContextResult.Value;
         var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
-            request.EnvironmentId,
+            request.Details.EnvironmentId,
             cancellationToken);
         if (environmentContextResult.IsFailure)
         {
@@ -134,15 +131,11 @@ public sealed class AccessRequestWorkflowService
         }
 
         var environmentContext = environmentContextResult.Value;
-        var environment = environmentContext.Environment;
         var client = environmentContext.Client;
-        var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
-            && StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId)
-            && StringComparer.Ordinal.Equals(environment.ClientId, request.ClientId)
-            && StringComparer.Ordinal.Equals(client.Id, request.ClientId)
-            && StringComparer.Ordinal.Equals(
-                client.BusinessApproverPrincipalId,
-                principal.Id);
+        var isResponsibleApprover = StringComparer.Ordinal.Equals(
+                client.Id,
+                request.Details.ClientId)
+            && principal.IsResponsibleBusinessApproverFor(client);
         if (!isResponsibleApprover)
         {
             var failure = new ApplicationFailure(
@@ -617,13 +610,8 @@ public sealed class AccessRequestWorkflowService
         AccessRequest request,
         CancellationToken cancellationToken)
     {
-        var validationOutcome = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                request.ClientId,
-                request.EnvironmentId,
-                request.RequestedRoleId,
-                request.Justification,
-                request.IncidentId),
+        var validationOutcome = await requestValidator.RevalidateAsync(
+            request.Details,
             cancellationToken);
 
         if (validationOutcome is RequestValidationFailed validationFailed)
@@ -631,19 +619,12 @@ public sealed class AccessRequestWorkflowService
             return validationFailed.Failure;
         }
 
-        if (validationOutcome is not RequestValidationSucceeded validationSucceeded)
+        if (validationOutcome is not RequestValidationSucceeded)
         {
             return InvalidCurrentContext();
         }
 
-        var fields = validationSucceeded.Fields;
-        return fields.ClientId == request.ClientId
-            && fields.EnvironmentId == request.EnvironmentId
-            && fields.RequestedRoleId == request.RequestedRoleId
-            && fields.Justification == request.Justification
-            && fields.IncidentId == request.IncidentId
-            ? null
-            : InvalidCurrentContext();
+        return null;
     }
 
     private static ApplicationFailure MapDevOpsPolicyFailure(
@@ -663,11 +644,6 @@ public sealed class AccessRequestWorkflowService
                 ApplicationFailureKind.InvalidTransition,
                 DevOpsInvalidBusinessApprovalCode,
                 "The required business approval is invalid."),
-            DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch =>
-                new ApplicationFailure(
-                    ApplicationFailureKind.InvalidTransition,
-                    DevOpsBusinessApprovalScopeMismatchCode,
-                    "The business-approved role does not match the immutable request."),
             _ => throw new InvalidOperationException(
                 "The DevOps decision policy failure is unsupported."),
         };

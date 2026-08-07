@@ -120,9 +120,9 @@ public sealed class AccessRequestsController : ControllerBase
             new RequestGrantResponse(
                 completed.Grant.Id,
                 completed.Grant.RequestId,
-                completed.Grant.RequesterId,
-                completed.Grant.EnvironmentId,
-                completed.Grant.RoleId,
+                completed.Request.RequesterId,
+                completed.Request.Details.EnvironmentId,
+                completed.Request.Details.RoleId,
                 completed.Grant.ActivatedAt,
                 completed.Grant.ExpiresAt,
                 completed.Grant.Outcome.ToString(),

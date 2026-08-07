@@ -65,13 +65,21 @@ public sealed class RequestIntakePersistenceTests
 
         Assert.Equal(ReservedRequestId, request.Id);
         Assert.Equal(DemoPrincipalKeys.Requester, request.RequesterId);
-        Assert.Equal("client-alpha", request.ClientId);
-        Assert.Equal("PROD-ALPHA-EU", request.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, request.RequestedRoleId);
+        Assert.Equal(
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
+            request.Details);
+        Assert.Equal("client-alpha", request.Details.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", request.Details.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, request.Details.RoleId);
         Assert.Equal(
             "Investigate the active production incident.",
-            request.Justification);
-        Assert.Equal("INC-1042", request.IncidentId);
+            request.Details.Justification);
+        Assert.Equal("INC-1042", request.Details.IncidentId);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
 
         Assert.Equal(request.Id, auditEvent.RequestId);
@@ -259,15 +267,13 @@ public sealed class RequestIntakePersistenceTests
                 DemoPrincipalKeys.Requester,
                 PreparedAt,
                 "prepare-correlation");
-            session.UpdateCandidate(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042",
-                PreparedAt,
-                "prepare-correlation");
             session.MarkReady(
+                new ValidatedRequestDetails(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
                 ReservedRequestId,
                 PreparedAt,
                 "prepare-correlation");
@@ -303,10 +309,7 @@ public sealed class RequestIntakePersistenceTests
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
-            new RequestSubmissionService(
-                validator,
-                requestContext,
-                new EfWorkflowStore(context)),
+            new EfWorkflowStore(context),
             clock);
     }
 

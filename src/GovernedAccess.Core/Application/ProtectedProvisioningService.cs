@@ -24,14 +24,9 @@ public sealed class ProtectedProvisioningService
 
     public const string WorkflowStateInvalidCode = "provisioning_workflow_state_invalid";
 
-    public const string OperationScopeMismatchCode = "provisioning_operation_scope_mismatch";
-
     public const string ApprovalEvidenceInvalidCode = "provisioning_approval_invalid";
 
     public const string CompletedGrantMissingCode = "provisioning_completed_grant_missing";
-
-    public const string AttemptCountInvalidCode =
-        "provisioning_attempt_count_invalid";
 
     public const string SuccessCode = "provisioning_succeeded";
 
@@ -111,14 +106,6 @@ public sealed class ProtectedProvisioningService
                     "The request and provisioning operation are not in a retryable state.");
             }
 
-            if (initialContext.Operation.AttemptCount == int.MaxValue)
-            {
-                return Failed(
-                    ApplicationFailureKind.DependencyFailure,
-                    AttemptCountInvalidCode,
-                    "The provisioning retry count cannot be advanced safely.");
-            }
-
             initialContext.Operation.AttemptCount++;
         }
 
@@ -141,8 +128,8 @@ public sealed class ProtectedProvisioningService
             new AccessProvisioningRequest(
                 initialContext.Request.Id,
                 initialContext.Request.RequesterId,
-                initialContext.Request.EnvironmentId,
-                initialContext.Operation.RoleId,
+                initialContext.Request.Details.EnvironmentId,
+                initialContext.Request.Details.RoleId,
                 initialContext.DevOpsApproval.CorrelationId),
             cancellationToken);
 
@@ -165,9 +152,6 @@ public sealed class ProtectedProvisioningService
         var grant = new AccessGrant(
             providerSucceeded.GrantId,
             initialContext.Request.Id,
-            initialContext.Request.RequesterId,
-            initialContext.Request.EnvironmentId,
-            initialContext.Operation.RoleId,
             providerSucceeded.ActivatedAt,
             initialContext.DevOpsApproval.CorrelationId);
         var completedAt = clock.UtcNow.ToUniversalTime();
@@ -287,15 +271,8 @@ public sealed class ProtectedProvisioningService
         }
 
         var operation = operationResult.Value;
-        if (operation.RequestId != requestId)
-        {
-            return FailedContext(Stale(
-                OperationScopeMismatchCode,
-                "The provisioning operation does not match its immutable request."));
-        }
-
         var requestResult = await workflowStore.ReloadRequestAsync(
-            operation.RequestId,
+            requestId,
             cancellationToken);
         if (requestResult.IsFailure)
         {
@@ -308,13 +285,6 @@ public sealed class ProtectedProvisioningService
             return FailedContext(Stale(
                 WorkflowStateInvalidCode,
                 "The request and provisioning operation are not in a provisionable state."));
-        }
-
-        if (WorkflowEvidencePolicy.ValidateOperationScope(request, operation) is not null)
-        {
-            return FailedContext(Stale(
-                OperationScopeMismatchCode,
-                "The provisioning operation scope does not match the immutable request."));
         }
 
         var businessApprovalResult = await workflowStore.GetApprovalDecisionAsync(
@@ -337,10 +307,8 @@ public sealed class ProtectedProvisioningService
 
         var businessApproval = businessApprovalResult.Value;
         var devOpsApproval = devOpsApprovalResult.Value;
-        if (WorkflowEvidencePolicy.ValidateApprovalEvidence(
-                request,
-                businessApproval,
-                devOpsApproval) is not null)
+        if (businessApproval.Decision != ApprovalOutcome.Approved
+            || devOpsApproval.Decision != ApprovalOutcome.Approved)
         {
             return FailedContext(Stale(
                 ApprovalEvidenceInvalidCode,
@@ -372,19 +340,10 @@ public sealed class ProtectedProvisioningService
                 : new ProtectedProvisioningFailed(grantResult.Failure);
         }
 
-        var grant = grantResult.Value;
-        return WorkflowEvidencePolicy.ValidateGrantScope(
-                   context.Request,
-                   context.Operation,
-                   grant) is null
-            ? new ProtectedProvisioningCompleted(
-                context.Request,
-                context.Operation,
-                grant)
-            : Failed(
-                ApplicationFailureKind.DependencyFailure,
-                OperationScopeMismatchCode,
-                "The stored access grant does not match the provisioning operation.");
+        return new ProtectedProvisioningCompleted(
+            context.Request,
+            context.Operation,
+            grantResult.Value);
     }
 
     private static bool IsWorkflowStateValid(

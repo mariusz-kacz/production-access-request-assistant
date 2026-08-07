@@ -12,9 +12,6 @@ public sealed class AccessGrantTests
         var grant = new AccessGrant(
             Guid.Parse("bddc152c-f65c-4afd-8173-955ffafae55c"),
             requestId,
-            "requester",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
             activation,
             "grant-correlation");
 

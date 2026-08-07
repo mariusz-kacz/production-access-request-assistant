@@ -34,11 +34,24 @@ public sealed record AuthenticatedChannelActor
 
     public string RequesterId { get; }
 
+    public bool Owns(RequestIntakeSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return Matches(Channel, session.Channel)
+            && Matches(TenantId, session.TenantId)
+            && Matches(ChannelActorId, session.ChannelActorId)
+            && Matches(ConversationId, session.ConversationId)
+            && Matches(RequesterId, session.RequesterId);
+    }
+
     private static string NormalizeRequired(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         return value.Trim();
     }
+
+    private static bool Matches(string expected, string actual) =>
+        string.Equals(expected, actual, StringComparison.Ordinal);
 }
 
 /// <summary>
@@ -205,64 +218,16 @@ public sealed class RequestPreparationResult
     public ApplicationFailure? Failure { get; }
 
     public static RequestPreparationResult ClarificationRequired(
-        RequestClarificationProposal clarification) =>
-        ClarificationRequired(clarification, []);
-
-    public static RequestPreparationResult ClarificationRequired(
         RequestClarificationProposal clarification,
         IEnumerable<RequestEnvironmentChoice> environmentChoices)
     {
         ArgumentNullException.ThrowIfNull(clarification);
         ArgumentNullException.ThrowIfNull(environmentChoices);
 
-        var choiceSnapshot = environmentChoices.ToArray();
-        if (choiceSnapshot.Length
-            > RequestClarificationProposal.MaximumEnvironmentOptionCount)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(environmentChoices),
-                choiceSnapshot.Length,
-                $"A clarification cannot contain more than {RequestClarificationProposal.MaximumEnvironmentOptionCount} environment choices.");
-        }
-
-        foreach (var choice in choiceSnapshot)
-        {
-            ArgumentNullException.ThrowIfNull(choice);
-        }
-
-        var choiceIds = choiceSnapshot
-            .Select(choice => choice.EnvironmentId)
-            .ToArray();
-        if (choiceIds.Distinct(StringComparer.Ordinal).Count() != choiceIds.Length)
-        {
-            throw new ArgumentException(
-                "Environment choices must have unique identifiers.",
-                nameof(environmentChoices));
-        }
-
-        if (clarification.Target != RequestClarificationTarget.EnvironmentId
-            && choiceSnapshot.Length > 0)
-        {
-            throw new ArgumentException(
-                "Only an environment clarification can contain environment choices.",
-                nameof(environmentChoices));
-        }
-
-        if (choiceIds.Length != clarification.EnvironmentOptionIds.Count
-            || choiceIds.Except(
-                    clarification.EnvironmentOptionIds,
-                    StringComparer.Ordinal)
-                .Any())
-        {
-            throw new ArgumentException(
-                "Validated environment choices must match the proposed option identifiers.",
-                nameof(environmentChoices));
-        }
-
         return new(
             RequestPreparationResultKind.ClarificationRequired,
             clarification: clarification,
-            environmentChoices: Array.AsReadOnly(choiceSnapshot));
+            environmentChoices: Array.AsReadOnly(environmentChoices.ToArray()));
     }
 
     public static RequestPreparationResult ReadyForConfirmation(
@@ -279,13 +244,6 @@ public sealed class RequestPreparationResult
     {
         ArgumentNullException.ThrowIfNull(validationErrors);
         var errors = validationErrors.ToArray();
-        if (errors.Length == 0)
-        {
-            throw new ArgumentException(
-                "At least one candidate validation error is required.",
-                nameof(validationErrors));
-        }
-
         return new(
             RequestPreparationResultKind.CandidateRejected,
             validationErrors: Array.AsReadOnly(errors));
@@ -330,16 +288,7 @@ public sealed class RequestIntakeResetResult
     public ApplicationFailure? Failure { get; }
 
     public static RequestIntakeResetResult Reset(Guid intakeId)
-    {
-        if (intakeId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "The reset intake identifier must not be empty.",
-                nameof(intakeId));
-        }
-
-        return new(RequestIntakeResetResultKind.Reset, intakeId, failure: null);
-    }
+        => new(RequestIntakeResetResultKind.Reset, intakeId, failure: null);
 
     public static RequestIntakeResetResult AlreadyClear() =>
         new(
@@ -352,13 +301,6 @@ public sealed class RequestIntakeResetResult
         Guid? intakeId = null)
     {
         ArgumentNullException.ThrowIfNull(failure);
-        if (intakeId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "The failed reset intake identifier must not be empty.",
-                nameof(intakeId));
-        }
-
         return new(RequestIntakeResetResultKind.Failed, intakeId, failure);
     }
 }
@@ -408,17 +350,8 @@ public sealed class RequestConfirmationResult
 
     private static RequestConfirmationResult Succeeded(
         RequestConfirmationResultKind kind,
-        Guid requestId)
-    {
-        if (requestId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "The submitted request identifier must not be empty.",
-                nameof(requestId));
-        }
-
-        return new(kind, requestId, failure: null);
-    }
+        Guid requestId) =>
+        new(kind, requestId, failure: null);
 }
 
 /// <summary>

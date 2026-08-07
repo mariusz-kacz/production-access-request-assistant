@@ -99,23 +99,10 @@ public interface IClock
 }
 
 /// <summary>
-/// Stages and reads insert-only audit evidence.
-/// Staged events are committed by the enclosing workflow store save operation.
-/// </summary>
-public interface IAuditStore
-{
-    void AddAuditEvent(AuditEvent auditEvent);
-
-    Task<ApplicationResult<IReadOnlyList<AuditEvent>>> ListAuditEventsAsync(
-        Guid requestId,
-        CancellationToken cancellationToken);
-}
-
-/// <summary>
 /// Provides focused persistence operations for the governed request workflow.
 /// A save commits all tracked request changes and staged evidence atomically.
 /// </summary>
-public interface IWorkflowStore : IAuditStore
+public interface IWorkflowStore
 {
     void AddRequest(AccessRequest request);
 
@@ -154,6 +141,12 @@ public interface IWorkflowStore : IAuditStore
     void AddAccessGrant(AccessGrant grant);
 
     Task<ApplicationResult<AccessGrant>> GetAccessGrantForRequestAsync(
+        Guid requestId,
+        CancellationToken cancellationToken);
+
+    void AddAuditEvent(AuditEvent auditEvent);
+
+    Task<ApplicationResult<IReadOnlyList<AuditEvent>>> ListAuditEventsAsync(
         Guid requestId,
         CancellationToken cancellationToken);
 

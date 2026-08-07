@@ -126,15 +126,13 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
                 DemoPrincipalKeys.Requester,
                 PreparedAt,
                 "concurrency-preparation");
-            session.UpdateCandidate(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042",
-                PreparedAt,
-                "concurrency-candidate");
             session.MarkReady(
+                new ValidatedRequestDetails(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Investigate the active production incident.",
+                    "INC-1042"),
                 ReservedRequestId,
                 PreparedAt,
                 "concurrency-ready");
@@ -173,10 +171,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
-            new RequestSubmissionService(
-                validator,
-                requestContext,
-                new EfWorkflowStore(context)),
+            new EfWorkflowStore(context),
             new DeterministicClock(ConfirmedAt));
     }
 

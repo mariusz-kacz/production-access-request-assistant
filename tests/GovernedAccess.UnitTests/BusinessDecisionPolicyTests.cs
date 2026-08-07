@@ -13,7 +13,7 @@ public sealed class BusinessDecisionPolicyTests
         new(2026, 7, 17, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task ApplyApprovalTransitionsAndBindsTheExactCurrentRequestScope()
+    public async Task ApplyApprovalRecordsDecisionAgainstTheImmutableRequest()
     {
         var request = await CreateSubmittedRequestAsync();
         var decisionId = Guid.Parse("4f551db5-d9de-4e04-8555-9948d8e81b0a");
@@ -39,7 +39,6 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(ApprovalStage.Business, decision.Stage);
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal("business-alpha", decision.ApproverId);
-        Assert.Equal(request.RequestedRoleId, decision.ApprovedRoleId);
         Assert.Equal("Approved for incident response.", decision.Comment);
         Assert.Equal(DecisionTime, decision.DecidedAt);
         Assert.Equal("business-correlation", decision.CorrelationId);
@@ -67,7 +66,6 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(2, request.PersistenceVersion);
         Assert.Equal(ApprovalStage.Business, applied.Decision.Stage);
         Assert.Equal(ApprovalOutcome.Rejected, applied.Decision.Decision);
-        Assert.Null(applied.Decision.ApprovedRoleId);
         Assert.Equal("Request is not justified.", applied.Decision.Comment);
     }
 
@@ -90,6 +88,32 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(originalPersistenceVersion, request.PersistenceVersion);
     }
 
+    [Theory]
+    [InlineData(PrincipalKind.Requester, null, "business-alpha", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-beta", "business-alpha", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-alpha", "business-beta", false)]
+    [InlineData(PrincipalKind.BusinessApprover, "client-alpha", "business-alpha", true)]
+    public void ResponsibleBusinessApproverRequiresRoleClientAndAssignment(
+        PrincipalKind kind,
+        string? principalClientId,
+        string configuredApproverId,
+        bool expected)
+    {
+        var client = new Client(
+            "client-alpha",
+            "Client Alpha",
+            configuredApproverId);
+        var principal = new AuthenticatedPrincipal(
+            "business-alpha",
+            "Business Alpha",
+            kind,
+            principalClientId);
+
+        Assert.Equal(
+            expected,
+            principal.IsResponsibleBusinessApproverFor(client));
+    }
+
     private static BusinessDecisionCommand ValidCommand()
     {
         return new BusinessDecisionCommand(
@@ -106,11 +130,12 @@ public sealed class BusinessDecisionPolicyTests
         var request = new AccessRequest(
             Guid.Parse("661718f5-b8dd-47eb-b5ab-057e23dfaeb2"),
             "requester",
-            "client-alpha",
-            "PROD-ALPHA-EU",
-            ProductionRoleIds.ReadOnly,
-            "Investigate the active production incident.",
-            "INC-1042",
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
             RequestCreatedAt,
             "request-correlation");
 
