@@ -212,9 +212,9 @@ The fixed baseline scenarios are:
     clear the incompatible existing role, and ask which role is required rather than
     automatically selecting Beta recovery's sole authoritative role.
 15. `MTN-04`: Request Beta recovery with an explicit valid role while the current
-    Alpha incident remains attached; clear the disputed client, environment, and incident,
-    preserve the current role and justification, and ask only how to resolve the incident
-    conflict before selecting scope.
+    Alpha incident remains attached; clear the disputed client, environment, role, and
+    incident, preserve justification, and ask only how to resolve the incident conflict
+    before selecting scope and role.
 16. `VAL-01`: Reject `ProductionDeployment` for Alpha recovery and retain only
     independently valid facts.
 17. `VAL-02`: Keep client, environment, role, and incident unresolved when exact Alpha

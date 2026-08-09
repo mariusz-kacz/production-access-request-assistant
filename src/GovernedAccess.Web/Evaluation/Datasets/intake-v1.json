@@ -312,19 +312,19 @@
         "candidate": {
           "clientId": null,
           "environmentId": null,
-          "requestedRoleId": "ProductionSupport",
+          "requestedRoleId": null,
           "hasJustification": true,
           "incidentId": null
         },
         "clarificationTarget": "incidentId",
         "environmentOptionIds": [],
         "preservedFields": [
-          "justification",
-          "requestedRoleId"
+          "justification"
         ],
         "clearedFields": [
           "clientId",
           "environmentId",
+          "requestedRoleId",
           "incidentId"
         ]
       }
