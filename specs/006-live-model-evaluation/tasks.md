@@ -15,7 +15,7 @@ live model.
 coverage is consolidated into exactly two fixtures: `EvaluationEngineTests` and
 `EvaluationCommandTests`. Existing `ProgramCompositionTests` covers the normal-host
 non-regression boundary. Test inputs do not add live scenarios beyond the fixed
-19-case dataset.
+20-case dataset.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -98,26 +98,26 @@ pre-confirmation outcomes without collecting model or MCP execution details.
 
 ## Phase 4: User Story 2 - Measure Outcome Correctness and Latency (Priority: P2)
 
-**Goal**: Execute the fixed 19 conversations and grade only their final
+**Goal**: Execute the fixed 20 conversations and grade only their final
 application-owned outcomes and facts, with latency recorded as a non-gating metric.
 
 **Independent Test**: Load dataset version 1, verify the exact inventory and category
 distribution, feed scripted final application results and durations into the grader,
-and confirm fact comparison, category totals, the 19-of-19 policy, and zero-tolerance
+and confirm fact comparison, category totals, the 20-of-20 policy, and zero-tolerance
 workflow-side-effect handling.
 
 ### Tests for User Story 2
 
 > Add these cases first and verify they fail before implementation.
 
-- [X] T011 [US2] Add nine focused cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`: default-dataset inventory/category distribution/unique turn IDs; the `IDF-01`/`IDF-02` exact-only identifier policy, `MTN-03` role-clarification, `MTN-04` existing-incident conflict, `VAL-02` new-scope incident conflict, `VAL-03` combined incident/environment/role-conflict, and `SAFE-01` role-independent no-match declarations; table-driven grading of only declared final application facts; and run grading for category totals, the 19-of-19 requirement, zero-tolerance workflow side effects, and non-gating latency
+- [X] T011 [US2] Add ten focused cases in `tests/GovernedAccess.IntegrationTests/Evaluation/EvaluationEngineTests.cs`: default-dataset inventory/category distribution/unique turn IDs; the `CLR-04` insufficient-justification boundary; the `IDF-01`/`IDF-02` exact-only identifier policy; `MTN-03` role clarification; `MTN-04` existing-incident conflict; `VAL-02` new-scope incident conflict; `VAL-03` combined incident/environment/role conflict; and `SAFE-01` role-independent no-match declarations; table-driven grading of only declared final application facts; and run grading for category totals, the 20-of-20 requirement, zero-tolerance workflow side effects, and non-gating latency
 
 ### Implementation for User Story 2
 
-- [X] T012 [US2] Populate `RES-01` through `SAFE-01` with ordered requester turns, optional starting candidates, and only deterministic final application-owned expectations using the exact 5/3/3/4/3/1 distribution in `src/GovernedAccess.Web/Evaluation/Datasets/intake-v1.json`
-- [X] T013 [US2] Implement final-outcome and declared-fact grading, scenario and category aggregation, the 19-of-19 semantic requirement, zero-tolerance side-effect failure, and runner integration in `src/GovernedAccess.Web/Evaluation/EvaluationGrader.cs`, `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
+- [X] T012 [US2] Populate `RES-01` through `SAFE-01` with ordered requester turns, optional starting candidates, and only deterministic final application-owned expectations using the exact 5/4/3/4/3/1 distribution in `src/GovernedAccess.Web/Evaluation/Datasets/intake-v1.json`
+- [X] T013 [US2] Implement final-outcome and declared-fact grading, scenario and category aggregation, the 20-of-20 semantic requirement, zero-tolerance side-effect failure, and runner integration in `src/GovernedAccess.Web/Evaluation/EvaluationGrader.cs`, `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
 
-**Checkpoint**: All 19 cases are versioned and deterministically gradable from final
+**Checkpoint**: All 20 cases are versioned and deterministically gradable from final
 application results; latency is recorded but does not alter semantic grading.
 
 ---
@@ -145,7 +145,7 @@ sanitized artifacts without prompts, transcripts, model internals, or MCP traces
 **Purpose**: Synchronize runtime guidance and capture final validation evidence.
 
 - [X] T016 [P] Document the evaluation command, final-outcome-only grading, informational latency, black-box model/MCP boundary, disposable state, credential-free tests, and canonical quickstart in `docs/architecture.md`, `docs/local-development.md`, and `docs/testing-strategy.md`
-- [X] T017 Run the optional fixed 19-case command with an approved live profile when available and record only its sanitized status, score, safety result, latency summary, and artifact paths—or the explicit unavailable prerequisite—in `specs/006-live-model-evaluation/validation.md`
+- [X] T017 Run the optional fixed 20-case command with an approved live profile when available and record only its sanitized status, score, safety result, latency summary, and artifact paths—or the explicit unavailable prerequisite—in `specs/006-live-model-evaluation/validation.md`
 - [X] T018 Add exact case-sensitive `--scenario <scenario-id>` selection with focused 1-of-1 grading, credential-free command coverage, and synchronized evaluation contracts and runbooks
 - [X] T019 Add failure-only sanitized observed-state diagnostics to JSON, Markdown, and console output, with credential-free artifact coverage and no model/MCP trace capture
 
@@ -210,13 +210,13 @@ Task T008: Evaluation host and temporary database ownership
 2. Implement US1 with a small deterministic in-process dataset.
 3. Stop and validate command isolation, cancellation, timeout behavior, and zero
    workflow side effects.
-4. Do not claim 19-case correctness coverage until US2 adds the fixed dataset and
+4. Do not claim 20-case correctness coverage until US2 adds the fixed dataset and
    final-outcome grading.
 
 ### Incremental Delivery
 
 1. **US1**: Safe runnable command and isolated intake execution.
-2. **US2**: Fixed 19-case dataset, final-outcome correctness, and latency capture.
+2. **US2**: Fixed 20-case dataset, final-outcome correctness, and latency capture.
 3. **US3**: Concise matching artifacts with focused failure diagnostics.
 4. **Polish**: Documentation plus mandatory deterministic and optional live evidence.
 

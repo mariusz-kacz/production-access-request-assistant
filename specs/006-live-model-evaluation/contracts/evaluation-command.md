@@ -26,7 +26,7 @@ host configuration.
 1. Validate arguments, live-model configuration, and the fixed dataset.
 2. Create and seed a disposable SQLite database.
 3. Start a loopback-only host exposing the existing read-only MCP endpoint.
-4. Execute all 19 scenarios sequentially through pre-confirmation intake, or only the
+4. Execute all 20 scenarios sequentially through pre-confirmation intake, or only the
    exact selected scenario when `--scenario` is supplied.
 5. Measure total elapsed milliseconds and grade the final application result for each
    scenario without inspecting model or MCP execution.
@@ -48,7 +48,7 @@ payload, or token usage is printed.
 
 | Code | Meaning |
 |-----:|---------|
-| `0` | Full run: all 19 scenarios passed; focused run: the selected scenario passed; no side effect occurred |
+| `0` | Full run: all 20 scenarios passed; focused run: the selected scenario passed; no side effect occurred |
 | `1` | Completed but one or more scenarios or the side-effect check failed |
 | `2` | Invalid prerequisite, dataset, output, or startup dependency |
 | `130` | Operator or host cancellation |

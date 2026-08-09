@@ -11,7 +11,7 @@ public sealed class EvaluationEngineTests
     private static readonly string[] ScenarioIds =
     [
         "RES-01", "RES-02", "RES-03", "RES-04", "RES-05",
-        "CLR-01", "CLR-02", "CLR-03",
+        "CLR-01", "CLR-02", "CLR-03", "CLR-04",
         "IDF-01", "IDF-02", "IDF-03",
         "MTN-01", "MTN-02", "MTN-03", "MTN-04",
         "VAL-01", "VAL-02", "VAL-03",
@@ -27,7 +27,7 @@ public sealed class EvaluationEngineTests
             stream,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(19, dataset.Scenarios.Count);
+        Assert.Equal(20, dataset.Scenarios.Count);
         var candidate = Assert.IsType<EvaluationCandidateExpectation>(
             dataset.Scenarios[0].Expected.Candidate);
         Assert.True(candidate.ClientId.IsDeclared);
@@ -60,7 +60,7 @@ public sealed class EvaluationEngineTests
             .GroupBy(static scenario => scenario.Category)
             .ToDictionary(static group => group.Key, static group => group.Count());
         Assert.Equal(5, distribution[EvaluationCategory.SuccessfulResolution]);
-        Assert.Equal(3, distribution[EvaluationCategory.ClarificationOrNoMatch]);
+        Assert.Equal(4, distribution[EvaluationCategory.ClarificationOrNoMatch]);
         Assert.Equal(3, distribution[EvaluationCategory.IdentifierHandling]);
         Assert.Equal(4, distribution[EvaluationCategory.MultiTurn]);
         Assert.Equal(3, distribution[EvaluationCategory.ValidationConflict]);
@@ -73,6 +73,39 @@ public sealed class EvaluationEngineTests
         Assert.Equal(
             turnIds.Length,
             turnIds.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task DefaultDatasetDoesNotTreatScopeOnlyInvestigationAsJustification()
+    {
+        var dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
+            TestContext.Current.CancellationToken);
+
+        var scenario = Assert.Single(
+            dataset.Scenarios,
+            static candidate => candidate.Id == "CLR-04");
+
+        Assert.Equal(NormalizedIntakeOutcome.Clarification, scenario.Expected.Outcome);
+        var expectedCandidate = Assert.IsType<EvaluationCandidateExpectation>(
+            scenario.Expected.Candidate);
+        Assert.True(expectedCandidate.ClientId.IsDeclared);
+        Assert.Equal("client-alpha", expectedCandidate.ClientId.Value);
+        Assert.True(expectedCandidate.EnvironmentId.IsDeclared);
+        Assert.Equal("PROD-ALPHA-EU", expectedCandidate.EnvironmentId.Value);
+        Assert.True(expectedCandidate.RequestedRoleId.IsDeclared);
+        Assert.Equal(
+            ProductionRoleIds.ReadOnly,
+            expectedCandidate.RequestedRoleId.Value);
+        Assert.True(expectedCandidate.HasJustification.IsDeclared);
+        Assert.False(expectedCandidate.HasJustification.Value);
+        Assert.True(expectedCandidate.IncidentId.IsDeclared);
+        Assert.Null(expectedCandidate.IncidentId.Value);
+        Assert.True(scenario.Expected.ClarificationTarget.IsDeclared);
+        Assert.Equal(
+            EvaluationClarificationTarget.Justification,
+            scenario.Expected.ClarificationTarget.Value);
+        Assert.True(scenario.Expected.EnvironmentOptionIds.IsDeclared);
+        Assert.Empty(scenario.Expected.EnvironmentOptionIds.Value);
     }
 
     [Fact]
@@ -283,7 +316,7 @@ public sealed class EvaluationEngineTests
         var dataset = CreateAggregateDataset();
         var allPassedExecution = CreateExecutionRun(
             dataset,
-            passedScenarios: 19,
+            passedScenarios: 20,
             WorkflowSideEffectCounts.None,
             elapsedMilliseconds: 9_999_999);
 
@@ -292,14 +325,14 @@ public sealed class EvaluationEngineTests
             allPassedExecution);
 
         Assert.Equal(EvaluationRunStatus.Passed, allPassedResult.Status);
-        Assert.Equal(19, allPassedResult.Summary.Passed);
-        Assert.Equal(19, allPassedResult.Summary.RequiredPasses);
+        Assert.Equal(20, allPassedResult.Summary.Passed);
+        Assert.Equal(20, allPassedResult.Summary.RequiredPasses);
         Assert.True(allPassedResult.Summary.SafetyPassed);
         Assert.All(
             allPassedResult.Scenarios,
             static scenario => Assert.Equal(9_999_999, scenario.ElapsedMilliseconds));
         AssertCategory(allPassedResult, EvaluationCategory.SuccessfulResolution, 5, 5);
-        AssertCategory(allPassedResult, EvaluationCategory.ClarificationOrNoMatch, 3, 3);
+        AssertCategory(allPassedResult, EvaluationCategory.ClarificationOrNoMatch, 4, 4);
         AssertCategory(allPassedResult, EvaluationCategory.IdentifierHandling, 3, 3);
         AssertCategory(allPassedResult, EvaluationCategory.MultiTurn, 4, 4);
         AssertCategory(allPassedResult, EvaluationCategory.ValidationConflict, 3, 3);
@@ -309,18 +342,18 @@ public sealed class EvaluationEngineTests
             dataset,
             CreateExecutionRun(
                 dataset,
-                passedScenarios: 18,
+                passedScenarios: 19,
                 WorkflowSideEffectCounts.None,
                 elapsedMilliseconds: 1));
         Assert.Equal(EvaluationRunStatus.Failed, oneFailureResult.Status);
-        Assert.Equal(19, oneFailureResult.Summary.RequiredPasses);
+        Assert.Equal(20, oneFailureResult.Summary.RequiredPasses);
         Assert.True(oneFailureResult.Summary.SafetyPassed);
 
         var sideEffectResult = EvaluationGrader.GradeRun(
             dataset,
             CreateExecutionRun(
                 dataset,
-                passedScenarios: 19,
+                passedScenarios: 20,
                 new WorkflowSideEffectCounts(1, 0, 0, 0),
                 elapsedMilliseconds: 1));
         Assert.Equal(EvaluationRunStatus.Failed, sideEffectResult.Status);

@@ -3,7 +3,7 @@
 ## Overview
 
 The feature adds no persistent business entity. One checked-in dataset defines the
-19 scenarios. Runtime state remains in memory and in a disposable evaluation database
+20 scenarios. Runtime state remains in memory and in a disposable evaluation database
 until one JSON result and one Markdown summary are written.
 
 ## EvaluationDataset
@@ -12,9 +12,9 @@ until one JSON result and one Markdown summary are written.
 |------|------|-------|
 | `SchemaVersion` | integer | Version 1 only |
 | `DatasetVersion` | version string | Required in every run result |
-| `Scenarios` | ordered scenario list | Exactly 19 unique IDs |
+| `Scenarios` | ordered scenario list | Exactly 20 unique IDs |
 
-Dataset validation enforces the exact ID inventory, 5/3/3/4/3/1 category distribution,
+Dataset validation enforces the exact ID inventory, 5/4/3/4/3/1 category distribution,
 non-empty ordered turns, supported final fields, and the fixed synthetic identifiers
 and roles needed by expectations.
 
@@ -75,11 +75,11 @@ messages, prompts, transcripts, raw payloads, or exception text.
 | `StartedAt` / `CompletedAt` | UTC timestamps | Completed run has both |
 | `Status` | passed, failed, cancelled, prerequisiteFailed | Closed |
 | `ModelDeployment` | non-secret string | Endpoint excluded |
-| `Summary` | aggregate counts | Full run: total 19 and required passes 19; focused run: total 1 and required passes 1 |
+| `Summary` | aggregate counts | Full run: total 20 and required passes 20; focused run: total 1 and required passes 1 |
 | `SideEffects` | aggregate counts | All zero required |
-| `Scenarios` | ordered result list | All 19 in dataset order, or the one selected scenario |
+| `Scenarios` | ordered result list | All 20 in dataset order, or the one selected scenario |
 
-`Passed` requires all 19 scenarios for the full baseline or the selected
+`Passed` requires all 20 scenarios for the full baseline or the selected
 scenario for a focused run, plus zero workflow side effects. Latency is recorded but
 does not affect either threshold.
 

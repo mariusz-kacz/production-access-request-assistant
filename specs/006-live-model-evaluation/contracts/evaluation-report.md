@@ -9,7 +9,7 @@ It does not independently calculate totals.
 2. `PASS` or `FAIL`, passed count, required count, and side-effect safety result.
 3. Six category passed/total counts for a full run or the selected scenario's
    category count for a focused run.
-4. One scenario row for a focused run or exactly 19 rows for a full run, each
+4. One scenario row for a focused run or exactly 20 rows for a full run, each
    containing ID, category, status, normalized outcome, and elapsed milliseconds.
 5. Failure-only expected-versus-observed final application facts.
 6. Failure-only observed application state: deterministic reason summary, normalized

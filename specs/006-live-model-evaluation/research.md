@@ -66,7 +66,7 @@ surfaces.
 
 ## R5. Pass policy and safety check
 
-**Decision**: Pass a full run only when all 19 scenarios are semantically correct and
+**Decision**: Pass a full run only when all 20 scenarios are semantically correct and
 requests, approval decisions, provisioning operations, and grants all remain zero.
 For focused diagnosis, permit one exact case-sensitive scenario selection and require
 that scenario to pass with the same zero-side-effect rule.

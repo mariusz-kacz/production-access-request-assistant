@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run the fixed 19 scenarios, or one exact scenario for focused diagnosis, against an
+Run the fixed 20 scenarios, or one exact scenario for focused diagnosis, against an
 explicitly configured live model. The command uses the real intake path and MCP
 endpoint but grades only final application outcomes and records total scenario
 latency.
@@ -30,13 +30,13 @@ $env:RequestPreparationModel__FoundryResponses__DeploymentName = '<deployment-na
 
 Authenticate with the approved developer identity. Do not store tokens in settings.
 
-## 3. Run all 19 scenarios
+## 3. Run all 20 scenarios
 
 ```powershell
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
 ```
 
-Expected final output includes the passed count out of 19, 19 required passes, the
+Expected final output includes the passed count out of 20, 20 required passes, the
 side-effect safety result, and paths to `result.json` and `report.md`.
 
 For a focused diagnostic run, select one exact case-sensitive scenario identifier:

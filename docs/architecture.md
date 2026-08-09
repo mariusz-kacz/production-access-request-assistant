@@ -217,7 +217,7 @@ service and route registration, starts a loopback-only host, and maps only the
 existing read-only `/mcp` endpoint. Teams, browser, confirmation, approval,
 provisioning, retry, and revocation surfaces are unavailable in this mode.
 
-The evaluator loads and validates the complete checked-in 19-scenario dataset. It
+The evaluator loads and validates the complete checked-in 20-scenario dataset. It
 runs every conversation sequentially by default, or one exact case-sensitive
 scenario selected with `--scenario`, through the real
 `RequestIntakeService.PrepareAsync` boundary. Each scenario receives distinct actor,
@@ -230,7 +230,7 @@ Correctness is determined only from the final application-owned intake outcome a
 the final facts declared by that scenario, such as canonical scope, clarification
 target, validation codes, or fields that must be preserved or cleared. Wall-clock
 elapsed milliseconds cover the complete scenario and are informational; latency does
-not affect semantic grading. A completed full run passes only when all 19
+not affect semantic grading. A completed full run passes only when all 20
 scenarios; a focused run requires its selected scenario to pass. Both require access
 requests, approval decisions, provisioning operations, and access grants to remain at
 zero.
