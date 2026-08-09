@@ -29,7 +29,7 @@ deployment, Azure credential, quota, provider network call, or Teams tenant.
 
 Live Foundry Responses exercises are separate deliberate manual gates. The canonical
 [live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
-runs the fixed 19-case outcome baseline after the credential-free suite. Historical
+runs the fixed 20-case outcome baseline after the credential-free suite. Historical
 provider and Teams walkthroughs remain useful for transport and presentation, but no
 live gate replaces repeatable deterministic tests, runs in CI, or may confirm or
 submit a request.
@@ -159,7 +159,7 @@ test level.
 | Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
-| Live-model evaluator | Closed 19-case dataset, exact single-scenario selection, final application-outcome grading, non-gating scenario latency, full-run 19-of-19 and focused-run 1-of-1 aggregation, isolated command composition, cancellation/timeouts, cleanup, and zero workflow side effects |
+| Live-model evaluator | Closed 20-case dataset, exact single-scenario selection, final application-outcome grading, non-gating scenario latency, full-run 20-of-20 and focused-run 1-of-1 aggregation, isolated command composition, cancellation/timeouts, cleanup, and zero workflow side effects |
 
 Integration tests should assert both the response and persisted side effects. A
 rejected action is not safe merely because it returned an error; tests also verify
@@ -333,9 +333,9 @@ negative assertions because it is neither exhaustive nor deterministic.
 The evaluator has exactly two owning integration fixtures, and both are
 credential-free:
 
-- `EvaluationEngineTests` validates strict dataset loading, the exact 19-case
+- `EvaluationEngineTests` validates strict dataset loading, the exact 20-case
   inventory and category distribution, declared-final-fact grading, category and
-  19-of-19 aggregation, zero-tolerance side effects, informational latency, and
+  20-of-20 aggregation, zero-tolerance side effects, informational latency, and
   the required multi-turn preservation/clearing declaration. It also verifies that a
   failed artifact explains the sanitized observed application state without changing
   grading inputs.
@@ -356,7 +356,7 @@ and MCP tools normally but grades only the final normalized application result a
 the final facts declared by each scenario. It does not inspect calls, proposals,
 iterations, prompts, transcripts, raw payloads, or token usage. Total wall-clock
 milliseconds are recorded per scenario but do not affect correctness. Passing
-requires all 19 scenarios for a full run or 1 of 1 for a focused run, plus
+requires all 20 scenarios for a full run or 1 of 1 for a focused run, plus
 zero requests, approval decisions, provisioning operations, or grants.
 
 Run it only after the complete credential-free gate and follow the
@@ -521,7 +521,7 @@ When introducing behavior:
 
 The automated strategy does not include:
 
-- live-model quality or safety evaluation in CI; the optional fixed 19-case outcome
+- live-model quality or safety evaluation in CI; the optional fixed 20-case outcome
   run is sanitized manual evidence only;
 - real identity-provider integration;
 - real provider contract or credential testing;

@@ -7,11 +7,11 @@
 ## Summary
 
 Add one explicit `evaluate-live-model` mode to the existing ASP.NET Core executable.
-It runs the fixed 19 scenarios sequentially, or one exact scenario selected for
+It runs the fixed 20 scenarios sequentially, or one exact scenario selected for
 focused diagnosis, through the real pre-confirmation intake path. It treats model and
 MCP execution as a black box, measures total scenario latency, and compares the final
 `RequestPreparationResult` with scenario-specific expected application facts. A full
-run passes at 19 of 19; a focused run passes at 1 of 1. Both require that no request,
+run passes at 20 of 20; a focused run passes at 1 of 1. Both require that no request,
 decision, provisioning operation, or grant was created. Automated tests use the
 deterministic chat client and never invoke a live model.
 
@@ -34,15 +34,15 @@ live command only, an approved Foundry deployment and developer identity
 
 **Project Type**: Existing single-executable modular ASP.NET Core host
 
-**Performance Goals**: Run all 19 cases sequentially without manual interaction, or
+**Performance Goals**: Run all 20 cases sequentially without manual interaction, or
 one selected case for focused diagnosis, and record total elapsed milliseconds per
 scenario; latency is informational in v1
 
-**Constraints**: Exactly 19 cases; all 19 required to pass; zero workflow side effects;
+**Constraints**: Exactly 20 cases; all 20 required to pass; zero workflow side effects;
 real pre-confirmation application boundary; existing per-turn timeout; no model/MCP
 observation, token accounting, prompt capture, transcript capture, or LLM judge
 
-**Scale/Scope**: One operator, one live deployment, 19 bounded conversations, one
+**Scale/Scope**: One operator, one live deployment, 20 bounded conversations, one
 fixed synthetic catalog, and two local artifacts per completed run
 
 ## Constitution Check
@@ -120,7 +120,7 @@ observation layer, provider decorator, new project, public API, or persistence m
    records from [data-model.md](data-model.md), and remove the observation scope.
 3. Extract the existing request-preparation registrations needed by both normal and
    evaluation modes and add a focused lazy MCP endpoint provider for the loopback host.
-4. Add strict dataset loading for the exact 19 IDs and 5/3/3/4/3/1 distribution.
+4. Add strict dataset loading for the exact 20 IDs and 5/4/3/4/3/1 distribution.
 5. Add the explicit command mode, optional exact scenario selection, and a
    loopback-only host using a disposable SQLite database and the real
    pre-confirmation intake service.

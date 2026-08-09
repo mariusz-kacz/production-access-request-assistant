@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "datasetVersion": "1.0.0",
+  "datasetVersion": "1.1.0",
   "scenarios": [
     {
       "id": "RES-01",
@@ -158,6 +158,28 @@
           "environmentId": null
         },
         "clarificationTarget": "environmentId",
+        "environmentOptionIds": []
+      }
+    },
+    {
+      "id": "CLR-04",
+      "category": "clarificationOrNoMatch",
+      "turns": [
+        {
+          "id": "clr-04-turn-01",
+          "requesterMessage": "I need ProductionReadOnly access to PROD-ALPHA-EU to investigate the Alpha environment. Continue without an incident."
+        }
+      ],
+      "expected": {
+        "outcome": "clarification",
+        "candidate": {
+          "clientId": "client-alpha",
+          "environmentId": "PROD-ALPHA-EU",
+          "requestedRoleId": "ProductionReadOnly",
+          "hasJustification": false,
+          "incidentId": null
+        },
+        "clarificationTarget": "justification",
         "environmentOptionIds": []
       }
     },

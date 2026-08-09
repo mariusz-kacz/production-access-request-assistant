@@ -9,7 +9,7 @@
 | Goal | Start here |
 |---|---|
 | Run the Web app and deterministic tests | [Normal local setup](#normal-local-setup) |
-| Evaluate the fixed 19 live-model scenarios | [Live-model evaluation](#live-model-evaluation) |
+| Evaluate the fixed 20 live-model scenarios | [Live-model evaluation](#live-model-evaluation) |
 | Receive requests from real Teams | [Teams quickstart](teams-quickstart.md) |
 | Use real Teams and a live Foundry model | [Teams quickstart: Azure sign-in](teams-quickstart.md#3-sign-in-to-azure-for-the-live-model) |
 
@@ -107,7 +107,7 @@ exact case-sensitive baseline identifier:
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --scenario RES-03 --output artifacts/live-model-evaluation
 ```
 
-Without `--scenario`, the command runs all 19 conversations sequentially. With it,
+Without `--scenario`, the command runs all 20 conversations sequentially. With it,
 the complete baseline is still validated but only the selected conversation runs.
 Both paths use the real pre-confirmation intake path and loopback read-only MCP
 endpoint. Normal Teams/browser routes and every confirmation, approval, provisioning,
@@ -116,7 +116,7 @@ retry, and revocation action are unavailable.
 The model and MCP exchange is intentionally a black box. Grading compares only each
 scenario's final normalized application outcome and its declared final application-
 owned facts. Total scenario latency is recorded in milliseconds for review but does
-not change pass or failure. A full run passes at 19 of 19; a focused run passes at 1
+not change pass or failure. A full run passes at 20 of 20; a focused run passes at 1
 of 1. Both must create zero requests, approval decisions, provisioning operations, and
 grants.
 
