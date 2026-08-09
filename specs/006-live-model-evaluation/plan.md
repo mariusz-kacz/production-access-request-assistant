@@ -7,12 +7,13 @@
 ## Summary
 
 Add one explicit `evaluate-live-model` mode to the existing ASP.NET Core executable.
-It runs the fixed 18 scenarios sequentially through the real pre-confirmation intake
-path, treats model and MCP execution as a black box, measures total scenario latency,
-and compares the final `RequestPreparationResult` with scenario-specific expected
-application facts. A run passes at 16 of 18 only when no request, decision,
-provisioning operation, or grant was created. Automated tests use the deterministic
-chat client and never invoke a live model.
+It runs the fixed 19 scenarios sequentially, or one exact scenario selected for
+focused diagnosis, through the real pre-confirmation intake path. It treats model and
+MCP execution as a black box, measures total scenario latency, and compares the final
+`RequestPreparationResult` with scenario-specific expected application facts. A full
+run passes at 19 of 19; a focused run passes at 1 of 1. Both require that no request,
+decision, provisioning operation, or grant was created. Automated tests use the
+deterministic chat client and never invoke a live model.
 
 ## Technical Context
 
@@ -33,14 +34,15 @@ live command only, an approved Foundry deployment and developer identity
 
 **Project Type**: Existing single-executable modular ASP.NET Core host
 
-**Performance Goals**: Run all 18 cases sequentially without manual interaction and
-record total elapsed milliseconds per scenario; latency is informational in v1
+**Performance Goals**: Run all 19 cases sequentially without manual interaction, or
+one selected case for focused diagnosis, and record total elapsed milliseconds per
+scenario; latency is informational in v1
 
-**Constraints**: Exactly 18 cases; 16 required passes; zero workflow side effects;
+**Constraints**: Exactly 19 cases; all 19 required to pass; zero workflow side effects;
 real pre-confirmation application boundary; existing per-turn timeout; no model/MCP
 observation, token accounting, prompt capture, transcript capture, or LLM judge
 
-**Scale/Scope**: One operator, one live deployment, 18 bounded conversations, one
+**Scale/Scope**: One operator, one live deployment, 19 bounded conversations, one
 fixed synthetic catalog, and two local artifacts per completed run
 
 ## Constitution Check
@@ -118,9 +120,10 @@ observation layer, provider decorator, new project, public API, or persistence m
    records from [data-model.md](data-model.md), and remove the observation scope.
 3. Extract the existing request-preparation registrations needed by both normal and
    evaluation modes and add a focused lazy MCP endpoint provider for the loopback host.
-4. Add strict dataset loading for the exact 18 IDs and 5/4/3/3/2/1 distribution.
-5. Add the explicit command mode and a loopback-only host using a disposable SQLite
-   database and the real pre-confirmation intake service.
+4. Add strict dataset loading for the exact 19 IDs and 5/3/3/4/3/1 distribution.
+5. Add the explicit command mode, optional exact scenario selection, and a
+   loopback-only host using a disposable SQLite database and the real
+   pre-confirmation intake service.
 6. Execute scenarios sequentially. Measure each scenario with `Stopwatch`, retain
    only the final `RequestPreparationResult`, and count workflow entities after each
    scenario.

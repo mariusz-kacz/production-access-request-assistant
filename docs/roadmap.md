@@ -69,9 +69,9 @@ or problem description.
 - Zero, one, and multiple environment matches produce distinct safe outcomes.
 - Environment choices contain stable identifiers, readable context, authoritative
   client relationships, and assigned roles.
-- Identifier-like environment values use exact lookup first. Only typed `NotFound`
-  permits discovery fallback, and no alternative becomes scope without requester
-  confirmation or selection.
+- Identifier-like environment values use exact lookup only. Exact `NotFound` keeps
+  scope unresolved and asks for correction with no discovery alternatives; readable
+  environment descriptions continue to use bounded discovery.
 - A model-authored clarification message is shown only after its separate structured
   option IDs are reloaded and validated; selectable labels and identifiers come from
   authoritative records, never prose.

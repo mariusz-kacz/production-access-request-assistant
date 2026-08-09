@@ -20,6 +20,8 @@ public sealed class EvaluationCommandTests
     [InlineData("--unknown")]
     [InlineData("--output")]
     [InlineData("--output", "first", "--output", "second")]
+    [InlineData("--scenario")]
+    [InlineData("--scenario", "RES-01", "--scenario", "RES-02")]
     public void CommandParserRejectsUnknownIncompleteAndDuplicateOptions(
         params string[] arguments)
     {
@@ -46,6 +48,40 @@ public sealed class EvaluationCommandTests
         Assert.Equal(
             Path.Combine(workingDirectory, "artifacts", "live-evaluation"),
             result.Value.OutputParentPath);
+        Assert.Null(result.Value.ScenarioId);
+    }
+
+    [Fact]
+    public void CommandParserAcceptsOneExactScenarioSelection()
+    {
+        var workingDirectory = Path.GetFullPath("evaluation-command-tests");
+
+        var result = LiveModelEvaluationCommand.ParseArguments(
+            ["--scenario", "RES-03", .. RelativeOutputArguments],
+            workingDirectory);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("RES-03", result.Value.ScenarioId);
+        Assert.Equal(
+            Path.Combine(workingDirectory, "artifacts", "live-evaluation"),
+            result.Value.OutputParentPath);
+    }
+
+    [Fact]
+    public void ScenarioSelectionUsesAnExactDatasetIdentifier()
+    {
+        var dataset = CreateDataset(
+            CreateReadyScenario("RES-01"),
+            CreateReadyScenario("RES-02"));
+
+        var selected = LiveModelEvaluationCommand.SelectScenarios(dataset, "RES-02");
+        var wrongCase = LiveModelEvaluationCommand.SelectScenarios(dataset, "res-02");
+
+        Assert.True(selected.IsSuccess);
+        Assert.Equal(dataset.DatasetVersion, selected.Value.DatasetVersion);
+        Assert.Equal("RES-02", Assert.Single(selected.Value.Scenarios).Id);
+        Assert.True(wrongCase.IsFailure);
+        Assert.Equal(ApplicationFailureKind.InvalidInput, wrongCase.Failure!.Kind);
     }
 
     [Fact]
@@ -147,10 +183,57 @@ public sealed class EvaluationCommandTests
             Assert.True(scenario.ElapsedMilliseconds >= 0);
             Assert.Equal(WorkflowSideEffectCounts.None, scenario.SideEffects);
             Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
+            Assert.Equal(EvaluationRunStatus.Passed, result.Status);
+            Assert.Equal(1, result.Summary.Passed);
+            Assert.Equal(1, result.Summary.RequiredPasses);
 
             await AssertWorkflowTablesAreEmptyAsync(
                 hosting.Services,
                 TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await hosting.DisposeAsync();
+            DeleteTemporaryDirectory(temporaryRoot);
+        }
+    }
+
+    [Fact]
+    public async Task FinalSchemaValidatedModelResponseIsRetainedForDiagnostics()
+    {
+        var temporaryRoot = CreateTemporaryDirectory();
+        var hosting = await StartHostingAsync(
+            temporaryRoot,
+            DeterministicChatMode.Clarification,
+            TimeSpan.FromSeconds(1),
+            TestContext.Current.CancellationToken);
+
+        try
+        {
+            var scenario = new EvaluationScenario(
+                "CLR-01",
+                EvaluationCategory.ClarificationOrNoMatch,
+                null,
+                [new EvaluationTurn("turn-1", "Prepare the synthetic request.")],
+                new FinalExpectation(
+                    NormalizedIntakeOutcome.Clarification,
+                    null,
+                    default,
+                    default,
+                    default,
+                    [],
+                    []));
+
+            var result = await RunAsync(
+                hosting,
+                CreateDataset(scenario),
+                TestContext.Current.CancellationToken);
+
+            var outcome = Assert.Single(result.Scenarios).FinalOutcome;
+            Assert.NotNull(outcome);
+            Assert.Equal(
+                "What operational justification should be recorded for this request?",
+                outcome.ModelResponse);
         }
         finally
         {

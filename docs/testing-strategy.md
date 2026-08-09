@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-07
 - **Scope**: Automated and bounded manual verification for the local MVP
 
 ## Purpose
@@ -27,14 +27,12 @@ uses the production MAF/session and MCP boundaries with deterministic chat clien
 and fake authenticated activities. No automated test may require a Foundry endpoint,
 deployment, Azure credential, quota, provider network call, or Teams tenant.
 
-Live Foundry Responses exercises are separate deliberate manual gates. The
-[real-model quickstart](../specs/003-exercise-real-model/quickstart.md) covers provider
-interoperability, configuration, latency, tool transport, safe failure, and Teams
-presentation. The optional semantic-quality matrix in the
-[feature-004 quickstart](../specs/004-resolve-context-identifiers/quickstart.md)
-measures natural-language environment resolution, ambiguity, identifier fallback,
-and exact-only incident behavior. Neither gate replaces repeatable deterministic
-tests, runs in CI, or may confirm or submit a request.
+Live Foundry Responses exercises are separate deliberate manual gates. The canonical
+[live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
+runs the fixed 19-case outcome baseline after the credential-free suite. Historical
+provider and Teams walkthroughs remain useful for transport and presentation, but no
+live gate replaces repeatable deterministic tests, runs in CI, or may confirm or
+submit a request.
 
 ## Test layers
 
@@ -144,6 +142,7 @@ test level.
 | Queries | Component: participant-filtered list/detail, nonparticipant nonvisibility, available actions, audit order, and logical expiry. Full host: representative response serialization and authentication |
 | Persistence | Keys, uniqueness, concurrency token, relationships, UTC conversion, and exact synthetic seeding |
 | Observability | Correlation creation, propagation, response header, and safe Problem Details metadata |
+| Live-model evaluator | Closed 19-case dataset, exact single-scenario selection, final application-outcome grading, non-gating scenario latency, full-run 19-of-19 and focused-run 1-of-1 aggregation, isolated command composition, cancellation/timeouts, cleanup, and zero workflow side effects |
 
 Integration tests should assert both the response and persisted side effects. A
 rejected action is not safe merely because it returned an error; tests also verify
@@ -312,18 +311,42 @@ The optional Playground or real personal-chat walkthrough validates transport,
 tenant authentication, packaging, and presentation. It cannot replace the automated
 negative assertions because it is neither exhaustive nor deterministic.
 
-### Optional live-model semantic matrix
+### Bounded live-model outcome evaluation
 
-Run the feature-004 semantic matrix only as explicit release evidence with synthetic
-data and confirmation/submission disabled. It covers varied unambiguous environment
-descriptions, ambiguity and no-match language, misspelled or incomplete potential
-identifiers, exact-ID-only incident handling, and readable terms that conflict with
-an exact environment result. Record only sanitized outcomes.
+The evaluator has exactly two owning integration fixtures, and both are
+credential-free:
 
-Scripted chat clients prove deterministic contracts and failure behavior; they do not
-measure whether a deployed model understands language. Conversely, a live-model run
-cannot replace schema, option-validation, fallback-gate, authorization, or
-zero-side-effect assertions in automated tests.
+- `EvaluationEngineTests` validates strict dataset loading, the exact 19-case
+  inventory and category distribution, declared-final-fact grading, category and
+  19-of-19 aggregation, zero-tolerance side effects, informational latency, and
+  the required multi-turn preservation/clearing declaration. It also verifies that a
+  failed artifact explains the sanitized observed application state without changing
+  grading inputs.
+- `EvaluationCommandTests` validates argument and exit-code behavior, fail-closed
+  live-profile prerequisites, exact single-scenario selection, evaluation-only route
+  composition, deterministic execution through the real intake and loopback MCP
+  boundaries, cancellation, turn timeout, disposable SQLite cleanup, and zero
+  workflow side effects.
+
+The fixtures inject deterministic chat responses and never resolve a live Foundry
+client, Azure credential, or provider network dependency. Existing MCP and MAF suites
+remain authoritative for tool schemas, fallback sequencing, malformed model output,
+transport failures, and internal cancellation; evaluator tests do not duplicate
+those contracts.
+
+The optional live command is black-box outcome evidence. It runs the configured model
+and MCP tools normally but grades only the final normalized application result and
+the final facts declared by each scenario. It does not inspect calls, proposals,
+iterations, prompts, transcripts, raw payloads, or token usage. Total wall-clock
+milliseconds are recorded per scenario but do not affect correctness. Passing
+requires all 19 scenarios for a full run or 1 of 1 for a focused run, plus
+zero requests, approval decisions, provisioning operations, or grants.
+
+Run it only after the complete credential-free gate and follow the
+[live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
+for configuration, execution, sanitized artifact review, and cleanup. A live result
+cannot replace deterministic schema, authorization, immutable-scope, side-effect, or
+failure-path assertions.
 
 ## Manual verification
 
@@ -494,8 +517,8 @@ When introducing behavior:
 
 The automated strategy does not include:
 
-- live-model quality or safety evaluation in CI; an optional sanitized semantic
-  matrix is release evidence only;
+- live-model quality or safety evaluation in CI; the optional fixed 19-case outcome
+  run is sanitized manual evidence only;
 - real identity-provider integration;
 - real provider contract or credential testing;
 - browser end-to-end automation;
@@ -521,4 +544,5 @@ corresponding integration or deployment becomes real.
 - [Environment-resolution quickstart](../specs/004-resolve-context-identifiers/quickstart.md)
 - [Environment-resolution task list](../specs/004-resolve-context-identifiers/tasks.md)
 - [Environment-resolution turn contract](../specs/004-resolve-context-identifiers/contracts/environment-resolution-turn-contract.md)
+- [Live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
 - [Governed workflow quickstart](../specs/001-governed-production-access/quickstart.md)
