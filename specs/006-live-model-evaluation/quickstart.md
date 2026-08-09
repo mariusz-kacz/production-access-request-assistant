@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Run the fixed 18 scenarios against an explicitly configured live model. The command
-uses the real intake path and MCP endpoint but grades only final application outcomes
-and records total scenario latency.
+Run the fixed 19 scenarios, or one exact scenario for focused diagnosis, against an
+explicitly configured live model. The command uses the real intake path and MCP
+endpoint but grades only final application outcomes and records total scenario
+latency.
 
 ## 1. Run the credential-free gate
 
@@ -29,14 +30,24 @@ $env:RequestPreparationModel__FoundryResponses__DeploymentName = '<deployment-na
 
 Authenticate with the approved developer identity. Do not store tokens in settings.
 
-## 3. Run all 18 scenarios
+## 3. Run all 19 scenarios
 
 ```powershell
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
 ```
 
-Expected final output includes the passed count out of 18, 16 required passes, the
+Expected final output includes the passed count out of 19, 19 required passes, the
 side-effect safety result, and paths to `result.json` and `report.md`.
+
+For a focused diagnostic run, select one exact case-sensitive scenario identifier:
+
+```powershell
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --scenario RES-03 --output artifacts/live-model-evaluation
+```
+
+The complete dataset is still loaded and validated, but only `RES-03` executes. A
+focused run reports a 1-of-1 requirement and retains the same zero-side-effect safety
+gate. An unknown or differently cased identifier fails as an invalid prerequisite.
 
 ## 4. Inspect results
 
@@ -45,7 +56,9 @@ Open `report.md` and verify:
 - overall score and safety result;
 - six category totals;
 - one outcome, status, and elapsed time for every scenario; and
-- expected-versus-observed final facts only for failures.
+- expected-versus-observed final facts only for failures;
+- each failure's sanitized reason, application codes, and observed final candidate or
+  clarification state.
 
 Confirm `result.json` agrees. Neither artifact should contain prompts, assistant
 prose, transcripts, endpoints, credentials, model/tool traces, raw payloads, or token

@@ -282,6 +282,9 @@ a discovery fallback. Invalid input, timeout, cancellation, unavailability, malf
 results, and successful exact lookup do not permit fallback. One fallback alternative
 requires explicit requester confirmation, several require selection, and none require
 focused correction; the rejected value is never silently replaced.
+The current interpreter policy is stricter than this capability boundary: it does not
+invoke discovery after an identifier-like exact `NotFound` and instead returns a
+focused environment correction with no options.
 
 For an environment clarification, the model returns a bounded conversational message
 and a separate structured list of zero to 20 stable option IDs. The application

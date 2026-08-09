@@ -1,7 +1,7 @@
 # Local development
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-07
 - **Audience**: Developers running or changing the local MVP
 
 ## Choose a path
@@ -9,6 +9,7 @@
 | Goal | Start here |
 |---|---|
 | Run the Web app and deterministic tests | [Normal local setup](#normal-local-setup) |
+| Evaluate the fixed 19 live-model scenarios | [Live-model evaluation](#live-model-evaluation) |
 | Receive requests from real Teams | [Teams quickstart](teams-quickstart.md) |
 | Use real Teams and a live Foundry model | [Teams quickstart: Azure sign-in](teams-quickstart.md#3-sign-in-to-azure-for-the-live-model) |
 
@@ -87,6 +88,54 @@ Teams transport. Do not put an API key or token in `appsettings*.json`.
 
 An invalid or unavailable live profile fails closed. It does not silently switch to
 the deterministic model.
+
+## Live-model evaluation
+
+The bounded evaluator is an explicit mode of the existing Web executable. Run the
+credential-free backend gate first, configure an approved `FoundryResponses` profile
+in process-local environment variables, and then run:
+
+```powershell
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
+```
+
+The optional `--output` value selects the parent for a new run-specific directory;
+the default is `artifacts/live-model-evaluation`. To run one focused scenario, add its
+exact case-sensitive baseline identifier:
+
+```powershell
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --scenario RES-03 --output artifacts/live-model-evaluation
+```
+
+Without `--scenario`, the command runs all 19 conversations sequentially. With it,
+the complete baseline is still validated but only the selected conversation runs.
+Both paths use the real pre-confirmation intake path and loopback read-only MCP
+endpoint. Normal Teams/browser routes and every confirmation, approval, provisioning,
+retry, and revocation action are unavailable.
+
+The model and MCP exchange is intentionally a black box. Grading compares only each
+scenario's final normalized application outcome and its declared final application-
+owned facts. Total scenario latency is recorded in milliseconds for review but does
+not change pass or failure. A full run passes at 19 of 19; a focused run passes at 1
+of 1. Both must create zero requests, approval decisions, provisioning operations, and
+grants.
+
+Each run owns a temporary SQLite database and process-local conversation history.
+Host disposal removes the database and its sidecars; completed evidence consists only
+of sanitized `result.json` and `report.md` files under the chosen ignored output
+parent. Automated evaluation tests use a deterministic fake chat client and need no
+endpoint, Azure identity, or model credentials.
+
+When a scenario fails, the console prints its identifier and a short sanitized reason.
+The failure section in `report.md` and the corresponding JSON `diagnostics` object add
+the observed final outcome, safe application codes, canonical candidate facts,
+clarification target, environment options when available, and the final bounded,
+schema-validated model response message when available. These diagnostics do not
+include prompts, transcripts, raw provider/MCP payloads, or exception text.
+
+Use the [live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
+as the canonical procedure for the required test sequence, live-profile variables,
+artifact review, and configuration cleanup.
 
 ## Common development commands
 
@@ -221,3 +270,4 @@ database files into a timestamped ignored directory; it does not delete them.
 - [Testing strategy](testing-strategy.md)
 - [Architecture](architecture.md)
 - [Security model](security-model.md)
+- [Live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)

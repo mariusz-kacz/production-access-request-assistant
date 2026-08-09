@@ -1,7 +1,7 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-07
 - **Scope**: Governed Production Access Request Assistant MVP
 
 The history-first Teams preparation and Teams-only creation boundaries described here
@@ -262,6 +262,45 @@ authoritative candidate assessment, immutable confirmation, human approvals, and
 protected idempotent provisioning path. Profile choice and model output are not
 authorization or persisted workflow evidence.
 
+### Bounded live-model evaluation mode
+
+`evaluate-live-model` is an explicit mode of the existing Web executable. It is not
+part of normal host startup: `Program` selects evaluation composition before normal
+service and route registration, starts a loopback-only host, and maps only the
+existing read-only `/mcp` endpoint. Teams, browser, confirmation, approval,
+provisioning, retry, and revocation surfaces are unavailable in this mode.
+
+The evaluator loads and validates the complete checked-in 19-scenario dataset. It
+runs every conversation sequentially by default, or one exact case-sensitive
+scenario selected with `--scenario`, through the real
+`RequestIntakeService.PrepareAsync` boundary. Each scenario receives distinct actor,
+conversation, intake, and correlation identities.
+The configured Foundry Responses client and the real MCP transport execute normally,
+but evaluation treats both as a black box: it records no prompts, transcripts,
+provider iterations, tool calls, tool ordering, raw payloads, or token usage.
+
+Correctness is determined only from the final application-owned intake outcome and
+the final facts declared by that scenario, such as canonical scope, clarification
+target, validation codes, or fields that must be preserved or cleared. Wall-clock
+elapsed milliseconds cover the complete scenario and are informational; latency does
+not affect semantic grading. A completed full run passes only when all 19
+scenarios; a focused run requires its selected scenario to pass. Both require access
+requests, approval decisions, provisioning operations, and access grants to remain at
+zero.
+
+Evaluation persistence is disposable. A run owns a uniquely named SQLite database in
+the system temporary directory, uses process-local MAF history, and removes the
+database and SQLite sidecars when the host is disposed. Completed local evidence is
+limited to one run-specific `result.json` and `report.md` under the selected ignored
+output parent. Both artifacts are rendered from the same sanitized run result. Failed
+scenarios additionally expose a deterministic reason and observed application-owned
+state—safe validation/provider codes, canonical candidate facts, clarification target,
+environment options, and the final bounded, schema-validated model response
+message—without adding raw model or MCP observation.
+
+The canonical operator procedure, including the credential-free gate and live-profile
+setup, is the [live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md).
+
 ## Teams request preparation and confirmation
 
 Teams confirmation is the only request-creation path. Preparation is model-assisted;
@@ -405,6 +444,9 @@ assigned ordered roles. Potential identifiers use exact lookup first; only a typ
 requires deterministic reload and developer confirmation or selection. Catalog
 overflow fails closed without a partial result. `get_incident` remains an exact-only
 lookup for a precise requester-supplied stable identifier.
+The current interpreter deliberately does not exercise that permitted fallback for
+identifier-like input: exact `NotFound` produces an environment clarification with no
+options. Readable environment descriptions still use bounded discovery directly.
 
 The complete wire contract is
 [specs/004-resolve-context-identifiers/contracts/mcp-tools.json](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
@@ -696,6 +738,14 @@ No automated suite requires a live model or external production system. The
 [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md) contains the
 detailed evidence matrix and manual demonstration scenarios.
 
+Evaluation coverage also remains credential-free. `EvaluationEngineTests` owns the
+fixed dataset, final-outcome grader, non-gating latency, and aggregate policy.
+`EvaluationCommandTests` owns command parsing and exit codes, evaluation-
+only route composition, deterministic execution through the real intake boundary,
+cancellation and timeout behavior, temporary-database cleanup, and zero workflow side
+effects. These tests replace the live chat client with a deterministic fake and never
+resolve a Foundry credential or make a provider call.
+
 ## Deliberate limitations
 
 The architecture intentionally does not include:
@@ -731,4 +781,5 @@ a new ADR before changing the deployment or trust boundaries.
 - [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
 - [Current MCP tool contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
 - [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
+- [Live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
 - [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)

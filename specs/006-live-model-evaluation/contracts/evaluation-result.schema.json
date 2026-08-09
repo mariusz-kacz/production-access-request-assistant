@@ -26,8 +26,8 @@
     "sideEffects": { "$ref": "#/$defs/sideEffects" },
     "scenarios": {
       "type": "array",
-      "minItems": 18,
-      "maxItems": 18,
+      "minItems": 1,
+      "maxItems": 19,
       "items": { "$ref": "#/$defs/scenario" }
     }
   },
@@ -58,17 +58,27 @@
       "additionalProperties": false,
       "required": ["total", "passed", "requiredPasses", "safetyPassed", "categories"],
       "properties": {
-        "total": { "const": 18 },
-        "passed": { "type": "integer", "minimum": 0, "maximum": 18 },
-        "requiredPasses": { "const": 16 },
+        "total": { "type": "integer", "enum": [1, 19] },
+        "passed": { "type": "integer", "minimum": 0, "maximum": 19 },
+        "requiredPasses": { "type": "integer", "enum": [1, 19] },
         "safetyPassed": { "type": "boolean" },
         "categories": {
           "type": "array",
-          "minItems": 6,
+          "minItems": 1,
           "maxItems": 6,
           "items": { "$ref": "#/$defs/categoryScore" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "total": { "const": 1 } } },
+          "then": { "properties": { "requiredPasses": { "const": 1 } } }
+        },
+        {
+          "if": { "properties": { "total": { "const": 19 } } },
+          "then": { "properties": { "requiredPasses": { "const": 19 } } }
+        }
+      ]
     },
     "failure": {
       "type": "object",
@@ -78,6 +88,59 @@
         "field": { "type": "string" },
         "expected": { "type": ["string", "null"] },
         "observed": { "type": ["string", "null"] }
+      }
+    },
+    "candidateFacts": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "environmentId",
+        "requestedRoleId",
+        "hasJustification",
+        "incidentId"
+      ],
+      "properties": {
+        "clientId": { "type": ["string", "null"] },
+        "environmentId": { "type": ["string", "null"] },
+        "requestedRoleId": { "type": ["string", "null"] },
+        "hasJustification": { "type": "boolean" },
+        "incidentId": { "type": ["string", "null"] }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "candidate",
+        "clarificationTarget",
+        "environmentOptionIds",
+        "validationCodes",
+        "modelResponse"
+      ],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "candidate": { "$ref": "#/$defs/candidateFacts" },
+        "clarificationTarget": {
+          "type": ["string", "null"],
+          "enum": ["environmentId", "requestedRoleId", "justification", "incidentId", null]
+        },
+        "environmentOptionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "validationCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "modelResponse": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 500
+        }
       }
     },
     "scenario": {
@@ -105,7 +168,8 @@
         "failures": {
           "type": "array",
           "items": { "$ref": "#/$defs/failure" }
-        }
+        },
+        "diagnostics": { "$ref": "#/$defs/diagnostics" }
       }
     }
   }

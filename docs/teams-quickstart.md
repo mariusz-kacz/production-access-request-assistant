@@ -164,11 +164,11 @@ cannot confirm, approve, or provision access. The existing 100-second Teams requ
 timeout is the single overall model/MCP deadline. If the selected live profile fails,
 the turn fails closed and never falls back to the deterministic client.
 
-For a live-model fallback check, send an identifier-like value such as
-`PROD-ALPHA`. The assistant must try exact lookup first. Only typed `NotFound` may
-lead to bounded discovery, and even one plausible stored alternative must be shown
-for explicit confirmation rather than silently substituted. Incident titles,
-descriptions, and partial IDs must instead produce an exact-ID-or-omit clarification.
+For a live-model strict-identifier check, send an identifier-like value such as
+`PROD-ALPHA`. The assistant must try exact lookup and, after typed `NotFound`, keep the
+environment unresolved with no suggested options instead of reinterpreting the value
+as a discovery query. Incident titles, descriptions, and partial IDs remain ordinary
+justification when no precise optional incident identifier is supplied.
 
 ## 7. Reset an unsubmitted preparation
 

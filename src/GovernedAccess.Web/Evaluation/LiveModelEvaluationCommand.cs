@@ -3,7 +3,9 @@ using GovernedAccess.Web.Ai;
 
 namespace GovernedAccess.Web.Evaluation;
 
-internal sealed record LiveModelEvaluationArguments(string OutputParentPath);
+internal sealed record LiveModelEvaluationArguments(
+    string OutputParentPath,
+    string? ScenarioId);
 
 internal sealed class LiveModelEvaluationCommand(
     LiveModelEvaluationRunner runner)
@@ -11,10 +13,13 @@ internal sealed class LiveModelEvaluationCommand(
     internal const string CommandName = "evaluate-live-model";
 
     private const string OutputOption = "--output";
+    private const string ScenarioOption = "--scenario";
     private const string InvalidArgumentsCode =
         "live_model_evaluation_arguments_invalid";
     private const string InvalidProfileCode =
         "live_model_evaluation_profile_invalid";
+    private const string InvalidScenarioCode =
+        "live_model_evaluation_scenario_invalid";
 
     internal static bool IsRequested(string[] arguments) =>
         arguments.Length > 0
@@ -28,21 +33,33 @@ internal sealed class LiveModelEvaluationCommand(
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
         string? outputPath = null;
+        string? scenarioId = null;
         for (var index = 0; index < arguments.Length; index++)
         {
-            if (!string.Equals(
-                    arguments[index],
-                    OutputOption,
-                    StringComparison.Ordinal)
-                || outputPath is not null
-                || index + 1 >= arguments.Length
+            var option = arguments[index];
+            if (index + 1 >= arguments.Length
                 || arguments[index + 1].StartsWith("--", StringComparison.Ordinal))
             {
                 return InvalidArguments();
             }
 
-            outputPath = arguments[++index];
-            if (string.IsNullOrWhiteSpace(outputPath))
+            var value = arguments[++index];
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return InvalidArguments();
+            }
+
+            if (string.Equals(option, OutputOption, StringComparison.Ordinal)
+                && outputPath is null)
+            {
+                outputPath = value;
+            }
+            else if (string.Equals(option, ScenarioOption, StringComparison.Ordinal)
+                     && scenarioId is null)
+            {
+                scenarioId = value;
+            }
+            else
             {
                 return InvalidArguments();
             }
@@ -57,7 +74,7 @@ internal sealed class LiveModelEvaluationCommand(
                 outputPath,
                 trustedWorkingDirectory);
             return ApplicationResult.Succeeded(
-                new LiveModelEvaluationArguments(resolvedOutputPath));
+                new LiveModelEvaluationArguments(resolvedOutputPath, scenarioId));
         }
         catch (Exception exception) when (
             exception is ArgumentException
@@ -66,6 +83,32 @@ internal sealed class LiveModelEvaluationCommand(
         {
             return InvalidArguments();
         }
+    }
+
+    internal static ApplicationResult<EvaluationDataset> SelectScenarios(
+        EvaluationDataset dataset,
+        string? scenarioId)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+
+        if (scenarioId is null)
+        {
+            return ApplicationResult.Succeeded(dataset);
+        }
+
+        var scenario = dataset.Scenarios.SingleOrDefault(candidate =>
+            string.Equals(candidate.Id, scenarioId, StringComparison.Ordinal));
+        if (scenario is null)
+        {
+            return ApplicationResult.Failed<EvaluationDataset>(
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidInput,
+                    InvalidScenarioCode,
+                    $"Evaluation scenario '{scenarioId}' does not exist in dataset '{dataset.DatasetVersion}'."));
+        }
+
+        return ApplicationResult.Succeeded(
+            dataset with { Scenarios = Array.AsReadOnly([scenario]) });
     }
 
     internal static ApplicationResult<RequestPreparationModelMetadata>
@@ -109,7 +152,27 @@ internal sealed class LiveModelEvaluationCommand(
         {
             var dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
                 cancellationToken);
-            var result = await runner.RunAsync(dataset, cancellationToken);
+            var selection = SelectScenarios(dataset, arguments.ScenarioId);
+            if (selection.IsFailure)
+            {
+                Console.Error.WriteLine(selection.Failure!.Message);
+                return GetExitCode(EvaluationRunStatus.PrerequisiteFailed);
+            }
+
+            var result = await runner.RunAsync(selection.Value, cancellationToken);
+            if (result.Status is EvaluationRunStatus.Passed or EvaluationRunStatus.Failed)
+            {
+                var artifacts = await EvaluationArtifactWriter.WriteAsync(
+                    result,
+                    arguments.OutputParentPath,
+                    cancellationToken);
+                WriteCompletion(result, artifacts);
+            }
+            else
+            {
+                Console.WriteLine("Evaluation CANCELLED.");
+            }
+
             return GetExitCode(result.Status);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -125,11 +188,28 @@ internal sealed class LiveModelEvaluationCommand(
         }
     }
 
+    private static void WriteCompletion(
+        EvaluationRunResult result,
+        EvaluationArtifactPaths artifacts)
+    {
+        Console.WriteLine(
+            $"Evaluation {(result.Status == EvaluationRunStatus.Passed ? "PASS" : "FAIL")}: {result.Summary.Passed}/{result.Summary.Total} scenarios passed ({result.Summary.RequiredPasses} required); workflow safety: {(result.Summary.SafetyPassed ? "PASS" : "FAIL")}.");
+        foreach (var scenario in result.Scenarios.Where(static scenario =>
+                     scenario.Status == EvaluationScenarioStatus.Failed))
+        {
+            Console.WriteLine(
+                $"- {scenario.Id}: {EvaluationArtifactWriter.FormatFailureSummary(scenario)}");
+        }
+
+        Console.WriteLine($"JSON result: {artifacts.JsonPath}");
+        Console.WriteLine($"Markdown report: {artifacts.MarkdownPath}");
+    }
+
     private static ApplicationResult<LiveModelEvaluationArguments>
         InvalidArguments() =>
         ApplicationResult.Failed<LiveModelEvaluationArguments>(
             new ApplicationFailure(
                 ApplicationFailureKind.InvalidInput,
                 InvalidArgumentsCode,
-                "Evaluation arguments are invalid. Only '--output <directory>' is supported."));
+                "Evaluation arguments are invalid. Supported options are '--output <directory>' and '--scenario <scenario-id>'."));
 }

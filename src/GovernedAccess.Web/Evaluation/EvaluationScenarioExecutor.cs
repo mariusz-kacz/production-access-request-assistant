@@ -181,7 +181,8 @@ internal sealed class EvaluationScenarioExecutor(
                     null,
                     null,
                     [],
-                    [code]),
+                    [code],
+                    null),
                 elapsedMilliseconds,
                 scenarioSideEffects,
                 []),
@@ -291,7 +292,8 @@ internal sealed class EvaluationScenarioExecutor(
             preparation.EnvironmentChoices
                 .Select(static choice => choice.EnvironmentId)
                 .ToArray(),
-            validationCodes);
+            validationCodes,
+            preparation.Clarification?.Message);
     }
 
     private static async Task<RequestIntakeSession?> FindCurrentSessionAsync(

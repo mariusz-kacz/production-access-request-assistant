@@ -28,7 +28,8 @@ internal sealed record FinalApplicationOutcome(
     FinalCandidateFacts? Candidate,
     EvaluationClarificationTarget? ClarificationTarget,
     IReadOnlyList<string> EnvironmentOptionIds,
-    IReadOnlyList<string> ValidationCodes);
+    IReadOnlyList<string> ValidationCodes,
+    string? ModelResponse);
 
 internal sealed record WorkflowSideEffectCounts(
     int Requests,

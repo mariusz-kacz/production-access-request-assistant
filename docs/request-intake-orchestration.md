@@ -105,9 +105,9 @@ The model instructions require it to:
   client or environment context without a precise or identifier-like value;
 - call exact environment lookup first when a precise or identifier-like value is
   supplied or changed;
-- use discovery as an exact-lookup fallback only after a typed `NotFound`; invalid
-  input, timeout, cancellation, unavailability, malformed results, success, and any
-  other outcome do not authorize fallback;
+- after an identifier-like exact `NotFound`, keep the environment unresolved and ask
+  for a corrected identifier with no discovery options; the application gate retains
+  the stricter invariant that no other exact outcome could authorize fallback;
 - use only the roles embedded in the applicable environment result; there is no
   separate role-listing tool;
 - call `get_incident` only when a precise stable incident identifier is supplied or
@@ -123,10 +123,10 @@ The model instructions require it to:
   and ordering they refer to; otherwise ask a self-contained clarification.
 
 `AllowMultipleToolCalls` remains false, so one model response requests at most one
-tool call. The bounded function loop may still make sequential calls: exact
-environment lookup, discovery after typed `NotFound`, and then exact incident lookup.
-A fresh application-controlled gate is created for each turn and prevents discovery
-after every exact result other than typed `NotFound`.
+tool call. The bounded function loop may still make sequential exact environment and
+incident calls. A fresh application-controlled gate is created for each turn and
+prevents discovery after every exact result other than typed `NotFound`, while the
+current model policy does not request discovery after `NotFound` either.
 
 Tool use improves interpretation but is not an authorization boundary. Application
 validation still reloads authoritative data after every proposal.

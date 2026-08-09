@@ -8,8 +8,6 @@ internal sealed class LiveModelEvaluationRunner(
     IClock clock,
     RequestPreparationModelMetadata modelMetadata)
 {
-    private const int RequiredPasses = 16;
-
     internal async Task<EvaluationRunResult> RunAsync(
         EvaluationDataset dataset,
         CancellationToken cancellationToken)
@@ -41,10 +39,13 @@ internal sealed class LiveModelEvaluationRunner(
                 dataset.Scenarios[index],
                 totalSideEffects,
                 cancellationToken);
-            scenarioResults.Add(execution.Result);
+            var scenarioResult = EvaluationGrader.GradeScenario(
+                dataset.Scenarios[index],
+                execution.Result);
+            scenarioResults.Add(scenarioResult);
             totalSideEffects = execution.TotalSideEffects;
 
-            if (execution.Result.Status == EvaluationScenarioStatus.Cancelled)
+            if (scenarioResult.Status == EvaluationScenarioStatus.Cancelled)
             {
                 AppendNotRunScenarios(
                     dataset,
@@ -60,17 +61,11 @@ internal sealed class LiveModelEvaluationRunner(
             }
         }
 
-        var passed = scenarioResults.Count(static result =>
-            result.Status == EvaluationScenarioStatus.Passed);
-        var status = passed >= RequiredPasses
-                && !totalSideEffects.HasAny
-            ? EvaluationRunStatus.Passed
-            : EvaluationRunStatus.Failed;
         return CreateRunResult(
             runId,
             dataset,
             startedAt,
-            status,
+            EvaluationRunStatus.Failed,
             totalSideEffects,
             scenarioResults);
     }
@@ -83,20 +78,7 @@ internal sealed class LiveModelEvaluationRunner(
         WorkflowSideEffectCounts totalSideEffects,
         IReadOnlyList<EvaluationScenarioResult> scenarios)
     {
-        // T013 replaces these execution-completion counts with semantic grading.
-        var categorySummaries = dataset.Scenarios
-            .GroupBy(static scenario => scenario.Category)
-            .Select(group => new EvaluationCategorySummary(
-                group.Key,
-                scenarios.Count(result =>
-                    result.Category == group.Key
-                    && result.Status == EvaluationScenarioStatus.Passed),
-                group.Count()))
-            .ToArray();
-        var passed = scenarios.Count(static result =>
-            result.Status == EvaluationScenarioStatus.Passed);
-
-        return new EvaluationRunResult(
+        var execution = new EvaluationRunResult(
             runId,
             dataset.DatasetVersion,
             startedAt,
@@ -105,12 +87,13 @@ internal sealed class LiveModelEvaluationRunner(
             modelMetadata.DeploymentName ?? "Unavailable",
             new EvaluationSummary(
                 dataset.Scenarios.Count,
-                passed,
-                RequiredPasses,
-                !totalSideEffects.HasAny,
-                Array.AsReadOnly(categorySummaries)),
+                0,
+                EvaluationGrader.GetRequiredPasses(dataset.Scenarios.Count),
+                false,
+                []),
             totalSideEffects,
             Array.AsReadOnly(scenarios.ToArray()));
+        return EvaluationGrader.GradeRun(dataset, execution);
     }
 
     private static void AppendNotRunScenarios(
