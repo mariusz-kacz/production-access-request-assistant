@@ -131,7 +131,7 @@ public sealed class EvaluationEngineTests
     }
 
     [Fact]
-    public async Task DefaultDatasetClarifiesIncidentScopeConflictBeforeEnvironmentChange()
+    public async Task DefaultDatasetClearsScopeDependentFieldsBeforeClarifyingIncidentConflict()
     {
         var dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
             TestContext.Current.CancellationToken);
@@ -144,13 +144,13 @@ public sealed class EvaluationEngineTests
         Assert.Equal(
             [
                 EvaluationCandidateField.Justification,
-                EvaluationCandidateField.RequestedRoleId,
             ],
             scenario.Expected.PreservedFields);
         Assert.Equal(
             [
                 EvaluationCandidateField.ClientId,
                 EvaluationCandidateField.EnvironmentId,
+                EvaluationCandidateField.RequestedRoleId,
                 EvaluationCandidateField.IncidentId,
             ],
             scenario.Expected.ClearedFields);
@@ -161,9 +161,7 @@ public sealed class EvaluationEngineTests
         Assert.True(expectedCandidate.EnvironmentId.IsDeclared);
         Assert.Null(expectedCandidate.EnvironmentId.Value);
         Assert.True(expectedCandidate.RequestedRoleId.IsDeclared);
-        Assert.Equal(
-            ProductionRoleIds.Support,
-            expectedCandidate.RequestedRoleId.Value);
+        Assert.Null(expectedCandidate.RequestedRoleId.Value);
         Assert.True(expectedCandidate.IncidentId.IsDeclared);
         Assert.Null(expectedCandidate.IncidentId.Value);
         Assert.True(expectedCandidate.HasJustification.IsDeclared);
