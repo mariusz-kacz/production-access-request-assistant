@@ -90,9 +90,10 @@ The evaluator does not capture prompts, transcripts, credentials, endpoints, raw
 provider/MCP payloads, tool traces, or token usage. Failed scenarios contain only
 sanitized final-state diagnostics.
 
-Generated runs remain ignored by default. The reviewed passing baseline from
-2026-08-10 is retained as project evidence in the
-[live-model evaluation report](../artifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/report.md).
+Generated runs remain ignored by default. The reviewed passing dataset 1.2.0 baseline
+from 2026-08-10 is retained as committed project evidence in the
+[evaluation evidence directory](evaluation/README.md), with both a human-readable
+report and machine-readable result.
 
 For the full credential-free validation sequence and cleanup commands, see the
 [evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md).

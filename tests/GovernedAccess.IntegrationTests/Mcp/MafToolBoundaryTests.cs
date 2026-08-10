@@ -169,24 +169,26 @@ public sealed class MafToolBoundaryTests
     }
 
     [Theory]
-    [InlineData("NotFound", true)]
-    [InlineData("InvalidInput", false)]
-    [InlineData("Timeout", false)]
-    [InlineData("Cancelled", false)]
-    [InlineData("Unavailable", false)]
-    public async Task DiscoveryFallbackRequiresTypedExactNotFound(
-        string exactOutcome,
-        bool discoveryExpected)
+    [InlineData(null)]
+    [InlineData("NotFound")]
+    [InlineData("InvalidInput")]
+    [InlineData("Timeout")]
+    [InlineData("Cancelled")]
+    [InlineData("Unavailable")]
+    public async Task DiscoveryIsBlockedAfterEveryExactLookupOutcome(
+        string? exactFailureOutcome)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var host = await BoundaryMcpTestHost.CreateAsync(
             TestCatalog.Exact,
-            ToolBehavior.TypedExactFailure,
+            exactFailureOutcome is null
+                ? ToolBehavior.Success
+                : ToolBehavior.TypedExactFailure,
             cancellationToken,
-            exactOutcome);
+            exactFailureOutcome);
         var chatClient = new ToolBoundaryChatClient(
             invokeEnvironmentTool: true,
-            attemptDiscoveryFallback: true);
+            attemptDiscoveryAfterExactLookup: true);
         var interpreter = CreateInterpreter(chatClient, host.HttpClientFactory);
 
         var outcome = await interpreter.InterpretAsync(
@@ -195,7 +197,7 @@ public sealed class MafToolBoundaryTests
 
         Assert.IsType<RequestPreparationInterpretationSucceeded>(outcome);
         Assert.Equal(1, host.ExactEnvironmentCallCount);
-        Assert.Equal(discoveryExpected ? 1 : 0, host.DiscoveryEnvironmentCallCount);
+        Assert.Equal(0, host.DiscoveryEnvironmentCallCount);
     }
 
     private static MafRequestPreparationInterpreter CreateInterpreter(
@@ -256,7 +258,7 @@ public sealed class MafToolBoundaryTests
 
     private sealed class ToolBoundaryChatClient(
         bool invokeEnvironmentTool,
-        bool attemptDiscoveryFallback = false) : IChatClient
+        bool attemptDiscoveryAfterExactLookup = false) : IChatClient
     {
         private int requestCount;
 
@@ -293,13 +295,13 @@ public sealed class MafToolBoundaryTests
                         ["environmentId"] = "PROD-ALPHA-EU",
                     },
                     cancellationToken);
-                if (!attemptDiscoveryFallback)
+                if (!attemptDiscoveryAfterExactLookup)
                 {
                     throw new HttpRequestException(
                         "The MCP tool reported dependency unavailability.");
                 }
 
-                if (attemptDiscoveryFallback)
+                if (attemptDiscoveryAfterExactLookup)
                 {
                     _ = await tool.InvokeAsync(
                         new AIFunctionArguments(),
@@ -559,7 +561,7 @@ public sealed class MafToolBoundaryTests
                     outcome,
                     code,
                     message = "The exact environment lookup failed.",
-                    correlationId = "fallback-gate-correlation",
+                    correlationId = "discovery-gate-correlation",
                 },
                 isError: true);
         }

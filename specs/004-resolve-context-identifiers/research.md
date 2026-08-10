@@ -140,9 +140,10 @@ an environment clarification. Change the tool allowlist and agent instructions t
 the exact two-tool design. Keep
 `AllowMultipleToolCalls = false`: it limits a single model response to one tool call
 but does not prevent sequential calls in the function-calling loop, so an environment
-exact attempt, environment discovery fallback, and exact incident lookup can still
-occur in one preparation turn. Those three calls plus the final proposal fit within
-the existing six-iteration request limit.
+discovery and exact incident lookup, or an exact environment lookup and exact incident
+lookup, can still occur in one preparation turn. Exact lookup and environment
+discovery cannot be combined in the same turn. The calls plus the final proposal fit
+within the existing six-iteration request limit.
 
 **Rationale**: The candidate already contains nullable client, environment, role,
 justification, and incident fields plus one focused clarification. The model still
@@ -231,36 +232,31 @@ measurable before a release.
 - Omit model-quality evaluation: rejected because success criteria SC-001 and SC-002
   explicitly describe resolution behavior that contract tests alone cannot measure.
 
-## R11. Suspected-identifier fallback
+## R11. Suspected-identifier handling
 
 **Decision**: When the model interprets a developer-supplied value as a possible
-environment identifier, it attempts exact lookup first. Only typed `NotFound` permits
-a second, parameterless discovery call in the same preparation turn. The model may
-then form a structured clarification shortlist only from the returned catalog,
-considering both identifier resemblance and the message's explicit readable terms.
-The application rejects duplicate, excessive, or unknown IDs, reloads each accepted
-option, orders valid options by stable ID, and renders their authoritative client and
-environment names beside the model's bounded conversational message. The message is
-shown only after the structured option set passes validation and is never parsed for
-additional choices or scope. The model must honor explicit readable scope terms, but no
-fallback alternative is automatically proposed: one requires confirmation, several
-require selection, and none require focused correction. The rejected value is never
-silently rewritten.
+environment identifier, it performs exact lookup. No exact outcome permits a second,
+parameterless discovery call in the same preparation turn. Typed `NotFound` keeps the
+environment and derived client unresolved and requires a focused corrected-identifier
+question with no structured environment options. Other failures retain their existing
+typed safe outcomes. Catalog discovery remains available only when the original input
+contains readable environment or client wording without an identifier-like value.
 
-**Rationale**: Exact-first preserves authoritative identifier semantics while the
-fallback recovers from the model mistaking readable text for an identifier or from a
-developer typo. Requiring interaction before substitution prevents approximate
-matching from selecting the wrong production scope. Typed failure discrimination
-also prevents outages or malformed calls from masquerading as authoritative absence.
+**Rationale**: Exact-only handling preserves authoritative identifier semantics and
+prevents a rejected identifier or typo from being reinterpreted as a different,
+security-relevant production scope. Typed failure discrimination also prevents
+outages or malformed calls from masquerading as authoritative absence.
 
 **Alternatives considered**:
 
 - Treat every identifier-like value as readable context: rejected because it skips
   the authoritative exact lookup and may conceal a valid stable identifier.
+- Discover after typed `NotFound`: rejected because identifier correction must remain
+  explicit and must not broaden into catalog interpretation in the same turn.
 - Automatically accept a single similar catalog entry: rejected because similarity
   is probabilistic and a typo correction changes security-relevant scope.
-- Fall back for timeout, cancellation, invalid input, or unavailability: rejected
-  because those outcomes do not prove that the supplied identifier is absent.
+- Discover after timeout, cancellation, invalid input, or unavailability: rejected
+  because those outcomes do not establish authoritative scope.
 - Add fuzzy search or aliases to MCP: rejected because the model already interprets
   the bounded catalog and another search surface is outside the fixed-data scope.
 

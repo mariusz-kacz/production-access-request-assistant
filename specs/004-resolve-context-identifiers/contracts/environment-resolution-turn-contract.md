@@ -49,14 +49,12 @@ execution. `get_available_roles` is not part of the catalog.
    environment value, first call `get_production_environment` with that value.
 2. When exact lookup succeeds, use only that returned context. If explicit readable
    client, environment, or location terms conflict with it, clarify the conflict.
-3. Only typed `NotFound` from exact lookup permits a second
-   `get_production_environment` call with `{}`. Invalid input, timeout, cancellation,
-   unavailability, or malformed results produce their existing safe outcome and do
-   not trigger discovery fallback.
-4. After exact `NotFound`, interpret the rejected value and all explicit readable
-   terms only against the returned complete candidate set. One plausible alternative
-   requires confirmation, several require selection, and none require focused
-   correction. Never silently rewrite the rejected value.
+3. No exact-lookup outcome permits a second `get_production_environment` call with
+   `{}` in the same turn. This includes success, typed `NotFound`, invalid input,
+   timeout, cancellation, unavailability, and malformed results.
+4. After exact `NotFound`, keep `clientId` and `environmentId` unresolved and ask for
+   a corrected environment identifier with no structured environment options. Never
+   reinterpret or silently rewrite the rejected value.
 5. When the latest message supplies readable environment or client context without a
    precise or identifier-like environment value, call
    `get_production_environment` with `{}` directly. In this ordinary discovery path,
@@ -118,9 +116,10 @@ one deterministic candidate assessment.
 
 `AllowMultipleToolCalls` remains false. One model response may request at most one
 tool call, while the function-calling loop may perform sequential calls before the
-turn returns its single final proposal. Exact environment lookup followed by
-environment discovery after `NotFound`, and then an exact incident lookup, may
-therefore occur sequentially in one user turn. No response requests parallel calls.
+turn returns its single final proposal. Environment discovery followed by exact
+incident lookup, or exact environment lookup followed by exact incident lookup, may
+occur sequentially in one user turn. Exact environment lookup followed by discovery
+is blocked. No response requests parallel calls.
 
 ## Expected Outcomes
 
@@ -152,12 +151,9 @@ latest message
 latest message with potential environment ID
   -> exact environment lookup
   -> typed NotFound
-  -> bounded environment discovery
-  -> zero, one, or several structured environmentOptionIds
-  -> deterministic option reload
-  -> model-authored question plus authoritative choice rendering
-  -> focused correction, confirmation, or selection
-  -> no candidate substitution before the developer replies
+  -> no bounded environment discovery
+  -> focused corrected-identifier question with no environmentOptionIds
+  -> environment and derived client remain unresolved
 ```
 
 ### Potential identifier lookup fails for another reason
@@ -167,7 +163,7 @@ latest message with potential environment ID
   -> exact environment lookup
   -> InvalidInput, timeout, cancellation, unavailable, or malformed result
   -> typed safe failure or retry guidance
-  -> no discovery fallback and no candidate change
+  -> no discovery call and no candidate change
 ```
 
 ### Incident description without exact ID

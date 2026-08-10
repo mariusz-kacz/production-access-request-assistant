@@ -4,7 +4,7 @@
 
 Use this guide after feature 004 implementation to prove the exact two-tool catalog,
 bounded environment discovery, embedded role context, exact-only incident behavior,
-exact-lookup fallback clarification, deterministic validation, and unchanged governed
+exact-lookup correction without discovery, deterministic validation, and unchanged governed
 workflow.
 
 See:
@@ -131,25 +131,22 @@ Message:
 I need read-only access to PROD-ALPHA.
 ```
 
-Script the model to call exact lookup first, receive typed `NotFound`, call discovery,
-and return a focused `message` together with
-`environmentOptionIds: ["PROD-ALPHA-EU"]`.
+Script the model to call exact lookup and receive typed `NotFound`. Have it attempt a
+discovery call before returning a focused corrected-identifier question with
+`environmentOptionIds: []`.
 
 Expected:
 
-- exact lookup occurs before discovery;
-- the proposed option ID is reloaded from authoritative context;
-- the application preserves the bounded model-authored question and appends Client
-  Alpha, Production Europe, and `PROD-ALPHA-EU` from authoritative data;
-- identifiers or display values written only in the model message do not become
-  selectable options;
-- `environmentId` remains unresolved and no ready snapshot or request exists until
-  the developer confirms the option.
+- exact lookup executes once and the attempted discovery does not reach MCP;
+- the exact `NotFound` result is returned to the model again;
+- no authoritative environment choices are rendered;
+- `clientId` and `environmentId` remain unresolved; and
+- no ready snapshot or request exists until the developer supplies a corrected ID.
 
-Repeat with zero and multiple plausible option IDs. Expect focused correction for
-zero, stable ordered authoritative choices for multiple, and no silent substitution.
+Repeat with exact success, `InvalidInput`, timeout, cancellation, and `Unavailable`.
+Expect discovery to remain blocked after every exact outcome.
 
-### Invalid fallback choices
+### Invalid discovery choices
 
 Return an unknown option ID, a duplicate ID, more than 20 IDs, or an environment ID
 written only in free-form `message`.
@@ -162,19 +159,19 @@ Expected:
 - unknown or prose-only IDs are never rendered as authoritative choices;
 - no candidate, request, approval, operation, or grant is created.
 
-Separately, script a potential identifier together with conflicting readable client
-or location terms. Expect the conflict to remain explicit, the response to remain a
+Separately, script readable environment wording together with conflicting client or
+location terms. Expect the conflict to remain explicit, the response to remain a
 clarification, and no option to become candidate scope without a developer reply.
 
-### No fallback for other exact-lookup failures
+### No discovery after exact lookup
 
-For an identifier-like message, make exact lookup return `InvalidInput`, timeout,
-cancellation, `Unavailable`, or a malformed result.
+For an identifier-like message, make exact lookup return success, `NotFound`,
+`InvalidInput`, timeout, cancellation, `Unavailable`, or a malformed result.
 
 Expected:
 
 - no discovery call follows;
-- the original typed correction or retry outcome is preserved;
+- the exact result or typed correction/retry outcome is preserved;
 - previously valid candidate values that do not depend on this resolution remain
   intact.
 
@@ -272,11 +269,12 @@ Record:
 - embedded role membership and stable ordering;
 - exact-only incident evidence;
 - ambiguity, no-match, overflow, timeout, cancellation, and malformed-output outcomes;
-- exact `NotFound` fallback with zero, one, and multiple plausible alternatives;
+- discovery blocked after exact success and every typed exact failure, including
+  `NotFound`;
 - structured option validation, preservation of bounded model-authored clarification
   wording, authoritative choice rendering, and explicit selection or confirmation
   before substitution;
-- proof that non-`NotFound` failures never trigger discovery fallback;
+- proof that readable non-identifier wording can still use bounded discovery;
 - independent rejection of unsupported environment-role and cross-environment incident
   combinations; and
 - updated README, architecture, security, orchestration, testing, Teams,

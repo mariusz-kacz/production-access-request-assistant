@@ -99,7 +99,7 @@
           "environmentId": "PROD-ALPHA-EU"
         },
         "exactSuccess": "Returns exactly one environment in environments[].",
-        "exactNotFound": "Returns the shared typed failure envelope with outcome NotFound. A consumer may then call discovery, but the tool never performs or ranks fallback matching.",
+        "exactNotFound": "Returns the shared typed failure envelope with outcome NotFound. The request-preparation consumer keeps scope unresolved and must not call discovery later in the same turn.",
         "invalidInput": "JSON null, blank environmentId, or unknown properties return the shared typed InvalidInput failure.",
         "overflow": "More than 20 authoritative environments returns Unavailable with code environment-candidate-limit-exceeded and no partial list.",
         "ordering": "Environment IDs and role IDs use ordinal ascending ordering."

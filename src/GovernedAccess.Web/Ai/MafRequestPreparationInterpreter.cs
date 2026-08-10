@@ -454,7 +454,7 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
             .Select<
                 McpClientTool,
                 AITool>(tool => tool.Name == "get_production_environment"
-                    ? new EnvironmentDiscoveryFallbackGate(tool)
+                    ? new EnvironmentDiscoveryAfterExactLookupGate(tool)
                     : tool)
             .ToArray();
     }
@@ -571,19 +571,19 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
     {
     }
 
-    private sealed class EnvironmentDiscoveryFallbackGate(AIFunction innerFunction)
+    private sealed class EnvironmentDiscoveryAfterExactLookupGate(
+        AIFunction innerFunction)
         : DelegatingAIFunction(innerFunction)
     {
         private object? exactLookupResult;
         private bool exactLookupAttempted;
-        private bool discoveryPermitted;
 
         protected override async ValueTask<object?> InvokeCoreAsync(
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
             var isDiscovery = !arguments.ContainsKey("environmentId");
-            if (isDiscovery && exactLookupAttempted && !discoveryPermitted)
+            if (isDiscovery && exactLookupAttempted)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return exactLookupResult;
@@ -597,53 +597,9 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
             {
                 exactLookupAttempted = true;
                 exactLookupResult = result;
-                discoveryPermitted = HasTypedNotFoundOutcome(result);
             }
 
             return result;
-        }
-
-        private static bool HasTypedNotFoundOutcome(object? result)
-        {
-            if (result is null)
-            {
-                return false;
-            }
-
-            try
-            {
-                var element = result is JsonElement jsonElement
-                    ? jsonElement
-                    : JsonSerializer.SerializeToElement(result, SerializerOptions);
-                return HasTypedNotFoundOutcome(element);
-            }
-            catch (JsonException)
-            {
-                return false;
-            }
-            catch (NotSupportedException)
-            {
-                return false;
-            }
-        }
-
-        private static bool HasTypedNotFoundOutcome(JsonElement element)
-        {
-            if (element.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            if (element.TryGetProperty("outcome", out var outcome))
-            {
-                return outcome.ValueKind == JsonValueKind.String
-                    && outcome.GetString() == "NotFound";
-            }
-
-            return element.TryGetProperty(
-                    "structuredContent",
-                    out var structuredContent)
-                && HasTypedNotFoundOutcome(structuredContent);
         }
     }
 

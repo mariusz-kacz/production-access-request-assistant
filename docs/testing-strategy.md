@@ -38,7 +38,7 @@ project name does not require every test to start the complete application.
 | Business and DevOps decisions | Unit policy tests plus SQLite component tests for authenticated authority, decision order, duplicate transitions, exact scope, and audit evidence. |
 | Provisioning and retry | Component tests for persisted-evidence reload, provider input, failed states, lost responses, idempotency, and one grant per request. |
 | MCP | Contract and transport tests for the exact two-tool catalog, closed schemas, bounded discovery, exact lookup, embedded roles, typed failures, overflow, and cancellation. |
-| MAF | Component tests for strict proposal parsing, session isolation, same-intake serialization, restart behavior, successful-save semantics, and provider failures. |
+| MAF | Component tests for strict proposal parsing, discovery blocked after every exact environment outcome, session isolation, same-intake serialization, restart behavior, successful-save semantics, and provider failures. |
 | Browser security | Full-host tests for six demo identities, cookies, antiforgery, authorization, over-posting, participant filtering, and `/api`/`/mcp` SPA exclusion. |
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
 | Persistence | EF model and component tests for relationships, unique constraints, UTC conversion, optimistic concurrency, and exact synthetic seeding. |

@@ -96,8 +96,8 @@ The model instructions require these behaviors:
 - readable client, region, primary, or recovery wording uses bounded environment
   discovery;
 - precise or identifier-like environment input uses exact lookup;
-- exact `NotFound` for identifier-like input remains an unresolved exact identifier in
-  the current policy and does not trigger discovery or fuzzy correction;
+- every exact environment outcome prevents later discovery in the same turn; exact
+  `NotFound` remains unresolved and does not trigger discovery or fuzzy correction;
 - client ID is derived from the authoritative environment;
 - a role is proposed only when assigned to the selected environment;
 - every role clarification lists all authoritative role IDs assigned to the selected

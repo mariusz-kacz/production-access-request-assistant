@@ -123,7 +123,7 @@ non-authoritative plain text, and appends client/environment names and stable ID
 those records. The message is never parsed for additional options or scope, and an
 invalid option set suppresses the associated message and choices. The model must
 honor explicit readable scope terms, while mandatory confirmation or selection
-prevents a fallback option from becoming scope automatically. Complete contexts and
+prevents a discovery option from becoming scope automatically. Complete contexts and
 choice lists are not persisted in the intake.
 
 ## Relationships
@@ -156,10 +156,8 @@ These are not persisted states or MCP failures:
 | Exactly one environment satisfies the readable terms | Candidate proposal | Independently validate all stable values |
 | More than one environment remains plausible | One focused model-authored `environmentId` clarification plus structured option IDs | Validate every ID, render the message with authoritative choices, persist sanitized candidate only, and create no request |
 | No environment satisfies the terms | One focused model-authored correction with no options | Keep environment unresolved; create no request |
-| Potential identifier exact lookup returns `NotFound`, one catalog alternative is plausible | One focused model-authored "did you mean" `environmentId` clarification with one structured option ID | Validate the ID, render the message with the authoritative option, and do not replace the rejected value until the developer confirms |
-| Potential identifier exact lookup returns `NotFound`, several catalog alternatives are plausible | One focused model-authored `environmentId` clarification with structured option IDs | Validate, reload, sort, and render the message with authoritative choices; accept only a developer-selected member |
-| Potential identifier exact lookup returns `NotFound`, no catalog alternative is plausible | One focused correction | Keep environment unresolved; never fabricate an ID |
-| Potential identifier exact lookup returns any other failure | Typed safe failure or retry guidance | Do not run discovery fallback or alter dependent values |
+| Potential identifier exact lookup returns `NotFound` | One focused corrected-`environmentId` clarification with no structured options | Keep environment and derived client unresolved; do not run discovery or fabricate an ID |
+| Potential identifier exact lookup returns any other failure | Typed safe failure or retry guidance | Do not run discovery or alter dependent values |
 | Requested role absent from selected candidate | One focused `requestedRoleId` clarification listing all authoritative role IDs returned for the selected environment | Never treat the role as allowed or ask for an unspecified role |
 | Incident wording lacks a precise ID | One focused `incidentId` clarification | Do not call incident lookup or infer an ID |
 
@@ -184,7 +182,7 @@ can become `Ready`.
 - The fixed reference schema stores business-approver responsibility on `Client`
   rather than repeating it on every `ProductionEnvironment`.
 - No new durable catalog, alias, confidence, ranking, or clarification-choice data.
-- The rejected potential identifier and its fallback shortlist remain turn-local
-  interpretation context and are not new durable fields.
+- The rejected potential identifier remains turn-local interpretation context and is
+  not a new durable field; exact lookup produces no discovery shortlist.
 - No transcript or full MCP payload persistence.
 - Existing startup validation of the fixed synthetic dataset remains authoritative.

@@ -11,9 +11,10 @@ environment's precise stable identifier from the requester's natural-language
 description. Include the roles assigned to each environment in that authoritative
 environment context so no separate role-listing tool is needed. Limit discovery to
 environments; an optional incident must still be provided using its precise stable
-identifier. When a value appears to be an environment identifier but exact lookup
-does not find it, discover and show authoritative plausible environment alternatives
-instead of silently correcting it. For environment clarification, preserve the
+identifier. When a value appears to be an environment identifier, use only exact
+lookup; if it is not found, keep the scope unresolved and request a corrected
+identifier without catalog discovery or silent correction. For environment
+clarification based on readable wording, preserve the
 model's bounded conversational wording while the application independently validates
 the model's structured option identifiers and renders authoritative option details."
 
@@ -58,13 +59,12 @@ developer to supply either identifier.
    authoritative roles included with that environment and performs no separate role
    lookup through the model-visible context surface.
 6. **Given** a developer supplies a value that appears to be an environment
-   identifier, **When** exact lookup does not find it, **Then** the assistant consults
-   the bounded authoritative environment set and shows any plausible alternatives
-   without silently replacing the rejected value.
-7. **Given** one plausible authoritative alternative remains after a failed exact
-   lookup, **When** the assistant responds, **Then** it asks the developer to confirm
-   that environment using the model's conversational question accompanied by an
-   application-rendered authoritative choice before proposing its identifier.
+   identifier, **When** exact lookup does not find it, **Then** the assistant keeps
+   the environment and client unresolved and asks for a corrected identifier without
+   catalog discovery, alternatives, or silent replacement.
+7. **Given** readable environment wording without an identifier-like value, **When**
+   the assistant resolves it, **Then** bounded discovery may produce authoritative
+   alternatives for clarification.
 
 ---
 
@@ -99,11 +99,11 @@ shown until one environment is selected and deterministically validated.
 4. **Given** conversation history needed to interpret a relative choice is no longer
    available, **When** the developer sends the relative answer, **Then** the assistant
    repeats a self-contained environment clarification instead of guessing.
-5. **Given** a failed exact lookup produces several plausible authoritative
-   alternatives, **When** the assistant asks for clarification, **Then** it shows
-   the model's focused conversational question plus readable authoritative client and
-   environment information together with each unchanged stable identifier, and waits
-   for the developer to select one.
+5. **Given** readable wording produces several plausible authoritative alternatives,
+   **When** the assistant asks for clarification, **Then** it shows the model's
+   focused conversational question plus readable authoritative client and environment
+   information together with each unchanged stable identifier, and waits for the
+   developer to select one.
 
 ---
 
@@ -165,10 +165,12 @@ fails safely without creating or advancing a request.
 4. **Given** a user instructs the assistant to invent an identifier, ignore a
    mismatch, approve, or provision access, **When** the message is processed, **Then**
    those instructions do not change the candidate or workflow state.
-5. **Given** an exact environment lookup fails because of timeout, cancellation,
-   invalid input, or context unavailability rather than an authoritative no-match,
-   **When** the turn ends, **Then** discovery fallback is not used to mask the failure
-   and the developer receives safe retry or correction guidance.
+5. **Given** an exact environment lookup returns any outcome, **When** the model then
+   attempts catalog discovery in the same turn, **Then** the discovery call is blocked.
+6. **Given** exact lookup returns `NotFound`, **When** the turn ends, **Then** the
+   developer receives focused identifier-correction guidance with no environment
+   options; timeout, cancellation, invalid input, and context unavailability retain
+   their existing safe outcomes.
 
 ### Edge Cases
 
@@ -187,10 +189,10 @@ fails safely without creating or advancing a request.
   identifier, or other description instead of the exact stable incident identifier.
 - A potential environment identifier differs from an authoritative identifier by a
   missing suffix, extra punctuation, capitalization, or a transcription error.
-- A rejected potential identifier resembles environments belonging to different
-  clients or locations.
-- A failed exact lookup has one plausible alternative, but readable client or
-  location terms in the message conflict with that alternative.
+- A rejected potential identifier resembles an authoritative environment; it is not
+  reinterpreted or corrected through discovery.
+- A failed exact lookup is accompanied by readable client or location terms; the
+  identifier-like value still keeps the turn on the exact-only correction path.
 - An exact incident identifier is valid but associated with a different environment.
 - The resolved environment does not offer the requested role.
 - Authoritative context changes between environment selection and final confirmation;
@@ -294,24 +296,22 @@ fails safely without creating or advancing a request.
   behavior MUST remain unchanged after an environment is resolved.
 - **FR-027**: When a developer supplies a value that plausibly represents an
   environment identifier, the assistant MUST attempt authoritative exact lookup
-  before treating that value as readable environment context.
-- **FR-028**: Only an authoritative exact-lookup no-match MAY trigger bounded
-  environment discovery as a fallback. Invalid input, timeout, cancellation,
-  unavailability, and malformed results MUST retain their explicit safe outcomes and
-  MUST NOT be treated as no-match.
-- **FR-029**: After an exact-lookup no-match, the assistant MUST compare the rejected
-  value and the message's readable client and environment terms only against the
-  bounded authoritative candidate set and MUST show only plausible alternatives from
-  that set.
-- **FR-030**: A failed exact lookup MUST NOT cause silent identifier correction. One
-  plausible alternative requires explicit developer confirmation; multiple plausible
-  alternatives require developer selection; no plausible alternative requires
-  focused correction guidance.
-- **FR-031**: Every fallback alternative MUST retain its authoritative stable
+  and MUST NOT subsequently reinterpret that value as readable environment context.
+- **FR-028**: No exact-lookup outcome, including authoritative `NotFound`, MAY trigger
+  bounded environment discovery in the same turn. Invalid input, timeout,
+  cancellation, unavailability, and malformed results MUST retain their explicit safe
+  outcomes.
+- **FR-029**: Bounded discovery MUST be used only when the request supplies readable
+  environment or client context without a precise or identifier-like environment
+  value.
+- **FR-030**: A failed exact lookup MUST NOT cause silent identifier correction or
+  produce discovery alternatives. Authoritative `NotFound` requires focused
+  identifier-correction guidance with no structured environment options.
+- **FR-031**: Every discovery alternative MUST retain its authoritative stable
   identifier and readable client and environment information unchanged. Conflicting
   client, environment, or location terms MUST be disclosed and MUST prevent automatic
   proposal.
-- **FR-032**: Fallback alternatives MUST be proposed as structured environment
+- **FR-032**: Discovery alternatives MUST be proposed as structured environment
   identifiers and independently checked against authoritative data. The model MAY
   supply the surrounding conversational question, but every displayed choice label,
   stable identifier, client relationship, and environment value MUST come from the
@@ -391,9 +391,9 @@ fails safely without creating or advancing a request.
   application renders authoritative display information beside that message. It is
   not approval evidence or a new persistent business record.
 - **Rejected potential environment identifier**: A developer-supplied value that was
-  attempted as an exact identifier and authoritatively returned no match. It may be
-  used only to identify plausible clarification choices and is never corrected or
-  persisted as authoritative scope.
+  attempted as an exact identifier and authoritatively returned no match. It remains
+  unresolved, produces no discovery choices, and is never corrected or persisted as
+  authoritative scope.
 
 ### Verification Requirements *(mandatory)*
 
@@ -407,8 +407,8 @@ fails safely without creating or advancing a request.
   environment; unchanged exact-identifier behavior for `get_incident`; absence of a
   separate role tool; stable identifiers and readable environment data; the exact
   two-tool catalog; explicit typed failures; cancellation and timeout propagation;
-  exact-lookup no-match followed by discovery and clarification; absence of fallback
-  for other failures; preservation of the bounded model clarification message beside
+  discovery blocked after exact success and every typed exact failure, including
+  `NotFound`; preservation of the bounded model clarification message beside
   independently rendered authoritative choices; suppression after invalid option
   sets; and final deterministic validation. Automated scenarios use a deterministic
   fake chat client and require no live model.
@@ -419,10 +419,10 @@ fails safely without creating or advancing a request.
   or
   missing tools, context failure and timeout, lost conversation history,
   prompt-injection attempts, stale context at confirmation, concurrent conversations,
-  replay behavior, silent typo correction, fallback suggestions absent from the
+  replay behavior, silent typo correction, discovery suggestions absent from the
   authoritative catalog, identifiers present only in clarification prose, invalid
-  option sets whose associated message must be suppressed, and fallback despite
-  non-no-match failures.
+  option sets whose associated message must be suppressed, and discovery attempted
+  after any exact lookup outcome.
 
 ## Success Criteria *(mandatory)*
 
@@ -457,13 +457,12 @@ fails safely without creating or advancing a request.
 - **SC-009**: In 100% of representative requests, role choices shown after environment
   resolution are exactly the roles currently assigned to that environment, and an
   unsupported role never reaches the final request.
-- **SC-010**: In 100% of representative failed exact-environment lookup scenarios,
-  every suggested alternative comes from the authoritative environment set and no
-  alternative becomes the proposed scope until the developer explicitly confirms or
-  selects it.
-- **SC-011**: In 100% of timeout, cancellation, invalid-input, unavailable-context,
-  and malformed-result scenarios, the failure is not converted into discovery-based
-  identifier correction.
+- **SC-010**: In 100% of representative exact-environment lookup scenarios,
+  subsequent catalog discovery is blocked after exact success and every typed failure,
+  including `NotFound`.
+- **SC-011**: In 100% of `NotFound`, timeout, cancellation, invalid-input,
+  unavailable-context, and malformed-result scenarios, the exact result is not
+  converted into discovery-based identifier correction.
 - **SC-012**: In 100% of environment clarifications with a valid structured option
   set, the developer sees the model's focused conversational question together with
   authoritative choice labels and stable identifiers; generated names or identifiers
@@ -488,11 +487,10 @@ fails safely without creating or advancing a request.
   is outside scope.
 - Exactly one valid authoritative environment is the safe default for automatic
   proposal; confidence scores alone never justify choosing among multiple records.
-- A failed exact lookup is a distinct case: even one plausible alternative is shown
-  for confirmation rather than silently proposed as a typo correction.
-- Potential-identifier matching uses the same bounded authoritative environment set;
-  no alias store, fuzzy-search service, or additional model-visible capability is
-  introduced.
+- A failed exact lookup is a distinct exact-only case: no catalog alternatives are
+  shown and `NotFound` asks for a corrected identifier.
+- Potential identifiers are not matched against the bounded discovery set; no alias
+  store, fuzzy-search service, or additional model-visible capability is introduced.
 - Existing bounded process-local conversation history and the durable typed candidate
   support environment-choice follow-ups; candidate lists and transcripts are not new
   durable business records.

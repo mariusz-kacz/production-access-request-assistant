@@ -205,8 +205,9 @@ concurrent tool invocation, and terminates on unknown calls.
 
 The client requires the catalog to contain exactly `get_production_environment` and
 `get_incident`, both marked read-only. Environment discovery is bounded to 20 results.
-The current interpreter does not reinterpret an identifier-like exact `NotFound` as a
-discovery query.
+The interpreter blocks catalog discovery after every exact environment lookup
+outcome. It does not reinterpret an identifier-like exact `NotFound` as a discovery
+query.
 
 The same Web executable also supports `evaluate-live-model`. That mode starts an
 isolated loopback host exposing only `/mcp`, uses a unique temporary SQLite database,

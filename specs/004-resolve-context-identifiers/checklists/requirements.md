@@ -41,9 +41,9 @@
   not an independently discovered or user-selected value.
 - Ambiguous or missing environment matches require clarification and are never
   resolved using confidence alone.
-- A potential identifier that returns authoritative no-match falls back to bounded
-  discovery, but every plausible alternative requires explicit user confirmation or
-  selection and no other failure type is reinterpreted as no-match.
+- A potential identifier uses exact lookup only. Authoritative no-match asks for a
+  corrected identifier with no options, and no exact outcome permits discovery later
+  in the same turn.
 - Validation iteration 4 passed all checklist items after separating the model-owned
   conversational clarification message from application-rendered authoritative
   choices. Structured option identifiers remain independently validated, prose is

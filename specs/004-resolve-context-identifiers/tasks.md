@@ -110,7 +110,7 @@ discovery and explicit confirmation of any proposed alternative.
 
 - [X] T011 [P] [US1] Replace the exact-only environment result and separate role tool with the dual-mode `get_production_environment` contract, common environment array, authoritative client display data, embedded ordered roles, and typed failures in `src/GovernedAccess.Mcp/RequestContextTools.cs`
 - [X] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
-- [X] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup only, with typed `NotFound` producing correction without options, in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 - [X] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
 - [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestDraftService.cs`
 - [X] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
@@ -179,22 +179,22 @@ MCP, Teams, or scripted-model tests.
 ## Phase 6: User Story 4 - Recover Safely from Resolution Failure (Priority: P4)
 
 **Goal**: Fail safely for catalog overflow, invalid structured choices, unexpected
-tools, dependency failures, cancellation, and malformed output; only authoritative
-exact `NotFound` may enable discovery fallback.
+tools, dependency failures, cancellation, and malformed output; every exact lookup
+outcome prevents discovery in the same turn.
 
 **Independent Test**: Verify the new public overflow mapping and deterministic
-fallback gate. Existing resilience suites continue to cover cancellation,
+discovery-after-exact gate. Existing resilience suites continue to cover cancellation,
 unavailability, malformed output, prompt injection, unexpected catalogs, session
 rollback, logging, and workflow-state isolation.
 
 ### Tests for User Story 4
 
 - [X] T021 [P] [US4] Update existing MCP failure expectations for the new environment list operation and add only the new catalog-overflow-to-typed-failure assertion; retain existing dependency-failure and cancellation cases instead of recreating them for discovery in `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
-- [X] T022 [P] [US4] Adapt the retained cancellation, unavailability, malformed-output, and unexpected-catalog fixtures to the new environment function shape, then add one focused theory proving the application-controlled fallback gate permits discovery after typed exact `NotFound` and rejects it after every other typed outcome; do not repeat T009's catalog contract or add semantic routing cases in `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs` and `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs`
+- [X] T022 [P] [US4] Adapt the retained cancellation, unavailability, malformed-output, and unexpected-catalog fixtures to the new environment function shape, then add one focused theory proving the application-controlled gate blocks discovery after exact success and every typed failure outcome, including `NotFound`; do not repeat T009's catalog contract or add semantic routing cases in `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs` and `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs`
 
 ### Implementation for User Story 4
 
-- [X] T023 [US4] Complete typed MCP failure mapping and deterministic per-turn fallback gating while preserving cancellation, the existing iteration bound, and metadata-only logging in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
+- [X] T023 [US4] Complete typed MCP failure mapping and deterministic per-turn discovery-after-exact gating while preserving cancellation, the existing iteration bound, and metadata-only logging in `src/GovernedAccess.Mcp/RequestContextTools.cs` and `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 
 The remaining US4 enforcement is delivered by T007 (bounded persistence), T015
 (invalid-choice rejection, associated-message suppression, and candidate
@@ -213,7 +213,7 @@ test layer, with no duplicate resilience matrix in persistence, MCP, MAF, and Te
 validation without expanding feature scope.
 
 - [X] T024 [P] Update the product overview, runtime architecture, current MCP contract link, and co-hosted MCP ADR from the three-tool exact-only design to feature 004 in `README.md`, `docs/architecture.md`, and `docs/adr/0001-use-one-deployable-service-including-mcp.md`
-- [X] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery, exact-first fallback, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
+- [X] T025 [P] Update orchestration, trust-boundary, failure, logging, and testing guidance for direct discovery of readable wording, exact-only identifier handling, model-authored clarification wording beside authoritative structured choices, exact-only incidents, consolidated integration coverage, and the optional live-model semantic matrix in `docs/request-intake-orchestration.md`, `docs/security-model.md`, and `docs/testing-strategy.md`
 - [X] T026 [P] Update operator/developer walkthroughs and reconcile current baseline/roadmap wording with the delivered two-tool runtime in `docs/teams-quickstart.md`, `docs/teams-advanced-reference.md`, `docs/local-development.md`, `docs/governed-production-access-product-baseline.md`, and `docs/roadmap.md`
 - [ ] T027 Run the warnings-as-errors build, unit tests, and complete integration project sequentially in the exact order and with the timeout/process-cleanup rules documented in `specs/004-resolve-context-identifiers/quickstart.md`
 
@@ -233,7 +233,7 @@ validation without expanding feature scope.
 - **Phase 4 - US2**: Depends on US1's discovery and choice pipeline.
 - **Phase 5 - US3**: Depends on US1's two-tool catalog but can proceed in parallel
   with US2.
-- **Phase 6 - US4**: Depends on US1's base lookup/fallback path and can proceed in
+- **Phase 6 - US4**: Depends on US1's base lookup and discovery-gating path and can proceed in
   parallel with US2 and US3 once that path exists.
 - **Phase 7 - Polish**: Depends on every selected story; T027 runs last.
 
@@ -277,7 +277,7 @@ US2 + US3 + US4 -> Polish -> Final validation
 1. Migrate existing fixtures and complete the foundational contracts.
 2. Rewrite existing MCP/catalog assertions and add the focused Core choice tests.
 3. Deliver environment discovery, exact lookup, embedded roles, derived client,
-   validated correction options, and model-authored clarification wording beside
+   validated discovery options, and model-authored clarification wording beside
    authoritative one-option choice data.
 4. Run only the affected focused tests at the US1 checkpoint.
 
@@ -287,7 +287,7 @@ US2 + US3 + US4 -> Polish -> Final validation
 2. **US2**: Add ambiguous-choice rendering by refocusing one retained Teams test,
    without increasing the FullHost inventory.
 3. **US3**: Tighten instructions while relying on existing exact-incident coverage.
-4. **US4**: Add only the novel overflow mapping and deterministic fallback-gate tests.
+4. **US4**: Add only the novel overflow mapping and deterministic discovery-gate tests.
 5. **Polish**: Synchronize documentation and run the complete required gates.
 
 ### Scope and N/A Rationale

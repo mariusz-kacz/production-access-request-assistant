@@ -73,7 +73,8 @@ The model-visible MCP surface is an explicit allowlist containing exactly:
 exact lookup through one typed contract. Every returned environment includes its
 authoritative client relationship and assigned roles, so no separate role-listing
 tool is exposed. Potential environment identifiers are looked up exactly first, and
-only typed `NotFound` may permit turn-local discovery fallback. `get_incident`
+no exact-lookup outcome permits turn-local catalog discovery. Exact `NotFound` keeps
+scope unresolved and requests a corrected identifier with no options. `get_incident`
 remains exact-only for a precise requester-supplied stable identifier.
 
 Approval, provisioning, revocation, workflow-transition, arbitrary-database, and

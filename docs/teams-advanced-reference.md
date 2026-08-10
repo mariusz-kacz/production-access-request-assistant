@@ -230,11 +230,10 @@ still receives only the exact two read-only MCP tools,
 `get_production_environment` and `get_incident`, and cannot confirm, approve,
 provision, or change workflow state. Environment calls use bounded discovery or exact
 lookup and return assigned roles with authoritative client context. Incident calls
-remain exact-identifier-only. For an identifier-like environment value, only typed
-exact `NotFound` permits discovery fallback; timeout, cancellation, invalid input,
-unavailability, or malformed results fail without fallback.
-The current interpreter uses a stricter policy and does not request discovery even
-after exact `NotFound`; it asks for a corrected identifier with no environment options.
+remain exact-identifier-only. For an identifier-like environment value, every exact
+lookup outcome prevents catalog discovery later in the turn. Exact `NotFound` asks
+for a corrected identifier with no environment options; timeout, cancellation,
+invalid input, unavailability, or malformed results retain their safe outcomes.
 
 An exact `/new` message is handled before the provider boundary. It resets only the
 authenticated conversation's active unsubmitted preparation, invokes no model or MCP

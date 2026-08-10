@@ -235,7 +235,7 @@ complete MCP payloads.
 | CSRF against browser actions | SameSite Strict cookies and antiforgery cookie/header validation. | Requires intended HTTPS browser hosting. |
 | Wrong-client approval or guessed request ID | Stored approver responsibility and participant filtering. | Direct database access is outside the application boundary. |
 | Prompt injection or invented identifiers | No state-changing model tools; closed schema; authoritative reload and validation. | The model can still produce unusable or confusing text. |
-| Silent substitution after lookup failure | Exact identifier policy, typed failures, bounded discovery, and deterministic option reload. | Natural-language shortlist quality remains model-dependent. |
+| Silent substitution after lookup failure | Exact identifier policy, typed failures, and deterministic blocking of discovery after every exact outcome. | Natural-language shortlist quality on the separate readable-wording discovery path remains model-dependent. |
 | MCP capability expansion | Explicit two-tool server registration and exact client catalog check. | The unauthenticated local route can be enumerated or abused for resource consumption. |
 | Request tampering after approval | Immutable request details and request-bound decisions and operations. | A compromised host process can bypass in-process controls. |
 | Duplicate or lost provisioning outcome | Request-keyed get-or-create, unique grant constraint, and scoped retry. | No automatic reconciliation or distributed provider guarantee. |

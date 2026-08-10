@@ -16,9 +16,9 @@ that catalog, while existing application services independently validate the pro
 environment, client, role, and optional exact incident identifier.
 
 When the model interprets a value as a possible environment identifier, it first
-uses exact lookup. A typed `NotFound` then permits bounded discovery so the model can
-show authoritative plausible alternatives. Even one alternative requires developer
-confirmation; other exact-lookup failures never trigger this fallback.
+uses exact lookup. Every exact outcome ends discovery eligibility for that turn. A
+typed `NotFound` keeps scope unresolved and asks for a corrected identifier with no
+catalog alternatives; other exact-lookup failures retain their safe typed outcomes.
 
 The model-visible MCP catalog shrinks from three tools to exactly two:
 `get_production_environment` and exact-only `get_incident`. The separate
@@ -59,8 +59,8 @@ identifier
 candidates controlled by the server; no partial/truncated catalog; exact-only incident
 lookup; assigned roles embedded in environment results; all model-proposed values
 authoritatively revalidated; no live LLM in automated tests; cancellation and typed
-failures across every async boundary; exact-to-discovery fallback only for typed
-`NotFound`; no silent identifier correction; no raw prompts or full MCP payload
+failures across every async boundary; no discovery after any exact lookup outcome;
+no silent identifier correction; no raw prompts or full MCP payload
 logging; environment clarification messages are bounded and shown only after their
 structured option set passes validation; selectable values never come from prose
 
@@ -90,7 +90,7 @@ No pre-design gate violation requires Complexity Tracking.
 | Gate | Status | Design confirmation |
 |------|--------|---------------------|
 | Human authority | PASS | [data-model.md](data-model.md) introduces no state-changing entity or transition, and [contracts/mcp-tools.json](contracts/mcp-tools.json) exposes read-only context only. |
-| AI and MCP boundary | PASS | The contract advertises exactly two closed-schema tools. Environment discovery returns bounded authoritative context; fallback suggestions are catalog members and remain untrusted; the bounded model message is rendered only after option validation and is never parsed as authority; incident lookup remains exact-only. |
+| AI and MCP boundary | PASS | The contract advertises exactly two closed-schema tools. Environment discovery returns bounded authoritative context; discovery suggestions are catalog members and remain untrusted; exact lookup prevents later turn-local discovery; the bounded model message is rendered only after option validation and is never parsed as authority; incident lookup remains exact-only. |
 | Scope integrity | PASS | Environment candidates carry one authoritative client and assigned role set; final candidate and confirmation validation remain unchanged. |
 | Provisioning evidence | PASS | No provisioning contract, input, handler, operation, or retry path is changed. |
 | Proportionality | PASS | The design adds a non-persistent read projection and reader operations, removes the redundant role tool, and requires no new service, package, table, UI, or retrieval subsystem. |
@@ -162,9 +162,9 @@ list-only role reader operation if no non-MCP caller remains after migration.
    the exact two-tool registration.
 3. Update model instructions, proposal-schema validation, and catalog validation.
    Natural-language environment text triggers discovery; identifier-like values
-   trigger exact lookup first; only typed `NotFound` permits a discovery fallback;
-   fallback alternatives are catalog-validated and always require developer
-   confirmation or selection. The model returns alternative IDs in a structured
+   trigger exact lookup only, and every exact outcome prevents later discovery in the
+   same turn. Discovery alternatives are catalog-validated and always require
+   developer confirmation or selection. The model returns alternative IDs in a structured
    field; the application rejects unknown, duplicate, or excessive values, reloads
    the referenced contexts, sorts them, renders the bounded model message as
    informational text, and appends authoritative option display values. Invalid
@@ -172,10 +172,11 @@ list-only role reader operation if no non-MCP caller remains after migration.
    prose are ignored. Incident text never triggers discovery, role choices come only
    from the selected environment, and `clientId` is never a clarification target.
 4. Update deterministic chat substitutes and the focused contract, persistence, MAF
-   boundary, Core validation, and retained Teams clarification tests. Cover exact
-   `NotFound` followed by discovery, valid and invalid structured alternatives,
+   boundary, Core validation, and retained Teams clarification tests. Cover discovery
+   blocked after exact success and every typed failure, valid and invalid structured
+   alternatives,
    preservation of the model message beside authoritative choices, explicit
-   confirmation, conflicts, and absence of fallback for every other failure. Do not
+   confirmation, conflicts, and preservation of every typed exact outcome. Do not
    recreate session, candidate-validation, incident, logging, or workflow scenarios
    already owned by narrower existing suites.
 5. Supersede the old MCP contract with the feature 004 contract and synchronize
