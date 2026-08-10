@@ -1,245 +1,170 @@
-# Request Intake Orchestration Rules
+# Request Intake Orchestration
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
-- **Scope**: Teams request preparation before human confirmation
-
-## Purpose
-
-These rules define how untrusted model proposals become a compact, durable request
-candidate. They prevent a weak or inconsistent model turn from corrupting previously
-validated progress.
-
-The governing boundary is:
-
-> The model interprets requester language and gathers read-only context. The
-> application validates, canonicalizes, persists, and decides readiness. Humans
-> approve. Deterministic services authorize and execute.
+- **Last reviewed**: 2026-08-10
+- **Scope**: Teams preparation before human confirmation
 
 ## Authority
 
-- Requester messages and model output are untrusted.
-- Model output must match the request-intake proposal schema before the application
-  uses it.
-- A model proposal is never evidence that an identifier exists, a role is available,
-  an incident is active, or a request is ready.
-- Authoritative application data decides all of those facts.
-- The model cannot submit, approve, provision, retry, or revoke access.
+Requester messages, conversation history, model output, MCP wire data, and model prose
+are untrusted. The model can interpret language and gather read-only context; Core
+validates, canonicalizes, persists, and decides readiness.
 
-## Per-turn algorithm
+A proposal must match the closed request-intake schema before Core sees it. A
+schema-valid proposal is still not evidence that an identifier exists, a role is
+assigned, an incident is active, or a request is ready. The model cannot submit,
+approve, provision, retry, or revoke access.
 
-For each non-command requester message, `RequestDraftService` performs exactly one
-interpretation attempt:
+## One intake turn
 
-1. Load or create the active intake and its last accepted candidate. An unexpired
-   `Ready` intake remains unchanged while the new turn is interpreted.
-2. Ask the model for one complete nullable candidate snapshot.
-3. Schema-validate and translate the proposal.
-4. Assess the candidate in one authoritative pass: validate every supplied value,
-   clear rejected values, canonicalize or derive authoritative values, and determine
-   whether the result is rejected, incomplete, or ready.
-5. For an environment clarification, validate and reload every structured
-   `environmentOptionIds` value before accepting its associated model message.
-6. If an existing ready candidate and the assessed candidate are identical, return
-   bounded discussion without persisting or changing confirmation identity. Otherwise,
-   supersede that ready snapshot and create a replacement intake before continuing.
-7. Persist either the ready candidate, a focused clarification with its sanitized
-   candidate, or the sanitized rejected candidate and deterministic errors. Choice
-   lists and rejected potential identifiers remain turn-local and are not persisted.
-8. When a value or option set is rejected, return transparent application-owned
-   correction guidance and wait for the requester to provide new information in a
-   later turn.
+For each normal requester message, `RequestDraftService` performs one interpretation
+and one authoritative candidate assessment:
 
-The application never asks the model to reinterpret the same requester message after
-authoritative validation has rejected a value.
+1. Load or create the intake bound to the authenticated Teams actor and exact personal
+   conversation.
+2. Supply the latest requester message and complete accepted candidate to the
+   interpreter.
+3. Run one MAF turn with the closed output schema and exact two-tool MCP catalog.
+4. Translate the proposal into Core types.
+5. Validate every supplied identifier and relationship, derive authoritative values,
+   clear rejected fields, and classify the candidate as rejected, incomplete, or
+   ready.
+6. Reload every structured environment clarification option before allowing its model
+   message to be displayed.
+7. Apply the ready-draft rules below when the intake was already ready.
+8. Persist the sanitized candidate and lifecycle outcome, or return a discussion that
+   requires no durable change.
 
-## Ready draft discussion and revision
+Core does not ask the model to reinterpret the same message after deterministic
+validation rejects a value. It returns typed correction guidance and waits for another
+requester message.
 
-An unexpired ready intake is an immutable confirmation snapshot, but it can remain the
-context for another natural-language turn:
+## Ready-draft turns
 
-- Questions about alternatives, roles, environments, tradeoffs, or hypothetical
-  changes must preserve the complete candidate. The application returns
-  `DraftDiscussion`; the preparation ID, reserved request ID, deadline, and existing
-  card remain active.
-- A proposed candidate response that is value-equal to the ready candidate also leaves
-  that draft active and creates no replacement card.
-- When deterministic assessment produces a different candidate, Core first marks the
-  old intake `Superseded`, then creates a new intake and persists the replacement as
-  ready, incomplete, or rejected.
-- The old card's preparation ID therefore remains bound to a terminal snapshot and can
-  never confirm the replacement candidate.
-- The Teams adapter may use process-local activity metadata to change the prior card to
-  **Draft being revised**. This is presentation only; stale confirmation is rejected
-  from durable intake status even when that update cannot be performed.
+An unexpired ready intake is an immutable confirmation snapshot, but it remains the
+context for another natural-language turn.
 
-## Partial candidate validation
+| Assessed outcome | Existing ready intake | Teams response |
+|---|---|---|
+| Discussion or value-equal candidate | Preserved | Bounded answer; existing card remains active. |
+| Incomplete candidate with an applicable focused clarification | Preserved | Clarification; existing card remains active while the requester decides. |
+| Different ready candidate | Superseded | New ready intake and separate review card. |
+| Rejected candidate | Superseded | New collecting intake and deterministic correction guidance. |
+| Incomplete candidate without an applicable clarification | Superseded | New collecting intake and deterministic missing-field guidance. |
+| Model, MCP, timeout, or dependency failure | Preserved | Safe failure; no replacement candidate is persisted. |
 
-Missing fields are allowed while intake is collecting. Every supplied identifier is
-validated before it can be persisted. One assessment produces exactly one of three
-application-owned outcomes: rejected with a sanitized candidate, incomplete with a
-sanitized candidate and missing-field errors, or ready with complete canonical fields.
-Readiness does not trigger a second set of authoritative lookups during the same turn.
+When a ready intake is superseded, its preparation ID remains terminal and cannot
+confirm the replacement. The Teams adapter uses process-local activity metadata to
+make a tracked old card non-actionable when it presents a replacement or correction.
+If that visual update is unavailable, confirmation still reloads durable intake status
+and rejects the stale card.
 
-| Proposed value | Deterministic behavior |
+## Candidate assessment
+
+Missing fields are allowed while collecting. Every supplied identifier is validated
+before persistence.
+
+| Proposed value | Deterministic result |
 |---|---|
-| Unknown client | Clear `clientId`, unless a valid environment or incident supplies the canonical client. |
-| Valid environment | Canonicalize `environmentId` and derive its canonical `clientId`. |
-| Unknown environment | Clear `environmentId` and report `environment_not_found`. |
-| Valid active incident | Canonicalize `incidentId`; derive its client and, when present, environment. |
-| Unknown or inactive incident | Clear `incidentId` and report the typed incident error. |
-| Environment and incident disagree | Clear the conflicting incident and report the relationship error. |
-| Valid client disagrees with environment | Clear the environment and any incompatible incident. |
-| Role unavailable for a validated environment | Clear `requestedRoleId` and report the role error. |
+| Valid environment | Canonicalize `environmentId` and derive its client. |
+| Unknown environment | Clear it and report `environment_not_found`. |
+| Valid active incident | Canonicalize it and derive its client and optional environment. |
+| Unknown or inactive incident | Clear it and report the typed incident error. |
+| Environment and incident conflict | Clear the incident and report the relationship error. |
+| Supplied client conflicts with scope | Clear incompatible scope while preserving unrelated valid fields. |
+| Role is not assigned to the selected environment | Clear `requestedRoleId` and report the role error. |
+| Missing required field | Preserve the remaining sanitized candidate and report the missing field. |
 
-Canonical ownership means a requester does not have to know an internal client ID.
-For example, a valid `PROD-ALPHA-EU` lookup supplies `client-alpha`; a valid incident
-may supply both the environment and client.
+Only `RequestDraftValidator` constructs new canonical `ValidatedRequestDetails` from a
+mutable candidate. Confirmation and later trust boundaries revalidate that immutable
+snapshot against authoritative context.
 
-## Deterministic rejection and field preservation
+## Model tool policy
 
-Validation errors are typed and field-specific:
+The allowed tools are:
 
-```json
-{
-  "field": "environmentId",
-  "code": "environment_not_found",
-  "message": "The selected production environment does not exist."
-}
-```
+- `get_production_environment`, called with `{}` for bounded discovery or one nonblank
+  `environmentId` for exact lookup; and
+- `get_incident`, called only with a precise requester-supplied incident ID.
 
-The application immediately persists the sanitized candidate and returns these errors
-without another model call. Valid progress survives; rejected fields remain null; no
-request, approval, operation, grant, or workflow audit entry is created. The next
-model call occurs only after the requester sends another message and receives the
-sanitized candidate as its current application context.
+The interpreter rejects any different catalog or tool lacking the read-only
+annotation. It disables concurrent tool calls, bounds the function loop, and terminates
+on unknown calls.
 
-## Model and MCP obligations
+The model instructions require these behaviors:
 
-The model receives exactly two read-only MCP tools:
+- readable client, region, primary, or recovery wording uses bounded environment
+  discovery;
+- precise or identifier-like environment input uses exact lookup;
+- exact `NotFound` for identifier-like input remains an unresolved exact identifier in
+  the current policy and does not trigger discovery or fuzzy correction;
+- client ID is derived from authoritative environment or incident context;
+- a role is proposed only when assigned to the selected environment;
+- every role clarification lists all authoritative role IDs assigned to the selected
+  environment, even when only one is available;
+- incident titles, partial IDs, alerts, and descriptions are not converted into an
+  incident ID;
+- a validated incident constrains compatible client and environment scope until the
+  requester removes or replaces it;
+- choosing to continue without an invalid or conflicting incident resumes resolution
+  of the scope already supplied in the requester message rather than asking for that
+  environment again; and
+- relative replies are resolved only when the actual preceding clarification and its
+  ordered choices exist in conversation history.
 
-- `get_production_environment`, which supports bounded discovery with `{}` and exact
-  lookup with one nonblank `environmentId`, returning authoritative client context
-  and the roles assigned to every returned environment; and
-- `get_incident`, which supports only precise requester-supplied stable identifiers.
+Tool use aids interpretation only. Core independently reloads proposed values after
+every successful model turn.
 
-The model instructions require it to:
+## Clarification rendering
 
-- call environment discovery directly when the latest message contains readable
-  client or environment context without a precise or identifier-like value;
-- call exact environment lookup first when a precise or identifier-like value is
-  supplied or changed;
-- after an identifier-like exact `NotFound`, keep the environment unresolved and ask
-  for a corrected identifier with no discovery options; the application gate retains
-  the stricter invariant that no other exact outcome could authorize fallback;
-- use only the roles embedded in the applicable environment result; there is no
-  separate role-listing tool;
-- call `get_incident` only when a precise stable incident identifier is supplied or
-  changed, never for a title, description, partial ID, or inferred reference;
-- copy stable identifiers from authoritative tool results and derive `clientId` from
-  the selected environment instead of asking the requester to choose it;
-- return proposed environment clarification choices only in the separate structured
-  `environmentOptionIds` field;
-- never invent, normalize, silently correct, or translate an identifier into an
-  unsupported value;
-- preserve the current candidate unless the requester clearly changes a field; and
-- resolve relative answers only when the restored conversation contains the question
-  and ordering they refer to; otherwise ask a self-contained clarification.
+Environment clarification uses a structured `environmentOptionIds` list separate from
+the model-authored question. The list may contain at most 20 unique stable IDs and may
+be non-empty only for `environmentId` clarification.
 
-`AllowMultipleToolCalls` remains false, so one model response requests at most one
-tool call. The bounded function loop may still make sequential exact environment and
-incident calls. A fresh application-controlled gate is created for each turn and
-prevents discovery after every exact result other than typed `NotFound`, while the
-current model policy does not request discovery after `NotFound` either.
+Core reloads the complete list and orders it by stable ID. Only then may the Teams
+adapter show the bounded model message and append authoritative client name,
+environment name, stable ID, and assigned-role context. Unknown, duplicate, excessive,
+or target-incompatible options suppress both the proposed message and choices. Values
+that appear only in prose never become candidate data or selectable scope.
 
-Tool use improves interpretation but is not an authorization boundary. Application
-validation still reloads authoritative data after every proposal.
+Role clarification has no separate option structure. The prompt requires the message
+to list the selected environment's authoritative role IDs, while Core remains
+responsible for validating the eventual selected role. Environment choices are the
+only application-rendered structured clarification options in the current contract.
 
-## Environment clarification boundary
+## Persistence and history
 
-The model owns one bounded conversational `message` and an untrusted shortlist of
-stable IDs. The application owns whether either may be shown:
+SQLite stores the intake binding, sanitized nullable candidate, status, timestamps,
+correlation metadata, and—when ready—the immutable scope, reserved request ID, and
+30-minute deadline. It does not store prompts, transcripts, model responses,
+clarification choices, or serialized MAF sessions.
 
-- `environmentOptionIds` must contain zero to 20 unique IDs and may be non-empty only
-  for an environment clarification;
-- every proposed ID is reloaded from authoritative environment context and ordered by
-  stable ID;
-- only after the complete option set validates does the Teams adapter render the
-  model message as non-authoritative plain text and append authoritative client name,
-  environment name, and stable ID choices;
-- an unknown, duplicate, excessive, or otherwise invalid option set suppresses the
-  associated model message and choices; and
-- identifiers, names, relationships, or instructions appearing only in model prose
-  never become selectable choices, candidate scope, workflow actions, approvals, or
-  authorization evidence.
+The native singleton MAF session store is keyed by intake ID. A process-local
+coordinator retains one gate per intake and serializes load, execution, and successful
+save. Sessions and gates are not removed when an intake becomes ready or terminal;
+they remain until the host stops.
 
-One fallback alternative requires developer confirmation, several require developer
-selection, and none require focused correction. No alternative replaces a rejected
-potential identifier until the developer responds and deterministic validation
-accepts the new proposal.
+After restart, the next turn receives the durable candidate without earlier messages.
+An ambiguous reply is clarified again. Confirmation and downstream workflow actions
+never read conversation memory.
 
-## Readiness and persistence
+## Reset
 
-- A model-declared `kind: candidate` cannot override missing-field or policy errors.
-- The application alone decides whether the candidate is ready.
-- `RequestDraftService` performs one candidate assessment per interpretation; the
-  strict validator is run again only at later persisted-state trust boundaries such as
-  confirmation and submission.
-- Collecting intake persists only the sanitized candidate and lifecycle metadata.
-- Model transcript and native MAF session state remain process-local and are not
-  stored in the workflow database.
-- Confirmation is a separate authenticated action that reloads and revalidates the
-  ready server-owned candidate before creating an immutable request.
+An exact trimmed, case-insensitive `/new` command is intercepted before model or MCP
+execution. It marks an active collecting or ready intake `Superseded`, or `Expired`
+when its deadline has passed, and clears its candidate through the terminal domain
+transition. It creates no replacement intake or request and cannot change a submitted
+request. The next normal message creates a new intake ID with separate model history.
 
-## Reset command
+Text that merely contains `/new` is handled as ordinary requester text.
 
-An exact, trimmed, case-insensitive `/new` command is intercepted before model or MCP
-execution. It does not become requester prompt history.
+## Current limitation
 
-- A collecting or ready intake is marked `Superseded` through the domain lifecycle
-  method, unless expiration already requires the terminal `Expired` state.
-- A submitted request remains immutable and is not superseded.
-- Process-local model history is abandoned through the new intake identity. The old
-  per-intake coordination gate remains allocated until process shutdown but is no
-  longer used by the replacement intake.
-- The next normal message creates a new intake identity with no old transcript or
-  candidate state.
-- Text that merely contains `/new` is a normal requester message.
+Deterministic justification validation checks presence and length, not semantic intent.
+Human approval therefore remains necessary even when the text is syntactically valid.
+A requirement to reject malicious intent before confirmation needs a new explicit
+deterministic policy and tests; it must not rely on the model.
 
-## Justification limitation
-
-Current deterministic justification policy checks only that the value is present and
-within the configured length bounds. It does not semantically classify intent.
-Therefore wording such as `I want to break production` can become part of a ready
-candidate if the remaining scope is valid.
-
-This does not grant access: authenticated human approvals and deterministic
-provisioning rules remain mandatory. If malicious-intent wording must be rejected
-before confirmation, that requires a new explicit deterministic product policy and
-tests. It must not rely on the model as the safety boundary.
-
-## Offline test boundary
-
-Automated tests do not implement a hand-written language model. Fixed-mode and
-scripted chat clients return exact proposal payloads and record the requests sent to
-them. Tests assert:
-
-- schema translation;
-- candidate canonicalization and field clearing;
-- one authoritative candidate assessment per intake turn;
-- single-pass interpretation and deterministic rejection;
-- preservation of unrelated validated fields;
-- ready-draft discussion without a lifecycle or identity change;
-- changed-candidate supersession and replacement preparation;
-- sanitized persistence after rejection;
-- model-history reuse, isolation, failure, and reset behavior;
-- the exact two-tool MCP capability boundary, discovery/exact contracts, typed
-  failures, and deterministic fallback gating;
-- structured option validation, model-message suppression for invalid choices, and
-  authoritative choice rendering for valid choices; and
-- cancellation and typed provider failures.
-
-Natural-language interpretation, relative-answer quality, latency, cost, and provider
-safety are evaluated through the bounded live-model outcome evaluation in the
-[feature-006 quickstart](../specs/006-live-model-evaluation/quickstart.md). It is release
-evidence, not CI, and cannot confirm or submit a request.
+Test ownership and live-model outcome evaluation are documented in the
+[testing strategy](testing-strategy.md) and
+[live-model evaluation guide](live-model-evaluation.md).

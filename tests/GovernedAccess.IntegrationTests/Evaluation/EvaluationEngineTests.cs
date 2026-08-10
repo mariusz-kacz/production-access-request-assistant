@@ -164,7 +164,7 @@ public sealed class EvaluationEngineTests
     }
 
     [Fact]
-    public async Task DefaultDatasetClearsScopeDependentFieldsBeforeClarifyingIncidentConflict()
+    public async Task DefaultDatasetContinuesWithPreviouslyRequestedScopeWithoutIncident()
     {
         var dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
             TestContext.Current.CancellationToken);
@@ -173,7 +173,11 @@ public sealed class EvaluationEngineTests
             dataset.Scenarios,
             static candidate => candidate.Id == "MTN-04");
 
-        Assert.Equal(NormalizedIntakeOutcome.Clarification, scenario.Expected.Outcome);
+        Assert.Equal(NormalizedIntakeOutcome.Ready, scenario.Expected.Outcome);
+        Assert.Equal(2, scenario.Turns.Count);
+        Assert.Equal(
+            "Continue with the requested recovery scope without the incident.",
+            scenario.Turns[1].RequesterMessage);
         Assert.Equal(
             [
                 EvaluationCandidateField.Justification,
@@ -181,28 +185,27 @@ public sealed class EvaluationEngineTests
             scenario.Expected.PreservedFields);
         Assert.Equal(
             [
-                EvaluationCandidateField.ClientId,
-                EvaluationCandidateField.EnvironmentId,
-                EvaluationCandidateField.RequestedRoleId,
                 EvaluationCandidateField.IncidentId,
             ],
             scenario.Expected.ClearedFields);
         var expectedCandidate = Assert.IsType<EvaluationCandidateExpectation>(
             scenario.Expected.Candidate);
         Assert.True(expectedCandidate.ClientId.IsDeclared);
-        Assert.Null(expectedCandidate.ClientId.Value);
+        Assert.Equal("client-beta", expectedCandidate.ClientId.Value);
         Assert.True(expectedCandidate.EnvironmentId.IsDeclared);
-        Assert.Null(expectedCandidate.EnvironmentId.Value);
+        Assert.Equal(
+            "RECOVERY-PROD-BETA-UK",
+            expectedCandidate.EnvironmentId.Value);
         Assert.True(expectedCandidate.RequestedRoleId.IsDeclared);
-        Assert.Null(expectedCandidate.RequestedRoleId.Value);
+        Assert.Equal(
+            ProductionRoleIds.ReadOnly,
+            expectedCandidate.RequestedRoleId.Value);
         Assert.True(expectedCandidate.IncidentId.IsDeclared);
         Assert.Null(expectedCandidate.IncidentId.Value);
         Assert.True(expectedCandidate.HasJustification.IsDeclared);
         Assert.True(expectedCandidate.HasJustification.Value);
-        Assert.True(scenario.Expected.ClarificationTarget.IsDeclared);
-        Assert.Equal(
-            EvaluationClarificationTarget.IncidentId,
-            scenario.Expected.ClarificationTarget.Value);
+        Assert.False(scenario.Expected.ClarificationTarget.IsDeclared);
+        Assert.False(scenario.Expected.EnvironmentOptionIds.IsDeclared);
     }
 
     [Fact]

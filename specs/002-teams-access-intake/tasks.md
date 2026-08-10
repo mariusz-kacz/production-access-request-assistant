@@ -121,7 +121,7 @@ workflow, retry, provisioning, or revocation tool.
 
 ## Phase 4: User Story 5 - Simplify the Teams Intake Architecture (Priority: P1 Refactoring Prerequisite)
 
-**Goal**: Make the Teams intake slice proportionate to the single-host portfolio
+**Goal**: Make the Teams intake slice proportionate to the single-host MVP
 scope before adding more behavior. A maintainer should be able to follow preparation
 and confirmation through one aggregate, one application service, one persistence
 port, and one transport adapter without losing any authentication, authoritative
@@ -412,7 +412,7 @@ scope, provisioning evidence, or retry authorization, and no browser intake rema
 ## Phase 9: Polish & Cross-Cutting Concerns
 
 **Purpose**: Complete operator guidance, packaging, whole-system verification, and
-the portfolio demo evidence.
+the local demo evidence.
 
 - [X] T086 [P] Finalize documentation of native process-local MAF session storage, restart recovery, deferred durable retention/compaction, Teams trust boundary, durable candidate boundary, single intake aggregate/save boundary, Teams-only creation policy, and unchanged approval/provisioning flow in docs/architecture.md and docs/security-model.md
 - [X] T087 [P] Finalize documentation of the history-sensitive deterministic fake, native session isolation/restart/concurrency negatives, Teams-only creation assertions, and the no-live-model acceptance workflow in docs/testing-strategy.md

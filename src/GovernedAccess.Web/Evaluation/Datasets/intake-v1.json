@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "datasetVersion": "1.1.0",
+  "datasetVersion": "1.2.0",
   "scenarios": [
     {
       "id": "RES-01",
@@ -327,26 +327,25 @@
         {
           "id": "mtn-04-turn-01",
           "requesterMessage": "Change the environment to Client Beta's UK recovery production environment and use ProductionReadOnly."
+        },
+        {
+          "id": "mtn-04-turn-02",
+          "requesterMessage": "Continue with the requested recovery scope without the incident."
         }
       ],
       "expected": {
-        "outcome": "clarification",
+        "outcome": "ready",
         "candidate": {
-          "clientId": null,
-          "environmentId": null,
-          "requestedRoleId": null,
+          "clientId": "client-beta",
+          "environmentId": "RECOVERY-PROD-BETA-UK",
+          "requestedRoleId": "ProductionReadOnly",
           "hasJustification": true,
           "incidentId": null
         },
-        "clarificationTarget": "incidentId",
-        "environmentOptionIds": [],
         "preservedFields": [
           "justification"
         ],
         "clearedFields": [
-          "clientId",
-          "environmentId",
-          "requestedRoleId",
           "incidentId"
         ]
       }

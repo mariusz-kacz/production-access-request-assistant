@@ -94,7 +94,7 @@ Before model invocation, the application adds server-owned turn context:
 | Outcome | Teams response | State effect |
 |---|---|---|
 | `DraftDiscussion` | Bounded model-authored guidance, optionally with application-rendered authoritative environment choices | Preserve the ready candidate, request identity, deadline, and active confirmation card |
-| `ClarificationRequired` | One focused model message, which may include choices grounded in approved context | Replace the durable candidate snapshot and retain only process-local MAF history |
+| `ClarificationRequired` | One focused model message, which may include choices grounded in approved context | Persist a collecting candidate during initial intake; while revising a ready draft, preserve that draft and card until the replacement is ready |
 | `CandidateRejected` | Application-owned validation correction with clear provenance | No synthetic interpreter question and no prepared request |
 | `ReadyForConfirmation` | Server-rendered **Review request draft** Adaptive Card | Create immutable prepared snapshot and reserved request ID |
 | `MalformedModelOutput` | Safe retry/start-over guidance | No prepared request |

@@ -253,7 +253,9 @@ fails safely without creating or advancing a request.
   the resolved environment before it can appear in a final request.
 - **FR-014**: The assistant MUST determine or clarify the requested role using the
   authoritative roles included with the resolved environment. The model-visible
-  context surface MUST NOT expose a separate role-listing capability.
+  context surface MUST NOT expose a separate role-listing capability. Every role
+  clarification MUST display all and only the authoritative role IDs returned for the
+  selected environment, including when only one role is available.
 - **FR-015**: Resolving or changing an environment MUST cause the client, requested
   role, and supplied incident to be re-evaluated; incompatible dependent values MUST
   not be carried into a final request.

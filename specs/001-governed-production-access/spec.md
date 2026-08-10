@@ -167,7 +167,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 ## Assumptions
 
-- This is a portfolio-grade, locally demonstrable vertical slice; all identities, enterprise context, incidents, and access grants are synthetic and no real production access is created.
+- This is a focused, locally demonstrable vertical slice; all identities, enterprise context, incidents, and access grants are synthetic and no real production access is created.
 - Client Alpha uses environment `PROD-ALPHA-EU`, allows `ProductionReadOnly` and `ProductionSupport`, and is assigned to the Client Alpha business approver.
 - Client Beta uses environment `PROD-BETA-UK`, allows only `ProductionReadOnly`, and is assigned to the Client Beta business approver.
 - Every successful grant lasts exactly eight hours, regardless of client or environment; duration is not requester- or approver-selectable.

@@ -218,6 +218,14 @@ public sealed class RequestPreparationResult
 
     public RequestIntakeSession? Session { get; }
 
+    /// <summary>
+    /// Indicates that a clarification concerns a possible revision while the
+    /// existing immutable ready draft remains active and confirmable.
+    /// </summary>
+    public bool PreservesReadyDraft =>
+        Kind == RequestPreparationResultKind.ClarificationRequired
+        && Session?.Status == RequestIntakeStatus.Ready;
+
     public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
 
     public ApplicationFailure? Failure { get; }
@@ -289,6 +297,28 @@ public sealed class RequestPreparationResult
             RequestPreparationResultKind.ClarificationRequired,
             clarification: clarification,
             environmentChoices: Array.AsReadOnly(environmentChoices.ToArray()));
+    }
+
+    public static RequestPreparationResult ClarificationRequiredWithActiveDraft(
+        RequestClarificationProposal clarification,
+        IEnumerable<RequestEnvironmentChoice> environmentChoices,
+        RequestIntakeSession activeReadySession)
+    {
+        ArgumentNullException.ThrowIfNull(clarification);
+        ArgumentNullException.ThrowIfNull(environmentChoices);
+        ArgumentNullException.ThrowIfNull(activeReadySession);
+        if (activeReadySession.Status != RequestIntakeStatus.Ready)
+        {
+            throw new ArgumentException(
+                "An active-draft clarification requires a ready intake.",
+                nameof(activeReadySession));
+        }
+
+        return new(
+            RequestPreparationResultKind.ClarificationRequired,
+            clarification: clarification,
+            environmentChoices: Array.AsReadOnly(environmentChoices.ToArray()),
+            session: activeReadySession);
     }
 
     public static RequestPreparationResult ReadyForConfirmation(

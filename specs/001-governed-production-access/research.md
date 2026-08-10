@@ -354,7 +354,7 @@ outcomes. Validate behavior with the existing thin React smokes plus a short man
 route/state matrix rather than screenshot-heavy testing.
 
 **Rationale**: These constraints make the interface reliably usable and objective
-without expanding the portfolio MVP into a design-system or exhaustive browser-test
+without expanding the local MVP into a design-system or exhaustive browser-test
 project. Existing workflow authorization remains covered by .NET tests.
 
 **Alternatives considered**: Color-only badges (inaccessible); animated transitions

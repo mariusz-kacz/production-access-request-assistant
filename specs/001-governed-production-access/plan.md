@@ -175,7 +175,7 @@ Presentation acceptance:
 
 **Access Lifetime**: Requesters and approvers provide no duration; every successful grant expires exactly eight hours after activation.
 
-**Scale/Scope**: Portfolio-grade local MVP for exactly 2 clients, 2 environments, 2 roles, 4 principals, 3 React routes, and synthetic records; no distributed infrastructure or background processing
+**Scale/Scope**: Focused local MVP for exactly 2 clients, 2 environments, 2 roles, 4 principals, 3 React routes, and synthetic records; no distributed infrastructure or background processing
 
 ## Constitution Check
 

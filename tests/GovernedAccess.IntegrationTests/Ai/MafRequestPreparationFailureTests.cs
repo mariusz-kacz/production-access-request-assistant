@@ -89,7 +89,7 @@ public sealed class MafRequestPreparationFailureTests
     }
 
     [Fact]
-    public async Task InstructionsPreserveAllGenericProductionTiersAndRejectScopeOnlyJustification()
+    public async Task InstructionsCoverProductionAmbiguityJustificationAndIncidentFollowUp()
     {
         var chatClient = new RecordingChatClient(ClarificationResponse);
         var interpreter = CreateInterpreter(chatClient);
@@ -123,6 +123,30 @@ public sealed class MafRequestPreparationFailureTests
             StringComparison.Ordinal);
         Assert.Contains(
             "null and return a justification clarification",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "continue with the requested scope without the incident",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Do not ask the requester to repeat an environment identifier",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "recover client/environment/role facts only from that earlier requester latestMessage",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Every requestedRoleId clarification requires one selected authoritative environment",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "list all and only the unchanged stable role IDs returned for that environment",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Never ask a vague role question without",
             instructions,
             StringComparison.Ordinal);
     }

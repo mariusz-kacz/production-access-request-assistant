@@ -174,8 +174,9 @@ secret exclusion.
   clarification or a safe unresolved result without silent substitution.
 - **FR-015**: The four multi-turn scenarios MUST cover selecting a prior option,
   receiving a relative answer without history, changing environment without silently
-  replacing an incompatible role, and clarifying rather than applying an environment
-  change that conflicts with the current exact incident.
+  replacing an incompatible role, and continuing with an already-supplied requested
+  scope without an incompatible current exact incident after first clarifying the
+  conflict.
 - **FR-016**: The three validation-conflict scenarios MUST cover an unavailable role,
   incompatible environment/client/incident context, and one combined request whose
   environment has neither the supplied role nor a relationship to the supplied
@@ -215,9 +216,10 @@ The fixed baseline scenarios are:
     clear the incompatible existing role, and ask which role is required rather than
     automatically selecting Beta recovery's sole authoritative role.
 16. `MTN-04`: Request Beta recovery with an explicit valid role while the current
-    Alpha incident remains attached; clear the disputed client, environment, role, and
-    incident, preserve justification, and ask only how to resolve the incident conflict
-    before selecting scope and role.
+    Alpha incident remains attached; first clear the disputed client, environment,
+    role, and incident and ask only how to resolve the conflict, then honor an explicit
+    choice to continue with the already-supplied Beta recovery scope without asking for
+    its environment identifier again.
 17. `VAL-01`: Reject `ProductionDeployment` for Alpha recovery and retain only
     independently valid facts.
 18. `VAL-02`: Keep client, environment, role, and incident unresolved when exact Alpha

@@ -609,6 +609,48 @@ public sealed class RequestDraftAndSubmissionServiceTests
     }
 
     [Fact]
+    public async Task RevisionClarificationPreservesReadyCandidateAndConfirmationIdentity()
+    {
+        var ready = CreateReadySession(IntakeScenario.CurrentTime);
+        var preparationId = ready.Id;
+        var requestId = ready.ReservedRequestId;
+        const string clarificationMessage =
+            "Which Client Alpha production environment should replace the current one?";
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    "client-alpha",
+                    environmentId: null,
+                    ProductionRoleIds.ReadOnly,
+                    ready.Justification,
+                    incidentId: null),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.EnvironmentId,
+                    clarificationMessage)),
+            initialSession: ready);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(
+            RequestPreparationResultKind.ClarificationRequired,
+            result.Kind);
+        Assert.Equal(clarificationMessage, result.Clarification!.Message);
+        Assert.True(result.PreservesReadyDraft);
+        Assert.Same(ready, result.Session);
+        Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
+        Assert.Equal(preparationId, ready.Id);
+        Assert.Equal(requestId, ready.ReservedRequestId);
+        Assert.Equal("client-alpha", ready.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", ready.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, ready.RequestedRoleId);
+        Assert.Equal("INC-1042", ready.IncidentId);
+        Assert.Equal(0, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
     public async Task EquivalentCandidateLeavesReadyDraftActiveWithoutNewCard()
     {
         var ready = CreateReadySession(IntakeScenario.CurrentTime);

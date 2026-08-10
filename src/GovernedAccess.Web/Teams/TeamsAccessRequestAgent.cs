@@ -167,12 +167,15 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 return;
 
             case RequestPreparationResultKind.ClarificationRequired:
-                await DisableTrackedDraftCardAsync(
-                    turnContext,
-                    actor,
-                    "Draft being revised",
-                    "This draft is no longer ready for submission. Continue in the chat to complete the revised details.",
-                    cancellationToken);
+                if (!outcome.PreservesReadyDraft)
+                {
+                    await DisableTrackedDraftCardAsync(
+                        turnContext,
+                        actor,
+                        "Draft being revised",
+                        "This draft is no longer ready for submission. Continue in the chat to complete the revised details.",
+                        cancellationToken);
+                }
                 await SendTextAsync(
                     turnContext,
                     RenderClarification(

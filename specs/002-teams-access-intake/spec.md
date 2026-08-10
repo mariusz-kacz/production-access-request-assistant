@@ -51,10 +51,13 @@ requester.
    context while the same draft, preparation identity, deadline, and confirmation
    card remain active.
 5. **Given** a ready request draft is displayed, **When** the developer explicitly
-   changes one or more fields and deterministic assessment produces a different
+   changes one or more fields and deterministic assessment produces a different ready
    candidate, **Then** the prior immutable draft is superseded and a replacement
    preparation carries forward every unrelated validated field without submitting a
    request.
+6. **Given** a ready request draft is displayed, **When** a requested revision still
+   requires clarification, **Then** the existing draft and confirmation card remain
+   active until the revised candidate becomes ready.
 
 ---
 
@@ -192,9 +195,11 @@ form, and session capability are absent while approval and retry endpoints remai
 
 - A developer discusses alternatives while a ready draft is active; the existing
   preparation and card remain confirmable because the assessed candidate is unchanged.
-- A developer explicitly revises a ready draft; the older preparation is superseded,
-  its card becomes non-actionable when presentation metadata is available, and any
-  stale confirmation is rejected by durable status validation.
+- A developer explicitly revises a ready draft but must answer a clarification; the
+  older preparation and card remain confirmable until the replacement is ready.
+- A revised candidate becomes ready; the older preparation is superseded, its card
+  becomes non-actionable when presentation metadata is available, and any stale
+  confirmation is rejected by durable status validation.
 - The ready request draft expires while the developer is viewing it.
 - Teams redelivers the same confirmation concurrently or after a response is lost.
 - A confirmation carries an unknown, malformed, expired, superseded, or already-used
@@ -258,9 +263,10 @@ form, and session capability are absent while approval and retry endpoints remai
 - **FR-012**: A prepared request MUST expire 30 minutes after it becomes ready for
   confirmation.
 - **FR-013**: Discussion that leaves an active ready candidate unchanged MUST preserve
-  its preparation identity and confirmability. When deterministic assessment produces
-  a different candidate, the system MUST supersede the prior unsubmitted preparation
-  before persisting its replacement.
+  its preparation identity and confirmability. A proposed revision that requires
+  clarification MUST also preserve the active ready draft. Only when deterministic
+  assessment produces a different ready candidate MUST the system supersede the prior
+  unsubmitted preparation before persisting its replacement.
 - **FR-014**: The ready request draft MUST display the canonical client, environment,
   requested role, justification, optional incident, and fixed eight-hour lifetime,
   and MUST explain that requester confirmation submits the request but does not
@@ -271,8 +277,9 @@ form, and session capability are absent while approval and retry endpoints remai
   approver-selection, or scope-changing actions.
 - **FR-016**: Conversation text MUST NOT mutate or submit the immutable ready snapshot.
   Natural-language discussion with an unchanged assessed candidate MUST leave it
-  active. An explicit revision MUST create a replacement preparation and make the
-  prior preparation non-confirmable only when the assessed candidate changes.
+  active. An incomplete proposed revision MUST leave it active while clarification is
+  pending. An explicit revision MUST create a replacement preparation and make the
+  prior preparation non-confirmable only when the revised candidate is ready.
 - **FR-017**: The confirmation action MUST carry only an opaque prepared-request
   reference and presentation metadata; it MUST NOT carry trusted identity, role,
   approver, duration, approval, validation, or request-scope assertions.
@@ -418,8 +425,9 @@ form, and session capability are absent while approval and retry endpoints remai
 - **Integration/contract coverage**: Verify authenticated personal-chat intake,
   fixed synthetic requester mapping, history-backed multi-turn interpretation,
   process-local history isolation and restart recovery, durable candidate
-  carry-forward, ready-draft discussion, replacement preparation, stale-card
-  rejection, exact review-card presentation, opaque confirmation actions,
+  carry-forward, ready-draft discussion, clarification with an active old card,
+  replacement preparation, stale-card rejection, exact review-card presentation,
+  opaque confirmation actions,
   persistence, repeated confirmation, stable request links, and continued web
   behavior. Verify the exact two-tool read-only context contract and model tool
   allowlist. No automated test may require a live model; deterministic fake behavior

@@ -148,6 +148,19 @@ public sealed class RequestDraftService
                         session);
             }
 
+            if (assessmentResult.Value
+                    is RequestCandidateAssessmentIncomplete revisionIncomplete
+                && proposal.Kind == RequestPreparationProposalKind.Clarification
+                && IsClarificationUnresolved(
+                    revisionIncomplete.Candidate,
+                    proposal.Clarification!.Target))
+            {
+                return await CreateReadyDraftClarificationAsync(
+                    session,
+                    proposal.Clarification,
+                    cancellationToken);
+            }
+
             session.MarkSuperseded(
                 clock.UtcNow.ToUniversalTime(),
                 command.CorrelationId);
@@ -348,6 +361,29 @@ public sealed class RequestDraftService
             discussion.Message,
             session,
             choicesResult.Value);
+    }
+
+    private async Task<RequestPreparationResult> CreateReadyDraftClarificationAsync(
+        RequestIntakeSession session,
+        RequestClarificationProposal clarification,
+        CancellationToken cancellationToken)
+    {
+        var choicesResult = await ResolveEnvironmentChoicesAsync(
+            clarification,
+            cancellationToken);
+        if (choicesResult.IsFailure)
+        {
+            return choicesResult.Failure!.Kind == ApplicationFailureKind.InvalidInput
+                ? RequestPreparationResult.DraftDiscussion(
+                    "The suggested alternatives could not be validated.",
+                    session)
+                : RequestPreparationResult.Failed(choicesResult.Failure);
+        }
+
+        return RequestPreparationResult.ClarificationRequiredWithActiveDraft(
+            clarification,
+            choicesResult.Value,
+            session);
     }
 
     private async Task<ApplicationResult<IReadOnlyList<RequestEnvironmentChoice>>>

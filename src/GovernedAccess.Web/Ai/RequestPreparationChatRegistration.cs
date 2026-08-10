@@ -61,7 +61,7 @@ internal static class RequestPreparationChatRegistration
             {
                 client.AllowConcurrentInvocation = false;
                 client.IncludeDetailedErrors = false;
-                client.MaximumIterationsPerRequest = 12;
+                client.MaximumIterationsPerRequest = 6;
                 client.TerminateOnUnknownCalls = true;
             });
 

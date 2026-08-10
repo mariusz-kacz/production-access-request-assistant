@@ -161,7 +161,7 @@ These are not persisted states or MCP failures:
 | Potential identifier exact lookup returns `NotFound`, several catalog alternatives are plausible | One focused model-authored `environmentId` clarification with structured option IDs | Validate, reload, sort, and render the message with authoritative choices; accept only a developer-selected member |
 | Potential identifier exact lookup returns `NotFound`, no catalog alternative is plausible | One focused correction | Keep environment unresolved; never fabricate an ID |
 | Potential identifier exact lookup returns any other failure | Typed safe failure or retry guidance | Do not run discovery fallback or alter dependent values |
-| Requested role absent from selected candidate | One focused `requestedRoleId` clarification | Never treat the role as allowed |
+| Requested role absent from selected candidate | One focused `requestedRoleId` clarification listing all authoritative role IDs returned for the selected environment | Never treat the role as allowed or ask for an unspecified role |
 | Incident wording lacks a precise ID | One focused `incidentId` clarification | Do not call incident lookup or infer an ID |
 
 ## Existing State Transitions

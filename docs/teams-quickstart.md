@@ -1,37 +1,30 @@
-# Teams quickstart
+# Teams Quickstart
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
-- **Audience**: Developers running the application from a real personal Teams chat
+- **Last reviewed**: 2026-08-10
+- **Audience**: Developers running the application from a personal Teams chat
 
-Use this page in order. The normal daily workflow is only two long-running commands
-and one check.
+Setup is performed once. Normal daily use requires the tunnel and application commands
+in step 4.
 
-## What you need
+## Prerequisites
 
-- .NET 10 and Node.js 24, already restored as shown in
-  [Local development](local-development.md).
-- A Microsoft 365 development tenant where your user can upload custom Teams apps.
-- Teams Developer CLI 3.x and Dev Tunnels CLI.
-- For the live model only: an Azure AI Foundry project endpoint, a deployed model,
-  and access to invoke that deployment.
+- .NET 10 and Node.js 24 dependencies restored as described in
+  [local development](local-development.md);
+- a Microsoft 365 development tenant whose user can upload custom Teams apps;
+- Teams Developer CLI 3.x;
+- Dev Tunnels CLI; and
+- for the live model only, an Azure AI Foundry deployment and permission to invoke it.
 
-Install the CLIs if needed:
+Install the CLIs when needed:
 
 ```powershell
 npm install -g @microsoft/teams.cli
 winget install Microsoft.devtunnel
 ```
 
-There are two independent sign-ins:
-
-| Sign-in | Used for |
-|---|---|
-| `teams login` | Teams app registration and bot transport |
-| `az login` | Live Foundry model calls |
-
-They may belong to different tenants. The application never copies one identity into
-the other.
+`teams login` manages Teams registration and bot transport. `az login` is separate and
+is used only for the optional Foundry model.
 
 ## 1. Sign in to Teams
 
@@ -41,10 +34,10 @@ devtunnel user login
 teams status
 ```
 
-Before continuing, check that `teams status` shows the intended Microsoft 365 tenant
-and that sideloading is enabled.
+Confirm that `teams status` shows the intended tenant and that custom-app upload is
+enabled.
 
-## 2. Create the Teams integration once
+## 2. Create the integration once
 
 From the repository root:
 
@@ -52,75 +45,67 @@ From the repository root:
 .\scripts\teams\setup.ps1 -ExpectedTenantId "<microsoft-365-tenant-guid>"
 ```
 
-The script creates a persistent tunnel and Teams-managed bot, then prints an install
-link. Open that link as a user in the same Microsoft 365 tenant and add the app in
-personal scope.
+The script creates a persistent tunnel and Teams-managed bot, then prints a personal-
+scope install link. Open it as a user in the same tenant and add the app.
 
-The generated files are:
+It stores:
 
-- `.teams-dev.local.json`: ignored, non-secret IDs used on later runs;
-- `%LOCALAPPDATA%\GovernedAccess\teams-local.env`: bot credential outside the repo.
+- non-secret IDs in ignored `.teams-dev.local.json`; and
+- the bot credential outside the repository in
+  `%LOCALAPPDATA%\GovernedAccess\teams-local.env`.
 
-Do not rerun setup on later days. Use the daily commands below.
+Do not rerun setup during normal daily use.
 
-## 3. Sign in to Azure for the live model
+## 3. Prepare the live model
 
-Skip this section when using the deterministic model.
+Skip this step for the default deterministic profile.
 
-Grant your developer identity the `Cognitive Services OpenAI User` role on the
-resource that contains the deployment. Then sign in and verify the selected account:
+Grant the developer identity `Cognitive Services OpenAI User` on the resource that
+contains the deployment, then verify the selected Azure account:
 
 ```powershell
 az login
 az account show
 ```
 
-Collect these two non-secret values from Foundry:
+Keep the Foundry project endpoint ending in `/openai/v1` and deployment name available
+for step 4. The application uses `DefaultAzureCredential`; no model API key belongs in
+source or application settings.
 
-- project inference base URL, ending in `/openai/v1`, for example
-  `https://<project>.services.ai.azure.com/openai/v1`;
-- deployment name, for example `governed-access-chat`.
-
-The app uses `DefaultAzureCredential`; no model API key belongs in settings or source
-control.
-
-## 4. Start the integration each day
+## 4. Start the integration
 
 Open two PowerShell terminals at the repository root.
 
-Terminal 1 — keep the tunnel running:
+Terminal 1:
 
 ```powershell
 .\scripts\teams\start-tunnel.ps1
 ```
 
-Terminal 2 — choose one model mode.
-
-Stable deterministic model:
+Terminal 2, deterministic profile:
 
 ```powershell
 .\scripts\teams\start-app.ps1
 ```
 
-Live Foundry model:
+Or use the live Foundry profile:
 
 ```powershell
 .\scripts\teams\start-app.ps1 -ModelProfile FoundryResponses -FoundryEndpoint "https://<project>.services.ai.azure.com/openai/v1" -DeploymentName "<deployment-name>"
 ```
 
-The start script loads the bot secret without printing it, updates the registered
-bot endpoint to the current tunnel URL, selects the requested model profile, and
-starts ASP.NET Core.
+The app script loads the bot credential without printing it, updates the registered bot
+endpoint to the active tunnel, selects the model profile, and starts ASP.NET Core.
 
-## 5. Check the route
+## 5. Check the protected route
 
-With both processes running, use a third terminal:
+With both processes running:
 
 ```powershell
 .\scripts\teams\check.ps1
 ```
 
-Success looks like this:
+Expected output:
 
 ```text
 Local endpoint status:  401
@@ -128,110 +113,61 @@ Public endpoint status: 401
 Tunnel and protected bot route are reachable.
 ```
 
-`401` is correct for these unauthenticated probes. It proves that the public tunnel
-reaches the protected bot endpoint without bypassing bearer-token authentication.
+Both `401` responses are correct for unauthenticated probes. They show that the tunnel
+reaches the protected endpoint without bypassing bearer authentication.
 
-## 6. Send one request
+## 6. Send a request
 
-In the bot's personal Teams chat, send:
+In the bot's personal chat, send:
 
 ```text
-I need read-only access to Client Alpha production in Europe to investigate INC-1042. I need to inspect production logs and configuration to diagnose the active incident.
+I need read-only access to Client Alpha production in Europe to inspect logs and configuration while diagnosing INC-1042.
 ```
 
-Expected flow:
+The deterministic profile returns its stable Client Alpha candidate. The live profile
+uses the bounded environment and exact incident tools before Core validates the
+proposal. In both modes:
 
-1. With the live profile, the assistant uses bounded environment discovery, resolves
-   the stored `PROD-ALPHA-EU` scope and `client-alpha` relationship, uses
-   `ProductionReadOnly` from that environment's embedded roles, and looks up only the
-   precise `INC-1042` incident identifier.
-2. The assistant shows a confirmation card for Client Alpha and an eight-hour grant.
-3. No access request exists until you select **Confirm and submit**.
-4. Confirmation creates one immutable request in `AwaitingBusinessApproval`.
-5. The confirmation card is replaced with a non-actionable submitted-status card.
-   Continue the human approval demo from the Web request register.
+1. the assistant shows a ready card;
+2. no request exists before **Confirm and submit**;
+3. confirmation creates one immutable `AwaitingBusinessApproval` request; and
+4. the submitted card becomes non-actionable and links to the Web register.
 
-The deterministic profile always returns its fixed Client Alpha candidate; it proves
-the Teams and governed-workflow path but does not evaluate natural-language matching.
-Use the explicitly selected live profile when evaluating interpretation quality.
+Continue the business and DevOps decisions at `https://localhost:7251`. Model output
+cannot confirm, approve, or provision, and live-provider failure does not fall back to
+the deterministic profile.
 
-The live model may interpret text and call only
-`get_production_environment` and `get_incident`. Environment context supports bounded
-discovery or exact lookup and already contains assigned roles; there is no separate
-role-listing tool. Incident lookup requires a precise stable identifier. Model output
-is still schema-validated and checked against authoritative local data, and the model
-cannot confirm, approve, or provision access. The existing 100-second Teams request
-timeout is the single overall model/MCP deadline. If the selected live profile fails,
-the turn fails closed and never falls back to the deterministic client.
+## 7. Reset an unsubmitted intake
 
-For a live-model strict-identifier check, send an identifier-like value such as
-`PROD-ALPHA`. The assistant must try exact lookup and, after typed `NotFound`, keep the
-environment unresolved with no suggested options instead of reinterpreting the value
-as a discovery query. Incident titles, descriptions, and partial IDs remain ordinary
-justification when no precise optional incident identifier is supplied.
+Send `/new` by itself to abandon the active collecting or ready intake. Matching is
+trimmed and case-insensitive; `/new please` remains ordinary requester text.
 
-## 7. Reset an unsubmitted preparation
+Reset calls neither the model nor MCP, creates no request, invalidates an old ready
+card, and leaves submitted requests unchanged. The next normal message starts a new
+intake with separate process-local history.
 
-Send `/new` by itself to abandon the active preparation in this personal
-conversation. Matching is trimmed and case-insensitive, so `/NEW` and `  /new  ` also
-match; `/new please` is ordinary requester text.
+## Stop or remove the integration
 
-The reset calls neither the model nor MCP. It terminally clears an active collecting
-or ready candidate, invalidates an old ready card, creates no access request, and
-leaves every submitted request and approval workflow unchanged. The next ordinary
-message creates a new intake ID with separate model history.
+For daily use, press `Ctrl+C` in the app and tunnel terminals. Keep the ignored local
+state for the next run. Starting the app without `-ModelProfile` selects the
+deterministic profile and clears inherited Foundry settings.
 
-## Stop and clean up
-
-For normal daily use, press `Ctrl+C` in the app and tunnel terminals. Keep the local
-state and bot credential for the next run.
-
-To stop using the live model, simply start the app without `-ModelProfile` next time.
-The deterministic profile is the default, and the script clears inherited Foundry
-settings before launch.
-
-Cloud-resource deletion is manual because it is destructive. Follow
-[permanent cleanup procedure](teams-advanced-reference.md#permanent-cleanup) when removing the
-integration permanently.
-
-## Less common commands
-
-| Task | Command |
-|---|---|
-| Adopt an existing app and tunnel | `.\scripts\teams\adopt.ps1` |
-| Run Teams CLI diagnostics | `.\scripts\teams\doctor.ps1` |
-| Rotate the bot secret | `.\scripts\teams\rotate-secret.ps1` |
-| Preserve an old local database before a schema refresh | `.\scripts\backup-local-database.ps1` |
-
-Run `Get-Help <script> -Detailed` or open the small script to see its parameters.
-The old `scripts\teams-local.ps1` command remains as a compatibility dispatcher, but
-new instructions use the focused scripts above.
+Permanent cloud-resource removal is manual and destructive. Follow the
+[advanced reference](teams-advanced-reference.md#permanent-cleanup) when the integration
+is no longer needed.
 
 ## Troubleshooting
 
-| Symptom | Fix |
+| Symptom | Action |
 |---|---|
-| Setup says sideloading is disabled | Enable custom-app upload for the Teams user, wait for policy propagation, then rerun `teams status`. |
-| Bot never replies | Confirm both long-running terminals are open, then run `check.ps1`. |
-| `start-app.ps1` says the tunnel is not hosted | Start `start-tunnel.ps1` first and keep it running. |
-| Live model returns unavailable | Verify `az account show`, Foundry role assignment, endpoint suffix/path, and deployment name. The app intentionally does not fall back to the deterministic model. |
-| Request fails after an EF schema change | Stop the app, run `backup-local-database.ps1`, then restart it. |
-| `teams app doctor` calls the endpoint unreachable | Prefer `check.ps1`; two `401` results are correct for this protected endpoint. |
+| Setup reports disabled sideloading | Enable custom-app upload, wait for policy propagation, then rerun `teams status`. |
+| Bot does not reply | Keep both long-running terminals open and run `check.ps1`. |
+| App says the tunnel is not hosted | Start `start-tunnel.ps1` first. |
+| Live model is unavailable | Verify `az account show`, Foundry role assignment, endpoint, and deployment name. |
+| Request fails after an EF schema change | Stop the app, run `backup-local-database.ps1`, and restart. |
+| Teams diagnostics report the endpoint unreachable | Prefer `check.ps1`; two `401` results are expected. |
 
-## Security boundaries
-
-- The bot credential and Azure sign-in token are never model inputs.
-- The anonymous development tunnel exposes network reachability, not anonymous bot
-  access; `/api/messages` still validates the Bot Framework token, tenant, channel,
-  actor, and conversation.
-- Use synthetic data only. Never paste real production-access details into the demo.
-- Do not commit `.teams-dev.local.json`, credentials, local databases, or generated
-  Teams packages.
-
-For tenant administration, alternative registration ownership, manual package
-inspection, and permanent cleanup, see the
-[Teams advanced reference](teams-advanced-reference.md).
-
-Official references: [Teams CLI registration](https://learn.microsoft.com/en-us/microsoftteams/platform/teams-sdk/get-started/quickstart-register),
-[local .NET authentication with `DefaultAzureCredential`](https://learn.microsoft.com/en-us/dotnet/azure/sdk/authentication/local-development-dev-accounts),
-and [Foundry Responses API](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/responses-api).
+Use synthetic request details only. Do not commit local Teams state, credentials,
+databases, or generated packages. Registration ownership alternatives, adoption,
+secret rotation, diagnostics, manual package inspection, and permanent cleanup are in
+the [Teams advanced reference](teams-advanced-reference.md).

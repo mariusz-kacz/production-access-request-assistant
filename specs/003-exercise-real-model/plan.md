@@ -74,7 +74,7 @@ is an exact reserved lifecycle command rather than an LLM intent
 **Scale/Scope**: One developer/reviewer, exactly `Deterministic` and
 `FoundryResponses` profiles, and one approved Foundry deployment at a time, local
 synthetic data, personal Teams conversations, and the
-existing single-host portfolio demo; no router, provider marketplace, multi-tenant
+existing single-host local demo; no router, provider marketplace, multi-tenant
 model policy, production rollout, RAG, or distributed coordination
 
 ## Constitution Check

@@ -19,10 +19,12 @@ in the in-memory MAF session; bounded environment option identifiers are validat
 per turn but neither options nor transcripts are written to the application database.
 
 While a ready draft is active, the same interpretation path answers questions without
-changing the immutable candidate. A deterministically assessed candidate difference
-supersedes that snapshot and creates a replacement preparation. The Teams adapter
-tracks the latest card activity only as process-local presentation metadata so it can
-make an old card visibly non-actionable; durable status validation remains decisive.
+changing the immutable candidate. A proposed revision that still needs clarification
+also leaves that snapshot and card active. A different deterministically assessed
+ready candidate supersedes the snapshot and creates a replacement preparation. The
+Teams adapter tracks the latest card activity only as process-local presentation
+metadata so it can make an old card visibly non-actionable after replacement; durable
+status validation remains decisive.
 
 The server renders that snapshot as an Adaptive Card with one **Confirm and submit**
 action. Confirmation is a deterministic authenticated channel command, not a
@@ -76,7 +78,7 @@ submit, approval, workflow, retry, provisioning, or revocation action; fixed
 eight-hour grant; prepared snapshot expires after 30 minutes; cancellation crosses
 asynchronous boundaries
 
-**Scale/Scope**: Portfolio-grade local demonstration, one active preparation per
+**Scale/Scope**: Focused local demonstration, one active preparation per
 authenticated Teams actor and personal conversation, and one process-local MAF
 session per created intake retained until process termination; existing two
 clients/two environments/two roles; no proactive messages, background worker,

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
@@ -173,6 +174,251 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
 
         Assert.Null(session.ReservedRequestId);
 
+        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+    }
+
+    [Fact]
+    public async Task IncidentConflictCanContinueWithPreviouslyRequestedScopeWithoutRepeatingEnvironment()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        const string conflictingRequest =
+            "Prepare ProductionReadOnly access to RECOVERY-PROD-ALPHA-EU to diagnose "
+            + "customer-facing errors for incident INC-1042.";
+        const string conflictMessage =
+            "The requested recovery scope conflicts with incident INC-1042's scope. "
+            + "Should I continue with the recovery scope without the incident, keep "
+            + "the incident scope, or use a compatible exact incident ID?";
+        const string conflictResponse =
+            """
+            {"kind":"clarification","candidate":{"clientId":null,"environmentId":null,"requestedRoleId":null,"justification":"Diagnose customer-facing errors.","incidentId":null},"clarification":{"target":"incidentId","message":"The requested recovery scope conflicts with incident INC-1042's scope. Should I continue with the recovery scope without the incident, keep the incident scope, or use a compatible exact incident ID?","environmentOptionIds":[]}}
+            """;
+        const string resolvedResponse =
+            """
+            {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"RECOVERY-PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Diagnose customer-facing errors.","incidentId":null},"clarification":null}
+            """;
+        var chatClient = new ScriptedChatClient(
+            conflictResponse,
+            resolvedResponse);
+        await using var factory = new GovernedAccessWebFactory(chatClient);
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = factory.CreateTeamsClient();
+
+        using var conflictHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(conflictingRequest),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var conflictBody = await conflictHttpResponse.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, conflictHttpResponse.StatusCode);
+        using var conflictJson = JsonDocument.Parse(conflictBody);
+        var conflictActivity = Assert.Single(
+            conflictJson.RootElement
+                .GetProperty("activities")
+                .EnumerateArray()
+                .ToArray());
+        Assert.Equal(
+            conflictMessage,
+            conflictActivity.GetProperty("text").GetString());
+        Assert.DoesNotContain(
+            PreparedRequestCardFactory.AdaptiveCardContentType,
+            conflictBody,
+            StringComparison.Ordinal);
+
+        using var resolvedHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(
+                "Continue with the requested recovery scope without the incident."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var resolvedBody = await resolvedHttpResponse.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, resolvedHttpResponse.StatusCode);
+        Assert.Contains("Review request draft", resolvedBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "RECOVERY-PROD-ALPHA-EU",
+            resolvedBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            ProductionRoleIds.ReadOnly,
+            resolvedBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("INC-1042", resolvedBody, StringComparison.Ordinal);
+
+        Assert.Equal(2, chatClient.InvocationCount);
+        var secondInvocation = chatClient.Invocations[1];
+        Assert.Contains(
+            secondInvocation.Messages,
+            message => message.Role == ChatRole.User
+                && message.Text is not null
+                && message.Text.Contains(conflictingRequest, StringComparison.Ordinal));
+        var latestEnvelopeMessage = secondInvocation.Messages.Last(
+            message => message.Role == ChatRole.User);
+        using var latestEnvelope = JsonDocument.Parse(latestEnvelopeMessage.Text!);
+        var currentCandidate = latestEnvelope.RootElement
+            .GetProperty("currentCandidate");
+        Assert.Equal(JsonValueKind.Null, currentCandidate.GetProperty("clientId").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            currentCandidate.GetProperty("environmentId").ValueKind);
+        Assert.Equal(
+            "Diagnose customer-facing errors.",
+            currentCandidate.GetProperty("justification").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            currentCandidate.GetProperty("incidentId").ValueKind);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var session = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.Equal(RequestIntakeStatus.Ready, session.Status);
+        Assert.Equal("client-alpha", session.ClientId);
+        Assert.Equal("RECOVERY-PROD-ALPHA-EU", session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, session.RequestedRoleId);
+        Assert.Equal("Diagnose customer-facing errors.", session.Justification);
+        Assert.Null(session.IncidentId);
+        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+    }
+
+    [Fact]
+    public async Task EnvironmentRevisionClarificationKeepsExistingDraftCardActiveUntilReplacementIsReady()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        const string justification = "Diagnose customer-facing errors.";
+        const string initialResponse =
+            """
+            {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Diagnose customer-facing errors.","incidentId":null},"clarification":null}
+            """;
+        const string clarificationMessage =
+            "Which Client Alpha production environment should replace the current one?";
+        const string clarificationResponse =
+            """
+            {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":null,"requestedRoleId":"ProductionReadOnly","justification":"Diagnose customer-facing errors.","incidentId":null},"clarification":{"target":"environmentId","message":"Which Client Alpha production environment should replace the current one?","environmentOptionIds":["PROD-ALPHA-EU","RECOVERY-PROD-ALPHA-EU"]}}
+            """;
+        const string replacementResponse =
+            """
+            {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"RECOVERY-PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Diagnose customer-facing errors.","incidentId":null},"clarification":null}
+            """;
+        var chatClient = new ScriptedChatClient(
+            initialResponse,
+            clarificationResponse,
+            replacementResponse);
+        await using var factory = new GovernedAccessWebFactory(chatClient);
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = factory.CreateTeamsClient();
+        var actor = new AuthenticatedChannelActor(
+            RequestIntakeSession.TeamsChannel,
+            FakeTeamsActivityBuilder.DefaultTenantId,
+            FakeTeamsActivityBuilder.DefaultActorId,
+            FakeTeamsActivityBuilder.DefaultConversationId,
+            DemoPrincipalKeys.Requester);
+        var cardTracker = factory.Services
+            .GetRequiredService<TeamsDraftCardTracker>();
+
+        using var initialHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(
+                "Prepare read-only access to PROD-ALPHA-EU to diagnose customer-facing errors."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var initialBody = await initialHttpResponse.Content.ReadAsStringAsync(
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, initialHttpResponse.StatusCode);
+        Assert.Contains("Review request draft", initialBody, StringComparison.Ordinal);
+        Guid initialPreparationId;
+        await using (var initialScope = factory.Services.CreateAsyncScope())
+        {
+            var initialDb = initialScope.ServiceProvider
+                .GetRequiredService<GovernedAccessDbContext>();
+            var initialDraft = await initialDb.RequestIntakeSessions
+                .AsNoTracking()
+                .SingleAsync(cancellationToken);
+            initialPreparationId = initialDraft.Id;
+            Assert.Equal(RequestIntakeStatus.Ready, initialDraft.Status);
+        }
+
+        cardTracker.Set(actor, initialPreparationId, "initial-ready-card-activity");
+        Assert.True(cardTracker.TryGet(actor, out var initialCard));
+
+        using var clarificationHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(
+                "Change the environment to Client Alpha production."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var clarificationBody = await clarificationHttpResponse.Content
+            .ReadAsStringAsync(cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, clarificationHttpResponse.StatusCode);
+        Assert.Contains(
+            clarificationMessage,
+            clarificationBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "RECOVERY-PROD-ALPHA-EU",
+            clarificationBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Draft being revised",
+            clarificationBody,
+            StringComparison.Ordinal);
+        Assert.True(cardTracker.TryGet(actor, out var preservedCard));
+        Assert.Equal(initialCard, preservedCard);
+
+        await using (var clarificationScope = factory.Services.CreateAsyncScope())
+        {
+            var clarificationDb = clarificationScope.ServiceProvider
+                .GetRequiredService<GovernedAccessDbContext>();
+            var activeDraft = await clarificationDb.RequestIntakeSessions
+                .AsNoTracking()
+                .SingleAsync(cancellationToken);
+            Assert.Equal(initialCard.PreparationId, activeDraft.Id);
+            Assert.Equal(RequestIntakeStatus.Ready, activeDraft.Status);
+            Assert.Equal("PROD-ALPHA-EU", activeDraft.EnvironmentId);
+            Assert.Equal(ProductionRoleIds.ReadOnly, activeDraft.RequestedRoleId);
+            Assert.Equal(justification, activeDraft.Justification);
+        }
+
+        using var replacementHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity("Use the recovery environment."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var replacementBody = await replacementHttpResponse.Content
+            .ReadAsStringAsync(cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, replacementHttpResponse.StatusCode);
+        Assert.Contains("Review request draft", replacementBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "RECOVERY-PROD-ALPHA-EU",
+            replacementBody,
+            StringComparison.Ordinal);
+        Assert.False(cardTracker.TryGet(actor, out _));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var sessions = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        var superseded = Assert.Single(
+            sessions,
+            session => session.Status == RequestIntakeStatus.Superseded);
+        Assert.Equal(initialCard.PreparationId, superseded.Id);
+        var ready = Assert.Single(
+            sessions,
+            session => session.Status == RequestIntakeStatus.Ready);
+        Assert.NotEqual(initialCard.PreparationId, ready.Id);
+        Assert.Equal("RECOVERY-PROD-ALPHA-EU", ready.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, ready.RequestedRoleId);
+        Assert.Equal(justification, ready.Justification);
+        Assert.Null(ready.IncidentId);
         await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
     }
 

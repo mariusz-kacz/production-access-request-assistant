@@ -42,7 +42,7 @@ and [Teams custom-app policy guidance](https://learn.microsoft.com/en-us/microso
 ### Recommended: Teams-managed
 
 The quickstart creates a Teams-managed app and multitenant bot registration. This is
-the default for the E5-only portfolio environment because it does not require an
+the default for the E5-only development environment because it does not require an
 Azure subscription.
 
 The ignored `.teams-dev.local.json` file records the tunnel ID, local port, Teams app

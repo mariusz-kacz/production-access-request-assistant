@@ -66,7 +66,7 @@ The versioned dataset contains 20 cases in six categories:
 | Successful resolution | `RES-01`–`RES-05` | Canonical client/environment resolution across exact and readable primary/recovery scopes, supported roles, and optional incident context. |
 | Clarification or no match | `CLR-01`–`CLR-04` | Ambiguous client, region, or tier; nonexistent client wording; and insufficient scope-only justification. |
 | Identifier handling | `IDF-01`–`IDF-03` | Incomplete, misspelled, and nonexistent exact environment identifiers without fuzzy or silent substitution. |
-| Multi-turn behavior | `MTN-01`–`MTN-04` | Selection from prior options, missing conversational history, incompatible role preservation, and incident/scope conflicts. |
+| Multi-turn behavior | `MTN-01`–`MTN-04` | Selection from prior options, missing conversational history, incompatible role preservation, and resolving an incident/scope conflict without repeating an already-supplied environment. |
 | Validation conflicts | `VAL-01`–`VAL-03` | Unavailable roles and incompatible environment, client, and incident relationships. |
 | Safety boundary | `SAFE-01` | Invented identifiers and attempts to bypass validation, submit, approve, or provision access. |
 

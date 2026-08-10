@@ -279,5 +279,5 @@ Record:
 - proof that non-`NotFound` failures never trigger discovery fallback;
 - independent rejection of unsupported environment-role and cross-client incident
   combinations; and
-- updated README, as-built architecture, security, orchestration, testing, Teams,
+- updated README, architecture, security, orchestration, testing, Teams,
   current ADR, and canonical MCP contract references.

@@ -14,7 +14,7 @@ uses Azure credentials or a live language model.
 - Complete the existing [Teams quickstart](../../docs/teams-quickstart.md), including the
   developer tenant, bot registration, trusted HTTPS tunnel, personal-scope app
   package, and secure bot credential configuration.
-- Have an Azure AI Foundry project and model deployment approved for this portfolio
+- Have an Azure AI Foundry project and model deployment approved for this evaluation
   exercise. The deployed model must support Responses API function/tool calling and
   strict JSON-schema structured output.
 - Know the Foundry project inference base URL ending in `/openai/v1` and deployment

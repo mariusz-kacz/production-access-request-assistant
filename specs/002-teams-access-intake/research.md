@@ -21,7 +21,7 @@ MAF handles only the model/tool loop. The feature needs no second agent protocol
 - MAF hosting or Foundry hosted agents behind a Teams adapter: adds another runtime or
   protocol without a product need and weakens the single-host story.
 - Direct `IChatClient` without MAF: lowest implementation complexity, but it would not
-  meet the explicit portfolio goal of demonstrating MAF.
+  meet the explicit goal of exercising MAF in the real intake path.
 
 Sources: [official M365 Agents SDK + MAF .NET sample](https://github.com/microsoft/Agents/tree/main/samples/dotnet/Agent%20Framework),
 [SDK comparison](https://learn.microsoft.com/en-us/microsoftteams/platform/teams-sdk/teams/sdk-comparison),

@@ -18,7 +18,7 @@ active. At the same time, an obsolete candidate can contain client, environment,
 role, justification, and incident details that are no longer needed to continue a
 draft.
 
-The current portfolio baseline is a local, synthetic, low-volume application. It has
+The current baseline is a local, synthetic, low-volume application. It has
 no background worker, operational database-maintenance process, or defined production
 privacy and retention schedule.
 
