@@ -33,7 +33,6 @@ const requestDetail: RequestDetailResponse = {
   createdAt: "2026-07-20T08:00:00Z",
   lastModifiedAt: "2026-07-20T08:00:00Z",
   availableActions: [BUSINESS_DECISION_ACTION],
-  validation: { isValid: true, fieldErrors: [] },
   decisions: [],
   provisioningOperation: null,
   grant: null,

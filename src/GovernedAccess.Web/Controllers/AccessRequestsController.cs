@@ -83,9 +83,6 @@ public sealed class AccessRequestsController : ControllerBase
             detail.CreatedAt,
             detail.LastModifiedAt,
             detail.AvailableActions,
-            new RequestValidationResponse(
-                detail.Validation.IsValid,
-                detail.Validation.FieldErrors),
             detail.Decisions.Select(ToDecisionResponse).ToArray(),
             detail.ProvisioningOperation is null
                 ? null
@@ -224,15 +221,10 @@ public sealed record RequestDetailResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset LastModifiedAt,
     IReadOnlyList<string> AvailableActions,
-    RequestValidationResponse Validation,
     IReadOnlyList<ApprovalDecisionResponse> Decisions,
     ProvisioningOperationResponse? ProvisioningOperation,
     RequestGrantResponse? Grant,
     IReadOnlyList<RequestAuditEventResponse> AuditEvents);
-
-public sealed record RequestValidationResponse(
-    bool IsValid,
-    IReadOnlyList<FieldValidationError> FieldErrors);
 
 public sealed record ApprovalDecisionResponse(
     Guid DecisionId,

@@ -78,10 +78,10 @@ Representative coverage:
   and one-save staging outcomes;
 - `RequestPreparationTests`: clarification target and bounded unique option-list
   invariants independent of provider or transport contracts;
-- `BusinessDecisionPolicyTests`: state, exact-role binding, rejection, and duplicate
-  business decisions;
-- `DevOpsDecisionPolicyTests`: prior approval, exact role, fixed scope, rejection, and
-  operation creation;
+- `BusinessDecisionPolicyTests`: business-stage cases for the shared approval policy,
+  including state, exact-role binding, rejection, and duplicate decisions;
+- `DevOpsDecisionPolicyTests`: DevOps-stage cases for the shared approval policy,
+  including prior approval, exact role, fixed scope, rejection, and operation creation;
 - `WorkflowEvidencePolicyTests`: request, approval, operation, and grant consistency;
   and
 - `AccessGrantTests`: activation, fixed eight-hour expiry, and scope construction.

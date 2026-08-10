@@ -23,7 +23,7 @@ public sealed class RequestQueriesTests(DefaultWebApplicationFixture fixture)
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
 
     [Fact]
-    public async Task ActiveDetailContainsCurrentValidationAndCompleteOrderedEvidence()
+    public async Task ActiveDetailContainsCompleteOrderedEvidence()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await factory.ResetDatabaseAsync(cancellationToken);
@@ -44,9 +44,7 @@ public sealed class RequestQueriesTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(nameof(RequestStatus.Active), detail.GetProperty("status").GetString());
         Assert.Empty(detail.GetProperty("availableActions").EnumerateArray());
 
-        var validation = detail.GetProperty("validation");
-        Assert.True(validation.GetProperty("isValid").GetBoolean());
-        Assert.Empty(validation.GetProperty("fieldErrors").EnumerateArray());
+        Assert.False(detail.TryGetProperty("validation", out _));
 
         var decisions = detail.GetProperty("decisions").EnumerateArray().ToArray();
         Assert.Collection(
@@ -468,7 +466,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysFailProvisioner(),
             fixture.Clock);
-        var failed = await workflowService.DecideDevOpsAsync(
+        var failed = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             failedRequest.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -520,8 +519,9 @@ public sealed class RequestQueryComponentTests
         var businessDecision = ApplyBusinessApproval(
             request,
             fixture.Clock.UtcNow);
-        var devOpsResult = DevOpsDecisionPolicy.Apply(
+        var devOpsResult = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             businessDecision,
             new ApprovalCommand(
                 Guid.NewGuid(),
@@ -530,8 +530,8 @@ public sealed class RequestQueryComponentTests
                 null,
                 fixture.Clock.UtcNow,
                 "devops-correlation"),
-            hasExistingDevOpsDecision: false);
-        var devOpsApplied = Assert.IsType<DevOpsDecisionApplied>(devOpsResult);
+            hasExistingDecision: false);
+        var devOpsApplied = Assert.IsType<ApprovalDecisionApplied>(devOpsResult);
 
         dbContext.AccessRequests.Add(request);
         dbContext.ApprovalDecisions.AddRange(
@@ -574,7 +574,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysSucceedProvisioner(fixture.Clock),
             fixture.Clock);
-        var activation = await workflowService.DecideDevOpsAsync(
+        var activation = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -608,7 +609,6 @@ public sealed class RequestQueryComponentTests
         return new AccessRequestQueryService(
             requestContext,
             workflowStore,
-            new AccessRequestValidator(requestContext),
             new AccessRequestVisibilityPolicy(requestContext, workflowStore),
             clock);
     }
@@ -648,9 +648,11 @@ public sealed class RequestQueryComponentTests
         AccessRequest request,
         DateTimeOffset decidedAt)
     {
-        return Assert.IsType<BusinessDecisionApplied>(
-            BusinessDecisionPolicy.Apply(
+        return Assert.IsType<ApprovalDecisionApplied>(
+            ApprovalDecisionPolicy.Apply(
                 request,
+                ApprovalStage.Business,
+                priorApproval: null,
                 new ApprovalCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
@@ -660,7 +662,7 @@ public sealed class RequestQueryComponentTests
                     null,
                     decidedAt,
                     "business-correlation"),
-                hasExistingBusinessDecision: false)).Decision;
+                hasExistingDecision: false)).Decision;
     }
 
     private sealed class AlwaysFailProvisioner : IAccessProvisioner

@@ -44,11 +44,6 @@ export type AuditEventType =
   | "ProvisioningFailed"
   | "DuplicateRetryReturned";
 
-export interface RequestValidationResponse {
-  isValid: boolean;
-  fieldErrors: ApiFieldError[];
-}
-
 export interface ApprovalDecisionResponse {
   decisionId: string;
   requestId: string;
@@ -109,7 +104,6 @@ export interface RequestDetailResponse {
   lastModifiedAt: string;
   // Presentation hints only; the server authorizes every protected action.
   availableActions: string[];
-  validation: RequestValidationResponse;
   decisions: ApprovalDecisionResponse[];
   provisioningOperation: ProvisioningOperationResponse | null;
   grant: RequestGrantResponse | null;

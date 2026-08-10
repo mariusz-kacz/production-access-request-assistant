@@ -166,7 +166,7 @@
 - [X] T069 [US4] Extend the established participant-authorized request query service with filtered lists, ordered decisions, grant state, logical expiry, audit evidence, and later-stage available actions in `src/GovernedAccess.Core/Application/RequestQueryService.cs`
 - [X] T070 [US4] Add `GET /api/requests` and `POST /api/requests/{requestId}/retry-provisioning`, and expose the enriched detail projection through the existing detail endpoint in `src/GovernedAccess.Web/Controllers/AccessRequestsController.cs`
 - [X] T071 [P] [US4] Implement relevant request rows, status filters, and actionable indicators in `src/GovernedAccess.Web/ClientApp/src/pages/RequestListPage.tsx`
-- [X] T072 [US4] Enrich immutable request detail rendering with validation, all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
+- [X] T072 [US4] Enrich immutable request detail rendering with all decisions, provisioning outcome, grant expiry, retry, later-stage actions, and audit timeline in `src/GovernedAccess.Web/ClientApp/src/pages/RequestDetailPage.tsx`
 - [X] T073 [US4] Complete the `/requests` list route and three-route navigation while preserving the established session state and `/requests/:requestId` detail composition in `src/GovernedAccess.Web/ClientApp/src/App.tsx`
 
 **Checkpoint**: Failed work is safely recoverable, concurrent duplicates converge on one grant, and authorized users can understand all material evidence.
@@ -312,5 +312,10 @@ descriptions as historical task records. Their separate `BusinessDecisionService
 unchanged; `RequestSubmissionService`, `RequestQueryService`, and
 `ProtectedProvisioningService` remain separate focused boundaries.
 
+T083 also supersedes the separate domain-policy paths recorded by T042 and T057 with
+`Domain/AccessRequests/Approvals/ApprovalDecisionPolicy.cs`. Their business-stage and
+DevOps-stage rules remain independently covered within the shared policy.
+
 - [X] T081 Restrict `AccessRequestWorkflowService.RetryProvisioningAsync` to `ProvisioningFailed` requests and add direct regression coverage that an `Active` request is rejected, audited, and left unchanged in `src/GovernedAccess.Core/Application/AccessRequestWorkflowService.cs` and `tests/GovernedAccess.IntegrationTests/Approvals/AccessRequestWorkflowServiceTests.cs` per FR-025 and US4/AC3 (contradicts)
 - [X] T082 Document the implemented command-service consolidation in `specs/001-governed-production-access/plan.md` and applicable reference documentation: `AccessRequestWorkflowService` coordinates business decisions, DevOps decisions, and provisioning retry; `RequestSubmissionService` and `RequestQueryService` remain focused services; and `ProtectedProvisioningService` remains the independent persisted-evidence boundary. Explicitly supersede the pre-refactor `BusinessDecisionService`, `DevOpsDecisionService`, and `ProvisioningRetryService` paths recorded by T043, T061, and T068 without changing functional requirements per plan: application-service boundaries (contradicts)
+- [X] T083 Unify business and DevOps approval orchestration behind `AccessRequestWorkflowService.DecideAsync` with a server-owned `ApprovalStage`, one `ApprovalDecisionCompletion`, and one `ApprovalDecisionPolicy`; retain separate HTTP subresources and explicit stage-specific authorization, prior-evidence, and provisioning behavior.

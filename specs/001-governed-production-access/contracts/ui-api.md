@@ -75,9 +75,10 @@ the configured approver receives `decideBusinessRequest` only while the request 
 `AwaitingBusinessApproval`. The requester can review their submitted request without
 receiving that action, and a nonparticipant receives `404`.
 
-Later story increments extend this stable endpoint with current validation, all
-decisions, provisioning outcome, grant/activation/expiry/logical expiry, ordered audit
-events, DevOps actions, and retry. They do not introduce a replacement detail route.
+Later story increments extend this stable endpoint with all decisions, provisioning
+outcome, grant/activation/expiry/logical expiry, ordered audit events, DevOps actions,
+and retry. The query returns persisted evidence without re-running submission
+validation. These increments do not introduce a replacement detail route.
 
 Submitted requests have no edit or resubmit endpoint. A correction is created through
 `POST /api/requests` and receives a new request ID.

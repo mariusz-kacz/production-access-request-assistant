@@ -13,10 +13,6 @@ public sealed record RequestListItemView(
     DateTimeOffset LastModifiedAt,
     bool Actionable);
 
-public sealed record RequestValidationView(
-    bool IsValid,
-    IReadOnlyList<FieldValidationError> FieldErrors);
-
 public sealed record ApprovalDecisionView(
     Guid DecisionId,
     Guid RequestId,
@@ -72,7 +68,6 @@ public sealed record RequestDetailView(
     DateTimeOffset CreatedAt,
     DateTimeOffset LastModifiedAt,
     IReadOnlyList<string> AvailableActions,
-    RequestValidationView Validation,
     IReadOnlyList<ApprovalDecisionView> Decisions,
     ProvisioningOperationView? ProvisioningOperation,
     AccessGrantView? Grant,
@@ -87,26 +82,22 @@ public sealed class AccessRequestQueryService
 {
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
-    private readonly AccessRequestValidator requestValidator;
     private readonly AccessRequestVisibilityPolicy visibilityPolicy;
     private readonly IClock clock;
 
     public AccessRequestQueryService(
         IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
-        AccessRequestValidator requestValidator,
         AccessRequestVisibilityPolicy visibilityPolicy,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
-        ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(visibilityPolicy);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
-        this.requestValidator = requestValidator;
         this.visibilityPolicy = visibilityPolicy;
         this.clock = clock;
     }
@@ -237,15 +228,6 @@ public sealed class AccessRequestQueryService
             return NotFound<RequestDetailView>();
         }
 
-        var validationResult = await GetCurrentValidationAsync(
-            request,
-            cancellationToken);
-        if (validationResult.IsFailure)
-        {
-            return ApplicationResult.Failed<RequestDetailView>(
-                validationResult.Failure!);
-        }
-
         var operationResult = await workflowStore.GetProvisioningOperationAsync(
             requestId,
             cancellationToken);
@@ -295,7 +277,6 @@ public sealed class AccessRequestQueryService
                 request.CreatedAt,
                 request.LastModifiedAt,
                 access.AvailableActions,
-                validationResult.Value,
                 decisionsResult.Value
                     .OrderBy(decision => decision.DecidedAt)
                     .ThenBy(decision => decision.Stage)
@@ -331,44 +312,6 @@ public sealed class AccessRequestQueryService
                     "authenticated_principal_not_found",
                     "The authenticated principal is unavailable.")
                 : principalResult;
-    }
-
-    private async Task<ApplicationResult<RequestValidationView>>
-        GetCurrentValidationAsync(
-            AccessRequest request,
-            CancellationToken cancellationToken)
-    {
-        var validationOutcome = await requestValidator.ValidateAsync(
-            AccessRequestValidationInput.From(request),
-            cancellationToken);
-
-        return validationOutcome switch
-        {
-            AccessRequestValidationSucceeded succeeded
-                when succeeded.Fields.Matches(request) =>
-                ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: true,
-                    FieldErrors: [])),
-            AccessRequestValidationSucceeded => ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: false,
-                    FieldErrors:
-                    [
-                        new FieldValidationError(
-                            "request",
-                            "request_context_mismatch",
-                            "Current stored context does not match the immutable request."),
-                    ])),
-            AccessRequestValidationRejected rejected => ApplicationResult.Succeeded(
-                new RequestValidationView(
-                    IsValid: false,
-                    rejected.Errors)),
-            AccessRequestValidationFailed failed =>
-                ApplicationResult.Failed<RequestValidationView>(failed.Failure),
-            _ => throw new InvalidOperationException(
-                "The request validation outcome is unsupported."),
-        };
     }
 
     private static ApprovalDecisionView ToView(ApprovalDecision decision)

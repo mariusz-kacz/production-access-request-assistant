@@ -452,26 +452,28 @@ After creation, the request follows the unchanged browser-driven business approv
 DevOps approval, protected provisioning, retry, and audit path. Teams supplies no
 alternate decision or provisioning route.
 
-### Business decision
+### Human approval decisions
 
-The workflow service:
+The business and DevOps endpoints supply their stage as a server-owned constant to one
+workflow decision operation. The browser cannot choose or override the approval stage.
+For the business stage, the workflow service:
 
 1. loads the authenticated principal from the stored principal dataset;
 2. loads the immutable request and current environment context;
 3. requires a business-approver principal;
 4. compares the principal with the owning client's configured approver;
-5. applies the business decision state and duplicate-stage policy; and
+5. applies the shared approval decision policy with the business stage; and
 6. records rejected authorization or transition attempts.
 
 The browser decision body contains only `Approve` or `Reject` plus an optional
 comment.
 
-### DevOps decision
+### DevOps-specific continuation
 
-The workflow service requires a DevOps principal, current validated request context,
-a valid prior business approval, the correct workflow state, and exact role
-consistency. The browser cannot provide a role, environment, client, duration, or
-approval assertion.
+The same workflow operation requires a DevOps principal, current validated request
+context, a valid prior business approval, the correct workflow state, and exact role
+consistency when invoked for the DevOps stage. The browser cannot provide a role,
+environment, client, duration, stage, or approval assertion.
 
 DevOps approval first commits the authenticated decision and pending request-keyed
 operation. It then passes only the request ID into protected provisioning.

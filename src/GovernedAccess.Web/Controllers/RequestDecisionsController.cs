@@ -33,7 +33,8 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await workflowService.DecideBusinessAsync(
+        var outcome = await workflowService.DecideAsync(
+            ApprovalStage.Business,
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -71,7 +72,8 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await workflowService.DecideDevOpsAsync(
+        var outcome = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -89,14 +91,14 @@ public sealed class RequestDecisionsController : ControllerBase
             completed.Request.Id,
             completed.Request.Status.ToString(),
             completed.Decision.CorrelationId,
-            completed.Grant is null
+            completed.Provisioning is null
                 ? null
                 : new DevOpsAccessGrantResponse(
-                    completed.Grant.Id,
-                    completed.Grant.EnvironmentId,
-                    completed.Grant.RoleId,
-                    completed.Grant.ActivatedAt,
-                    completed.Grant.ExpiresAt)));
+                    completed.Provisioning.Grant.Id,
+                    completed.Provisioning.Grant.EnvironmentId,
+                    completed.Provisioning.Grant.RoleId,
+                    completed.Provisioning.Grant.ActivatedAt,
+                    completed.Provisioning.Grant.ExpiresAt)));
     }
 
     private static ApprovalOutcome? ParseDecision(string? decision) =>

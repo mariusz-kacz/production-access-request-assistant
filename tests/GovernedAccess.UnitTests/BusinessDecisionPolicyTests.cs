@@ -19,8 +19,10 @@ public sealed class BusinessDecisionPolicyTests
         var request = await CreateSubmittedRequestAsync();
         var decisionId = Guid.Parse("4f551db5-d9de-4e04-8555-9948d8e81b0a");
 
-        var result = BusinessDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.Business,
+            priorApproval: null,
             new ApprovalCommand(
                 decisionId,
                 ApprovalOutcome.Approved,
@@ -28,9 +30,9 @@ public sealed class BusinessDecisionPolicyTests
                 " Approved for incident response. ",
                 DecisionTime,
                 " business-correlation "),
-            hasExistingBusinessDecision: false);
+            hasExistingDecision: false);
 
-        var applied = Assert.IsType<BusinessDecisionApplied>(result);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(result);
         var decision = applied.Decision;
         Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
         Assert.Equal(DecisionTime, request.LastModifiedAt);
@@ -51,8 +53,10 @@ public sealed class BusinessDecisionPolicyTests
     {
         var request = await CreateSubmittedRequestAsync();
 
-        var result = BusinessDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.Business,
+            priorApproval: null,
             new ApprovalCommand(
                 Guid.Parse("e2b658e5-a183-48a7-99e6-8b67300a60f7"),
                 ApprovalOutcome.Rejected,
@@ -60,9 +64,9 @@ public sealed class BusinessDecisionPolicyTests
                 " Request is not justified. ",
                 DecisionTime,
                 "business-correlation"),
-            hasExistingBusinessDecision: false);
+            hasExistingDecision: false);
 
-        var applied = Assert.IsType<BusinessDecisionApplied>(result);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(result);
         Assert.Equal(RequestStatus.Rejected, request.Status);
         Assert.Equal(DecisionTime, request.LastModifiedAt);
         Assert.Equal(2, request.PersistenceVersion);
@@ -79,13 +83,15 @@ public sealed class BusinessDecisionPolicyTests
         var originalLastModifiedAt = request.LastModifiedAt;
         var originalPersistenceVersion = request.PersistenceVersion;
 
-        var result = BusinessDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.Business,
+            priorApproval: null,
             ValidCommand(),
-            hasExistingBusinessDecision: true);
+            hasExistingDecision: true);
 
-        var notApplied = Assert.IsType<BusinessDecisionNotApplied>(result);
-        Assert.Equal(BusinessDecisionPolicyError.DuplicateStage, notApplied.Error);
+        var notApplied = Assert.IsType<ApprovalDecisionNotApplied>(result);
+        Assert.Equal(ApprovalDecisionPolicyError.DuplicateStage, notApplied.Error);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
         Assert.Equal(originalLastModifiedAt, request.LastModifiedAt);
         Assert.Equal(originalPersistenceVersion, request.PersistenceVersion);

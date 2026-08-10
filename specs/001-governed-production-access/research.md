@@ -91,14 +91,18 @@ project-per-layer structure (more ceremony than this MVP needs).
 
 **Decision**: Use `AccessRequestWorkflowService` as the single application
 coordinator for authenticated business decisions, DevOps decisions, and provisioning
-retry. Keep `RequestSubmissionService` and `AccessRequestQueryService` focused on request
-creation and read projections. Keep `ProtectedProvisioningService` separate as the
-internal boundary that reloads persisted evidence and invokes the synthetic provider.
+retry. Business and DevOps endpoints invoke one decision operation with a server-owned
+stage, backed by one domain approval policy. Keep `RequestSubmissionService` and
+`AccessRequestQueryService` focused on request creation and read projections. Keep
+`ProtectedProvisioningService` separate as the internal boundary that reloads
+persisted evidence and invokes the synthetic provider.
 
-**Rationale**: The three human workflow commands share actor loading, request loading,
-rejected-attempt auditing, correlation handling, deterministic transition policies,
-and persistence coordination. One command coordinator removes repeated application
-orchestration without introducing a workflow engine. The protected provisioning
+**Rationale**: Both decisions share input normalization, actor and request loading,
+duplicate detection, rejected-attempt auditing, correlation handling, deterministic
+transition application, and persistence coordination. Their authorization,
+prerequisite evidence, and post-decision effects remain explicit stage branches. One
+decision pipeline removes repeated orchestration without introducing a workflow
+engine. The protected provisioning
 service must remain separate because it distrusts its caller, accepts only the
 immutable request ID, and independently validates stored authorization evidence.
 

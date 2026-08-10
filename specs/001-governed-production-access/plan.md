@@ -67,12 +67,14 @@ independent provisioning trust boundary remain unchanged.
 | Reload persisted authorization evidence and execute idempotent provisioning | `ProtectedProvisioningService` |
 
 `AccessRequestWorkflowService` remains the single command coordinator for authenticated
-human workflow actions. `AccessRequestCommandContextLoader` supplies its normalized actor,
-immutable request, correlation identity, and command-specific authoritative context.
-The coordinator applies the existing deterministic business and DevOps policies,
-records decisions and rejected attempts, and invokes protected provisioning by
-immutable request ID. It does not absorb the domain policies or accept browser
-assertions about actor, approval, scope, duration, or validation.
+human workflow actions. Both decision endpoints call one stage-driven decision method;
+their stage is supplied by the server route and is not browser input.
+`AccessRequestCommandContextLoader` supplies the normalized actor, immutable request,
+correlation identity, and command-specific authoritative context. The coordinator
+applies one deterministic `ApprovalDecisionPolicy`, records decisions and rejected
+attempts, and invokes protected provisioning by immutable request ID for an approved
+DevOps decision. It does not absorb domain rules or accept browser assertions about
+actor, stage, approval, scope, duration, or validation.
 
 `ProtectedProvisioningService` deliberately remains separate. Initial provisioning
 and retry reach it only through the workflow coordinator, but the protected service
@@ -84,6 +86,8 @@ The completed T043, T061, and T068 task descriptions preserve the original
 implementation history. Their `BusinessDecisionService`, `DevOpsDecisionService`, and
 `ProvisioningRetryService` file paths are superseded by
 `AccessRequestWorkflowService.cs`; their behavioral requirements remain in force.
+The separate business and DevOps policy paths recorded by T042 and T057 are likewise
+superseded by `ApprovalDecisionPolicy.cs`, which retains explicit stage-specific rules.
 `RequestDecisionsController` resolves the coordinator for both decision endpoints, and
 the retry endpoint resolves the same coordinator when it is implemented.
 
@@ -99,10 +103,11 @@ server-computed available actions. The submitted-request success link must open 
 route, and switching demo identities on the route must reload the projection.
 
 User Story 4 does not create the detail route. It extends the established projection
-with ordered decisions, current validation, provisioning outcome, grant and logical
-expiry, retry, and audit evidence, and adds the request-list route. This keeps the
-business-decision story independently demonstrable without pulling provisioning or
-complete evidence scope into an earlier phase.
+with ordered decisions, provisioning outcome, grant and logical expiry, retry, and
+audit evidence, and adds the request-list route. The query projects submitted evidence
+without repeating authoritative submission validation. This keeps the business-decision
+story independently demonstrable without pulling provisioning or complete evidence
+scope into an earlier phase.
 
 ## UI Presentation Correction
 
@@ -311,10 +316,11 @@ thin React presentation.
   `AccessRequestQueryService` loads and projects participant-authorized read data. None of
   these components coordinates approval or provisioning commands.
 - `AccessRequestWorkflowService` is the single application coordinator for business
-  decisions, DevOps decisions, and provisioning retry. It receives trusted actor and
-  current context from `AccessRequestCommandContextLoader`, applies deterministic domain
-  policies, persists decision and audit evidence, and passes only the immutable
-  request ID into protected provisioning.
+  decisions, DevOps decisions, and provisioning retry. Both decision routes invoke one
+  `DecideAsync` operation with a server-owned stage. It receives trusted actor and
+  current context from `AccessRequestCommandContextLoader`, applies the deterministic
+  shared approval policy, persists decision and audit evidence, and passes only the
+  immutable request ID into protected provisioning.
 - `ProtectedProvisioningService` remains an independent internal trust boundary. It
   reloads persisted request, approval, operation, and grant evidence and never trusts
   the workflow coordinator to assert that authorization or validation succeeded.

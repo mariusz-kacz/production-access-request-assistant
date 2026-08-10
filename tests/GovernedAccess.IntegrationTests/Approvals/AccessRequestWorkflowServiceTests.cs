@@ -28,7 +28,8 @@ public sealed class AccessRequestWorkflowServiceTests
         var provisioner = new PersistenceInspectingProvisioner(dbContext);
         var service = CreateService(dbContext, provisioner, fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -41,7 +42,7 @@ public sealed class AccessRequestWorkflowServiceTests
         Assert.True(provisioner.DecisionWasPersistedBeforeInvocation);
         Assert.True(provisioner.OperationWasPersistedBeforeInvocation);
         Assert.Equal(RequestStatus.Active, completed.Request.Status);
-        Assert.NotNull(completed.Grant);
+        Assert.NotNull(completed.Provisioning?.Grant);
     }
 
     [Fact]
@@ -60,7 +61,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideBusinessAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientBetaApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -95,14 +97,16 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var first = await service.DecideBusinessAsync(
+        var first = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientAlphaApproverPrincipalId,
             ApprovalOutcome.Approved,
             "Original decision.",
             "first-correlation",
             cancellationToken);
-        var duplicate = await service.DecideBusinessAsync(
+        var duplicate = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientAlphaApproverPrincipalId,
             ApprovalOutcome.Rejected,
@@ -143,7 +147,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             principalId,
             ApprovalOutcome.Approved,
@@ -179,7 +184,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Rejected,
@@ -189,8 +195,7 @@ public sealed class AccessRequestWorkflowServiceTests
 
         Assert.True(outcome.IsSuccess);
         Assert.Equal(RequestStatus.Rejected, request.Status);
-        Assert.Null(outcome.Value.Operation);
-        Assert.Null(outcome.Value.Grant);
+        Assert.Null(outcome.Value.Provisioning);
         Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
             cancellationToken));
         Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
@@ -227,8 +232,10 @@ public sealed class AccessRequestWorkflowServiceTests
             DemoDataIds.PrimaryIncidentId,
             occurredAt,
             "request-correlation");
-        var policyResult = BusinessDecisionPolicy.Apply(
+        var policyResult = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.Business,
+            priorApproval: null,
             new ApprovalCommand(
                 Guid.NewGuid(),
                 ApprovalOutcome.Approved,
@@ -236,8 +243,8 @@ public sealed class AccessRequestWorkflowServiceTests
                 null,
                 occurredAt,
                 "business-correlation"),
-            hasExistingBusinessDecision: false);
-        var applied = Assert.IsType<BusinessDecisionApplied>(policyResult);
+            hasExistingDecision: false);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(policyResult);
 
         dbContext.AccessRequests.Add(request);
         dbContext.ApprovalDecisions.Add(applied.Decision);

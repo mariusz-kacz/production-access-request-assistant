@@ -6,18 +6,13 @@ using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.Core.Application.AccessRequests;
 
-public sealed record BusinessDecisionResult(
-    AccessRequest Request,
-    ApprovalDecision Decision);
-
-public sealed record DevOpsDecisionResult(
+public sealed record ApprovalDecisionCompletion(
     AccessRequest Request,
     ApprovalDecision Decision,
-    ProvisioningOperation? Operation,
-    AccessGrant? Grant);
+    ProvisioningCompletion? Provisioning);
 
 /// <summary>
-/// Coordinates the authenticated human commands for the governed access workflow.
+/// Coordinates authenticated human decisions and DevOps provisioning retries.
 /// Domain policies remain deterministic, and protected provisioning independently
 /// reloads and validates persisted authorization evidence.
 /// </summary>
@@ -82,7 +77,8 @@ public sealed class AccessRequestWorkflowService
         this.clock = clock;
     }
 
-    public async Task<ApplicationResult<BusinessDecisionResult>> DecideBusinessAsync(
+    public async Task<ApplicationResult<ApprovalDecisionCompletion>> DecideAsync(
+        ApprovalStage stage,
         Guid requestId,
         string? authenticatedPrincipalId,
         ApprovalOutcome decision,
@@ -90,19 +86,20 @@ public sealed class AccessRequestWorkflowService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        var inputResult = NormalizeDecisionInput(
-            decision,
-            comment,
-            "business_decision_invalid",
-            "The business decision must be approve or reject.",
-            "business_decision_comment_too_long");
-        if (inputResult.IsFailure)
+        if (!Enum.IsDefined(stage))
         {
-            return ApplicationResult.Failed<BusinessDecisionResult>(
-                inputResult.Failure!);
+            return Failed<ApprovalDecisionCompletion>(
+                ApplicationFailureKind.InvalidInput,
+                "approval_stage_invalid",
+                "The approval stage is invalid.");
         }
 
-        var input = inputResult.Value;
+        var inputResult = NormalizeDecisionInput(stage, decision, comment);
+        if (inputResult.IsFailure)
+        {
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                inputResult.Failure!);
+        }
 
         var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
@@ -111,7 +108,7 @@ public sealed class AccessRequestWorkflowService
             cancellationToken);
         if (commandContextResult.IsFailure)
         {
-            return ApplicationResult.Failed<BusinessDecisionResult>(
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
                 commandContextResult.Failure!);
         }
 
@@ -119,251 +116,103 @@ public sealed class AccessRequestWorkflowService
         var request = context.Request;
         var principal = context.Principal;
         var normalizedCorrelationId = context.CorrelationId;
-        var environmentContextResult = await commandContextLoader.LoadEnvironmentContextAsync(
-            request,
-            cancellationToken);
-        if (environmentContextResult.IsFailure)
-        {
-            return ApplicationResult.Failed<BusinessDecisionResult>(
-                environmentContextResult.Failure!);
-        }
 
-        var environmentContext = environmentContextResult.Value;
-        var environment = environmentContext.Environment;
-        var client = environmentContext.Client;
-        var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
-            && StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId)
-            && StringComparer.Ordinal.Equals(environment.ClientId, request.ClientId)
-            && StringComparer.Ordinal.Equals(client.Id, request.ClientId)
-            && StringComparer.Ordinal.Equals(
-                client.BusinessApproverPrincipalId,
-                principal.Id);
-        if (!isResponsibleApprover)
+        var authorizationFailure = await AuthorizeDecisionAsync(
+            stage,
+            request,
+            principal,
+            cancellationToken);
+        if (authorizationFailure is not null)
         {
-            var failure = new ApplicationFailure(
-                ApplicationFailureKind.Unauthorized,
-                BusinessApproverNotResponsibleCode,
-                "Only the configured business approver can decide this request.");
-            return ApplicationResult.Failed<BusinessDecisionResult>(
+            if (authorizationFailure.Kind != ApplicationFailureKind.Unauthorized)
+            {
+                return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                    authorizationFailure);
+            }
+
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
                 await RecordRejectedAttemptAsync(
                     request,
-                    ApprovalStage.Business,
+                    stage,
                     principal.Id,
                     normalizedCorrelationId,
-                    failure,
+                    authorizationFailure,
                     authorizationRejected: true,
                     cancellationToken));
         }
 
+        if (stage == ApprovalStage.DevOps)
+        {
+            var currentContextFailure = await ValidateCurrentContextAsync(
+                request,
+                cancellationToken);
+            if (currentContextFailure is not null)
+            {
+                if (currentContextFailure.Kind is
+                    ApplicationFailureKind.DependencyUnavailable or
+                    ApplicationFailureKind.DependencyFailure or
+                    ApplicationFailureKind.Timeout or
+                    ApplicationFailureKind.Cancelled)
+                {
+                    return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                        currentContextFailure);
+                }
+
+                return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                    await RecordRejectedAttemptAsync(
+                        request,
+                        stage,
+                        principal.Id,
+                        normalizedCorrelationId,
+                        currentContextFailure,
+                        authorizationRejected: false,
+                        cancellationToken));
+            }
+        }
+
+        var priorApprovalResult = await LoadPriorApprovalAsync(
+            stage,
+            request.Id,
+            cancellationToken);
+        if (priorApprovalResult.IsFailure)
+        {
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                priorApprovalResult.Failure!);
+        }
+
         var existingDecisionResult = await workflowStore.GetApprovalDecisionAsync(
             request.Id,
-            ApprovalStage.Business,
+            stage,
             cancellationToken);
         var hasExistingDecision = existingDecisionResult.IsSuccess;
         if (existingDecisionResult.IsFailure
             && existingDecisionResult.Failure!.Kind != ApplicationFailureKind.NotFound)
         {
-            return ApplicationResult.Failed<BusinessDecisionResult>(
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
                 existingDecisionResult.Failure);
-        }
-
-        var occurredAt = clock.UtcNow.ToUniversalTime();
-        var policyResult = BusinessDecisionPolicy.Apply(
-            request,
-            new ApprovalCommand(
-                Guid.NewGuid(),
-                input.Decision,
-                principal.Id,
-                input.Comment,
-                occurredAt,
-                normalizedCorrelationId),
-            hasExistingDecision);
-
-        if (policyResult is BusinessDecisionNotApplied notApplied)
-        {
-            var failure = notApplied.Error switch
-            {
-                BusinessDecisionPolicyError.DuplicateStage => new ApplicationFailure(
-                    ApplicationFailureKind.InvalidTransition,
-                    BusinessDuplicateDecisionCode,
-                    "A business decision has already been recorded for this request."),
-                BusinessDecisionPolicyError.InvalidTransition => new ApplicationFailure(
-                    ApplicationFailureKind.InvalidTransition,
-                    BusinessInvalidTransitionCode,
-                    "The request is not awaiting a business decision."),
-                _ => throw new InvalidOperationException(
-                    "The business decision policy failure is unsupported."),
-            };
-            return ApplicationResult.Failed<BusinessDecisionResult>(
-                await RecordRejectedAttemptAsync(
-                    request,
-                    ApprovalStage.Business,
-                    principal.Id,
-                    normalizedCorrelationId,
-                    failure,
-                    authorizationRejected: false,
-                    cancellationToken));
-        }
-
-        if (policyResult is not BusinessDecisionApplied applied)
-        {
-            throw new InvalidOperationException(
-                "The business decision policy outcome is unsupported.");
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        workflowStore.AddApprovalDecision(applied.Decision);
-        workflowStore.AddAuditEvent(AuditEvent.CreateBusinessDecision(
-            Guid.NewGuid(),
-            request,
-            applied.Decision));
-
-        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        return saveResult.IsFailure
-            ? ApplicationResult.Failed<BusinessDecisionResult>(saveResult.Failure!)
-            : ApplicationResult.Succeeded(
-                new BusinessDecisionResult(request, applied.Decision));
-    }
-
-    public async Task<ApplicationResult<DevOpsDecisionResult>> DecideDevOpsAsync(
-        Guid requestId,
-        string? authenticatedPrincipalId,
-        ApprovalOutcome decision,
-        string? comment,
-        string? correlationId,
-        CancellationToken cancellationToken)
-    {
-        var inputResult = NormalizeDecisionInput(
-            decision,
-            comment,
-            "devops_decision_invalid",
-            "The DevOps decision must be approve or reject.",
-            "devops_decision_comment_too_long");
-        if (inputResult.IsFailure)
-        {
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                inputResult.Failure!);
         }
 
         var input = inputResult.Value;
-
-        var commandContextResult = await commandContextLoader.LoadAsync(
-            requestId,
-            authenticatedPrincipalId,
-            correlationId,
-            cancellationToken);
-        if (commandContextResult.IsFailure)
-        {
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                commandContextResult.Failure!);
-        }
-
-        var context = commandContextResult.Value;
-        var request = context.Request;
-        var principal = context.Principal;
-        var normalizedCorrelationId = context.CorrelationId;
-        if (principal.Kind != PrincipalKind.DevOpsApprover)
-        {
-            var failure = new ApplicationFailure(
-                ApplicationFailureKind.Unauthorized,
-                DevOpsApproverNotAuthorizedCode,
-                "Only the authenticated DevOps approver can decide this request.");
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                await RecordRejectedAttemptAsync(
-                    request,
-                    ApprovalStage.DevOps,
-                    principal.Id,
-                    normalizedCorrelationId,
-                    failure,
-                    authorizationRejected: true,
-                    cancellationToken));
-        }
-
-        var currentContextFailure = await ValidateCurrentContextAsync(
+        var policyResult = ApprovalDecisionPolicy.Apply(
             request,
-            cancellationToken);
-        if (currentContextFailure is not null)
-        {
-            if (currentContextFailure.Kind is
-                ApplicationFailureKind.DependencyUnavailable or
-                ApplicationFailureKind.DependencyFailure or
-                ApplicationFailureKind.Timeout or
-                ApplicationFailureKind.Cancelled)
-            {
-                return ApplicationResult.Failed<DevOpsDecisionResult>(
-                    currentContextFailure);
-            }
-
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                await RecordRejectedAttemptAsync(
-                    request,
-                    ApprovalStage.DevOps,
-                    principal.Id,
-                    normalizedCorrelationId,
-                    currentContextFailure,
-                    authorizationRejected: false,
-                    cancellationToken));
-        }
-
-        var businessApprovalResult = await workflowStore.GetApprovalDecisionAsync(
-            request.Id,
-            ApprovalStage.Business,
-            cancellationToken);
-        if (businessApprovalResult.IsFailure)
-        {
-            if (businessApprovalResult.Failure!.Kind != ApplicationFailureKind.NotFound)
-            {
-                return ApplicationResult.Failed<DevOpsDecisionResult>(
-                    businessApprovalResult.Failure);
-            }
-
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                await RecordRejectedAttemptAsync(
-                    request,
-                    ApprovalStage.DevOps,
-                    principal.Id,
-                    normalizedCorrelationId,
-                    new ApplicationFailure(
-                        ApplicationFailureKind.InvalidTransition,
-                        DevOpsInvalidBusinessApprovalCode,
-                        "A valid business approval is required before a DevOps decision."),
-                    authorizationRejected: false,
-                    cancellationToken));
-        }
-
-        var existingDecisionResult = await workflowStore.GetApprovalDecisionAsync(
-            request.Id,
-            ApprovalStage.DevOps,
-            cancellationToken);
-        var hasExistingDecision = existingDecisionResult.IsSuccess;
-        if (existingDecisionResult.IsFailure
-            && existingDecisionResult.Failure!.Kind != ApplicationFailureKind.NotFound)
-        {
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                existingDecisionResult.Failure);
-        }
-
-        var occurredAt = clock.UtcNow.ToUniversalTime();
-        var policyResult = DevOpsDecisionPolicy.Apply(
-            request,
-            businessApprovalResult.Value,
+            stage,
+            priorApprovalResult.Value.Decision,
             new ApprovalCommand(
                 Guid.NewGuid(),
                 input.Decision,
                 principal.Id,
                 input.Comment,
-                occurredAt,
+                clock.UtcNow.ToUniversalTime(),
                 normalizedCorrelationId),
             hasExistingDecision);
 
-        if (policyResult is DevOpsDecisionNotApplied notApplied)
+        if (policyResult is ApprovalDecisionNotApplied notApplied)
         {
-            var failure = MapDevOpsPolicyFailure(notApplied.Error);
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
+            var failure = MapPolicyFailure(stage, notApplied.Error);
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
                 await RecordRejectedAttemptAsync(
                     request,
-                    ApprovalStage.DevOps,
+                    stage,
                     principal.Id,
                     normalizedCorrelationId,
                     failure,
@@ -371,10 +220,10 @@ public sealed class AccessRequestWorkflowService
                     cancellationToken));
         }
 
-        if (policyResult is not DevOpsDecisionApplied applied)
+        if (policyResult is not ApprovalDecisionApplied applied)
         {
             throw new InvalidOperationException(
-                "The DevOps decision policy outcome is unsupported.");
+                "The approval decision policy outcome is unsupported.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -385,44 +234,35 @@ public sealed class AccessRequestWorkflowService
             workflowStore.AddProvisioningOperation(applied.Operation);
         }
 
-        workflowStore.AddAuditEvent(AuditEvent.CreateDevOpsDecision(
-            Guid.NewGuid(),
-            request,
-            applied.Decision));
+        workflowStore.AddAuditEvent(CreateDecisionAuditEvent(request, applied.Decision));
 
-        var decisionSaveResult = await workflowStore.SaveChangesAsync(cancellationToken);
-        if (decisionSaveResult.IsFailure)
+        var saveResult = await workflowStore.SaveChangesAsync(cancellationToken);
+        if (saveResult.IsFailure)
         {
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                decisionSaveResult.Failure!);
+            return ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                saveResult.Failure!);
         }
 
         if (applied.Operation is null)
         {
             return ApplicationResult.Succeeded(
-                new DevOpsDecisionResult(
+                new ApprovalDecisionCompletion(
                     request,
                     applied.Decision,
-                    Operation: null,
-                    Grant: null));
+                    Provisioning: null));
         }
 
-        var provisioningOutcome = await protectedProvisioning.ProvisionAsync(
+        var provisioningResult = await protectedProvisioning.ProvisionAsync(
             request.Id,
             cancellationToken);
-        if (provisioningOutcome.IsFailure)
-        {
-            return ApplicationResult.Failed<DevOpsDecisionResult>(
-                provisioningOutcome.Failure!);
-        }
-
-        var completed = provisioningOutcome.Value;
-        return ApplicationResult.Succeeded(
-            new DevOpsDecisionResult(
-                completed.Request,
-                applied.Decision,
-                completed.Operation,
-                completed.Grant));
+        return provisioningResult.IsFailure
+            ? ApplicationResult.Failed<ApprovalDecisionCompletion>(
+                provisioningResult.Failure!)
+            : ApplicationResult.Succeeded(
+                new ApprovalDecisionCompletion(
+                    provisioningResult.Value.Request,
+                    applied.Decision,
+                    provisioningResult.Value));
     }
 
     public async Task<ApplicationResult<ProvisioningCompletion>>
@@ -484,6 +324,76 @@ public sealed class AccessRequestWorkflowService
             cancellationToken);
     }
 
+    private async Task<ApplicationFailure?> AuthorizeDecisionAsync(
+        ApprovalStage stage,
+        AccessRequest request,
+        AuthenticatedPrincipal principal,
+        CancellationToken cancellationToken)
+    {
+        if (stage == ApprovalStage.DevOps)
+        {
+            return principal.Kind == PrincipalKind.DevOpsApprover
+                ? null
+                : new ApplicationFailure(
+                    ApplicationFailureKind.Unauthorized,
+                    DevOpsApproverNotAuthorizedCode,
+                    "Only the authenticated DevOps approver can decide this request.");
+        }
+
+        var environmentContextResult =
+            await commandContextLoader.LoadEnvironmentContextAsync(
+                request,
+                cancellationToken);
+        if (environmentContextResult.IsFailure)
+        {
+            return environmentContextResult.Failure;
+        }
+
+        var environmentContext = environmentContextResult.Value;
+        var isResponsibleApprover = principal.Kind == PrincipalKind.BusinessApprover
+            && StringComparer.Ordinal.Equals(principal.ClientId, request.ClientId)
+            && StringComparer.Ordinal.Equals(
+                environmentContext.Environment.ClientId,
+                request.ClientId)
+            && StringComparer.Ordinal.Equals(
+                environmentContext.Client.Id,
+                request.ClientId)
+            && StringComparer.Ordinal.Equals(
+                environmentContext.Client.BusinessApproverPrincipalId,
+                principal.Id);
+        return isResponsibleApprover
+            ? null
+            : new ApplicationFailure(
+                ApplicationFailureKind.Unauthorized,
+                BusinessApproverNotResponsibleCode,
+                "Only the configured business approver can decide this request.");
+    }
+
+    private async Task<ApplicationResult<PriorApprovalEvidence>> LoadPriorApprovalAsync(
+        ApprovalStage stage,
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        if (stage == ApprovalStage.Business)
+        {
+            return ApplicationResult.Succeeded(
+                new PriorApprovalEvidence(Decision: null));
+        }
+
+        var priorApprovalResult = await workflowStore.GetApprovalDecisionAsync(
+            requestId,
+            ApprovalStage.Business,
+            cancellationToken);
+        return priorApprovalResult.IsSuccess
+            ? ApplicationResult.Succeeded(
+                new PriorApprovalEvidence(priorApprovalResult.Value))
+            : priorApprovalResult.Failure!.Kind == ApplicationFailureKind.NotFound
+                ? ApplicationResult.Succeeded(
+                    new PriorApprovalEvidence(Decision: null))
+                : ApplicationResult.Failed<PriorApprovalEvidence>(
+                    priorApprovalResult.Failure);
+    }
+
     private async Task<ApplicationFailure> RecordRejectedAttemptAsync(
         AccessRequest request,
         ApprovalStage stage,
@@ -542,30 +452,62 @@ public sealed class AccessRequestWorkflowService
             : InvalidCurrentContext();
     }
 
-    private static ApplicationFailure MapDevOpsPolicyFailure(
-        DevOpsDecisionPolicyError error)
-    {
-        return error switch
+    private static AuditEvent CreateDecisionAuditEvent(
+        AccessRequest request,
+        ApprovalDecision decision) =>
+        decision.Stage switch
         {
-            DevOpsDecisionPolicyError.DuplicateStage => new ApplicationFailure(
-                ApplicationFailureKind.InvalidTransition,
-                DevOpsDuplicateDecisionCode,
-                "A DevOps decision has already been recorded for this request."),
-            DevOpsDecisionPolicyError.InvalidTransition => new ApplicationFailure(
-                ApplicationFailureKind.InvalidTransition,
-                DevOpsInvalidTransitionCode,
-                "The request is not awaiting a DevOps decision."),
-            DevOpsDecisionPolicyError.InvalidBusinessApproval => new ApplicationFailure(
-                ApplicationFailureKind.InvalidTransition,
-                DevOpsInvalidBusinessApprovalCode,
-                "The required business approval is invalid."),
-            DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch =>
+            ApprovalStage.Business => AuditEvent.CreateBusinessDecision(
+                Guid.NewGuid(),
+                request,
+                decision),
+            ApprovalStage.DevOps => AuditEvent.CreateDevOpsDecision(
+                Guid.NewGuid(),
+                request,
+                decision),
+            _ => throw new InvalidOperationException(
+                "The approval decision stage is unsupported."),
+        };
+
+    private static ApplicationFailure MapPolicyFailure(
+        ApprovalStage stage,
+        ApprovalDecisionPolicyError error)
+    {
+        return (stage, error) switch
+        {
+            (ApprovalStage.Business, ApprovalDecisionPolicyError.DuplicateStage) =>
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidTransition,
+                    BusinessDuplicateDecisionCode,
+                    "A business decision has already been recorded for this request."),
+            (ApprovalStage.Business, ApprovalDecisionPolicyError.InvalidTransition) =>
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidTransition,
+                    BusinessInvalidTransitionCode,
+                    "The request is not awaiting a business decision."),
+            (ApprovalStage.DevOps, ApprovalDecisionPolicyError.DuplicateStage) =>
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidTransition,
+                    DevOpsDuplicateDecisionCode,
+                    "A DevOps decision has already been recorded for this request."),
+            (ApprovalStage.DevOps, ApprovalDecisionPolicyError.InvalidTransition) =>
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidTransition,
+                    DevOpsInvalidTransitionCode,
+                    "The request is not awaiting a DevOps decision."),
+            (ApprovalStage.DevOps, ApprovalDecisionPolicyError.InvalidPriorApproval) =>
+                new ApplicationFailure(
+                    ApplicationFailureKind.InvalidTransition,
+                    DevOpsInvalidBusinessApprovalCode,
+                    "A valid business approval is required before a DevOps decision."),
+            (ApprovalStage.DevOps,
+                ApprovalDecisionPolicyError.PriorApprovalScopeMismatch) =>
                 new ApplicationFailure(
                     ApplicationFailureKind.InvalidTransition,
                     DevOpsBusinessApprovalScopeMismatchCode,
                     "The business-approved role does not match the immutable request."),
             _ => throw new InvalidOperationException(
-                "The DevOps decision policy failure is unsupported."),
+                "The approval decision policy failure is unsupported for this stage."),
         };
     }
 
@@ -579,18 +521,18 @@ public sealed class AccessRequestWorkflowService
 
     private static ApplicationResult<NormalizedDecisionInput>
         NormalizeDecisionInput(
+            ApprovalStage stage,
             ApprovalOutcome decision,
-            string? comment,
-            string invalidDecisionCode,
-            string invalidDecisionMessage,
-            string commentTooLongCode)
+            string? comment)
     {
+        var stageName = stage == ApprovalStage.Business ? "business" : "DevOps";
+        var codePrefix = stage == ApprovalStage.Business ? "business" : "devops";
         if (!Enum.IsDefined(decision))
         {
             return Failed<NormalizedDecisionInput>(
                 ApplicationFailureKind.InvalidInput,
-                invalidDecisionCode,
-                invalidDecisionMessage);
+                $"{codePrefix}_decision_invalid",
+                $"The {stageName} decision must be approve or reject.");
         }
 
         var normalizedComment = string.IsNullOrWhiteSpace(comment)
@@ -599,7 +541,7 @@ public sealed class AccessRequestWorkflowService
         return normalizedComment?.Length > ApprovalDecision.MaximumCommentLength
             ? Failed<NormalizedDecisionInput>(
                 ApplicationFailureKind.InvalidInput,
-                commentTooLongCode,
+                $"{codePrefix}_decision_comment_too_long",
                 $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.")
             : ApplicationResult.Succeeded(
                 new NormalizedDecisionInput(decision, normalizedComment));
@@ -619,4 +561,5 @@ public sealed class AccessRequestWorkflowService
         ApprovalOutcome Decision,
         string? Comment);
 
+    private sealed record PriorApprovalEvidence(ApprovalDecision? Decision);
 }

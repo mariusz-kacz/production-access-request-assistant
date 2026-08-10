@@ -192,9 +192,10 @@ actor or action list from the browser.
 Participant visibility is evaluated before projection: the requester and currently
 responsible business approver can see the request during the business-decision stage;
 a nonparticipant receives no detail. Later stories extend this same projection with
-ordered decisions, current validation, provisioning operation, grant, logical expiry,
-retry eligibility, and ordered audit events. Those extensions do not change the
-immutable request entity or introduce a second detail endpoint.
+ordered decisions, provisioning operation, grant, logical expiry, retry eligibility,
+and ordered audit events. The projection does not revalidate the immutable submitted
+scope against reference data. Those extensions do not change the immutable request
+entity or introduce a second detail endpoint.
 
 ## Client-only presentation projections
 

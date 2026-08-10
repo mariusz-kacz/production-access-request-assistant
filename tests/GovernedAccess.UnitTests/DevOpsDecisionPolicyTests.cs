@@ -23,8 +23,9 @@ public sealed class DevOpsDecisionPolicyTests
         var (request, businessApproval) = CreateBusinessApprovedRequest();
         var decisionId = Guid.Parse("5c270790-e989-4277-a835-f7f5365aefd8");
 
-        var result = DevOpsDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             businessApproval,
             new ApprovalCommand(
                 decisionId,
@@ -33,9 +34,9 @@ public sealed class DevOpsDecisionPolicyTests
                 " Approved for the fixed eight-hour access period. ",
                 DevOpsDecisionTime,
                 " devops-correlation "),
-            hasExistingDevOpsDecision: false);
+            hasExistingDecision: false);
 
-        var applied = Assert.IsType<DevOpsDecisionApplied>(result);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(result);
         var decision = applied.Decision;
         var operation = Assert.IsType<ProvisioningOperation>(applied.Operation);
 
@@ -69,15 +70,16 @@ public sealed class DevOpsDecisionPolicyTests
             ProductionRoleIds.Support);
         var snapshot = RequestSnapshot.Capture(request);
 
-        var result = DevOpsDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             mismatchedBusinessApproval,
             ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false);
+            hasExistingDecision: false);
 
-        var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
+        var notApplied = Assert.IsType<ApprovalDecisionNotApplied>(result);
         Assert.Equal(
-            DevOpsDecisionPolicyError.BusinessApprovalScopeMismatch,
+            ApprovalDecisionPolicyError.PriorApprovalScopeMismatch,
             notApplied.Error);
         snapshot.AssertUnchanged(request);
     }
@@ -92,15 +94,16 @@ public sealed class DevOpsDecisionPolicyTests
             request.CreatedAt.AddTicks(-1));
         var snapshot = RequestSnapshot.Capture(request);
 
-        var result = DevOpsDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             invalidBusinessApproval,
             ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false);
+            hasExistingDecision: false);
 
-        var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
+        var notApplied = Assert.IsType<ApprovalDecisionNotApplied>(result);
         Assert.Equal(
-            DevOpsDecisionPolicyError.InvalidBusinessApproval,
+            ApprovalDecisionPolicyError.InvalidPriorApproval,
             notApplied.Error);
         snapshot.AssertUnchanged(request);
     }
@@ -110,8 +113,9 @@ public sealed class DevOpsDecisionPolicyTests
     {
         var (request, businessApproval) = CreateBusinessApprovedRequest();
 
-        var result = DevOpsDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             businessApproval,
             new ApprovalCommand(
                 Guid.Parse("325eb46d-e95e-42ed-bc44-3f6f31749693"),
@@ -120,9 +124,9 @@ public sealed class DevOpsDecisionPolicyTests
                 " Current risk is too high. ",
                 DevOpsDecisionTime,
                 "devops-correlation"),
-            hasExistingDevOpsDecision: false);
+            hasExistingDecision: false);
 
-        var applied = Assert.IsType<DevOpsDecisionApplied>(result);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(result);
         Assert.Equal(RequestStatus.Rejected, request.Status);
         Assert.Equal(DevOpsDecisionTime, request.LastModifiedAt);
         Assert.Equal(3, request.PersistenceVersion);
@@ -140,14 +144,15 @@ public sealed class DevOpsDecisionPolicyTests
         var businessApproval = CreateBusinessApproval(request, request.RequestedRoleId);
         var snapshot = RequestSnapshot.Capture(request);
 
-        var result = DevOpsDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.DevOps,
             businessApproval,
             ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false);
+            hasExistingDecision: false);
 
-        var notApplied = Assert.IsType<DevOpsDecisionNotApplied>(result);
-        Assert.Equal(DevOpsDecisionPolicyError.InvalidTransition, notApplied.Error);
+        var notApplied = Assert.IsType<ApprovalDecisionNotApplied>(result);
+        Assert.Equal(ApprovalDecisionPolicyError.InvalidTransition, notApplied.Error);
         snapshot.AssertUnchanged(request);
     }
 
@@ -157,16 +162,18 @@ public sealed class DevOpsDecisionPolicyTests
         var (firstRequest, firstBusinessApproval) = CreateBusinessApprovedRequest();
         var (secondRequest, secondBusinessApproval) = CreateBusinessApprovedRequest();
 
-        var first = Assert.IsType<DevOpsDecisionApplied>(DevOpsDecisionPolicy.Apply(
+        var first = Assert.IsType<ApprovalDecisionApplied>(ApprovalDecisionPolicy.Apply(
             firstRequest,
+            ApprovalStage.DevOps,
             firstBusinessApproval,
             ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false));
-        var second = Assert.IsType<DevOpsDecisionApplied>(DevOpsDecisionPolicy.Apply(
+            hasExistingDecision: false));
+        var second = Assert.IsType<ApprovalDecisionApplied>(ApprovalDecisionPolicy.Apply(
             secondRequest,
+            ApprovalStage.DevOps,
             secondBusinessApproval,
             ValidApprovalCommand(),
-            hasExistingDevOpsDecision: false));
+            hasExistingDecision: false));
 
         Assert.Equal(RequestId, first.Operation?.RequestId);
         Assert.Equal(first.Operation?.RequestId, second.Operation?.RequestId);
@@ -187,8 +194,10 @@ public sealed class DevOpsDecisionPolicyTests
         CreateBusinessApprovedRequest()
     {
         var request = CreateSubmittedRequest();
-        var result = BusinessDecisionPolicy.Apply(
+        var result = ApprovalDecisionPolicy.Apply(
             request,
+            ApprovalStage.Business,
+            priorApproval: null,
             new ApprovalCommand(
                 Guid.Parse("2e303a27-8cc3-4814-92e8-3b989576662f"),
                 ApprovalOutcome.Approved,
@@ -196,8 +205,8 @@ public sealed class DevOpsDecisionPolicyTests
                 null,
                 BusinessDecisionTime,
                 "business-correlation"),
-            hasExistingBusinessDecision: false);
-        var applied = Assert.IsType<BusinessDecisionApplied>(result);
+            hasExistingDecision: false);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(result);
 
         return (request, applied.Decision);
     }

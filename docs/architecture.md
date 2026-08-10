@@ -205,12 +205,12 @@ request and response shapes, call application services, and map typed failures.
 | `RequestDraftValidator` | Validate and canonicalize mutable, potentially incomplete draft candidates while clearing rejected identifiers. | Submission or human authority. |
 | `AccessRequestValidator` | Strictly validate complete submitted-request scope against current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
 | `RequestDraftService` | Coordinate conversational preparation, ready-draft revision, and explicit reset over the mutable intake lifecycle. | Confirmation, submission, or downstream approval. |
-| `RequestSubmissionService` | Authenticate confirmation, reload and revalidate the ready draft, and atomically persist its terminal transition, immutable request, and audit evidence. | Public/browser submission or later approval/provisioning transitions. |
+| `RequestSubmissionService` | Verify authenticated confirmation ownership, reload and revalidate the ready draft, and atomically persist its terminal transition, immutable request, and audit evidence. | Public/browser submission or later approval/provisioning transitions. |
 | `AccessRequestCommandContextLoader` | Load the authenticated principal, immutable request, normalized correlation identity, and command-specific environment context. | Actor authorization or workflow transitions. |
-| `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
+| `AccessRequestWorkflowService` | Coordinate both approval stages through one authenticated decision pipeline and handle DevOps retry. | Provider execution based on caller assertions. |
 | `ProtectedProvisioningService` | Reload persisted workflow evidence, validate exact scope, call the provider, and persist the operation outcome. | Business or DevOps approval. |
 | `AccessRequestVisibilityPolicy` | Determine submitted-request visibility and server-computed presentation actions from authoritative evidence. | Command authorization or workflow mutation. |
-| `AccessRequestQueryService` | Load submitted-request data and return participant-authorized list and detail projections. | Authorization based on UI visibility. |
+| `AccessRequestQueryService` | Load persisted submitted-request evidence and return participant-authorized list and detail projections without repeating submission validation. | Authorization based on UI visibility or current validity of immutable submitted scope. |
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
 
@@ -251,8 +251,8 @@ Correctness is determined only from the final application-owned intake outcome a
 the final facts declared by that scenario, such as canonical scope, clarification
 target, validation codes, or fields that must be preserved or cleared. Wall-clock
 elapsed milliseconds cover the complete scenario and are informational; latency does
-not affect semantic grading. A completed full run passes only when all 20
-scenarios; a focused run requires its selected scenario to pass. Both require access
+not affect semantic grading. A completed full run passes only when all 20 scenarios
+pass; a focused run requires its selected scenario to pass. Both require access
 requests, approval decisions, provisioning operations, and access grants to remain at
 zero.
 
@@ -319,17 +319,18 @@ sequenceDiagram
     Context->>DB: Query authoritative records
     alt Identifier or candidate value is rejected
         DraftService->>DraftService: Clear rejected fields and preserve validated fields
-        DraftService->>DB: Persist sanitized candidate and typed validation errors
+        DraftService->>DB: Persist sanitized candidate; retain typed errors in result
     else Candidate is accepted
         DraftService->>DB: Persist clarification or immutable ready scope
     end
+    DraftService-->>Agent: Typed preparation result
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
     Agent->>Submission: ConfirmDraftAsync(actor, intake ID)
     Submission->>DB: Reload ownership/status/scope and revalidate
     Submission->>DB: One save: submitted intake + request + audit
-    Agent-->>Teams: Stable request ID and trusted Web link
+    Agent-->>Teams: Submitted confirmation with stable request ID
 ```
 
 The collecting candidate is untrusted and creates no request or approval. Core
@@ -421,7 +422,7 @@ The adapter defaults to:
 
 - one 100-second ASP.NET Core request-safety deadline on the Teams activity
   endpoint, propagated through MCP and model work;
-- at most six model/tool iterations;
+- at most 12 model/tool iterations;
 - no concurrent tool invocation; and
 - termination on unknown tool calls.
 
@@ -478,22 +479,30 @@ From `AwaitingBusinessApproval` onward, the existing browser-driven human approv
 protected provisioning, retry, and audit flow is unchanged. Teams creates the same
 immutable request aggregate consumed by that flow; it does not bypass or duplicate it.
 
-### Business decision
+### Human approval decision
 
-1. `AccessRequestWorkflowService` loads the authenticated principal and request.
-2. It loads current environment and client context.
-3. It verifies that the actor is the owning client's configured business approver.
-4. `BusinessDecisionPolicy` validates state, duplicate-stage prevention, and
-   exact-role binding.
-5. The decision, workflow transition, and audit evidence are saved together.
+The business and DevOps endpoints remain separate business-facing subresources, but
+both pass a server-owned `ApprovalStage` into the same
+`AccessRequestWorkflowService.DecideAsync` pipeline. The stage is never accepted from
+the browser request body. The shared pipeline normalizes input, loads the authenticated
+actor and request, detects an existing stage decision, applies
+`ApprovalDecisionPolicy`, records rejected attempts, and saves decision plus audit
+evidence. It returns one `ApprovalDecisionCompletion`; only an approved DevOps
+decision carries its subsequent `ProvisioningCompletion`.
+
+For the business stage, the pipeline additionally loads current environment and client
+context and verifies that the actor is the owning client's configured approver. The
+shared policy binds an approval to the immutable requested role and advances the
+request to DevOps review; rejection ends the request.
 
 The requester cannot nominate or replace the business approver.
 
 ### DevOps decision and provisioning
 
-1. The workflow service loads the authenticated DevOps principal, request, and
-   business approval.
-2. It validates current request context and applies `DevOpsDecisionPolicy`.
+1. The shared decision pipeline requires the authenticated DevOps principal, reloads
+   the business approval, and validates current request context.
+2. `ApprovalDecisionPolicy` checks the DevOps transition, prior approval integrity,
+   duplicate-stage prevention, and exact role continuity.
 3. Rejection records the decision and moves the request to `Rejected`.
 4. Approval records the exact-role DevOps decision and creates the request-keyed
    pending provisioning operation.
@@ -602,10 +611,13 @@ call provider with request ID as idempotency identity
 persist local success or typed failure outcome
 ```
 
-Provider success followed by cancellation, process failure, or local persistence
-failure is a possible partial outcome. The provider's get-or-create behavior, the
-stable request ID, the unique grant constraint, and the scoped retry path allow the
-workflow to converge without claiming cross-system atomicity.
+Typed provider failures other than caller cancellation move both request and operation
+to their failed states, after which the scoped retry path and provider get-or-create
+behavior converge on the stable request ID. Provider success followed by caller
+cancellation, process failure, or unavailable local persistence can instead leave
+local evidence pending. The current MVP has no pending-operation reconciliation or
+retry route; operator intervention or a future reconciler is required for that partial
+outcome. The implementation therefore does not claim cross-system atomicity.
 
 The relevant decisions are:
 
@@ -703,9 +715,11 @@ failure.
 
 `CorrelationMiddleware` assigns an `X-Correlation-ID` from the current trace ID or a
 new GUID and places it in the response, logging scope, persisted request/evidence, and
-safe Problem Details. Model, MCP, workflow, and provisioning operations record
-duration and outcome metadata. Raw prompts, secrets, and complete MCP payloads are not
-required for normal logging.
+safe Problem Details. Teams preparation, reset, and confirmation record aggregate
+duration and outcome metadata; MCP tools and the synthetic provisioner record their
+own duration and outcomes. Workflow decisions persist actor, stage, decision, status,
+correlation, and audit evidence but do not emit separate duration measurements. Raw
+prompts, secrets, and complete MCP payloads are not required for normal logging.
 
 OpenTelemetry export is not configured. The application exposes an `ActivitySource`
 as an optional instrumentation seam.
