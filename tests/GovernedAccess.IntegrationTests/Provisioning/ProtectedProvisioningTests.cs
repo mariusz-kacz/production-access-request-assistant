@@ -1,5 +1,7 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.Provisioning;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Demo;
@@ -46,7 +48,8 @@ public sealed class ProtectedProvisioningTests
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        var completed = Assert.IsType<ProtectedProvisioningCompleted>(outcome);
+        Assert.True(outcome.IsSuccess);
+        var completed = outcome.Value;
         Assert.Equal(RequestId, completed.Request.Id);
         Assert.Equal(RequestId, completed.Operation.RequestId);
         Assert.Equal(ProviderGrantId, completed.Grant.Id);
@@ -87,7 +90,7 @@ public sealed class ProtectedProvisioningTests
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        _ = Assert.IsType<ProtectedProvisioningFailed>(outcome);
+        Assert.True(outcome.IsFailure);
         Assert.Empty(provisioner.Requests);
         Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
             cancellationToken));
@@ -113,10 +116,10 @@ public sealed class ProtectedProvisioningTests
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        var failed = Assert.IsType<ProtectedProvisioningFailed>(outcome);
+        Assert.True(outcome.IsFailure);
         Assert.Equal(
             ProtectedProvisioningService.OperationScopeMismatchCode,
-            failed.Failure.Code);
+            outcome.Failure!.Code);
         Assert.Empty(provisioner.Requests);
         Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
             cancellationToken));
@@ -138,7 +141,7 @@ public sealed class ProtectedProvisioningTests
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        _ = Assert.IsType<ProtectedProvisioningCompleted>(outcome);
+        Assert.True(outcome.IsSuccess);
         var grant = await dbContext.AccessGrants
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
@@ -180,7 +183,7 @@ public sealed class ProtectedProvisioningTests
             "request-correlation");
         var businessResult = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 Guid.Parse("1e206088-6778-40cb-8900-b59465252e14"),
                 ApprovalOutcome.Approved,
                 DemoDataIds.ClientAlphaApproverPrincipalId,

@@ -1,4 +1,5 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
 using GovernedAccess.Web.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;

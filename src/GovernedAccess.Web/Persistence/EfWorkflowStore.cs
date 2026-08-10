@@ -1,6 +1,6 @@
 using System.Data.Common;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Ports;
 using Microsoft.EntityFrameworkCore;
 

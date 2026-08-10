@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
 using Microsoft.Agents.AI.Hosting;

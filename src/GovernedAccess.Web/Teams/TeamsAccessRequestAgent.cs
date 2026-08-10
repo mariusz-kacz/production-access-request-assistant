@@ -3,7 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Drafts;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Ai;
 using Microsoft.Agents.Builder;
@@ -35,7 +38,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         "Describe the temporary production access you need, including the client, environment, requested role, and operational justification.";
 
     private readonly TeamsActorResolver actorResolver;
-    private readonly RequestIntakeService intakeService;
+    private readonly RequestDraftService draftService;
+    private readonly RequestSubmissionService submissionService;
     private readonly PreparedRequestCardFactory cardFactory;
     private readonly TeamsDraftCardTracker cardTracker;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
@@ -44,7 +48,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
-        RequestIntakeService intakeService,
+        RequestDraftService draftService,
+        RequestSubmissionService submissionService,
         PreparedRequestCardFactory cardFactory,
         TeamsDraftCardTracker cardTracker,
         ILogger<TeamsAccessRequestAgent> logger,
@@ -52,14 +57,16 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         : base(options)
     {
         ArgumentNullException.ThrowIfNull(actorResolver);
-        ArgumentNullException.ThrowIfNull(intakeService);
+        ArgumentNullException.ThrowIfNull(draftService);
+        ArgumentNullException.ThrowIfNull(submissionService);
         ArgumentNullException.ThrowIfNull(cardFactory);
         ArgumentNullException.ThrowIfNull(cardTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelMetadata);
 
         this.actorResolver = actorResolver;
-        this.intakeService = intakeService;
+        this.draftService = draftService;
+        this.submissionService = submissionService;
         this.cardFactory = cardFactory;
         this.cardTracker = cardTracker;
         this.logger = logger;
@@ -117,7 +124,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         }
 
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.PrepareAsync(
+        var outcome = await draftService.PrepareAsync(
             new PrepareAccessRequestCommand(
                 actor,
                 latestMessage,
@@ -220,7 +227,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         CancellationToken cancellationToken)
     {
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.ResetAsync(
+        var outcome = await draftService.ResetAsync(
             new ResetRequestIntakeCommand(actor, correlationId),
             cancellationToken);
         if (logger.IsEnabled(LogLevel.Information))
@@ -306,7 +313,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         var correlationId = CreateCorrelationId();
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.ConfirmAsync(
+        var outcome = await submissionService.ConfirmDraftAsync(
             new ConfirmRequestIntakeCommand(
                 actor,
                 preparationId,
@@ -495,13 +502,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     {
         (string Title, string Message)? content = failure.Code switch
         {
-            RequestIntakeService.SupersededCode => (
+            RequestSubmissionService.SupersededCode => (
                 "Draft replaced",
                 "This draft was replaced by a newer version and can no longer be submitted. Use the latest request draft card."),
-            RequestIntakeService.ExpiredCode => (
+            RequestSubmissionService.ExpiredCode => (
                 "Draft expired",
                 "This draft expired and can no longer be submitted. Continue in the chat to prepare a new draft."),
-            RequestIntakeService.InvalidatedCode => (
+            RequestSubmissionService.InvalidatedCode => (
                 "Draft no longer valid",
                 "This draft is no longer valid against current production context and cannot be submitted."),
             _ => null,
@@ -526,13 +533,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     {
         var message = failure.Code switch
         {
-            RequestIntakeService.MalformedModelOutputCode =>
+            RequestDraftService.MalformedModelOutputCode =>
                 "The assistant response could not be validated. No request was submitted; please try again.",
-            RequestIntakeService.ModelTimeoutCode =>
+            RequestDraftService.ModelTimeoutCode =>
                 "Request preparation timed out before any request was submitted. Please try again.",
-            RequestIntakeService.ModelCancelledCode =>
+            RequestDraftService.ModelCancelledCode =>
                 "Request preparation was cancelled before any request was submitted. Send the request again when you are ready.",
-            RequestIntakeService.ModelUnavailableCode =>
+            RequestDraftService.ModelUnavailableCode =>
                 "Request preparation is temporarily unavailable. No request was submitted; please try again later.",
             _ => CreateGenericPreparationFailureMessage(failure.Kind),
         };
@@ -685,18 +692,18 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     {
         return failure.Code switch
         {
-            RequestIntakeService.ForbiddenCode =>
+            RequestSubmissionService.ForbiddenCode =>
                 CreateConcealedConfirmationMessage(),
-            RequestIntakeService.ExpiredCode =>
+            RequestSubmissionService.ExpiredCode =>
                 "This prepared request has expired. No request was submitted; start a new request in this chat.",
-            RequestIntakeService.SupersededCode =>
+            RequestSubmissionService.SupersededCode =>
                 "This prepared request was replaced by a newer preparation. No request was submitted; use the latest card or start a new request.",
-            RequestIntakeService.InvalidatedCode =>
+            RequestSubmissionService.InvalidatedCode =>
                 "This prepared request is no longer valid against current production context. No request was submitted; start a new request in this chat.",
-            RequestIntakeService.NotReadyCode =>
+            RequestSubmissionService.NotReadyCode =>
                 "This preparation is not ready for confirmation. No request was submitted; continue the request in this chat.",
-            RequestIntakeService.ScopeMismatchCode
-                or RequestIntakeService.SubmissionEvidenceInvalidCode =>
+            RequestSubmissionService.ScopeMismatchCode
+                or RequestSubmissionService.SubmissionEvidenceInvalidCode =>
                 "The request could not be confirmed safely. No request was submitted; start a new request in this chat.",
             _ => CreateGenericConfirmationFailureMessage(failure.Kind),
         };

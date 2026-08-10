@@ -89,7 +89,7 @@ integration
 
 | Gate | Pre-research result | Design evidence |
 |---|---|---|
-| **Human authority** | PASS | Conversation turns can update only intake state. Authenticated requester confirmation is handled by the unified `RequestIntakeService`; business and DevOps approvals remain explicit authenticated Web actions. |
+| **Human authority** | PASS | Conversation turns can update only intake state through `RequestDraftService`. Authenticated requester confirmation and immutable request creation are handled deterministically by `RequestSubmissionService`; business and DevOps approvals remain explicit authenticated Web actions. |
 | **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals `get_production_environment` and `get_incident` before passing only those tools to MAF; assigned roles arrive within authoritative environment context. |
 | **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
@@ -125,10 +125,26 @@ ProductionAccessRequestAssistant.sln
 src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
-│   │   └── RequestIntakeSession.cs
+│   │   ├── Drafts/
+│   │   │   └── RequestIntakeSession.cs
+│   │   ├── ReferenceData/
+│   │   └── AccessRequests/
+│   │       ├── Approvals/
+│   │       ├── Provisioning/
+│   │       └── Auditing/
 │   ├── Application/
-│   │   ├── RequestIntakeService.cs
-│   │   └── RequestSubmissionService.cs   # Confirmation-only staging seam
+│   │   ├── Drafts/
+│   │   │   ├── RequestDraftService.cs
+│   │   │   └── RequestDraftValidator.cs
+│   │   ├── AccessRequests/
+│   │   │   ├── RequestSubmissionService.cs   # Deterministic confirmation boundary
+│   │   │   ├── AccessRequestValidator.cs
+│   │   │   ├── AccessRequestWorkflowService.cs
+│   │   │   ├── AccessRequestCommandContextLoader.cs
+│   │   │   ├── AccessRequestQueryService.cs
+│   │   │   └── AccessRequestVisibilityPolicy.cs
+│   │   └── Provisioning/
+│   │       └── ProtectedProvisioningService.cs
 │   └── Ports/
 │       ├── RequestDrafting.cs       # Evolved provider-neutral turn contract
 │       └── RequestIntake.cs
@@ -157,7 +173,7 @@ src/
     └── Program.cs
 tests/
 ├── GovernedAccess.UnitTests/
-│   └── RequestIntakeServiceTests.cs
+│   └── RequestDraftAndSubmissionServiceTests.cs
 └── GovernedAccess.IntegrationTests/
     ├── Mcp/
     ├── Persistence/
@@ -248,9 +264,10 @@ only executable.
   lazy expiry/supersession checks, revalidates current authoritative context, and
   creates the existing `AccessRequest` with the reserved ID and exact prepared scope.
 - Teams confirmation is the only request-creation path. `RequestSubmissionService`
-  is a prepared-confirmation-only staging seam: it requires a server-reserved request
-  ID and confirmation timestamp, revalidates scope/requester, stages the immutable
-  request and request-created audit event, and never saves independently.
+  owns the complete deterministic confirmation boundary: it reloads and authorizes
+  the ready draft, requires its server-reserved request ID, revalidates scope and
+  requester, stages the immutable request and request-created audit event, marks the
+  draft submitted, and saves the complete transition atomically.
 - Confirmation status, immutable request, and request-created audit commit in one
   `SaveChangesAsync`. A unique reserved request ID plus optimistic
   concurrency makes duplicate or concurrent delivery reload and return the same

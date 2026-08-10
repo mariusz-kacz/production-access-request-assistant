@@ -110,7 +110,7 @@ one deterministic candidate assessment.
 - `ProductionReadOnly` and `ProductionSupport` remain the only schema-supported IDs.
 - Presence in model output never proves availability.
 - The selected role must appear in the selected environment tool candidate.
-- `RequestValidator` must independently reload the exact environment-role assignment
+- `RequestDraftValidator` must independently reload the exact environment-role assignment
   before readiness and again through the existing confirmation path.
 - No role hierarchy, privilege implication, or separate role tool exists.
 

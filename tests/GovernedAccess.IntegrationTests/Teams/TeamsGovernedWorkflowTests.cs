@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Controllers;

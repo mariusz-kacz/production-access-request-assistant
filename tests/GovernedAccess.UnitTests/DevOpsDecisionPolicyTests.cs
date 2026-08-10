@@ -1,4 +1,5 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 
 namespace GovernedAccess.UnitTests;
 
@@ -25,7 +26,7 @@ public sealed class DevOpsDecisionPolicyTests
         var result = DevOpsDecisionPolicy.Apply(
             request,
             businessApproval,
-            new DevOpsDecisionCommand(
+            new ApprovalCommand(
                 decisionId,
                 ApprovalOutcome.Approved,
                 " devops-approver ",
@@ -112,7 +113,7 @@ public sealed class DevOpsDecisionPolicyTests
         var result = DevOpsDecisionPolicy.Apply(
             request,
             businessApproval,
-            new DevOpsDecisionCommand(
+            new ApprovalCommand(
                 Guid.Parse("325eb46d-e95e-42ed-bc44-3f6f31749693"),
                 ApprovalOutcome.Rejected,
                 "devops-approver",
@@ -171,9 +172,9 @@ public sealed class DevOpsDecisionPolicyTests
         Assert.Equal(first.Operation?.RequestId, second.Operation?.RequestId);
     }
 
-    private static DevOpsDecisionCommand ValidApprovalCommand()
+    private static ApprovalCommand ValidApprovalCommand()
     {
-        return new DevOpsDecisionCommand(
+        return new ApprovalCommand(
             Guid.Parse("7a70e89c-8ff7-427c-a5f3-ddacbb6d5cba"),
             ApprovalOutcome.Approved,
             "devops-approver",
@@ -188,7 +189,7 @@ public sealed class DevOpsDecisionPolicyTests
         var request = CreateSubmittedRequest();
         var result = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 Guid.Parse("2e303a27-8cc3-4814-92e8-3b989576662f"),
                 ApprovalOutcome.Approved,
                 "business-alpha",

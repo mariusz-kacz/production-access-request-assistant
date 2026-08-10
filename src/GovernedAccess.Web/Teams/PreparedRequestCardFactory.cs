@@ -2,7 +2,8 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using Microsoft.Agents.Core.Models;
 

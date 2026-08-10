@@ -1,4 +1,4 @@
-namespace GovernedAccess.Core.Domain;
+namespace GovernedAccess.Core.Domain.AccessRequests;
 
 public enum DevOpsDecisionPolicyError
 {
@@ -7,14 +7,6 @@ public enum DevOpsDecisionPolicyError
     InvalidBusinessApproval,
     BusinessApprovalScopeMismatch,
 }
-
-public sealed record DevOpsDecisionCommand(
-    Guid DecisionId,
-    ApprovalOutcome Decision,
-    string ApproverId,
-    string? Comment,
-    DateTimeOffset DecidedAt,
-    string CorrelationId);
 
 public abstract record DevOpsDecisionPolicyResult;
 
@@ -31,7 +23,7 @@ public static class DevOpsDecisionPolicy
     public static DevOpsDecisionPolicyResult Apply(
         AccessRequest request,
         ApprovalDecision businessApproval,
-        DevOpsDecisionCommand command,
+        ApprovalCommand command,
         bool hasExistingDevOpsDecision)
     {
         ArgumentNullException.ThrowIfNull(request);

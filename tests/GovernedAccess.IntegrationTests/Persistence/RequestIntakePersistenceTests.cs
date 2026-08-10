@@ -1,5 +1,8 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
@@ -34,7 +37,7 @@ public sealed class RequestIntakePersistenceTests
 
         await using (var context = new GovernedAccessDbContext(options))
         {
-            var outcome = await CreateConfirmationService(context).ConfirmAsync(
+            var outcome = await CreateConfirmationService(context).ConfirmDraftAsync(
                 ConfirmationCommand(),
                 cancellationToken);
 
@@ -104,7 +107,7 @@ public sealed class RequestIntakePersistenceTests
 
         await using (var context = new GovernedAccessDbContext(options))
         {
-            var outcome = await CreateConfirmationService(context).ConfirmAsync(
+            var outcome = await CreateConfirmationService(context).ConfirmDraftAsync(
                 ConfirmationCommand(),
                 cancellationToken);
 
@@ -292,21 +295,17 @@ public sealed class RequestIntakePersistenceTests
             .AddInterceptors(saveCounter)
             .Options;
 
-    private static RequestIntakeService CreateConfirmationService(
+    private static RequestSubmissionService CreateConfirmationService(
         GovernedAccessDbContext context)
     {
         var requestContext = new EfRequestContextReader(context);
         var clock = new DeterministicClock(ConfirmedAt);
-        var validator = new RequestValidator(requestContext);
-        return new RequestIntakeService(
-            new UnusedInterpreter(),
+        var validator = new AccessRequestValidator(requestContext);
+        return new RequestSubmissionService(
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
-            new RequestSubmissionService(
-                validator,
-                requestContext,
-                new EfWorkflowStore(context)),
+            new EfWorkflowStore(context),
             clock);
     }
 

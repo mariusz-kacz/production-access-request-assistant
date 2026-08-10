@@ -1,18 +1,10 @@
-namespace GovernedAccess.Core.Domain;
+namespace GovernedAccess.Core.Domain.AccessRequests;
 
 public enum BusinessDecisionPolicyError
 {
     InvalidTransition,
     DuplicateStage,
 }
-
-public sealed record BusinessDecisionCommand(
-    Guid DecisionId,
-    ApprovalOutcome Decision,
-    string ApproverId,
-    string? Comment,
-    DateTimeOffset DecidedAt,
-    string CorrelationId);
 
 public abstract record BusinessDecisionPolicyResult;
 
@@ -26,7 +18,7 @@ public static class BusinessDecisionPolicy
 {
     public static BusinessDecisionPolicyResult Apply(
         AccessRequest request,
-        BusinessDecisionCommand command,
+        ApprovalCommand command,
         bool hasExistingBusinessDecision)
     {
         ArgumentNullException.ThrowIfNull(request);

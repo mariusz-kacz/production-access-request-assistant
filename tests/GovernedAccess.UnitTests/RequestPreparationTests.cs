@@ -1,4 +1,5 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.UnitTests;

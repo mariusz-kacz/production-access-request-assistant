@@ -1,7 +1,7 @@
 # Architecture Decision Record Index
 
 - **Status**: Current
-- **Last reviewed**: 2026-07-23
+- **Last reviewed**: 2026-08-10
 
 ## Purpose
 
@@ -21,6 +21,8 @@ lost when reading only the current code. They complement the
 | [0002: Validate Persisted Workflow Evidence at Provisioning](0002-validate-persisted-workflow-evidence-at-provisioning.md) | Accepted | Reload request, approval, operation, and grant evidence before provisioning, but do not repeat fixed synthetic reference-data lookups. | Provisioning distrusts caller assertions without modeling mutation of a dataset that cannot change through supported behavior. |
 | [0003: Do Not Model Provider Execution and Workflow Persistence as Atomic](0003-do-not-model-provider-and-workflow-persistence-as-atomic.md) | Accepted | Treat provider execution and local workflow persistence as separate consistency boundaries. | Partial outcomes remain possible and are recovered with provider idempotency and scoped retry rather than a false distributed-transaction guarantee. |
 | [0004: Use Request ID as the Provisioning Idempotency Identity](0004-use-request-id-as-provisioning-idempotency-identity.md) | Accepted | Use the immutable server-generated request UUID as the sole logical provisioning and provider idempotency identity. | One request maps directly to one operation and at most one grant without a redundant operation identifier. |
+| [0005: Retain Terminal Request-Intake Tombstones](0005-retain-terminal-request-intake-tombstones.md) | Accepted | Retain terminal intake rows while clearing obsolete candidate content. | Stale cards and submitted replays remain deterministic, but intake metadata accumulates until the database is removed or a future retention policy is adopted. |
+| [0006: Persist Canonical Intake State, Not Conversation History](0006-persist-canonical-intake-state-not-conversation-history.md) | Accepted | Persist the sanitized application-owned intake while keeping native conversation and presentation state process-local. | Draft progress survives restart without making model history authoritative, but conversational nuance and proactive card-update tracking do not. |
 
 ## Decision relationships
 
@@ -30,8 +32,12 @@ flowchart TD
     A2[ADR 0002<br/>reload persisted evidence]
     A3[ADR 0003<br/>no cross-boundary atomicity]
     A4[ADR 0004<br/>request ID is idempotency identity]
+    A5[ADR 0005<br/>retain intake tombstones]
+    A6[ADR 0006<br/>persist canonical intake only]
 
     A1 --> A2
+    A1 --> A6
+    A6 --> A5
     A2 --> A3
     A3 --> A4
     A4 --> A2
@@ -40,7 +46,10 @@ flowchart TD
 ADR 0001 establishes the proportional single-host boundary. ADR 0002 defines what the
 protected handler must reload inside that boundary. ADR 0003 states the honest
 consistency guarantee around provider calls. ADR 0004 supplies the stable identity
-used to recover safely across that partial-failure boundary.
+used to recover safely across that partial-failure boundary. ADR 0005 defines the
+durable terminal evidence retained for stale intake cards and submitted replay. ADR
+0006 defines the broader persistence boundary between canonical intake state and
+ephemeral conversation and presentation context.
 
 ## Revisit summary
 
@@ -50,6 +59,8 @@ used to recover safely across that partial-failure boundary.
 | 0002 | Reference data becomes mutable, externally sourced, administratively writable, or subject to authority/approval expiry. |
 | 0003 | Real provisioning requires bounded automatic recovery, compensation, status polling, or durable delivery. |
 | 0004 | One request must own multiple independently addressable provisioning operations. |
+| 0005 | Real data, material intake volume, or privacy and operational requirements demand bounded retention. |
+| 0006 | Shared or restart-safe conversation continuity, defined transcript retention, or bounded process-memory behavior becomes required. |
 
 The complete and authoritative criteria remain in each ADR.
 

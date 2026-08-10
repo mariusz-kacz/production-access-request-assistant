@@ -1,4 +1,4 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.Drafts;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Teams;
 

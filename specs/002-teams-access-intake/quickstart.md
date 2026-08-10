@@ -105,7 +105,7 @@ Verify after each turn:
 - ordinal references resolve from that active history, while the resulting identifier
   is authoritatively canonicalized before persistence;
 - the model proposal is schema-valid but remains untrusted;
-- no final card appears while `RequestValidator` reports missing or invalid fields;
+- no final card appears while `RequestDraftValidator` reports missing or invalid fields;
 - no option list, raw message, model response, transcript, or serialized MAF session
   is written to SQLite; and
 - the final card appears only after all identifiers and relationships are

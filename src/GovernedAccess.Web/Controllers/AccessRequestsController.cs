@@ -1,7 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,7 @@ public sealed class AccessRequestsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<RequestListResponse>> GetListAsync(
         [FromQuery] string? status,
-        [FromServices] RequestQueryService queryService,
+        [FromServices] AccessRequestQueryService queryService,
         CancellationToken cancellationToken)
     {
         RequestStatus? statusFilter = null;
@@ -56,7 +57,7 @@ public sealed class AccessRequestsController : ControllerBase
     [HttpGet("{requestId:guid}")]
     public async Task<ActionResult<RequestDetailResponse>> GetDetailAsync(
         Guid requestId,
-        [FromServices] RequestQueryService queryService,
+        [FromServices] AccessRequestQueryService queryService,
         CancellationToken cancellationToken)
     {
         var result = await queryService.GetDetailAsync(

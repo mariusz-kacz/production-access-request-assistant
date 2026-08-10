@@ -1,10 +1,14 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Drafts;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.UnitTests;
 
-public sealed class RequestIntakeServiceTests
+public sealed class RequestDraftAndSubmissionServiceTests
 {
     [Fact]
     public void CompactResultFactoriesRejectMissingRequiredEvidence()
@@ -323,7 +327,7 @@ public sealed class RequestIntakeServiceTests
 
         Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
         Assert.Equal(ApplicationFailureKind.Unauthorized, result.Failure!.Kind);
-        Assert.Equal(RequestIntakeService.ForbiddenCode, result.Failure.Code);
+        Assert.Equal(RequestSubmissionService.ForbiddenCode, result.Failure.Code);
         Assert.Equal("Ready", scenario.IntakeStatus);
         Assert.Empty(scenario.Requests);
         Assert.Empty(scenario.AuditEvents);
@@ -341,7 +345,7 @@ public sealed class RequestIntakeServiceTests
 
         Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
         Assert.Equal(ApplicationFailureKind.InvalidTransition, result.Failure!.Kind);
-        Assert.Equal(RequestIntakeService.InvalidatedCode, result.Failure.Code);
+        Assert.Equal(RequestSubmissionService.InvalidatedCode, result.Failure.Code);
         Assert.Equal("Invalidated", scenario.IntakeStatus);
         Assert.NotNull(scenario.Session.ReservedRequestId);
         Assert.Null(scenario.Session.ClientId);
@@ -758,7 +762,7 @@ public sealed class RequestIntakeServiceTests
         var result = await scenario.PrepareResultAsync();
 
         Assert.Equal(RequestPreparationResultKind.Failed, result.Kind);
-        Assert.Equal(RequestIntakeService.ModelUnavailableCode, result.Failure!.Code);
+        Assert.Equal(RequestDraftService.ModelUnavailableCode, result.Failure!.Code);
         Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
         Assert.NotNull(ready.ReservedRequestId);
         Assert.Equal(0, scenario.SaveCount);
@@ -777,7 +781,7 @@ public sealed class RequestIntakeServiceTests
 
         Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
         Assert.Equal(ApplicationFailureKind.InvalidTransition, result.Failure!.Kind);
-        Assert.Equal(RequestIntakeService.ExpiredCode, result.Failure.Code);
+        Assert.Equal(RequestSubmissionService.ExpiredCode, result.Failure.Code);
         Assert.Equal(RequestIntakeStatus.Expired, session.Status);
         Assert.Equal(reservedRequestId, session.ReservedRequestId);
         Assert.Null(session.ClientId);
@@ -1071,7 +1075,8 @@ public sealed class RequestIntakeServiceTests
             new(2026, 7, 27, 10, 5, 0, TimeSpan.Zero);
 
         private readonly RequestPreparationInterpretationResult interpretation;
-        private readonly RequestIntakeService service;
+        private readonly RequestDraftService draftService;
+        private readonly RequestSubmissionService submissionService;
         private RequestIntakeSession? session;
 
         public IntakeScenario(
@@ -1092,17 +1097,18 @@ public sealed class RequestIntakeServiceTests
                     proposal ?? ValidCandidateProposal());
             session = initialSession;
 
-            var validator = new RequestValidator(this);
-            var submissionService = new RequestSubmissionService(
+            var validator = new AccessRequestValidator(this);
+            submissionService = new RequestSubmissionService(
                 validator,
+                this,
+                this,
                 this,
                 this);
-            service = new RequestIntakeService(
+            draftService = new RequestDraftService(
                 this,
-                validator,
+                new RequestDraftValidator(this),
                 this,
                 this,
-                submissionService,
                 this);
         }
 
@@ -1187,7 +1193,7 @@ public sealed class RequestIntakeServiceTests
 
         public Task<RequestPreparationResult> PrepareResultAsync(
             CancellationToken? cancellationToken = null) =>
-            service.PrepareAsync(
+            draftService.PrepareAsync(
                 new PrepareAccessRequestCommand(
                     Owner,
                     "I need production access.",
@@ -1226,7 +1232,7 @@ public sealed class RequestIntakeServiceTests
                     "The scenario must be prepared before confirmation.");
             }
 
-            return service.ConfirmAsync(
+            return submissionService.ConfirmDraftAsync(
                 new ConfirmRequestIntakeCommand(
                     actor,
                     session.Id,
@@ -1237,7 +1243,7 @@ public sealed class RequestIntakeServiceTests
         public Task<RequestIntakeResetResult> ResetResultAsync(
             AuthenticatedChannelActor actor,
             CancellationToken? cancellationToken = null) =>
-            service.ResetAsync(
+            draftService.ResetAsync(
                 new ResetRequestIntakeCommand(
                     actor,
                     "reset-correlation"),

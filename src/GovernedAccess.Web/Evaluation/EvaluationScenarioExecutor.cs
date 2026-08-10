@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.Drafts;
+using GovernedAccess.Core.Domain.Drafts;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
@@ -63,8 +64,8 @@ internal sealed class EvaluationScenarioExecutor(
                     $"Evaluation scenario '{scenario.Id}' does not contain a turn.");
             }
 
-            var intakeService = scope.ServiceProvider
-                .GetRequiredService<RequestIntakeService>();
+            var draftService = scope.ServiceProvider
+                .GetRequiredService<RequestDraftService>();
             RequestPreparationResult? finalPreparation = null;
 
             stopwatch.Start();
@@ -76,7 +77,7 @@ internal sealed class EvaluationScenarioExecutor(
                         cancellationToken);
                 turnCancellation.CancelAfter(options.TurnTimeout);
 
-                finalPreparation = await intakeService.PrepareAsync(
+                finalPreparation = await draftService.PrepareAsync(
                     new PrepareAccessRequestCommand(
                         actor,
                         turn.RequesterMessage,
@@ -168,8 +169,8 @@ internal sealed class EvaluationScenarioExecutor(
             ? EvaluationScenarioStatus.Cancelled
             : EvaluationScenarioStatus.Failed;
         var code = cancelled
-            ? RequestIntakeService.ModelCancelledCode
-            : RequestIntakeService.ModelTimeoutCode;
+            ? RequestDraftService.ModelCancelledCode
+            : RequestDraftService.ModelTimeoutCode;
 
         return new EvaluationScenarioExecution(
             new EvaluationScenarioResult(

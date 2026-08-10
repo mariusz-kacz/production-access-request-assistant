@@ -105,7 +105,7 @@ The model-output candidate fields remain unchanged:
 | `Justification` | nullable text | Existing rules unchanged |
 | `IncidentId` | nullable stable ID | Only a precise requester-supplied ID may be proposed |
 
-The candidate remains untrusted. `RequestValidator` reloads the selected environment,
+The candidate remains untrusted. `RequestDraftValidator` reloads the selected environment,
 client, environment-role assignment, and optional incident rather than trusting the
 tool result or model statement.
 

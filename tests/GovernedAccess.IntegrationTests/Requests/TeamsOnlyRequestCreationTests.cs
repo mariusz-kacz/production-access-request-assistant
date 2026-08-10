@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Ai;

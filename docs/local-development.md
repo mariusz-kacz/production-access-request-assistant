@@ -133,9 +133,10 @@ clarification target, environment options when available, and the final bounded,
 schema-validated model response message when available. These diagnostics do not
 include prompts, transcripts, raw provider/MCP payloads, or exception text.
 
-Use the [live-model evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md)
-as the canonical procedure for the required test sequence, live-profile variables,
-artifact review, and configuration cleanup.
+See the [live-model evaluation guide](live-model-evaluation.md) for command options,
+exit codes, covered cases, and artifact interpretation. Use the
+[evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md) as the
+canonical procedure for the required test sequence and configuration cleanup.
 
 ## Common development commands
 

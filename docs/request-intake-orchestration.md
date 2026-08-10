@@ -1,7 +1,7 @@
 # Request Intake Orchestration Rules
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-10
 - **Scope**: Teams request preparation before human confirmation
 
 ## Purpose
@@ -28,19 +28,20 @@ The governing boundary is:
 
 ## Per-turn algorithm
 
-For each non-command requester message, `RequestIntakeService` performs exactly one
+For each non-command requester message, `RequestDraftService` performs exactly one
 interpretation attempt:
 
 1. Load or create the active intake and its last accepted candidate. An unexpired
    `Ready` intake remains unchanged while the new turn is interpreted.
 2. Ask the model for one complete nullable candidate snapshot.
 3. Schema-validate and translate the proposal.
-4. Assess the candidate in one authoritative pass: validate every supplied value,
+4. Validate the candidate through `RequestDraftValidator` in one authoritative pass:
+   validate every supplied value,
    clear rejected values, canonicalize or derive authoritative values, and determine
    whether the result is rejected, incomplete, or ready.
 5. For an environment clarification, validate and reload every structured
    `environmentOptionIds` value before accepting its associated model message.
-6. If an existing ready candidate and the assessed candidate are identical, return
+6. If an existing ready candidate and the validated candidate are identical, return
    bounded discussion without persisting or changing confirmation identity. Otherwise,
    supersede that ready snapshot and create a replacement intake before continuing.
 7. Persist either the ready candidate, a focused clarification with its sanitized
@@ -64,7 +65,7 @@ context for another natural-language turn:
   card remain active.
 - A proposed candidate response that is value-equal to the ready candidate also leaves
   that draft active and creates no replacement card.
-- When deterministic assessment produces a different candidate, Core first marks the
+- When deterministic draft validation produces a different candidate, Core first marks the
   old intake `Superseded`, then creates a new intake and persists the replacement as
   ready, incomplete, or rejected.
 - The old card's preparation ID therefore remains bound to a terminal snapshot and can
@@ -76,7 +77,7 @@ context for another natural-language turn:
 ## Partial candidate validation
 
 Missing fields are allowed while intake is collecting. Every supplied identifier is
-validated before it can be persisted. One assessment produces exactly one of three
+validated before it can be persisted. One draft validation produces exactly one of three
 application-owned outcomes: rejected with a sanitized candidate, incomplete with a
 sanitized candidate and missing-field errors, or ready with complete canonical fields.
 Readiness does not trigger a second set of authoritative lookups during the same turn.
@@ -182,14 +183,17 @@ accepts the new proposal.
 
 - A model-declared `kind: candidate` cannot override missing-field or policy errors.
 - The application alone decides whether the candidate is ready.
-- `RequestIntakeService` performs one candidate assessment per interpretation; the
-  strict validator is run again only at later persisted-state trust boundaries such as
-  confirmation and submission.
+- `RequestDraftService` invokes `RequestDraftValidator` once per interpretation. The
+  strict `AccessRequestValidator` runs again only at later persisted-state trust boundaries
+  such as confirmation and submission.
 - Collecting intake persists only the sanitized candidate and lifecycle metadata.
 - Model transcript and native MAF session state remain process-local and are not
   stored in the workflow database.
-- Confirmation is a separate authenticated action that reloads and revalidates the
-  ready server-owned candidate before creating an immutable request.
+- The complete persistence inventory, restart behavior, and tradeoffs are recorded in
+  [ADR 0006: Persist Canonical Intake State, Not Conversation History](adr/0006-persist-canonical-intake-state-not-conversation-history.md).
+- `RequestSubmissionService.ConfirmDraftAsync` is the separate authenticated action
+  that reloads and revalidates the ready server-owned candidate before atomically
+  creating an immutable request and marking the draft submitted.
 
 ## Reset command
 

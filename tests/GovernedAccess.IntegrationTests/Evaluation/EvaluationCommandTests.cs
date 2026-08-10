@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Application.Drafts;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Evaluation;
 using GovernedAccess.Web.Persistence;
@@ -301,7 +302,7 @@ public sealed class EvaluationCommandTests
                 NormalizedIntakeOutcome.ProviderFailure,
                 scenario.FinalOutcome!.Kind);
             Assert.Contains(
-                RequestIntakeService.ModelTimeoutCode,
+                RequestDraftService.ModelTimeoutCode,
                 scenario.FinalOutcome.ValidationCodes);
             Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
         }

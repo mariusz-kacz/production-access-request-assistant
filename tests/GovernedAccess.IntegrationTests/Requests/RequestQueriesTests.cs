@@ -2,7 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Provisioning;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
@@ -484,10 +487,10 @@ public sealed class RequestQueryComponentTests
             DemoDataIds.DevOpsApproverPrincipalId,
             cancellationToken);
         Assert.Equal(
-            RequestQueryService.DevOpsDecisionAction,
+            AccessRequestVisibilityPolicy.DevOpsDecisionAction,
             Assert.Single(decisionDetail.Value.AvailableActions));
         Assert.Equal(
-            RequestQueryService.RetryProvisioningAction,
+            AccessRequestVisibilityPolicy.RetryProvisioningAction,
             Assert.Single(retryDetail.Value.AvailableActions));
 
         var requesterDecisionDetail = await queryService.GetDetailAsync(
@@ -500,6 +503,55 @@ public sealed class RequestQueryComponentTests
             cancellationToken);
         Assert.Empty(requesterDecisionDetail.Value.AvailableActions);
         Assert.Empty(requesterRetryDetail.Value.AvailableActions);
+    }
+
+    [Fact]
+    public async Task PersistedDevOpsDecisionSuppressesAnotherDecisionAction()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await ProvisioningTestFixture.CreateAsync(
+            cancellationToken);
+        await using var dbContext = fixture.CreateDbContext();
+        var request = CreateRequest(
+            DemoDataIds.ClientAlphaId,
+            DemoDataIds.ClientAlphaEnvironmentId,
+            DemoDataIds.PrimaryIncidentId,
+            fixture.Clock.UtcNow);
+        var businessDecision = ApplyBusinessApproval(
+            request,
+            fixture.Clock.UtcNow);
+        var devOpsResult = DevOpsDecisionPolicy.Apply(
+            request,
+            businessDecision,
+            new ApprovalCommand(
+                Guid.NewGuid(),
+                ApprovalOutcome.Approved,
+                DemoDataIds.DevOpsApproverPrincipalId,
+                null,
+                fixture.Clock.UtcNow,
+                "devops-correlation"),
+            hasExistingDevOpsDecision: false);
+        var devOpsApplied = Assert.IsType<DevOpsDecisionApplied>(devOpsResult);
+
+        dbContext.AccessRequests.Add(request);
+        dbContext.ApprovalDecisions.AddRange(
+            businessDecision,
+            devOpsApplied.Decision);
+        dbContext.ProvisioningOperations.Add(devOpsApplied.Operation!);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var queryService = CreateQueryService(dbContext, fixture.Clock);
+        var list = await queryService.ListAsync(
+            DemoDataIds.DevOpsApproverPrincipalId,
+            status: null,
+            cancellationToken);
+        var detail = await queryService.GetDetailAsync(
+            request.Id,
+            DemoDataIds.DevOpsApproverPrincipalId,
+            cancellationToken);
+
+        Assert.False(Assert.Single(list.Value).Actionable);
+        Assert.Empty(detail.Value.AvailableActions);
     }
 
     [Fact]
@@ -547,15 +599,17 @@ public sealed class RequestQueryComponentTests
         Assert.Equal("request_not_found", detail.Failure.Code);
     }
 
-    private static RequestQueryService CreateQueryService(
+    private static AccessRequestQueryService CreateQueryService(
         GovernedAccessDbContext dbContext,
         IClock clock)
     {
         var requestContext = new EfRequestContextReader(dbContext);
-        return new RequestQueryService(
+        var workflowStore = new EfWorkflowStore(dbContext);
+        return new AccessRequestQueryService(
             requestContext,
-            new EfWorkflowStore(dbContext),
-            new RequestValidator(requestContext),
+            workflowStore,
+            new AccessRequestValidator(requestContext),
+            new AccessRequestVisibilityPolicy(requestContext, workflowStore),
             clock);
     }
 
@@ -567,9 +621,9 @@ public sealed class RequestQueryComponentTests
         var requestContext = new EfRequestContextReader(dbContext);
         var workflowStore = new EfWorkflowStore(dbContext);
         return new AccessRequestWorkflowService(
-            requestContext,
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }
@@ -597,7 +651,7 @@ public sealed class RequestQueryComponentTests
         return Assert.IsType<BusinessDecisionApplied>(
             BusinessDecisionPolicy.Apply(
                 request,
-                new BusinessDecisionCommand(
+                new ApprovalCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
                     request.ClientId == DemoDataIds.ClientAlphaId

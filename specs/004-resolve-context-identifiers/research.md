@@ -301,5 +301,5 @@ change governed state.
   iterations.
 - Local package and source baseline: `ModelContextProtocol` 1.4.1,
   `Microsoft.Extensions.AI` 10.7.0, `RequestContextTools`,
-  `MafRequestPreparationInterpreter`, `RequestValidator`, and
+  `MafRequestPreparationInterpreter`, `RequestDraftValidator`, and
   `EfRequestContextReader`.

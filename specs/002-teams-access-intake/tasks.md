@@ -626,3 +626,33 @@ deterministically assessed candidate changes.
 - [X] T095 [P] [US1] Cover ready-draft discussion identity preservation, equivalent candidates, invalid alternatives, model failure, explicit revision, hidden request identity, stale-card invocation, and exact tracker binding in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.IntegrationTests/Teams/
 - [ ] T096 [P] [US1] Add an adapter-level Teams test that captures `UpdateActivityAsync` and proves a changed assessed candidate makes the prior activity **Draft being revised**, sends a separate latest review card, and remains safely confirmable or rejectable when the presentation update fails
 - [X] T097 [P] [US1] Synchronize current architecture, security, orchestration, testing, product-baseline, and feature validation documentation with the distinction between unchanged discussion and changed-candidate replacement in docs/ and specs/002-teams-access-intake/validation.md
+
+---
+
+## Phase 11: Application Service Responsibility Refactor
+
+**Purpose**: Make the Core application layer easier to read without introducing a
+service per operation or changing product behavior and trust boundaries. This phase
+supersedes the earlier implementation-shape decisions in T036 and T054; their
+behavioral requirements remain in force.
+
+- [X] T098 Extract mutable candidate canonicalization and readiness into `RequestDraftValidator`, retain strict complete-scope validation in `AccessRequestValidator`, and share only deterministic field rules in `src/GovernedAccess.Core/Application/`
+- [X] T099 Replace the unified intake coordinator with `RequestDraftService` for prepare/reset and make `RequestSubmissionService.ConfirmDraftAsync` own deterministic reload, ownership, revalidation, immutable request staging, terminal draft transition, recovery, and the one atomic save
+- [X] T100 Extract authenticated principal, immutable request, normalized correlation identity, and business environment-context loading into `AccessRequestCommandContextLoader` while retaining workflow decisions in `AccessRequestWorkflowService`
+- [X] T101 Extract submitted-request visibility and available-action calculation into `AccessRequestVisibilityPolicy` while retaining data loading and projection assembly in `AccessRequestQueryService`
+- [X] T102 Update composition, direct-construction tests, current architecture/security/orchestration/testing documentation, and pass the required build, unit, and integration validation sequence
+- [X] T103 Make the lifecycle boundary structural by grouping mutable drafting under `Application/Drafts`, submitted request creation, validation, workflow, visibility, and queries under `Application/AccessRequests`, and protected execution under `Application/Provisioning`; rename generic submitted-request types to the `AccessRequest*` vocabulary
+- [X] T104 Synchronize current documentation and pass the required build, unit, and integration validation sequence after the namespace separation
+
+---
+
+## Phase 12: Domain Aggregate Structure
+
+**Purpose**: Make mutable drafts, authoritative reference data, and the immutable
+submitted-request evidence chain visible in the Domain structure without introducing
+new domain services or changing aggregate behavior.
+
+- [X] T105 Move `RequestIntakeSession` to `Domain.Drafts`, authoritative client/environment/role/incident types to `Domain.ReferenceData`, and submitted request, actor, decision policies, and evidence policies to `Domain.AccessRequests`
+- [X] T106 Split the monolithic `WorkflowEvidence.cs` into cohesive approval decision, provisioning operation, access grant, audit details, audit event, and internal validation files while retaining one `Domain.AccessRequests` namespace for their cross-stage invariants
+- [X] T107 Update Core ports/application consumers, EF persistence, MCP/Web adapters, and all direct tests for the three domain namespaces without changing persistence mappings or public transport contracts
+- [X] T108 Synchronize current architecture and feature structure documentation and pass the required build, unit, and integration validation sequence

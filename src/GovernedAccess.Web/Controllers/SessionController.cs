@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Security;
 using Microsoft.AspNetCore.Antiforgery;

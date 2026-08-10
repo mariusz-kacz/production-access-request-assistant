@@ -1,5 +1,7 @@
 using System.Net;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Drafts;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
 using GovernedAccess.Web.Ai;
@@ -63,7 +65,8 @@ internal sealed class EvaluationHosting : IAsyncDisposable
             options.UseSqlite($"Data Source={databasePath}"));
         builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
         builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-        builder.Services.AddScoped<RequestValidator>();
+        builder.Services.AddScoped<RequestDraftValidator>();
+        builder.Services.AddScoped<AccessRequestValidator>();
         builder.Services.AddScoped<RequestSubmissionService>();
         builder.Services.AddHttpClient();
         builder.Services.AddRequestPreparationChat(builder.Configuration);

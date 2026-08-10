@@ -19,7 +19,7 @@ includes every `[Fact]` and every discovered `[Theory]` row.
 | Unit / `AccessGrantTests` | 1 | Unit | Keep |
 | Unit / `BusinessDecisionPolicyTests` | 3 | Unit | Expand business transition permutations here |
 | Unit / `DevOpsDecisionPolicyTests` | 6 | Unit | Expand DevOps transition and immutable-scope permutations here |
-| Unit / `RequestIntakeServiceTests` | 16 | Unit | Keep deterministic intake policy coverage |
+| Unit / `RequestDraftAndSubmissionServiceTests` | 16 | Unit | Keep deterministic draft and submission policy coverage |
 | Unit / `RequestPreparationTests` | 7 | Unit | Keep aggregate/proposal invariants |
 | Unit / `RequestValidationTests` | 17 | Unit | Keep authoritative candidate validation permutations |
 | Unit / `WorkflowEvidencePolicyTests` | 5 | Unit | Expand immutable workflow-evidence negatives here |
@@ -61,7 +61,7 @@ concurrency**, and **6 React component** cases.
 | Business approver responsibility, transition, duplicate decision, exact role | Unit policy/application tests | One authenticated, antiforgery-protected overposting HTTP case plus security inventory |
 | DevOps identity, transition, exact business-approved role, fixed duration | Unit policy/application tests | One authenticated overposting HTTP case and one typed failure response |
 | Retry authorization, failed-state restriction, persisted evidence, idempotency | Real-SQLite application/provisioning components | One non-DevOps HTTP rejection; complete security antiforgery inventory |
-| Participant request visibility and available actions | Real-SQLite `RequestQueryService` components | Representative GET contract and global unauthenticated API rejection |
+| Participant request visibility and available actions | Real-SQLite `AccessRequestQueryService` components | Representative GET contract and global unauthenticated API rejection |
 | Immutable request/approval/operation/grant scope | Unit evidence policies plus real-SQLite provisioning components | `ApiSecurityTests` crafted-payload journey |
 | Model proposal schema, utterance interpretation, history/restart semantics | Direct deterministic-chat/MAF components | One complete and one multi-turn hosted Teams transport-to-card scenario |
 | Authenticated Teams actor and Activity Protocol mapping | Core/application components where possible | Hosted `/api/messages` authentication, actor mapping, route order, card serialization |
@@ -137,9 +137,10 @@ resolver policy assertion.
 - Retry lost-response convergence, invalid-state rejection, and stored-operation
   mismatch execute as real-SQLite components; one hosted actor rejection remains.
 - Participant visibility and action capabilities execute directly through
-  `RequestQueryService`; one hosted enriched-detail response contract remains.
+  `AccessRequestQueryService`; one hosted enriched-detail response contract remains.
 - Candidate identifier and missing-field matrices execute through deterministic MAF,
-  `RequestIntakeService`, authoritative seeded context, and SQLite without a host.
+  `RequestDraftService` and `RequestSubmissionService`, authoritative seeded context,
+  and SQLite without a host.
 - The five-scenario utterance matrix and intake-history isolation execute directly
   through MAF/native sessions. One complete hosted preparation and one multi-turn
   hosted clarification still prove Activity Protocol and Adaptive Card wiring.

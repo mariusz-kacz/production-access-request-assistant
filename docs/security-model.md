@@ -1,7 +1,7 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-10
 - **Scope**: Local synthetic Governed Production Access Request Assistant MVP
 
 ## Purpose
@@ -218,6 +218,13 @@ active. If the assessed candidate differs, the application marks the old intake
 `Superseded` and creates a new intake before persisting the replacement outcome. The
 old card can therefore never submit fields shown only by the replacement card.
 
+Terminal intake rows are retained for the lifetime of the SQLite database, but their
+candidate content is cleared. The remaining lifecycle tombstone supports ownership
+checks, stale-card classification, and submitted replay; the current baseline has no
+automatic retention window or purge. The rationale and production revisit conditions
+are recorded in
+[ADR 0005: Retain Terminal Request-Intake Tombstones](adr/0005-retain-terminal-request-intake-tombstones.md).
+
 `TeamsDraftCardTracker` stores only one preparation/activity reference per exact
 authenticated actor and conversation for the host lifetime. It lets the transport
 adapter replace a prior activity with a non-actionable **Draft being revised** card.
@@ -254,6 +261,9 @@ session is persisted or logged by default. Session presence and content are neit
 authorization nor audit evidence and are never inputs to confirmation, approval,
 provisioning, retry, or revocation. Durable session retention/deletion, multi-host
 coordination, and native MAF compaction require a future privacy and capacity design.
+See
+[ADR 0006: Persist Canonical Intake State, Not Conversation History](adr/0006-persist-canonical-intake-state-not-conversation-history.md)
+for the complete persistence inventory and consequences.
 
 ## Browser, identity, and session boundary
 
@@ -322,13 +332,19 @@ not use `dangerouslySetInnerHTML` or another raw HTML rendering path.
 
 ## Request visibility
 
-`RequestQueryService` calculates participation on the server:
+`AccessRequestQueryService` loads authoritative submitted-request evidence and
+`AccessRequestVisibilityPolicy` calculates visibility and presentation actions on the server:
 
 - the requester can view their own request;
 - the configured business approver can view the responsible client's request;
 - DevOps can view requests from the DevOps stage onward, including a rejection on
   which DevOps acted; and
 - other principals are treated as nonparticipants.
+
+The same policy returns presentation actions with the visibility result. It consults
+persisted DevOps decision evidence before advertising another DevOps decision, rather
+than relying only on a request status that can remain unchanged while provisioning is
+in progress. Command services still repeat authorization and transition validation.
 
 List filtering cannot expand this visibility. Request detail returns a not-found
 outcome to a nonparticipant rather than confirming the existence of an inaccessible
@@ -424,13 +440,13 @@ conversation from authenticated SDK context and maps the actor server-side to th
 fixed synthetic requester. The action carries only a schema version and opaque intake
 ID; payload identity, role, duration, approval, and scope fields are rejected.
 
-`RequestIntakeService` reloads the intake, verifies exact actor/conversation ownership,
-readiness, expiry, and supersession, and revalidates immutable canonical scope.
-`RequestSubmissionService` requires the reserved server-generated request ID and
-stages the immutable request plus request-created audit evidence without saving
-independently. One shared `SaveChangesAsync` commits the `Ready -> Submitted` intake
-transition, `AwaitingBusinessApproval` request, and audit event. Confirmation does not
-read MAF history and cannot approve or provision access.
+`RequestSubmissionService` reloads the intake, verifies exact actor/conversation
+ownership, readiness, expiry, and supersession, requires the reserved server-generated
+request ID, and revalidates immutable canonical scope. It stages the immutable request
+plus request-created audit evidence and uses one shared `SaveChangesAsync` to commit
+the `Ready -> Submitted` intake transition, `AwaitingBusinessApproval` request, and
+audit event. Confirmation does not read MAF history and cannot approve or provision
+access. `RequestDraftService` is not part of this deterministic submission boundary.
 
 After creation, the request follows the unchanged browser-driven business approval,
 DevOps approval, protected provisioning, retry, and audit path. Teams supplies no
@@ -609,7 +625,7 @@ Security behavior is exercised by automated tests, including:
   serialization, and last-good-session preservation;
 - [Teams actor tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs):
   channel, tenant, personal-conversation, actor, and forged-payload boundaries;
-- [request-intake unit tests](../tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs):
+- [request-draft and submission unit tests](../tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs):
   ownership, terminal states, stale context, deterministic option reload, invalid
   option rejection, ready-draft discussion identity preservation, changed-candidate
   replacement, candidate preservation, and confirmation behavior;
@@ -722,3 +738,5 @@ Review this document and the related tests whenever a change:
 - [ADR 0002: Validate Persisted Workflow Evidence at Provisioning](adr/0002-validate-persisted-workflow-evidence-at-provisioning.md)
 - [ADR 0003: Do Not Model Provider and Workflow Persistence as Atomic](adr/0003-do-not-model-provider-and-workflow-persistence-as-atomic.md)
 - [ADR 0004: Use Request ID as the Provisioning Idempotency Identity](adr/0004-use-request-id-as-provisioning-idempotency-identity.md)
+- [ADR 0005: Retain Terminal Request-Intake Tombstones](adr/0005-retain-terminal-request-intake-tombstones.md)
+- [ADR 0006: Persist Canonical Intake State, Not Conversation History](adr/0006-persist-canonical-intake-state-not-conversation-history.md)

@@ -19,7 +19,7 @@ implementation while matching the Foundry project `/openai/v1` endpoint.
 - Refactor to a provider-specific Agent Framework agent: rejected because hosted
   tools and a second agent construction path are unnecessary; the existing local MCP
   and structured `IChatClient` path already meets the feature.
-- Call the provider directly from `RequestIntakeService`: rejected because it would
+- Call the provider directly from `RequestDraftService`: rejected because it would
   leak provider concerns across the infrastructure boundary and bypass MAF history
   and tool controls.
 - Add a general multi-provider router: rejected because the scope calls for one
@@ -131,7 +131,7 @@ preventing failed turns from saving session or workflow state.
 
 **Decision**: Do not create a real-model-specific request proposal or MCP catalog.
 Continue using `request-intake-proposal.schema.json`, exact equality with the three
-read-only MCP tools, strict parsing, `RequestValidator`, immutable readiness, and the
+read-only MCP tools, strict parsing, `RequestDraftValidator`, immutable readiness, and the
 existing confirmation service.
 
 **Rationale**: Model provenance must not affect trust. Sharing the exact path is the

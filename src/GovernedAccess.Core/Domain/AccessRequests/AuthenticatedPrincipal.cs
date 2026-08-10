@@ -1,4 +1,4 @@
-namespace GovernedAccess.Core.Domain;
+namespace GovernedAccess.Core.Domain.AccessRequests;
 
 public enum PrincipalKind
 {

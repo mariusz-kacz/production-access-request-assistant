@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -21,12 +22,7 @@ public sealed class RequestDecisionsController : ControllerBase
         [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
-        var decision = request.Decision switch
-        {
-            "Approve" => ApprovalOutcome.Approved,
-            "Reject" => ApprovalOutcome.Rejected,
-            _ => (ApprovalOutcome?)null,
-        };
+        var decision = ParseDecision(request.Decision);
 
         if (decision is null)
         {
@@ -64,12 +60,7 @@ public sealed class RequestDecisionsController : ControllerBase
         [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
-        var decision = request.Decision switch
-        {
-            "Approve" => ApprovalOutcome.Approved,
-            "Reject" => ApprovalOutcome.Rejected,
-            _ => (ApprovalOutcome?)null,
-        };
+        var decision = ParseDecision(request.Decision);
 
         if (decision is null)
         {
@@ -107,6 +98,14 @@ public sealed class RequestDecisionsController : ControllerBase
                     completed.Grant.ActivatedAt,
                     completed.Grant.ExpiresAt)));
     }
+
+    private static ApprovalOutcome? ParseDecision(string? decision) =>
+        decision switch
+        {
+            "Approve" => ApprovalOutcome.Approved,
+            "Reject" => ApprovalOutcome.Rejected,
+            _ => null,
+        };
 }
 
 public sealed record BusinessDecisionRequest(string? Decision, string? Comment);

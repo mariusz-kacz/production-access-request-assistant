@@ -1,7 +1,10 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Application.Provisioning;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.AccessRequests;
 
 public sealed record BusinessDecisionResult(
     AccessRequest Request,
@@ -12,11 +15,6 @@ public sealed record DevOpsDecisionResult(
     ApprovalDecision Decision,
     ProvisioningOperation? Operation,
     AccessGrant? Grant);
-
-public sealed record ProvisioningRetryResult(
-    AccessRequest Request,
-    ProvisioningOperation Operation,
-    AccessGrant Grant);
 
 /// <summary>
 /// Coordinates the authenticated human commands for the governed access workflow.
@@ -58,26 +56,26 @@ public sealed class AccessRequestWorkflowService
     public const string ProvisioningRetryInvalidTransitionCode =
         "provisioning_retry_invalid_transition";
 
-    private readonly IRequestContextReader requestContext;
+    private readonly AccessRequestCommandContextLoader commandContextLoader;
     private readonly IWorkflowStore workflowStore;
-    private readonly RequestValidator requestValidator;
+    private readonly AccessRequestValidator requestValidator;
     private readonly ProtectedProvisioningService protectedProvisioning;
     private readonly IClock clock;
 
     public AccessRequestWorkflowService(
-        IRequestContextReader requestContext,
+        AccessRequestCommandContextLoader commandContextLoader,
         IWorkflowStore workflowStore,
-        RequestValidator requestValidator,
+        AccessRequestValidator requestValidator,
         ProtectedProvisioningService protectedProvisioning,
         IClock clock)
     {
-        ArgumentNullException.ThrowIfNull(requestContext);
+        ArgumentNullException.ThrowIfNull(commandContextLoader);
         ArgumentNullException.ThrowIfNull(workflowStore);
         ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(protectedProvisioning);
         ArgumentNullException.ThrowIfNull(clock);
 
-        this.requestContext = requestContext;
+        this.commandContextLoader = commandContextLoader;
         this.workflowStore = workflowStore;
         this.requestValidator = requestValidator;
         this.protectedProvisioning = protectedProvisioning;
@@ -92,26 +90,21 @@ public sealed class AccessRequestWorkflowService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        if (!Enum.IsDefined(decision))
+        var inputResult = NormalizeDecisionInput(
+            decision,
+            comment,
+            "business_decision_invalid",
+            "The business decision must be approve or reject.",
+            "business_decision_comment_too_long");
+        if (inputResult.IsFailure)
         {
-            return Failed<BusinessDecisionResult>(
-                ApplicationFailureKind.InvalidInput,
-                "business_decision_invalid",
-                "The business decision must be approve or reject.");
+            return ApplicationResult.Failed<BusinessDecisionResult>(
+                inputResult.Failure!);
         }
 
-        var normalizedComment = string.IsNullOrWhiteSpace(comment)
-            ? null
-            : comment.Trim();
-        if (normalizedComment?.Length > ApprovalDecision.MaximumCommentLength)
-        {
-            return Failed<BusinessDecisionResult>(
-                ApplicationFailureKind.InvalidInput,
-                "business_decision_comment_too_long",
-                $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.");
-        }
+        var input = inputResult.Value;
 
-        var commandContextResult = await LoadCommandContextAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
             authenticatedPrincipalId,
             correlationId,
@@ -122,10 +115,12 @@ public sealed class AccessRequestWorkflowService
                 commandContextResult.Failure!);
         }
 
-        var (request, principal, normalizedCorrelationId) =
-            commandContextResult.Value;
-        var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
-            request.EnvironmentId,
+        var context = commandContextResult.Value;
+        var request = context.Request;
+        var principal = context.Principal;
+        var normalizedCorrelationId = context.CorrelationId;
+        var environmentContextResult = await commandContextLoader.LoadEnvironmentContextAsync(
+            request,
             cancellationToken);
         if (environmentContextResult.IsFailure)
         {
@@ -175,11 +170,11 @@ public sealed class AccessRequestWorkflowService
         var occurredAt = clock.UtcNow.ToUniversalTime();
         var policyResult = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 Guid.NewGuid(),
-                decision,
+                input.Decision,
                 principal.Id,
-                normalizedComment,
+                input.Comment,
                 occurredAt,
                 normalizedCorrelationId),
             hasExistingDecision);
@@ -239,26 +234,21 @@ public sealed class AccessRequestWorkflowService
         string? correlationId,
         CancellationToken cancellationToken)
     {
-        if (!Enum.IsDefined(decision))
+        var inputResult = NormalizeDecisionInput(
+            decision,
+            comment,
+            "devops_decision_invalid",
+            "The DevOps decision must be approve or reject.",
+            "devops_decision_comment_too_long");
+        if (inputResult.IsFailure)
         {
-            return Failed<DevOpsDecisionResult>(
-                ApplicationFailureKind.InvalidInput,
-                "devops_decision_invalid",
-                "The DevOps decision must be approve or reject.");
+            return ApplicationResult.Failed<DevOpsDecisionResult>(
+                inputResult.Failure!);
         }
 
-        var normalizedComment = string.IsNullOrWhiteSpace(comment)
-            ? null
-            : comment.Trim();
-        if (normalizedComment?.Length > ApprovalDecision.MaximumCommentLength)
-        {
-            return Failed<DevOpsDecisionResult>(
-                ApplicationFailureKind.InvalidInput,
-                "devops_decision_comment_too_long",
-                $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.");
-        }
+        var input = inputResult.Value;
 
-        var commandContextResult = await LoadCommandContextAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
             authenticatedPrincipalId,
             correlationId,
@@ -269,8 +259,10 @@ public sealed class AccessRequestWorkflowService
                 commandContextResult.Failure!);
         }
 
-        var (request, principal, normalizedCorrelationId) =
-            commandContextResult.Value;
+        var context = commandContextResult.Value;
+        var request = context.Request;
+        var principal = context.Principal;
+        var normalizedCorrelationId = context.CorrelationId;
         if (principal.Kind != PrincipalKind.DevOpsApprover)
         {
             var failure = new ApplicationFailure(
@@ -356,11 +348,11 @@ public sealed class AccessRequestWorkflowService
         var policyResult = DevOpsDecisionPolicy.Apply(
             request,
             businessApprovalResult.Value,
-            new DevOpsDecisionCommand(
+            new ApprovalCommand(
                 Guid.NewGuid(),
-                decision,
+                input.Decision,
                 principal.Id,
-                normalizedComment,
+                input.Comment,
                 occurredAt,
                 normalizedCorrelationId),
             hasExistingDecision);
@@ -418,49 +410,46 @@ public sealed class AccessRequestWorkflowService
         var provisioningOutcome = await protectedProvisioning.ProvisionAsync(
             request.Id,
             cancellationToken);
-        if (provisioningOutcome is ProtectedProvisioningCompleted completed)
+        if (provisioningOutcome.IsFailure)
         {
-            return ApplicationResult.Succeeded(
-                new DevOpsDecisionResult(
-                    completed.Request,
-                    applied.Decision,
-                    completed.Operation,
-                    completed.Grant));
+            return ApplicationResult.Failed<DevOpsDecisionResult>(
+                provisioningOutcome.Failure!);
         }
 
-        if (provisioningOutcome is not ProtectedProvisioningFailed provisioningFailed)
-        {
-            throw new InvalidOperationException(
-                "The protected provisioning outcome is unsupported.");
-        }
-
-        return ApplicationResult.Failed<DevOpsDecisionResult>(
-            provisioningFailed.Failure);
+        var completed = provisioningOutcome.Value;
+        return ApplicationResult.Succeeded(
+            new DevOpsDecisionResult(
+                completed.Request,
+                applied.Decision,
+                completed.Operation,
+                completed.Grant));
     }
 
-    public async Task<ApplicationResult<ProvisioningRetryResult>>
+    public async Task<ApplicationResult<ProvisioningCompletion>>
         RetryProvisioningAsync(
             Guid requestId,
             string? authenticatedPrincipalId,
             string? correlationId,
             CancellationToken cancellationToken)
     {
-        var commandContextResult = await LoadCommandContextAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
             authenticatedPrincipalId,
             correlationId,
             cancellationToken);
         if (commandContextResult.IsFailure)
         {
-            return ApplicationResult.Failed<ProvisioningRetryResult>(
+            return ApplicationResult.Failed<ProvisioningCompletion>(
                 commandContextResult.Failure!);
         }
 
-        var (request, principal, normalizedCorrelationId) =
-            commandContextResult.Value;
+        var context = commandContextResult.Value;
+        var request = context.Request;
+        var principal = context.Principal;
+        var normalizedCorrelationId = context.CorrelationId;
         if (principal.Kind != PrincipalKind.DevOpsApprover)
         {
-            return ApplicationResult.Failed<ProvisioningRetryResult>(
+            return ApplicationResult.Failed<ProvisioningCompletion>(
                 await RecordRejectedAttemptAsync(
                     request,
                     ApprovalStage.DevOps,
@@ -476,7 +465,7 @@ public sealed class AccessRequestWorkflowService
 
         if (request.Status != RequestStatus.ProvisioningFailed)
         {
-            return ApplicationResult.Failed<ProvisioningRetryResult>(
+            return ApplicationResult.Failed<ProvisioningCompletion>(
                 await RecordRejectedAttemptAsync(
                     request,
                     ApprovalStage.DevOps,
@@ -490,92 +479,9 @@ public sealed class AccessRequestWorkflowService
                     cancellationToken));
         }
 
-        var provisioningOutcome = await protectedProvisioning.RetryAsync(
+        return await protectedProvisioning.RetryAsync(
             request.Id,
             cancellationToken);
-        return provisioningOutcome switch
-        {
-            ProtectedProvisioningCompleted completed =>
-                ApplicationResult.Succeeded(
-                    new ProvisioningRetryResult(
-                        completed.Request,
-                        completed.Operation,
-                        completed.Grant)),
-            ProtectedProvisioningFailed failed =>
-                ApplicationResult.Failed<ProvisioningRetryResult>(failed.Failure),
-            _ => throw new InvalidOperationException(
-                "The protected provisioning outcome is unsupported."),
-        };
-    }
-
-    private async Task<ApplicationResult<(
-        AccessRequest Request,
-        AuthenticatedPrincipal Principal,
-        string CorrelationId)>> LoadCommandContextAsync(
-            Guid requestId,
-            string? authenticatedPrincipalId,
-            string? correlationId,
-            CancellationToken cancellationToken)
-    {
-        if (requestId == Guid.Empty)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.InvalidInput,
-                "request_id_required",
-                "An access request identifier is required.");
-        }
-
-        var principalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
-        if (principalId is null)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.Unauthenticated,
-                "authentication_required",
-                "An authenticated workflow actor is required.");
-        }
-
-        var normalizedCorrelationId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            correlationId);
-        if (normalizedCorrelationId is null)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.InvalidInput,
-                "correlation_id_required",
-                "A correlation identifier is required.");
-        }
-
-        var principalResult = await requestContext.GetPrincipalAsync(
-            principalId,
-            cancellationToken);
-        if (principalResult.IsFailure)
-        {
-            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? FailedCommandContext(
-                    ApplicationFailureKind.Unauthenticated,
-                    "authenticated_principal_not_found",
-                    "The authenticated principal is unavailable.")
-                : ApplicationResult.Failed<(
-                    AccessRequest,
-                    AuthenticatedPrincipal,
-                    string)>(principalResult.Failure);
-        }
-
-        var requestResult = await workflowStore.GetRequestAsync(
-            requestId,
-            cancellationToken);
-        if (requestResult.IsFailure)
-        {
-            return ApplicationResult.Failed<(
-                AccessRequest,
-                AuthenticatedPrincipal,
-                string)>(requestResult.Failure!);
-        }
-
-        return ApplicationResult.Succeeded((
-            requestResult.Value,
-            principalResult.Value,
-            normalizedCorrelationId));
     }
 
     private async Task<ApplicationFailure> RecordRejectedAttemptAsync(
@@ -618,30 +524,20 @@ public sealed class AccessRequestWorkflowService
         CancellationToken cancellationToken)
     {
         var validationOutcome = await requestValidator.ValidateAsync(
-            new RequestValidationInput(
-                request.ClientId,
-                request.EnvironmentId,
-                request.RequestedRoleId,
-                request.Justification,
-                request.IncidentId),
+            AccessRequestValidationInput.From(request),
             cancellationToken);
 
-        if (validationOutcome is RequestValidationFailed validationFailed)
+        if (validationOutcome is AccessRequestValidationFailed validationFailed)
         {
             return validationFailed.Failure;
         }
 
-        if (validationOutcome is not RequestValidationSucceeded validationSucceeded)
+        if (validationOutcome is not AccessRequestValidationSucceeded validationSucceeded)
         {
             return InvalidCurrentContext();
         }
 
-        var fields = validationSucceeded.Fields;
-        return fields.ClientId == request.ClientId
-            && fields.EnvironmentId == request.EnvironmentId
-            && fields.RequestedRoleId == request.RequestedRoleId
-            && fields.Justification == request.Justification
-            && fields.IncidentId == request.IncidentId
+        return validationSucceeded.Fields.Matches(request)
             ? null
             : InvalidCurrentContext();
     }
@@ -681,6 +577,34 @@ public sealed class AccessRequestWorkflowService
             "Current request context no longer validates the immutable request.");
     }
 
+    private static ApplicationResult<NormalizedDecisionInput>
+        NormalizeDecisionInput(
+            ApprovalOutcome decision,
+            string? comment,
+            string invalidDecisionCode,
+            string invalidDecisionMessage,
+            string commentTooLongCode)
+    {
+        if (!Enum.IsDefined(decision))
+        {
+            return Failed<NormalizedDecisionInput>(
+                ApplicationFailureKind.InvalidInput,
+                invalidDecisionCode,
+                invalidDecisionMessage);
+        }
+
+        var normalizedComment = string.IsNullOrWhiteSpace(comment)
+            ? null
+            : comment.Trim();
+        return normalizedComment?.Length > ApprovalDecision.MaximumCommentLength
+            ? Failed<NormalizedDecisionInput>(
+                ApplicationFailureKind.InvalidInput,
+                commentTooLongCode,
+                $"The comment must not exceed {ApprovalDecision.MaximumCommentLength} characters.")
+            : ApplicationResult.Succeeded(
+                new NormalizedDecisionInput(decision, normalizedComment));
+    }
+
     private static ApplicationResult<T> Failed<T>(
         ApplicationFailureKind kind,
         string code,
@@ -691,17 +615,8 @@ public sealed class AccessRequestWorkflowService
             new ApplicationFailure(kind, code, message));
     }
 
-    private static ApplicationResult<(
-        AccessRequest Request,
-        AuthenticatedPrincipal Principal,
-        string CorrelationId)> FailedCommandContext(
-            ApplicationFailureKind kind,
-            string code,
-            string message)
-    {
-        return ApplicationResult.Failed<(
-            AccessRequest,
-            AuthenticatedPrincipal,
-            string)>(new ApplicationFailure(kind, code, message));
-    }
+    private sealed record NormalizedDecisionInput(
+        ApprovalOutcome Decision,
+        string? Comment);
+
 }

@@ -60,16 +60,19 @@ independent provisioning trust boundary remain unchanged.
 | Responsibility | Current application owner |
 |---|---|
 | Validate and submit an immutable request | `RequestSubmissionService` |
-| Produce participant-authorized list and detail projections | `RequestQueryService` |
+| Determine participant visibility and presentation actions | `AccessRequestVisibilityPolicy` |
+| Produce participant-authorized list and detail projections | `AccessRequestQueryService` |
+| Load authoritative workflow command context | `AccessRequestCommandContextLoader` |
 | Coordinate authenticated business decisions, DevOps decisions, and provisioning retry | `AccessRequestWorkflowService` |
 | Reload persisted authorization evidence and execute idempotent provisioning | `ProtectedProvisioningService` |
 
-`AccessRequestWorkflowService` is the single command coordinator for authenticated
-human workflow actions. It loads trusted request context and persisted workflow state,
-applies the existing deterministic business and DevOps policies, records decisions and
-rejected attempts, and invokes protected provisioning by immutable request ID. It does
-not absorb the domain policies or accept browser assertions about actor, approval,
-scope, duration, or validation.
+`AccessRequestWorkflowService` remains the single command coordinator for authenticated
+human workflow actions. `AccessRequestCommandContextLoader` supplies its normalized actor,
+immutable request, correlation identity, and command-specific authoritative context.
+The coordinator applies the existing deterministic business and DevOps policies,
+records decisions and rejected attempts, and invokes protected provisioning by
+immutable request ID. It does not absorb the domain policies or accept browser
+assertions about actor, approval, scope, duration, or validation.
 
 `ProtectedProvisioningService` deliberately remains separate. Initial provisioning
 and retry reach it only through the workflow coordinator, but the protected service
@@ -231,6 +234,12 @@ ProductionAccessRequestAssistant.sln
 src/
 ├── GovernedAccess.Core/
 │   ├── Domain/
+│   │   ├── Drafts/
+│   │   ├── ReferenceData/
+│   │   └── AccessRequests/
+│   │       ├── Approvals/
+│   │       ├── Provisioning/
+│   │       └── Auditing/
 │   ├── Application/
 │   └── Ports/
 ├── GovernedAccess.Mcp/
@@ -297,13 +306,15 @@ thin React presentation.
 - Protected API inputs contain resource/decision data only. The actor is
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
-- `RequestSubmissionService` owns validated immutable request creation, and
-  `RequestQueryService` owns participant-authorized read projections. Neither
-  coordinates approval or provisioning commands.
+- `RequestSubmissionService` owns validated immutable request creation.
+  `AccessRequestVisibilityPolicy` owns visibility/action calculations, while
+  `AccessRequestQueryService` loads and projects participant-authorized read data. None of
+  these components coordinates approval or provisioning commands.
 - `AccessRequestWorkflowService` is the single application coordinator for business
-  decisions, DevOps decisions, and provisioning retry. It resolves trusted actor and
-  current context, applies deterministic domain policies, persists decision and audit
-  evidence, and passes only the immutable request ID into protected provisioning.
+  decisions, DevOps decisions, and provisioning retry. It receives trusted actor and
+  current context from `AccessRequestCommandContextLoader`, applies deterministic domain
+  policies, persists decision and audit evidence, and passes only the immutable
+  request ID into protected provisioning.
 - `ProtectedProvisioningService` remains an independent internal trust boundary. It
   reloads persisted request, approval, operation, and grant evidence and never trusts
   the workflow coordinator to assert that authorization or validation succeeded.

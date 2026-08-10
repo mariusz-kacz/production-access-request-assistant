@@ -1,5 +1,8 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Drafts;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.UnitTests;
@@ -7,11 +10,11 @@ namespace GovernedAccess.UnitTests;
 public sealed class RequestValidationTests
 {
     [Fact]
-    public async Task CandidateAssessmentClearsAnUnknownPartialClientImmediately()
+    public async Task DraftValidationClearsAnUnknownPartialClientImmediately()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             new RequestCandidate(
                 "ClientA",
                 environmentId: null,
@@ -21,7 +24,7 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+        var assessment = Assert.IsType<RequestDraftRejected>(
             result.Value);
         Assert.Null(assessment.Candidate.ClientId);
         var error = Assert.Single(assessment.Errors);
@@ -30,11 +33,11 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task CandidateAssessmentDerivesCanonicalClientFromEnvironment()
+    public async Task DraftValidationDerivesCanonicalClientFromEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             new RequestCandidate(
                 "Client Alpha",
                 "PROD-ALPHA-EU",
@@ -44,18 +47,18 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentIncomplete>(
+        var assessment = Assert.IsType<RequestDraftIncomplete>(
             result.Value);
         Assert.Equal("client-alpha", assessment.Candidate.ClientId);
         Assert.Equal("PROD-ALPHA-EU", assessment.Candidate.EnvironmentId);
     }
 
     [Fact]
-    public async Task CandidateAssessmentDerivesCanonicalScopeFromActiveIncident()
+    public async Task DraftValidationDerivesCanonicalScopeFromActiveIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             new RequestCandidate(
                 clientId: null,
                 environmentId: null,
@@ -65,7 +68,7 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentIncomplete>(
+        var assessment = Assert.IsType<RequestDraftIncomplete>(
             result.Value);
         Assert.Equal("client-alpha", assessment.Candidate.ClientId);
         Assert.Equal("PROD-ALPHA-EU", assessment.Candidate.EnvironmentId);
@@ -73,9 +76,9 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task CandidateAssessmentClearsOnlyAnUnknownIncident()
+    public async Task DraftValidationClearsOnlyAnUnknownIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
         var candidate = new RequestCandidate(
             "client-alpha",
             "PROD-ALPHA-EU",
@@ -83,12 +86,12 @@ public sealed class RequestValidationTests
             "Investigate the active production incident.",
             "INC-UNKNOWN");
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             candidate,
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+        var assessment = Assert.IsType<RequestDraftRejected>(
             result.Value);
         var sanitized = assessment.Candidate;
         Assert.Equal(candidate.ClientId, sanitized.ClientId);
@@ -102,11 +105,11 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task CandidateAssessmentClearsARoleUnavailableForCanonicalEnvironment()
+    public async Task DraftValidationClearsARoleUnavailableForCanonicalEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             new RequestCandidate(
                 "client-alpha",
                 "PROD-ALPHA-EU",
@@ -116,7 +119,7 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentRejected>(
+        var assessment = Assert.IsType<RequestDraftRejected>(
             result.Value);
         Assert.Null(assessment.Candidate.RequestedRoleId);
         var error = Assert.Single(assessment.Errors);
@@ -125,12 +128,12 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task CandidateAssessmentReturnsReadyAfterOneAuthoritativePass()
+    public async Task DraftValidationReturnsReadyAfterOneAuthoritativePass()
     {
         var requestContext = new StubRequestContextReader();
-        var validator = new RequestValidator(requestContext);
+        var validator = new RequestDraftValidator(requestContext);
 
-        var result = await validator.AssessCandidateAsync(
+        var result = await validator.ValidateAsync(
             new RequestCandidate(
                 "client-alpha",
                 "PROD-ALPHA-EU",
@@ -140,7 +143,7 @@ public sealed class RequestValidationTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        var assessment = Assert.IsType<RequestCandidateAssessmentReady>(
+        var assessment = Assert.IsType<RequestDraftReady>(
             result.Value);
         Assert.Equal("client-alpha", assessment.Fields.ClientId);
         Assert.Equal("PROD-ALPHA-EU", assessment.Fields.EnvironmentId);
@@ -156,10 +159,10 @@ public sealed class RequestValidationTests
     public async Task ValidateAsyncReturnsNormalizedFieldsForAValidRequest()
     {
         var requestContext = new StubRequestContextReader();
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
-            new RequestValidationInput(
+            new AccessRequestValidationInput(
                 " client-alpha ",
                 " PROD-ALPHA-EU ",
                 $" {ProductionRoleIds.ReadOnly} ",
@@ -178,7 +181,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncAllowsAnOmittedIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "   "),
@@ -191,7 +194,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(clientId: "client-unknown"),
@@ -203,7 +206,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(environmentId: "PROD-UNKNOWN"),
@@ -215,7 +218,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnEnvironmentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(environmentId: "PROD-BETA-UK"),
@@ -230,7 +233,7 @@ public sealed class RequestValidationTests
     public async Task ValidateAsyncRejectsASupportedRoleThatIsNotAllowedForTheEnvironment(
         string roleId)
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(requestedRoleId: roleId),
@@ -242,7 +245,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAGloballyUnsupportedRole()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(requestedRoleId: "ProductionAdministrator"),
@@ -260,7 +263,7 @@ public sealed class RequestValidationTests
         string? justification,
         string expectedCode)
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(justification: justification),
@@ -272,7 +275,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAJustificationLongerThanTheDomainMaximum()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(justification: new string('a', AccessRequest.MaximumJustificationLength + 1)),
@@ -284,7 +287,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnUnknownIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-UNKNOWN"),
@@ -298,7 +301,7 @@ public sealed class RequestValidationTests
     {
         var requestContext = new StubRequestContextReader();
         requestContext.AlphaIncident.SetStatus(IncidentStatus.Inactive);
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
             ValidInput(),
@@ -310,7 +313,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnIncidentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-BETA"),
@@ -322,7 +325,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task ValidateAsyncRejectsAnIncidentAssociatedWithAnotherEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.ValidateAsync(
             ValidInput(incidentId: "INC-ALPHA-OTHER"),
@@ -341,24 +344,24 @@ public sealed class RequestValidationTests
                 "request_context_unavailable",
                 "Request context is unavailable."),
         };
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var result = await validator.ValidateAsync(
             ValidInput(),
             TestContext.Current.CancellationToken);
 
-        var failure = Assert.IsType<RequestValidationFailed>(result);
+        var failure = Assert.IsType<AccessRequestValidationFailed>(result);
         Assert.Same(requestContext.ClientFailure, failure.Failure);
     }
 
-    private static RequestValidationInput ValidInput(
+    private static AccessRequestValidationInput ValidInput(
         string? clientId = "client-alpha",
         string? environmentId = "PROD-ALPHA-EU",
         string? requestedRoleId = ProductionRoleIds.ReadOnly,
         string? justification = "Investigate the active production incident.",
         string? incidentId = "INC-1042")
     {
-        return new RequestValidationInput(
+        return new AccessRequestValidationInput(
             clientId,
             environmentId,
             requestedRoleId,
@@ -367,19 +370,19 @@ public sealed class RequestValidationTests
     }
 
     private static void AssertFieldError(
-        RequestValidationOutcome result,
+        AccessRequestValidationOutcome result,
         string expectedField,
         string expectedCode)
     {
-        var rejection = Assert.IsType<RequestValidationRejected>(result);
+        var rejection = Assert.IsType<AccessRequestValidationRejected>(result);
         Assert.Contains(
             rejection.Errors,
             error => error.Field == expectedField && error.Code == expectedCode);
     }
 
-    private static ValidatedRequestFields AssertValid(RequestValidationOutcome result)
+    private static ValidatedAccessRequestFields AssertValid(AccessRequestValidationOutcome result)
     {
-        return Assert.IsType<RequestValidationSucceeded>(result).Fields;
+        return Assert.IsType<AccessRequestValidationSucceeded>(result).Fields;
     }
 
     private sealed class StubRequestContextReader : IRequestContextReader

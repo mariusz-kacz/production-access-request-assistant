@@ -1,7 +1,7 @@
 # As-Built Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-07
+- **Last reviewed**: 2026-08-10
 - **Scope**: Governed Production Access Request Assistant MVP
 
 The history-first Teams preparation and Teams-only creation boundaries described here
@@ -130,12 +130,15 @@ flowchart TB
 
 Core contains:
 
-- domain entities and workflow evidence;
-- business and DevOps decision policies;
-- workflow evidence validation;
-- request validation, intake, confirmation-only submission staging, query, workflow,
-  and protected provisioning
-  services;
+- `Domain/Drafts` for the mutable `RequestIntakeSession` aggregate;
+- `Domain/ReferenceData` for authoritative clients, environments, environment-role
+  assignments, supported role IDs, and incidents;
+- `Domain/AccessRequests` for the immutable submitted request and its authenticated
+  actor, approval, provisioning, grant, audit, and evidence invariants;
+- `Application/Drafts` for mutable conversational preparation and draft validation;
+- `Application/AccessRequests` for the atomic submission bridge, immutable request
+  validation, human workflow commands, submitted-request visibility, and read models;
+- `Application/Provisioning` for the independent persisted-evidence execution boundary;
 - explicit application and provider outcomes; and
 - ports for request context, workflow persistence, intake persistence, time,
   request-preparation interpretation, and provisioning.
@@ -143,6 +146,21 @@ Core contains:
 Core does not reference ASP.NET Core MVC, EF Core, React, `Microsoft.Extensions.AI`,
 or the MCP SDK. AI-provider and protocol-specific types are translated before they
 cross into Core.
+
+The application namespaces make the lifecycle dependency direction explicit.
+Drafting does not reference submitted-request or provisioning services.
+`RequestSubmissionService` is the only application component that consumes a ready
+draft and creates an immutable `AccessRequest`. Approval/query components do not
+reference draft state, and protected provisioning does not trust either UI actions or
+caller-supplied approval assertions.
+
+The domain namespaces follow aggregates rather than application operations.
+`Domain.ReferenceData` is independent authoritative context. `Domain.Drafts` may use
+reference data and immutable access-request construction constraints because its
+purpose is to prepare that request, but it contains no approval or provisioning
+transition. `Domain.AccessRequests` owns the complete post-submission evidence chain.
+Its `Approvals`, `Provisioning`, and `Auditing` folders share one namespace because
+their scope and sequencing invariants intentionally cross those lifecycle stages.
 
 ### `GovernedAccess.Mcp`
 
@@ -184,12 +202,15 @@ request and response shapes, call application services, and map typed failures.
 | `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the agent turn under request cancellation, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
 | `AIHostAgent` with `InMemoryAgentSessionStore` | Load and save MAF-owned conversation sessions by server-generated intake ID for the process lifetime. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
 | `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
-| `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
-| `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
-| `RequestSubmissionService` | Revalidate and stage a reserved-ID request and request-created audit event for confirmation; never save independently. | Public/browser submission or later approval/provisioning transitions. |
+| `RequestDraftValidator` | Validate and canonicalize mutable, potentially incomplete draft candidates while clearing rejected identifiers. | Submission or human authority. |
+| `AccessRequestValidator` | Strictly validate complete submitted-request scope against current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
+| `RequestDraftService` | Coordinate conversational preparation, ready-draft revision, and explicit reset over the mutable intake lifecycle. | Confirmation, submission, or downstream approval. |
+| `RequestSubmissionService` | Authenticate confirmation, reload and revalidate the ready draft, and atomically persist its terminal transition, immutable request, and audit evidence. | Public/browser submission or later approval/provisioning transitions. |
+| `AccessRequestCommandContextLoader` | Load the authenticated principal, immutable request, normalized correlation identity, and command-specific environment context. | Actor authorization or workflow transitions. |
 | `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
 | `ProtectedProvisioningService` | Reload persisted workflow evidence, validate exact scope, call the provider, and persist the operation outcome. | Business or DevOps approval. |
-| `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
+| `AccessRequestVisibilityPolicy` | Determine submitted-request visibility and server-computed presentation actions from authoritative evidence. | Command authorization or workflow mutation. |
+| `AccessRequestQueryService` | Load submitted-request data and return participant-authorized list and detail projections. | Authorization based on UI visibility. |
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
 
@@ -220,7 +241,7 @@ provisioning, retry, and revocation surfaces are unavailable in this mode.
 The evaluator loads and validates the complete checked-in 20-scenario dataset. It
 runs every conversation sequentially by default, or one exact case-sensitive
 scenario selected with `--scenario`, through the real
-`RequestIntakeService.PrepareAsync` boundary. Each scenario receives distinct actor,
+`RequestDraftService.PrepareAsync` boundary. Each scenario receives distinct actor,
 conversation, intake, and correlation identities.
 The configured Foundry Responses client and the real MCP transport execute normally,
 but evaluation treats both as a black box: it records no prompts, transcripts,
@@ -258,7 +279,8 @@ sequenceDiagram
     actor User
     participant Teams
     participant Agent as TeamsAccessRequestAgent
-    participant Intake as RequestIntakeService
+    participant DraftService as RequestDraftService
+    participant Submission as RequestSubmissionService
     participant Draft as MafRequestPreparationInterpreter
     participant Memory as Native MAF session store
     participant Gate as Per-intake turn coordinator
@@ -270,8 +292,8 @@ sequenceDiagram
 
     User->>Teams: Describe request
     Teams->>Agent: Authenticated personal activity
-    Agent->>Intake: PrepareAsync(actor, latest message)
-    Intake->>Draft: Intake ID + complete candidate + latest message
+    Agent->>DraftService: PrepareAsync(actor, latest message)
+    DraftService->>Draft: Intake ID + complete candidate + latest message
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly two read-only tools
@@ -292,21 +314,21 @@ sequenceDiagram
     Draft->>Draft: Strict schema parsing and boundary translation
     Draft-->>Gate: Successfully validated outcome
     Gate->>Memory: Save native session
-    Draft-->>Intake: Untrusted candidate + optional message/environment option IDs
-    Intake->>Context: Reload options and validate every identifier and relationship
+    Draft-->>DraftService: Untrusted candidate + optional message/environment option IDs
+    DraftService->>Context: Reload options and validate every identifier and relationship
     Context->>DB: Query authoritative records
     alt Identifier or candidate value is rejected
-        Intake->>Intake: Clear rejected fields and preserve validated fields
-        Intake->>DB: Persist sanitized candidate and typed validation errors
+        DraftService->>DraftService: Clear rejected fields and preserve validated fields
+        DraftService->>DB: Persist sanitized candidate and typed validation errors
     else Candidate is accepted
-        Intake->>DB: Persist clarification or immutable ready scope
+        DraftService->>DB: Persist clarification or immutable ready scope
     end
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
-    Agent->>Intake: ConfirmAsync(actor, intake ID)
-    Intake->>DB: Reload ownership/status/scope and revalidate
-    Intake->>DB: One save: submitted intake + request + audit
+    Agent->>Submission: ConfirmDraftAsync(actor, intake ID)
+    Submission->>DB: Reload ownership/status/scope and revalidate
+    Submission->>DB: One save: submitted intake + request + audit
     Agent-->>Teams: Stable request ID and trusted Web link
 ```
 
@@ -386,6 +408,10 @@ an ambiguous relative reply is re-clarified rather than guessed unless the suppl
 conversation itself contains its preceding question and ordering. Confirmation and
 all downstream workflow actions never read this memory.
 
+The persistence boundary and its restart, privacy, debugging, and capacity
+consequences are recorded in
+[ADR 0006: Persist Canonical Intake State, Not Conversation History](adr/0006-persist-canonical-intake-state-not-conversation-history.md).
+
 Durable MAF sessions, retention/deletion policy, multi-host coordination, and native
 MAF compaction are deferred until a concrete production requirement defines privacy,
 capacity, and lifecycle rules. They are not hidden responsibilities of the SQLite
@@ -437,10 +463,11 @@ stateDiagram-v2
 
 1. The Teams boundary derives actor, tenant, and conversation from authenticated
    activity context.
-2. `RequestIntakeService` reloads the ready intake, verifies ownership/status/expiry,
-   and revalidates its immutable scope.
-3. `RequestSubmissionService` requires the server-reserved request ID and confirmation
-   timestamp and stages the request plus request-created audit event.
+2. `RequestSubmissionService` reloads the ready intake, verifies
+   ownership/status/expiry, requires its server-reserved request ID, and revalidates
+   its immutable scope.
+3. The submission service stages the request plus request-created audit event and
+   marks the intake submitted.
 4. The intake transition, immutable `AwaitingBusinessApproval` request, and audit
    event commit in one shared `SaveChangesAsync`.
 
@@ -454,10 +481,10 @@ immutable request aggregate consumed by that flow; it does not bypass or duplica
 ### Business decision
 
 1. `AccessRequestWorkflowService` loads the authenticated principal and request.
-2. It validates current stored request context.
-3. It resolves the owning client's configured business approver.
-4. `BusinessDecisionPolicy` validates state, authority, duplicate-stage prevention,
-   and exact-role binding.
+2. It loads current environment and client context.
+3. It verifies that the actor is the owning client's configured business approver.
+4. `BusinessDecisionPolicy` validates state, duplicate-stage prevention, and
+   exact-role binding.
 5. The decision, workflow transition, and audit evidence are saved together.
 
 The requester cannot nominate or replace the business approver.
@@ -521,6 +548,12 @@ There is no runtime command surface for mutating reference context.
 - the complete nullable candidate while collecting;
 - immutable ready scope, reserved request ID, and 30-minute confirmation expiry; and
 - terminal status and correlation metadata for replay-safe old-card handling.
+
+Terminal intake rows are retained for the lifetime of the SQLite database. Terminal
+transitions clear candidate content but keep the minimal binding and lifecycle
+evidence needed to classify stale-card confirmation and recover submitted replay.
+There is no automatic purge or retention window in the current local baseline. See
+[ADR 0005: Retain Terminal Request-Intake Tombstones](adr/0005-retain-terminal-request-intake-tombstones.md).
 
 The database stores no raw activity, prompt, transcript, clarification option list,
 model response, or serialized MAF session. Ready scope is immutable, active binding
@@ -624,7 +657,7 @@ state-changing dependencies in the MCP project.
 Core depends on focused interfaces:
 
 - `IRequestContextReader`;
-- `IWorkflowStore` and `IAuditStore`;
+- `IWorkflowStore`, including insert-only audit staging and reads;
 - `IRequestPreparationInterpreter` and `IRequestIntakeStore`;
 - `IAccessProvisioner`; and
 - `IClock`.

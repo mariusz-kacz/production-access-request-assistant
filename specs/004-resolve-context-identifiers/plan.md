@@ -122,7 +122,7 @@ specs/004-resolve-context-identifiers/
 ```text
 src/
 |-- GovernedAccess.Core/
-|   |-- Application/RequestIntakeService.cs # authoritative option validation
+|   |-- Application/Drafts/RequestDraftService.cs # authoritative option validation
 |   |-- Ports/CorePorts.cs                   # enriched exact/list reader operations
 |   `-- Ports/RequestDrafting.cs             # structured environment option IDs
 |-- GovernedAccess.Mcp/

@@ -1,4 +1,6 @@
-namespace GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.ReferenceData;
+
+namespace GovernedAccess.Core.Domain.AccessRequests;
 
 public enum RequestStatus
 {

@@ -1,5 +1,6 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.UnitTests;
@@ -20,7 +21,7 @@ public sealed class BusinessDecisionPolicyTests
 
         var result = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 decisionId,
                 ApprovalOutcome.Approved,
                 " business-alpha ",
@@ -52,7 +53,7 @@ public sealed class BusinessDecisionPolicyTests
 
         var result = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 Guid.Parse("e2b658e5-a183-48a7-99e6-8b67300a60f7"),
                 ApprovalOutcome.Rejected,
                 "business-alpha",
@@ -90,9 +91,9 @@ public sealed class BusinessDecisionPolicyTests
         Assert.Equal(originalPersistenceVersion, request.PersistenceVersion);
     }
 
-    private static BusinessDecisionCommand ValidCommand()
+    private static ApprovalCommand ValidCommand()
     {
-        return new BusinessDecisionCommand(
+        return new ApprovalCommand(
             Guid.Parse("57409ebf-2263-4e45-bfd1-29c6bc9700e5"),
             ApprovalOutcome.Approved,
             "business-alpha",

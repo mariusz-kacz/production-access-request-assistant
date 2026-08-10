@@ -119,8 +119,9 @@ The schema intentionally avoids conditional JSON Schema keywords that are not
 uniformly supported by structured-output model providers.
 
 **Rationale**: Structured output makes the model useful without allowing prose or a
-model-reported “complete” flag to transition state. The existing `RequestValidator`
-can canonicalize and validate the proposed fields against authoritative data.
+model-reported “complete” flag to transition state. `RequestDraftValidator`
+canonicalizes and validates proposed fields against authoritative data while keeping
+strict complete-scope validation in `AccessRequestValidator`.
 
 **Alternatives considered**:
 

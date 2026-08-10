@@ -1,5 +1,8 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Provisioning;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Demo;
@@ -201,9 +204,9 @@ public sealed class AccessRequestWorkflowServiceTests
         var requestContext = new EfRequestContextReader(dbContext);
         var workflowStore = new EfWorkflowStore(dbContext);
         return new AccessRequestWorkflowService(
-            requestContext,
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }
@@ -226,7 +229,7 @@ public sealed class AccessRequestWorkflowServiceTests
             "request-correlation");
         var policyResult = BusinessDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            new ApprovalCommand(
                 Guid.NewGuid(),
                 ApprovalOutcome.Approved,
                 DemoDataIds.ClientAlphaApproverPrincipalId,

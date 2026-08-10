@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;

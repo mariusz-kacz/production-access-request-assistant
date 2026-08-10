@@ -1,4 +1,7 @@
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Application.AccessRequests;
+using GovernedAccess.Core.Application.Drafts;
+using GovernedAccess.Core.Application.Provisioning;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
 using GovernedAccess.Web.Ai;
@@ -41,10 +44,13 @@ builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
     options.UseSqlite(databaseConnectionString));
 builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
 builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-builder.Services.AddScoped<RequestValidator>();
+builder.Services.AddScoped<RequestDraftValidator>();
+builder.Services.AddScoped<AccessRequestValidator>();
 builder.Services.AddScoped<RequestSubmissionService>();
-builder.Services.AddScoped<RequestQueryService>();
+builder.Services.AddScoped<AccessRequestVisibilityPolicy>();
+builder.Services.AddScoped<AccessRequestQueryService>();
 builder.Services.AddScoped<ProtectedProvisioningService>();
+builder.Services.AddScoped<AccessRequestCommandContextLoader>();
 builder.Services.AddScoped<AccessRequestWorkflowService>();
 builder.Services.AddSingleton<SyntheticAccessProvisionerControl>();
 builder.Services.AddSingleton<SyntheticAccessProvisioner>();

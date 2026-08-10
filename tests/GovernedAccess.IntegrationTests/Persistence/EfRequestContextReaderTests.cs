@@ -1,5 +1,6 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Persistence;
 using Microsoft.Data.Sqlite;

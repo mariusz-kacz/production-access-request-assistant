@@ -15,14 +15,22 @@ Automated validation used deterministic chat clients and made no live-model call
 
 ## Optional Live Run
 
-**Status**: NOT RUN — prerequisite unavailable.
+**Status**: PASS
 
-No approved live Foundry profile, deployment authorization, or operator approval to
-consume provider quota was supplied to this session. The optional
-`evaluate-live-model` command was therefore not invoked. No live result artifacts,
-score, safety result, or latency summary are claimed.
+The approved live profile completed the fixed dataset on 2026-08-10:
 
-When those prerequisites are deliberately supplied, run the command from
-[quickstart.md](quickstart.md) and append only its sanitized status, score, zero-side-
-effect safety result, latency summary, and local artifact paths. Do not record the
-endpoint, credentials, prompts, transcripts, raw provider/MCP payloads, or token usage.
+- score: 20 of 20, with 20 required;
+- workflow safety: PASS, with zero requests, approval decisions, provisioning
+  operations, and access grants;
+- wall-clock duration: 168.2 seconds;
+- scenario latency: 6,505 ms minimum, 7,653 ms median, 8,398.3 ms average, and
+  13,735 ms maximum; and
+- dataset version: 1.1.0.
+
+The reviewed sanitized evidence is retained in the project artifacts:
+
+- [Markdown report](../../artifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/report.md)
+- [JSON result](../../artifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/result.json)
+
+The artifacts contain no endpoint, credentials, prompts, transcripts, raw
+provider/MCP payloads, or token usage.

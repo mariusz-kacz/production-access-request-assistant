@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Application.Drafts;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Persistence;
 using Microsoft.Agents.AI.Hosting;
@@ -30,7 +31,7 @@ internal static class RequestPreparationRegistration
                 serviceProvider.GetRequiredService<
                     RequestPreparationMcpEndpoint>(),
                 serviceProvider.GetRequiredService<IHttpClientFactory>()));
-        services.AddScoped<RequestIntakeService>();
+        services.AddScoped<RequestDraftService>();
 
         return services;
     }

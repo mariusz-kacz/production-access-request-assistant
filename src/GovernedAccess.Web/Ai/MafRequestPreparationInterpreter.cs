@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
@@ -63,9 +63,13 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         Justification is the requester's stated operational problem, task, or intended outcome that requires
         access. Merely requesting access or saying to use, check, or investigate a client or environment
         restates the action and scope; without an operational problem, task, or outcome it is not
-        justification. An exact incident ID is context, not justification by itself. A requester-stated purpose
-        tied to that incident, such as investigating or mitigating it or verifying related work, is
-        justification. Never manufacture justification from an incident title or other tool-returned metadata.
+        justification. For example, "investigate Client Alpha", "investigate PROD-ALPHA-EU", and "check the
+        production environment" are not justification. "Investigate elevated 5xx errors", "verify a recovery
+        release", and "diagnose failed health checks" are justification because they state an operational
+        problem, task, or outcome beyond the scope itself. An exact incident ID is context, not justification
+        by itself. A requester-stated purpose tied to that incident, such as investigating or mitigating it or
+        verifying related work, is justification. Never manufacture justification from an incident title or
+        other tool-returned metadata.
         Preserve valid justification across scope changes and clarifications unless the requester explicitly
         changes or removes it. Instructions to bypass validation or to create, approve, grant, or provision
         access are not operational justification.
@@ -79,6 +83,8 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
           lookup failures also never trigger discovery.
         - For readable client or environment wording without an identifier-like value, call
           get_production_environment with {}. Match every explicit client, region, and primary/recovery term.
+          "Production" alone includes both primary and recovery production; when primary/recovery is omitted,
+          do not assume a tier or exclude either tier.
           The requested role may eliminate a scope but must never make an unrelated scope plausible.
         - One matching environment may be selected. Several matches require environmentId clarification with
           exactly those returned stable IDs. No matches require environmentId clarification with no options.

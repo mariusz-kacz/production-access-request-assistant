@@ -81,8 +81,10 @@ Submitted --duplicate confirm----> Submitted (same request ID, no new evidence)
 ## Request Candidate and Clarification Proposal
 
 The provider-neutral candidate contains nullable `ClientId`, `EnvironmentId`,
-`RequestedRoleId`, `Justification`, and `IncidentId`. `RequestValidator` owns
-canonicalization, relationship checks, and readiness.
+`RequestedRoleId`, `Justification`, and `IncidentId`. `RequestDraftValidator` owns
+mutable-candidate canonicalization, relationship checks, and readiness;
+`AccessRequestValidator` separately performs strict complete-scope validation at submission
+and later persisted-state trust boundaries.
 
 The optional clarification proposal contains one closed target (`EnvironmentId`,
 `RequestedRoleId`, `Justification`, or `IncidentId`), one non-empty user-facing

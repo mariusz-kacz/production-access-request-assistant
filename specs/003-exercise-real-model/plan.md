@@ -84,7 +84,7 @@ model policy, production rollout, RAG, or distributed coordination
 | Gate | Pre-design | Post-design evidence |
 |------|------------|----------------------|
 | **Human authority** | PASS | Model use ends at an untrusted proposal. Authenticated requester confirmation, business approval, DevOps approval, and deterministic provisioning remain the only state-changing path. |
-| **AI and MCP boundary** | PASS | The existing closed proposal schema and authoritative `RequestValidator` remain unchanged. The interpreter still requires exact equality with `get_production_environment`, `get_incident`, and `get_available_roles`; Azure/OpenAI SDK types stay in Web. |
+| **AI and MCP boundary** | PASS | The existing closed proposal schema and authoritative `RequestDraftValidator` remain unchanged. The interpreter still requires exact equality with `get_production_environment` and `get_incident`; Azure/OpenAI SDK types stay in Web. |
 | **Scope integrity** | PASS | A real-model proposal enters the same immutable ready snapshot, reserved request ID, actor/conversation ownership, revalidation, fixed eight-hour scope, and correction-by-new-request rules. |
 | **Provisioning evidence** | PASS | No model-visible state-changing tool is added. Provisioning still receives only request ID, reloads persisted evidence, and uses that ID for idempotency. |
 | **Proportionality** | PASS | One options/configuration surface, one concrete registration/adapter boundary, and one unavailable client are added to the existing executable. There is no new project, endpoint, process, database entity, router, or generic provider abstraction. |
@@ -117,8 +117,8 @@ specs/003-exercise-real-model/
 ```text
 src/
 |-- GovernedAccess.Core/                  # Provider-neutral reset lifecycle
-|   |-- Application/RequestIntakeService.cs       # Reset active intake operation
-|   |-- Domain/RequestIntakeSession.cs            # Reuse terminal supersession
+|   |-- Application/Drafts/RequestDraftService.cs # Reset active draft operation
+|   |-- Domain/Drafts/RequestIntakeSession.cs     # Reuse terminal supersession
 |   |-- Ports/RequestDrafting.cs
 |   `-- Ports/RequestIntake.cs                     # Reset command/outcome contract
 |-- GovernedAccess.Mcp/                   # Same exact three read-only tools
@@ -140,7 +140,7 @@ src/
 
 tests/
 |-- GovernedAccess.UnitTests/
-|   `-- RequestIntakeServiceTests.cs                # Reset lifecycle transitions
+|   `-- RequestDraftAndSubmissionServiceTests.cs    # Draft/reset and confirmation lifecycle transitions
 `-- GovernedAccess.IntegrationTests/
     |-- Ai/
     |   |-- RequestPreparationChatRegistrationTests.cs
@@ -188,7 +188,7 @@ authenticated Teams message ─► ASP.NET request timeout + existing MAF interp
                                                     │
                          exact three read-only MCP tools + closed proposal schema
                                                     │
-                         existing deterministic authoritative RequestValidator
+                         existing deterministic authoritative RequestDraftValidator
                                                     │
                     clarification / rejection / immutable confirmation card
                                                     │
