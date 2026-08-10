@@ -632,11 +632,11 @@ public sealed class RequestIntakeService
             RequestCandidateAssessmentRejected rejected => rejected.Candidate,
             RequestCandidateAssessmentIncomplete incomplete => incomplete.Candidate,
             RequestCandidateAssessmentReady ready => new RequestCandidate(
-                ready.Fields.ClientId,
-                ready.Fields.EnvironmentId,
-                ready.Fields.RequestedRoleId,
-                ready.Fields.Justification,
-                ready.Fields.IncidentId),
+                ready.Details.ClientId,
+                ready.Details.EnvironmentId,
+                ready.Details.RoleId,
+                ready.Details.Justification,
+                ready.Details.IncidentId),
             _ => throw new InvalidOperationException(
                 "The request candidate assessment is unsupported."),
         };
