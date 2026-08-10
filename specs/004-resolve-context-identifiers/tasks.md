@@ -39,7 +39,7 @@ The following existing coverage is reused rather than duplicated:
   one authoritative clarification rendering case, one reset command, one closed
   confirmation boundary, and one golden governed workflow. Scripted candidate
   progression and Core validation are not repeated through the FullHost fixture.
-- Unknown, inactive, cross-client, cross-environment, and omitted incident validation
+- Unknown, inactive, cross-environment, and omitted incident validation
   remain covered by `RequestValidationTests.cs`; existing MCP incident assertions are
   retained while the MCP catalog test is rewritten.
 - Malformed model output, prompt injection, cancellation, dependency unavailability,
@@ -61,7 +61,7 @@ No new general-purpose test client or MCP host fixture is needed.
 - [X] T001 [P] Delete the duplicate MAF cache-smoke, interpreter-session, Teams candidate-validation, Teams clarification, and confirmation-component suites; preserve only the current-candidate serialization assertion by merging it into the owning session-store test, and migrate the surviving session fixtures to `environmentOptionIds`, in `tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheSmokeTests.cs`, `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationInterpreterSessionTests.cs`, `tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs`, and `tests/GovernedAccess.IntegrationTests/Teams/RequestIntakeConfirmationComponentTests.cs`
 - [X] T002 [P] Consolidate retained integration coverage: keep only malformed-schema, cancellation, and unavailability MAF failures; reduce Teams preparation to authentication, one provider-unavailable response, and one clarification slot; retain one exact `/new` bypass/reset case and one representative malformed/foreign confirmation case; trim the golden workflow to major transitions; keep one sensitive-data logging case without the synthetic timing threshold; and reduce Teams-only request creation to endpoint inventory and negative browser paths, in `tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationResetTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs`, `tests/GovernedAccess.IntegrationTests/Teams/TeamsGovernedWorkflowTests.cs`, `tests/GovernedAccess.IntegrationTests/Observability/TeamsIntakeLoggingTests.cs`, and `tests/GovernedAccess.IntegrationTests/Requests/TeamsOnlyRequestCreationTests.cs`
 
-**Checkpoint**: Before feature-specific additions, the integration portfolio is reduced
+**Checkpoint**: Before feature-specific additions, the integration suite is reduced
 from about 100 to about 75 test methods, Teams-related coverage from 27 to about 11,
 and FullHost coverage from 40 to about 29 while retaining every transport, security,
 persistence, MCP, approval, provisioning, and golden-workflow boundary listed above.
@@ -81,7 +81,7 @@ focused tests pass.
 - [X] T005 [P] Define the non-persistent `ProductionEnvironmentContext` projection and exact/list reader operations while retaining exact environment-role validation in `src/GovernedAccess.Core/Ports/CorePorts.cs`
 - [X] T006 [P] Extend the untrusted clarification proposal and application result contracts with bounded `EnvironmentOptionIds` and validated environment-choice records, and remove `RequestClarificationTarget.ClientId`, in `src/GovernedAccess.Core/Ports/RequestDrafting.cs` and `src/GovernedAccess.Core/Ports/RequestIntake.cs`
 - [X] T007 Implement no-tracking exact/list environment context aggregation over clients, environments, and roles with stable ordinal ordering and a load-at-most-21 fail-closed cap, and remove the obsolete role-list reader operation, in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs`
-- [X] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
+- [X] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 
 **Checkpoint**: Core contracts and persistence can return authoritative, ordered
 environment/client/role context without any MCP or AI SDK types.
@@ -104,7 +104,7 @@ discovery and explicit confirmation of any proposed alternative.
 ### Tests for User Story 1
 
 - [X] T009 [P] [US1] Rewrite the existing MCP contract and MAF catalog assertions for exactly two read-only tools, `{}` discovery, exact environment lookup, a common `environments` envelope, authoritative client display data, embedded ordered roles, and the unchanged exact incident contract; modify existing tests rather than adding parallel contract cases in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs` and `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs`
-- [X] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`
+- [X] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs`
 
 ### Implementation for User Story 1
 
@@ -112,7 +112,7 @@ discovery and explicit confirmation of any proposed alternative.
 - [X] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
 - [X] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 - [X] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
-- [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
+- [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestDraftService.cs`
 - [X] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: The application exposes the bounded authoritative environment context,
@@ -157,7 +157,7 @@ descriptions, partial IDs, or reformatted values from becoming incident identifi
 
 **Independent Test**: Existing MCP contract/failure tests retain exact incident lookup
 and typed no-match assertions. Existing request-validation tests retain unknown,
-inactive, cross-client, cross-environment, and omitted-incident coverage. Semantic
+inactive, cross-environment, and omitted-incident coverage. Semantic
 judgment for titles or partial IDs belongs to the optional live-model matrix.
 
 ### Tests for User Story 3

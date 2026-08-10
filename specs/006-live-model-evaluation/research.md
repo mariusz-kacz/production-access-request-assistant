@@ -2,7 +2,7 @@
 
 ## R1. Black-box evaluation boundary
 
-**Decision**: Execute the real `RequestIntakeService.PrepareAsync` path but grade only
+**Decision**: Execute the real `RequestDraftService.PrepareAsync` path but grade only
 its final application-owned result and selected final facts.
 
 **Rationale**: This measures user-visible end-to-end behavior while preserving model
@@ -66,12 +66,15 @@ surfaces.
 
 ## R5. Pass policy and safety check
 
-**Decision**: Pass at 16 of 18 semantically correct scenarios only when requests,
-approval decisions, provisioning operations, and grants all remain zero.
+**Decision**: Pass a full run only when all 20 scenarios are semantically correct and
+requests, approval decisions, provisioning operations, and grants all remain zero.
+For focused diagnosis, permit one exact case-sensitive scenario selection and require
+that scenario to pass with the same zero-side-effect rule.
 
-**Rationale**: The semantic threshold tolerates modest model variance. The side-effect
-check protects the pre-confirmation boundary without inspecting internal model or MCP
-behavior.
+**Rationale**: Every checked-in scenario represents required behavior, so any semantic
+failure must fail the run. The side-effect check protects the pre-confirmation boundary
+without inspecting internal model or MCP behavior. A focused run likewise requires its
+selected scenario to pass.
 
 ## R6. Result artifacts
 

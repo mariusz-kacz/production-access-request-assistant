@@ -1,28 +1,29 @@
-# Local development
+# Local Development
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
-- **Audience**: Developers running or changing the local MVP
+- **Last reviewed**: 2026-08-10
 
-## Choose a path
+## Paths through the repository
 
 | Goal | Start here |
 |---|---|
-| Run the Web app and deterministic tests | [Normal local setup](#normal-local-setup) |
-| Receive requests from real Teams | [Teams quickstart](teams-quickstart.md) |
-| Use real Teams and a live Foundry model | [Teams quickstart: Azure sign-in](teams-quickstart.md#3-sign-in-to-azure-for-the-live-model) |
+| Build and run automated tests | [Credential-free validation](#credential-free-validation) |
+| Run the application with real Teams transport | [Teams quickstart](teams-quickstart.md) |
+| Run the fixed live-model dataset without Teams | [Live-model evaluation](live-model-evaluation.md) |
+| Work on the React client | [React hot reload](#react-hot-reload) |
 
-The normal local loop needs no Microsoft 365 tenant, Azure subscription, tunnel, or
-model credentials.
+Building and testing require no Microsoft 365 tenant, Azure subscription, tunnel,
+model credentials, or external production system. Starting the normal host requires
+valid Teams bot and tenant configuration; checked-in blank values intentionally fail
+closed. The Teams scripts create and load that local configuration.
 
-## Normal local setup
-
-Prerequisites:
+## Prerequisites
 
 - .NET 10 SDK;
 - Node.js 24 with npm;
-- PowerShell 7;
-- a browser that trusts the ASP.NET Core HTTPS development certificate.
+- PowerShell 7; and
+- a browser that trusts the ASP.NET Core HTTPS development certificate when running
+  the Web application.
 
 Confirm the tools:
 
@@ -32,192 +33,149 @@ node --version
 npm --version
 ```
 
-If HTTPS is not trusted:
+Trust the development certificate when needed:
 
 ```powershell
 dotnet dev-certs https --trust
 ```
 
-First run from the repository root:
+## Credential-free validation
+
+Restore dependencies from the repository root:
 
 ```powershell
 dotnet restore ProductionAccessRequestAssistant.sln
 npm ci --prefix src/GovernedAccess.Web/ClientApp
-dotnet run --project src/GovernedAccess.Web --launch-profile https
 ```
 
-Open `https://localhost:7251`.
-
-The host also binds `http://localhost:5136` for local MCP and Teams tunnel traffic.
-Use HTTPS in the browser because authentication and antiforgery cookies are Secure.
-
-The Web UI lists requests and supports human decisions and protected retry. Request
-creation exists only through authenticated Teams messages.
-
-## Model modes
-
-The checked-in default is `Deterministic`. It needs no credentials and always returns
-the fixed Client Alpha candidate used by tests and stable workflow demos. It does not
-measure whether a model understands natural-language environment wording.
-
-The optional `FoundryResponses` mode uses a real Azure AI Foundry deployment. For the
-shortest supported setup, start it through the Teams helper:
+Run the backend gates sequentially:
 
 ```powershell
-.\scripts\teams\start-app.ps1 -ModelProfile FoundryResponses -FoundryEndpoint "https://<project>.services.ai.azure.com/openai/v1" -DeploymentName "<deployment-name>"
+dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
+dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
+dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
 ```
 
-That command assumes the one-time Teams setup is complete and `az login` has
-authenticated an identity allowed to invoke the deployment. See the complete
-[Teams quickstart](teams-quickstart.md).
+Give the integration command an outer timeout of at least four minutes. If it times
+out, stop only the runner process tree created by that command before another run.
 
-To start a live model without real Teams, set the same process-local configuration
-before `dotnet run`:
+Run frontend tests separately:
+
+```powershell
+npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
+```
+
+All automated tests use deterministic clients. Detailed test placement and acceptance
+coverage are in the [testing strategy](testing-strategy.md).
+
+## Running the application
+
+Complete the one-time Teams setup, start the persistent tunnel, and launch the host
+through the focused scripts in the [Teams quickstart](teams-quickstart.md). The app
+starts at `https://localhost:7251`; use HTTPS because authentication and antiforgery
+cookies are Secure.
+
+The checked-in request-preparation profile is `Deterministic`. It returns a stable
+fixed Client Alpha candidate for transport, confirmation, approval, and provisioning
+exercises. It does not measure natural-language interpretation quality.
+
+The optional `FoundryResponses` profile uses `DefaultAzureCredential` and an explicitly
+configured Azure AI Foundry endpoint and deployment. The Teams start script accepts
+those values after `az login`. Invalid live configuration or provider failure fails
+closed and never falls back to the deterministic client.
+
+## Live-model evaluation
+
+The Web executable also has an evaluation-only mode that needs no Teams registration
+or tunnel. It requires an authorized Foundry deployment and runs the real intake and
+loopback MCP path without exposing confirmation or workflow actions.
 
 ```powershell
 az login
 $env:RequestPreparationModel__ExecutionProfile = "FoundryResponses"
 $env:RequestPreparationModel__FoundryResponses__Endpoint = "https://<project>.services.ai.azure.com/openai/v1"
 $env:RequestPreparationModel__FoundryResponses__DeploymentName = "<deployment-name>"
-dotnet run --project src/GovernedAccess.Web --launch-profile https
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model
 ```
 
-This starts the model-enabled host, but a real request still requires authenticated
-Teams transport. Do not put an API key or token in `appsettings*.json`.
-
-An invalid or unavailable live profile fails closed. It does not silently switch to
-the deterministic model.
-
-## Common development commands
-
-Restore:
-
-```powershell
-dotnet restore ProductionAccessRequestAssistant.sln
-npm ci --prefix src/GovernedAccess.Web/ClientApp
-```
-
-Build:
-
-```powershell
-dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
-```
-
-Test:
-
-```powershell
-dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror
-dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore
-dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m
-npm test --prefix src/GovernedAccess.Web/ClientApp -- --run
-```
-
-Run the three backend commands sequentially in exactly that order. The integration
-command runs component and FullHost fixtures together; give it an outer timeout of at
-least four minutes. If it times out, identify and stop only the runner process tree it
-created before starting another run. The frontend command is separate from the
-required backend gate.
-
-All automated tests use deterministic fake clients. They never call the live model.
-The optional sanitized semantic matrix is documented in the
-[feature-004 validation quickstart](../specs/004-resolve-context-identifiers/quickstart.md#optional-live-model-quality-matrix).
+Use [live-model evaluation](live-model-evaluation.md) for scenario selection, exit
+codes, artifact interpretation, and cleanup. An explicit `--output` may select any
+resolvable directory; only the default artifact location is ignored by repository
+rules.
 
 ## Local MCP surface
 
-The same host exposes the real streamable HTTP endpoint at
-`http://localhost:5136/mcp`. It advertises exactly:
+The normal host exposes Streamable HTTP at `/mcp`. The local launch profile binds
+`https://localhost:7251` and `http://localhost:5136`; the configured trusted Web origin
+determines the server-side MCP client address.
 
-- `get_production_environment`, using `{}` for a complete bounded environment
-  catalog or one nonblank `environmentId` for exact lookup; and
-- `get_incident`, requiring one precise stable `incidentId`.
+The endpoint advertises exactly:
 
-Environment results include their authoritative client relationship and assigned
-roles, so no separate role-listing tool exists. Discovery returns no partial catalog:
-more than 20 environments fails closed. The model-facing wire schemas are recorded
-in the [current MCP contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
+- `get_production_environment`, with `{}` for bounded discovery or one
+  `environmentId` for exact lookup; and
+- `get_incident`, with one exact `incidentId`.
 
-Publish:
-
-```powershell
-dotnet publish src/GovernedAccess.Web/GovernedAccess.Web.csproj -c Release
-```
+Environment results include authoritative client and assigned-role context. The exact
+wire schemas are in the [MCP contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
 
 ## React hot reload
 
-Keep the ASP.NET Core host running, then start Vite in another terminal:
+Start the configured ASP.NET Core host, then run Vite in another terminal:
 
 ```powershell
 npm run dev --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-Open the URL printed by Vite. It proxies `/api` to `https://localhost:7251`.
-If the ASP.NET address differs:
+Vite proxies `/api` to `https://localhost:7251`. Override it when the host uses another
+address:
 
 ```powershell
 $env:VITE_API_PROXY_TARGET = "https://localhost:7443"
 npm run dev --prefix src/GovernedAccess.Web/ClientApp
 ```
 
-## Configuration reference
+The browser never calls MCP or the provisioner directly.
 
-ASP.NET Core configuration uses `__` instead of `:` in environment variable names.
+## Configuration
 
-| Key | Default | Purpose |
+ASP.NET Core environment variables replace `:` with `__`.
+
+| Key | Checked-in value | Purpose |
 |---|---|---|
 | `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | Local SQLite database |
-| `RequestPreparationModel:ExecutionProfile` | `Deterministic` | Closed choice: `Deterministic` or `FoundryResponses` |
-| `RequestPreparationModel:FoundryResponses:Endpoint` | empty | Trusted project URL ending in `/openai/v1` |
-| `RequestPreparationModel:FoundryResponses:DeploymentName` | empty | Selected Foundry deployment |
+| `RequestPreparationModel:ExecutionProfile` | `Deterministic` | `Deterministic` or `FoundryResponses` |
+| `RequestPreparationModel:FoundryResponses:Endpoint` | empty | Foundry project URL ending in `/openai/v1` |
+| `RequestPreparationModel:FoundryResponses:DeploymentName` | empty | Foundry deployment name |
 | `TeamsAccessRequest:AllowedTenantId` | empty, fail closed | Accepted Teams tenant |
-| `TeamsAccessRequest:TrustedWebBaseUri` | empty, fail closed | HTTPS host origin used to derive the co-hosted loopback MCP endpoint |
-| `TeamsAccessRequest:RequestTimeout` | `00:01:40` | Total Teams request deadline |
-| `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Confirmation window |
+| `TeamsAccessRequest:TrustedWebBaseUri` | empty in production settings | HTTPS origin used for the co-hosted MCP client |
+| `TeamsAccessRequest:RequestTimeout` | `00:01:40` | Total Teams activity deadline |
+| `TeamsAccessRequest:PreparationLifetime` | `00:30:00` | Ready-card confirmation window |
 
-The Teams start script supplies the bot audience, secret, tenant, authority, and
-trusted tunnel URL from ignored local state. Do not persist its secret in application
-settings.
+The Teams start script supplies the bot client ID, audience, tenant, secret, and tunnel
+origin from ignored local state. The bot credential is stored outside the repository
+and must not be printed or copied into `appsettings*.json`.
 
 ## Local database
 
-Startup creates and seeds the SQLite database with fixed synthetic data. Workflow
-records remain between runs.
-
-This project uses `EnsureCreated`, not migrations. After an EF model change, stop the
-host and preserve the old disposable database:
+Startup uses `EnsureCreated` and validates the exact synthetic dataset. Workflow rows
+remain between runs. After an EF model change, stop the host and preserve the disposable
+database before restarting:
 
 ```powershell
 .\scripts\backup-local-database.ps1
 ```
 
-The next start creates the current schema. The script moves only the explicitly named
-database files into a timestamped ignored directory; it does not delete them.
+The script moves only the explicitly named database and sidecar files into an ignored
+timestamped directory. The next host start creates the current schema.
 
-## Project map
+## Troubleshooting
 
-| Area | Location |
+| Symptom | Action |
 |---|---|
-| Domain and workflow rules | `src/GovernedAccess.Core` |
-| MCP endpoint and adapters | `src/GovernedAccess.Mcp` |
-| Host, Teams, AI, EF Core | `src/GovernedAccess.Web` |
-| React application | `src/GovernedAccess.Web/ClientApp/src` |
-| Unit tests | `tests/GovernedAccess.UnitTests` |
-| Integration tests | `tests/GovernedAccess.IntegrationTests` |
-
-## Quick troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Browser stays anonymous | Use `https://localhost:7251`, not HTTP. |
+| Startup reports missing Teams options | Complete Teams setup and launch through `start-app.ps1`; blank checked-in bot values fail closed. |
+| Browser stays anonymous | Use HTTPS, not the HTTP MCP/tunnel binding. |
 | Browser rejects the certificate | Run `dotnet dev-certs https --trust`, then restart the host and browser. |
-| Vite cannot reach the API | Confirm the HTTPS host is running or set `VITE_API_PROXY_TARGET`. |
-| Startup reports a synthetic-data conflict | Stop the host and back up the local database before restarting. |
-| Frontend rejects the Node version | Use Node 24; the package requires major version 24. |
-| Live model is unavailable | Check the endpoint, deployment, `az account show`, and Azure role assignment. |
-
-## Related documentation
-
-- [Teams quickstart](teams-quickstart.md)
-- [Teams advanced reference](teams-advanced-reference.md)
-- [Testing strategy](testing-strategy.md)
-- [Architecture](architecture.md)
-- [Security model](security-model.md)
+| Vite cannot reach the API | Confirm the configured HTTPS host is running or set `VITE_API_PROXY_TARGET`. |
+| Synthetic-data conflict after a model change | Stop the host, run `backup-local-database.ps1`, and restart. |
+| Frontend rejects Node | Use Node 24. |
+| Live model is unavailable | Check the endpoint, deployment, `az account show`, and Foundry role assignment. |

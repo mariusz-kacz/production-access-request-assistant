@@ -21,7 +21,7 @@ The governed production access application needs to provide:
 - idempotent synthetic provisioning.
 
 These capabilities could be split into separately deployed web, MCP, workflow, and
-provisioning services. The current product, however, is a portfolio-grade local
+provisioning services. The current product, however, is a focused local
 reference implementation maintained by one developer. It has two clients, two
 environments, six fixed demonstration principals, synthetic data, no real production
 access, and no independent scaling or ownership requirements.

@@ -1,125 +1,71 @@
-# As-Built Architecture
+# Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-05
+- **Last reviewed**: 2026-08-10
 - **Scope**: Governed Production Access Request Assistant MVP
 
-The history-first Teams preparation and Teams-only creation boundaries described here
-are implemented and covered by the current feature test suite.
+## Architectural shape
 
-## Purpose
+The repository contains one executable ASP.NET Core host. It serves the React
+application, receives Teams activities, runs request interpretation, exposes the
+read-only MCP endpoint, persists workflow state in SQLite, and invokes the synthetic
+provisioner.
 
-This document describes the architecture implemented in the repository. It explains
-the runtime shape, source dependencies, trust boundaries, principal workflows,
-persistence and consistency model, and important operational characteristics.
-
-The governing design rule is:
+The governing boundary is:
 
 > AI interprets and gathers context. Humans approve. Deterministic services authorize
 > and execute.
 
-This document is an as-built view. Product intent and requirements remain in the
-[product baseline](governed-production-access-product-baseline.md), while the reasons
-for significant design choices are recorded in the
-[architecture decision records](adr/).
-
-## Architectural drivers
-
-The implementation is shaped by the following constraints:
-
-- one executable ASP.NET Core host;
-- a thin React application served from that host;
-- local SQLite persistence and a fixed synthetic dataset;
-- synthetic cookie authentication with exactly six demo principals;
-- one server-selected request-preparation profile: the checked-in deterministic
-  client or an explicitly configured Foundry Responses client behind the same
-  `IChatClient` boundary;
-- a real, read-only MCP endpoint with exactly two tools;
-- no model-visible approval, workflow, or provisioning capability;
-- immutable submitted requests and request-bound approvals;
-- deterministic authorization and validation for every state change;
-- idempotent synthetic provisioning;
-- explicit typed outcomes, bounded timeouts, and cancellation propagation; and
-- no distributed infrastructure introduced solely for the portfolio scenario.
-
-## System context
-
-The system has fixed synthetic principals for the requester, the Client Alpha, Beta,
-Gamma, and Theta business approvers, and the DevOps approver.
-The browser never supplies authoritative identity or role claims. It selects a known
-demo principal, and the server issues an HttpOnly authentication cookie containing
-server-defined claims.
+The design stays within one process because no current capability has independent
+ownership, deployment, scaling, or availability requirements. Logical and protocol
+boundaries remain explicit inside that host.
 
 ```mermaid
 flowchart LR
     Requester[Requester]
     Business[Business approver]
     DevOps[DevOps approver]
-    Teams[Microsoft Teams personal chat]
-    Browser[React browser application]
+    Teams[Microsoft Teams]
+    BotService[Azure Bot Service]
+    Browser[React browser]
 
-    subgraph Host[Governed Access Host]
-        Agent[Authenticated /api/messages adapter]
-        API[Same-origin UI API]
-        AI[MAF interpretation adapter]
-        MCP[Read-only /mcp endpoint]
-        App[Application and domain rules]
-        Provider[Synthetic access provider]
+    subgraph Host[GovernedAccess.Web]
+        Activity[/api/messages]
+        API[/api]
+        AI[MAF interpretation]
+        MCP[/mcp]
+        App[Core application rules]
         DB[(SQLite)]
+        Provider[Synthetic provisioner]
     end
 
-    Requester -->|prepare and confirm| Teams
-    Requester -->|list and inspect| Browser
+    Requester <--> Teams
+    Teams <--> BotService
+    BotService <-->|authenticated Activity Protocol| Activity
+    Requester --> Browser
     Business --> Browser
     DevOps --> Browser
-    Teams --> Agent
     Browser -->|cookie-authenticated HTTPS| API
-    Agent --> AI
-    Agent --> App
+    Activity --> AI
+    Activity --> App
     API --> App
-    AI -->|loopback Streamable HTTP| MCP
+    AI -->|Streamable HTTP| MCP
     MCP --> DB
     App --> DB
     App --> Provider
 ```
 
-The synthetic access provider creates only local demonstration grants. The system has
-no connection to a real identity provider, incident system, client environment, or
-access-control provider.
+`GovernedAccess.Web` is the only deployment unit. The normal host maps Teams, browser,
+MCP, static assets, and SPA routes. Unknown `/api/*` and `/mcp/*` paths return `404`
+instead of `index.html`.
 
-## Deployment and runtime view
-
-`GovernedAccess.Web` is the only executable and the only deployment unit. One process
-hosts:
-
-- ASP.NET Core MVC controllers;
-- cookie authentication and authorization;
-- antiforgery protection;
-- correlation middleware and application instrumentation;
-- the compiled React static assets and SPA fallback;
-- Teams request interpretation, one process-wide selected `IChatClient`, and MAF's
-  native process-local session store;
-- a real MCP client;
-- the stateless Streamable HTTP `/mcp` server;
-- request validation and workflow application services;
-- EF Core with one SQLite database; and
-- the synthetic access provisioner.
-
-The Teams interpretation adapter reaches `/mcp` over HTTP, even though client and
-server are in the same process. This preserves the real MCP initialization, tool
-discovery, serialization, invocation, timeout, and failure boundary without creating
-another deployable service.
-
-The SPA fallback handles browser routes only. Unknown `/api/*` and `/mcp/*` paths
-return `404` and are never rewritten to `index.html`.
-
-## Source dependency view
+## Source boundaries
 
 ```mermaid
 flowchart TB
-    Web[GovernedAccess.Web<br/>sole executable]
-    Mcp[GovernedAccess.Mcp<br/>MCP infrastructure adapter]
-    Core[GovernedAccess.Core<br/>domain, application, and ports]
+    Web[GovernedAccess.Web]
+    Mcp[GovernedAccess.Mcp]
+    Core[GovernedAccess.Core]
 
     Web --> Core
     Web --> Mcp
@@ -128,141 +74,51 @@ flowchart TB
 
 ### `GovernedAccess.Core`
 
-Core contains:
+Core owns domain entities, deterministic policies, application services, typed
+outcomes, and focused ports for request context, intake persistence, workflow
+persistence, time, interpretation, and provisioning.
 
-- domain entities and workflow evidence;
-- business and DevOps decision policies;
-- workflow evidence validation;
-- request validation, intake and confirmation, query, human-decision workflow, and
-  protected provisioning
-  services;
-- explicit application and provider outcomes; and
-- ports for request context, workflow persistence, intake persistence, time,
-  request-preparation interpretation, and provisioning.
-
-Core does not reference ASP.NET Core MVC, EF Core, React, `Microsoft.Extensions.AI`,
-or the MCP SDK. AI-provider and protocol-specific types are translated before they
-cross into Core.
+It has no dependency on ASP.NET Core MVC, EF Core, Teams, Microsoft Agent Framework,
+React, `Microsoft.Extensions.AI`, or the MCP SDK. Provider and protocol contracts are
+translated before entering Core.
 
 ### `GovernedAccess.Mcp`
 
-MCP contains:
-
-- stateless Streamable HTTP server registration;
-- explicit registration of the two allowed tools;
-- typed tool input and result records; and
-- translation between MCP-facing contracts and `IRequestContextReader`.
-
-It references Core for the request-context port and domain records. It has no workflow
-store, decision service, or provisioning dependency.
+MCP registers the stateless Streamable HTTP server and exactly two typed read-only
+tools. It translates tool contracts to `IRequestContextReader`. The project has no
+workflow store, decision service, or provisioning dependency.
 
 ### `GovernedAccess.Web`
 
-Web is the composition and infrastructure layer. It contains:
+Web is the composition and infrastructure layer. It contains controllers, browser and
+Teams authentication, antiforgery, the Teams adapter, MAF interpreter and session
+store, model-client selection, EF Core adapters, SQLite seeding, the synthetic
+provisioner, correlation middleware, and React source and assets.
 
-- API controllers and Problem Details translation;
-- synthetic authentication and antiforgery;
-- Teams activity handling, `MafRequestPreparationInterpreter`, MAF's singleton
-  `InMemoryAgentSessionStore`, the process-lifetime
-  `MafConversationTurnCoordinator`, and the closed deterministic/Foundry Responses
-  chat-client registration;
-- the EF Core database context, request-context reader, workflow store, and seeder;
-- the synthetic provisioner;
-- correlation and activity instrumentation; and
-- the React source and generated static assets.
+Controllers translate HTTP contracts and derive actors from authenticated context;
+application services make authorization and transition decisions.
 
-Controllers remain thin: they derive the actor from `ClaimsPrincipal`, translate
-request and response shapes, call application services, and map typed failures.
+## Runtime responsibilities
 
-## Runtime components
+| Component | Owns |
+|---|---|
+| React UI | Participant-visible request list/detail, human-decision forms, retry action, and audit presentation. |
+| Teams adapter | Authenticated personal-activity routing, `/new`, preparation responses, card confirmation, and presentation updates. |
+| MAF interpreter | MCP tool discovery, one bounded agent turn, strict proposal parsing, and provider-failure translation. |
+| MAF session store and coordinator | Process-local conversation history and one serialized load/run/save gate per intake. |
+| `RequestDraftService` | Intake lifecycle, interpretation coordination, candidate assessment, clarification, revision, and reset. |
+| `RequestSubmissionService` | Owned ready-draft confirmation, revalidation, immutable request creation, and audit staging. |
+| `AccessRequestWorkflowService` | Business decision, DevOps decision, and failed-operation retry. |
+| `ProtectedProvisioningService` | Persisted-evidence reload, provider input construction, provider call, and operation finalization. |
+| Query and visibility services | Participant filtering and server-computed presentation actions. |
+| EF Core adapters | Translation between Core ports and SQLite. |
+| Synthetic provisioner | Request-keyed local grant get-or-create. |
 
-| Component | Responsibility | Does not decide |
-|---|---|---|
-| React UI | Display the request register/detail, submit structured approval or retry actions, and show audit evidence. | Request creation, identity, authorization, approver assignment, or valid workflow transitions. |
-| MVC controllers | Enforce endpoint authentication/antiforgery attributes, extract server identity, translate HTTP contracts, and invoke application services. | Domain policy or provisioning eligibility. |
-| `TeamsAccessRequestAgent` | Route authenticated personal Teams activities to preparation or deterministic confirmation. | Actor authority, readiness, approval, or provisioning. |
-| `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the agent turn under request cancellation, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
-| `AIHostAgent` with `InMemoryAgentSessionStore` | Load and save MAF-owned conversation sessions by server-generated intake ID for the process lifetime. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
-| `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
-| `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
-| `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
-| `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
-| `ProtectedProvisioningService` | Reload request-bound workflow evidence, derive provider input from `AccessRequest.Details`, call the provider, and persist the operation outcome. | Business or DevOps approval. |
-| `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
-| EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
-| Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
+Core remains the authority for readiness, scope, approver responsibility, legal
+transitions, provisioning eligibility, and fixed grant lifetime. UI state, model
+output, MCP annotations, and provider behavior do not replace those decisions.
 
-## Authority, validation, and invariant ownership
-
-Model output first becomes a mutable `RequestCandidate`. It is not authority, even
-when it contains every field. `RequestValidator` reloads the fixed reference context,
-checks identifier relationships, role assignment, justification, and optional
-incident, and is the only path that constructs `ValidatedRequestDetails` from that
-input. A ready intake persists one immutable validated snapshot so the requester can
-confirm exactly what was prepared. The aggregate exposes that flattened persistence
-state only as `PreparedDetails`, so downstream code continues with the canonical
-value instead of rebuilding another validation DTO.
-
-Confirmation reloads the ready intake, asks the authenticated channel actor to verify
-the complete persisted ownership binding, checks expiry, and calls `RevalidateAsync`
-with the canonical snapshot. The resulting `AccessRequest.Details` is the sole
-durable authority for client, environment, role, justification, and incident after
-submission. Approval decisions, the provisioning operation, and the access grant are
-request-bound evidence; they do not own parallel copies of those details. HTTP and UI
-contracts that expose role or environment values project them from the request.
-
-Validation is intentionally placed at distinct boundaries:
-
-- the model adapter schema-validates output and deterministic candidate assessment
-  rejects or clears unknown and inconsistent proposed values;
-- confirmation revalidates the prepared snapshot and authenticated requester before
-  atomically creating the request;
-- approval commands reload authenticated principals, current approver assignment,
-  current reference context, workflow state, and prior decisions; and
-- protected provisioning uses request-keyed persistence queries to reload request,
-  approval, operation, and grant evidence, validates approval outcomes and mutable
-  workflow state, then builds provider input exclusively from
-  `AccessRequest.Details`.
-
-Read models trust a submitted `AccessRequest.Details`; they do not rerun reference
-validation against the fixed startup-validated dataset. The compatibility
-`validation` response therefore reports the invariant established at confirmation,
-not a second live validation pass.
-
-Invariant ownership is similarly explicit:
-
-- domain construction and transition policies own non-empty values, supported roles,
-  immutable request details, legal decision order, operation lifecycle, and the fixed
-  eight-hour grant lifetime;
-- application services own authenticated authorization, current assignments,
-  fail-closed validation, and transaction sequencing;
-- SQLite owns foreign keys, one decision per request/stage, one request-keyed
-  operation, at most one grant per request, and optimistic concurrency; and
-- the provider boundary owns request-ID get-or-create idempotency, while retry and
-  local uniqueness let partial outcomes converge.
-
-Application code does not recompare request IDs, stages, or scope after those
-relationships have been selected by request-keyed queries and enforced by persistence.
-Audit factories project already-authorized transitions; they do not re-authorize or
-revalidate the objects supplied by the workflow service.
-
-### Request-preparation model profile
-
-`RequestPreparationModel:ExecutionProfile` is resolved once when the host starts and
-accepts only `Deterministic` or `FoundryResponses`. Checked-in settings select
-`Deterministic`. The live profile requires the configured
-`FoundryResponses:Endpoint` and `FoundryResponses:DeploymentName`, authenticates with
-`DefaultAzureCredential`, and uses the existing 100-second Teams request timeout as
-the single overall model/MCP deadline. Invalid configuration, missing authorization,
-provider failure, and timeout fail closed; the host never substitutes the
-deterministic client after `FoundryResponses` was selected.
-
-Both profiles enter the same strict proposal schema, exact two-tool MCP allowlist,
-authoritative candidate assessment, immutable confirmation, human approvals, and
-protected idempotent provisioning path. Profile choice and model output are not
-authorization or persisted workflow evidence.
-
-## Teams request preparation and confirmation
+## Request preparation
 
 Teams confirmation is the only request-creation path. Preparation is model-assisted;
 confirmation is a direct deterministic application action.
@@ -271,149 +127,99 @@ confirmation is a direct deterministic application action.
 sequenceDiagram
     actor User
     participant Teams
-    participant Agent as TeamsAccessRequestAgent
-    participant Intake as RequestIntakeService
-    participant Draft as MafRequestPreparationInterpreter
-    participant Memory as Native MAF session store
-    participant Gate as Per-intake turn coordinator
-    participant Chat as IChatClient
-    participant McpClient as MCP client
-    participant McpServer as /mcp server
-    participant Context as IRequestContextReader
+    participant Agent as Teams adapter
+    participant Draft as RequestDraftService
+    participant Model as MAF / IChatClient
+    participant MCP as /mcp
     participant DB as SQLite
+    participant Submit as RequestSubmissionService
 
-    User->>Teams: Describe request
+    User->>Teams: Describe or revise request
     Teams->>Agent: Authenticated personal activity
-    Agent->>Intake: PrepareAsync(actor, latest message)
-    Intake->>Draft: Intake ID + complete candidate + latest message
-    Draft->>McpClient: Initialize and list tools
-    McpClient->>McpServer: Streamable HTTP
-    McpServer-->>McpClient: Exactly two read-only tools
-    Draft->>Gate: Execute turn under intake ID
-    Gate->>Memory: Get or create native AgentSession
-    Memory-->>Gate: Session with available prior messages
-    Draft->>Chat: Current candidate, latest text, strict schema, allowed tools
-    opt Model requests stored context
-        Chat->>McpClient: Invoke allowed tool
-        McpClient->>McpServer: Typed tool call
-        McpServer->>Context: Read authoritative context
-        Context->>DB: Query
-        DB-->>Context: Stored record
-        Context-->>McpServer: Typed outcome
-        McpServer-->>Chat: Tool result
+    Agent->>Draft: Prepare(actor, message)
+    Draft->>Model: Intake ID, accepted candidate, latest message
+    opt Read-only context needed
+        Model->>MCP: Allowed typed tool
+        MCP->>DB: Authoritative lookup
+        DB-->>MCP: Stored context
+        MCP-->>Model: Typed result
     end
-    Chat-->>Draft: Closed JSON proposal
-    Draft->>Draft: Strict schema parsing and boundary translation
-    Draft-->>Gate: Successfully validated outcome
-    Gate->>Memory: Save native session
-    Draft-->>Intake: Untrusted candidate + optional message/environment option IDs
-    Intake->>Context: Reload options and validate every identifier and relationship
-    Context->>DB: Query authoritative records
-    alt Identifier or candidate value is rejected
-        Intake->>Intake: Clear rejected fields and preserve validated fields
-        Intake->>DB: Persist sanitized candidate and typed validation errors
-    else Candidate is accepted
-        Intake->>DB: Persist clarification or immutable ready scope
-    end
-    Agent-->>Teams: Clarification, safe failure, or immutable card
+    Model-->>Draft: Closed proposal
+    Draft->>Draft: Validate identifiers and relationships
+    Draft->>DB: Persist sanitized intake outcome
+    Draft-->>Agent: Discussion, clarification, rejection, ready card, or safe failure
     User->>Teams: Confirm and submit
-    Teams->>Agent: Authenticated Action.Execute
-    Agent->>Intake: ConfirmAsync(actor, intake ID)
-    Intake->>DB: Reload ownership/status/scope and revalidate
-    Intake->>DB: One save: submitted intake + request + audit
-    Agent-->>Teams: Stable request ID and trusted Web link
+    Teams->>Agent: Authenticated card action
+    Agent->>Submit: Confirm(preparation ID, actor)
+    Submit->>DB: Reload ownership, status, expiry, and scope
+    Submit->>DB: Commit request and audit evidence
+    Agent-->>Teams: Stable request ID and Web link
 ```
 
-The collecting candidate is untrusted and creates no request or approval. Core
-validates every supplied client, environment, role, and incident value before it is
-persisted. It also reloads every structured environment clarification option before
-the Teams adapter may show the model-authored message beside application-rendered
-authoritative choices. A valid environment or active incident supplies canonical
-client ownership; display names and model prose never become stable identifiers.
-When validation rejects a value or option set, Core suppresses the associated unsafe
-proposal, preserves unrelated validated fields, persists the sanitized candidate,
-and returns typed deterministic correction guidance without another model call. Only
-an owned, unexpired ready intake can be confirmed. The model and MCP never receive a
-submit capability.
+The collecting candidate creates no request or approval. Core reloads every proposed
+identifier and every structured environment option before accepting it. Only an owned,
+unexpired ready intake can be confirmed; the model and MCP receive no submit
+capability.
 
-### Explicit preparation reset
+An existing ready card remains active for discussion, an identical candidate, or a
+valid unresolved revision clarification. A different ready candidate replaces it. A
+rejected or improperly incomplete revision supersedes it and returns the replacement
+intake to collecting. Durable intake status rejects stale cards regardless of whether
+Teams presentation metadata survived restart or activity update.
 
-The Teams adapter intercepts only an exact trimmed, case-insensitive `/new` message
-before interpretation. Core resolves the active intake from the authenticated actor
-and exact conversation, marks a collecting or unexpired ready intake `Superseded`
-(or an expired ready intake `Expired`), and clears candidate state through the
-existing terminal transition. The command calls neither the model nor MCP, creates no
-replacement intake or request, and cannot change a submitted request. The next normal
-message receives a new server-generated intake ID and therefore a separate MAF
-session key.
+An exact trimmed, case-insensitive `/new` command bypasses the model and MCP,
+terminally clears the active unsubmitted intake, and creates no replacement until the
+next normal message.
 
-MAF history is history-first but deliberately ephemeral. The singleton native store
-keys sessions by server-generated intake ID, while the singleton coordinator retains
-one exact gate per intake and serializes load, run, and save. Both live for the host
-process lifetime. The application applies no inactivity timeout, turn-count limit,
-terminal deletion, or conversation compaction in the current low-volume baseline.
-Only a completed schema-valid turn is saved; timeout, cancellation, dependency
-failure, and malformed output leave the last successfully stored session unchanged.
+The complete turn algorithm, tool policy, and clarification rules are maintained in
+[request-intake orchestration](request-intake-orchestration.md).
 
-### Known limitation: process-lifetime gate retention
+## Conversation memory
 
-`MafConversationTurnCoordinator` stores one `SemaphoreSlim` in a
-`ConcurrentDictionary<Guid, SemaphoreSlim>` for every intake ID it encounters. Gates
-are not removed when an intake becomes ready, submitted, superseded, expired, or
-invalidated. Memory usage therefore grows monotonically with the number of distinct
-intakes handled during one host process lifetime and is released only when the process
-stops.
+The singleton native MAF store keys sessions by server-generated intake ID. The
+singleton coordinator retains one `SemaphoreSlim` per intake and serializes session
+load, agent execution, and successful save.
 
-This is accepted for the current local, low-volume baseline. A long-running or
-higher-volume deployment must add safe gate retirement or a bounded keyed-lock
-implementation. Removal must account for current holders and waiters; deleting a gate
-solely because an intake reached a terminal state could create two different gates for
-the same intake and break same-intake serialization.
+Sessions and gates remain for the host process lifetime. SQLite stores the sanitized
+candidate and intake lifecycle, not transcripts or serialized MAF state. Restart loses
+conversation history without losing accepted candidate data; ambiguous relative text
+is clarified again. Confirmation and all downstream actions ignore this memory.
 
-SQLite persists the accepted sanitized nullable candidate and intake lifecycle, not
-clarification options, prompts, transcripts, or serialized MAF sessions. That compact
-candidate is the durable canonical state supplied to every model turn. Process restart
-clears MAF history and gates without changing the intake or losing accepted candidate
-data. The next run receives the durable candidate without prior conversation messages;
-an ambiguous relative reply is re-clarified rather than guessed unless the supplied
-conversation itself contains its preceding question and ordering. Confirmation and
-all downstream workflow actions never read this memory.
+The unbounded process-lifetime gate dictionary is accepted for the current local,
+low-volume baseline. Higher volume requires safe keyed-lock retirement that accounts
+for active holders and waiters.
 
-Durable MAF sessions, retention/deletion policy, multi-host coordination, and native
-MAF compaction are deferred until a concrete production requirement defines privacy,
-capacity, and lifecycle rules. They are not hidden responsibilities of the SQLite
-intake store.
+## Model and MCP profiles
 
-The adapter defaults to:
+`RequestPreparationModel:ExecutionProfile` accepts only `Deterministic` or
+`FoundryResponses`; checked-in settings select `Deterministic`. The live profile
+requires a validated Foundry endpoint and deployment, uses `DefaultAzureCredential`,
+and fails closed on configuration, credential, provider, or timeout failure. It never
+falls back to the deterministic client after live selection.
 
-- one 100-second ASP.NET Core request-safety deadline on the Teams activity
-  endpoint, propagated through MCP and model work;
-- at most six model/tool iterations;
-- no concurrent tool invocation; and
-- termination on unknown tool calls.
+Both profiles use the same closed response schema, two-tool MCP allowlist,
+authoritative assessment, confirmation, approval, and provisioning boundaries. The
+Teams activity has one configured deadline of at most 100 seconds covering model and
+MCP work. Function invocation allows at most six sequential iterations, disallows
+concurrent tool invocation, and terminates on unknown calls.
 
-The MCP client rejects a catalog that does not contain exactly:
+The client requires the catalog to contain exactly `get_production_environment` and
+`get_incident`, both marked read-only. Environment discovery is bounded to 20 results.
+The current interpreter does not reinterpret an identifier-like exact `NotFound` as a
+discovery query.
 
-- `get_production_environment`;
-- `get_incident`.
-
-`get_production_environment` accepts `{}` for a complete bounded discovery result or
-one nonblank `environmentId` for exact lookup. Both success modes return the same
-ordered `environments` shape with authoritative client context and each environment's
-assigned ordered roles. Potential identifiers use exact lookup first; only a typed
-`NotFound` unlocks turn-local discovery fallback, and any proposed alternative still
-requires deterministic reload and developer confirmation or selection. Catalog
-overflow fails closed without a partial result. `get_incident` remains an exact-only
-lookup for a precise requester-supplied stable identifier.
-
-The complete wire contract is
-[specs/004-resolve-context-identifiers/contracts/mcp-tools.json](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
+The same Web executable also supports `evaluate-live-model`. That mode starts an
+isolated loopback host exposing only `/mcp`, uses a unique temporary SQLite database,
+runs the checked-in 20-scenario dataset through `RequestDraftService`, records only
+sanitized final outcomes, and removes temporary database files on disposal. It cannot
+confirm, approve, provision, retry, or revoke. Operator instructions live in the
+[live-model evaluation guide](live-model-evaluation.md).
 
 ## Governed workflow
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AwaitingBusinessApproval: validated submission
+    [*] --> AwaitingBusinessApproval: Teams confirmation
     AwaitingBusinessApproval --> AwaitingDevOpsApproval: business approves
     AwaitingBusinessApproval --> Rejected: business rejects
     AwaitingDevOpsApproval --> Rejected: DevOps rejects
@@ -423,312 +229,111 @@ stateDiagram-v2
     ProvisioningFailed --> ProvisioningFailed: retry fails
 ```
 
-### Submission
+Submission commits the terminal intake, immutable request, and audit event together.
+There is no request update endpoint.
 
-1. The Teams boundary derives actor, tenant, and conversation from authenticated
-   activity context.
-2. `RequestIntakeService` reloads the ready intake, verifies the typed actor ownership
-   binding plus status/expiry, and revalidates its immutable `PreparedDetails`.
-3. The same confirmation use case constructs the request with the server-reserved ID
-   and canonical `ValidatedRequestDetails`, then stages request-created audit evidence.
-4. The intake transition, immutable `AwaitingBusinessApproval` request, and audit
-   event commit in one shared `SaveChangesAsync`.
+Business decisions reload the current environment/client ownership and configured
+approver. DevOps decisions require the request-bound business approval and current
+canonical request context. DevOps approval commits the decision and pending operation
+before calling `ProtectedProvisioningService` with only the request ID.
 
-There is no update endpoint for a submitted request. A correction produces a new
-Teams preparation, request ID, and new approvals.
+Protected provisioning reloads the request, approvals, operation, and grant; validates
+their states; constructs provider input from immutable request details; and calls the
+synthetic provider. Every successful grant expires exactly eight hours after
+activation. Only authenticated DevOps may retry, and only from matching failed request
+and operation states.
 
-From `AwaitingBusinessApproval` onward, the existing browser-driven human approval,
-protected provisioning, retry, and audit flow is unchanged. Teams creates the same
-immutable request aggregate consumed by that flow; it does not bypass or duplicate it.
+## Persistence and consistency
 
-### Business decision
+One EF Core `GovernedAccessDbContext` uses SQLite and stores:
 
-1. `AccessRequestWorkflowService` loads the authenticated principal and request.
-2. It reloads the current environment/client relationship.
-3. It resolves the owning client's configured business approver.
-4. `BusinessDecisionPolicy` validates state and duplicate-stage prevention for the
-   immutable request ID.
-5. The decision, workflow transition, and audit evidence are saved together.
+- fixed clients, environments, assigned roles, incidents, and principals;
+- intake binding, sanitized candidate, lifecycle, immutable ready scope, reserved
+  request ID, and confirmation deadline; and
+- access requests, approval decisions, provisioning operations, grants, and audit
+  events.
 
-The requester cannot nominate or replace the business approver.
+Startup creates missing fixed reference records and fails when existing or unexpected
+records conflict with the exact synthetic dataset. There is no runtime reference-data
+mutation surface.
 
-### DevOps decision and provisioning
+Database guarantees include foreign keys, one active intake per actor/conversation,
+unique reserved request IDs, one decision per request/stage, one request-keyed
+operation, at most one grant per request, restricted deletes, and optimistic
+concurrency on mutable aggregates.
 
-1. The workflow service loads the authenticated DevOps principal, request, and
-   business approval.
-2. It validates current request context and applies `DevOpsDecisionPolicy`.
-3. Rejection records the decision and moves the request to `Rejected`.
-4. Approval records the request-bound DevOps decision and creates the request-keyed
-   pending provisioning operation; neither record copies request scope.
-5. The decision, operation, request version, and audit evidence are committed before
-   provider invocation.
-6. The workflow service passes only the request ID to
-   `ProtectedProvisioningService`.
-7. The protected service reloads the operation, immutable request, business approval,
-   and DevOps approval.
-8. It validates workflow/operation state and approval outcomes. Request-keyed
-   lookups and persistence constraints own the record relationships.
-9. It persists the provisioning-attempt audit event.
-10. It calls the synthetic provider with server-constructed scope.
-11. Provider success finalizes the request, operation, grant, and success audit event
-    in one local save.
-
-Every successful grant expires exactly eight hours after activation. Duration is not
-accepted from the requester, either approver, the browser, or the model.
-
-### Retry
-
-Only the authenticated DevOps approver can retry, and only when both the request and
-operation are in failed states. Retry:
-
-- accepts no replacement scope;
-- uses the same protected provisioning service;
-- reloads and validates persisted evidence again;
-- increments the existing operation attempt count;
-- reuses the request ID as the provider idempotency identity; and
-- returns an already completed matching grant when concurrent work has won the race.
-
-## Persistence model
-
-One EF Core `GovernedAccessDbContext` uses SQLite. It stores three categories of data.
-
-### Fixed reference context
-
-- clients;
-- production environments;
-- environment roles;
-- incidents; and
-- authenticated principals.
-
-`SyntheticDataSeeder` creates missing expected records and validates existing records
-against the exact dataset. Startup fails when a stored reference record conflicts with
-the expected synthetic definition or when an unexpected reference record exists.
-There is no runtime command surface for mutating reference context.
-
-### Request intake state
-
-- one `RequestIntakeSession` row per server-generated intake;
-- authenticated channel, tenant, actor, requester, and personal-conversation binding;
-- the complete nullable candidate while collecting;
-- immutable ready scope, reserved request ID, and 30-minute confirmation expiry; and
-- terminal status and correlation metadata for replay-safe old-card handling.
-
-The database stores no raw activity, prompt, transcript, clarification option list,
-model response, or serialized MAF session. Ready scope is immutable, active binding
-and reserved request IDs are unique, and optimistic concurrency protects terminal
-transitions.
-
-### Workflow evidence
-
-- access requests;
-- business and DevOps approval decisions;
-- provisioning operations;
-- access grants; and
-- audit events.
-
-Important database guarantees include:
-
-- `AccessRequest.PersistenceVersion` is an optimistic concurrency token;
-- one decision per request and approval stage;
-- one provisioning operation keyed by request ID;
-- at most one access grant per request ID;
-- restricted deletes across authoritative relationships; and
-- ordered insert-only audit records from the application workflow.
-
-The Teams intake entity and save boundary are defined in the
-[Teams intake data model](../specs/002-teams-access-intake/data-model.md). Existing
-workflow entities remain defined in the
-[governed workflow data model](../specs/001-governed-production-access/data-model.md).
-
-## Consistency and idempotency
-
-SQLite commits tracked workflow changes and staged audit evidence atomically within
-each `SaveChangesAsync`. That local guarantee does not extend across a general access
-provider call.
-
-The implementation deliberately uses this sequence:
+One `SaveChangesAsync` atomically commits tracked local state and staged audit evidence.
+That guarantee does not cross the provider call:
 
 ```text
 persist DevOps approval and pending operation
         |
-reload and validate persisted workflow evidence
+reload and validate persisted evidence
         |
-persist provisioning-attempt evidence
+persist attempt evidence
         |
-call provider with request ID as idempotency identity
+call provider with request ID
         |
-persist local success or typed failure outcome
+persist success or typed failure
 ```
 
-Provider success followed by cancellation, process failure, or local persistence
-failure is a possible partial outcome. The provider's get-or-create behavior, the
-stable request ID, the unique grant constraint, and the scoped retry path allow the
-workflow to converge without claiming cross-system atomicity.
+Provider success followed by cancellation or local persistence failure is possible.
+Request-keyed provider idempotency, the unique grant constraint, and scoped retry allow
+convergence without claiming distributed atomicity.
 
-The relevant decisions are:
+## Interfaces and authentication
 
-- [ADR 0002: Validate Persisted Workflow Evidence at Provisioning](adr/0002-validate-persisted-workflow-evidence-at-provisioning.md)
-- [ADR 0003: Do Not Model Provider and Workflow Persistence as Atomic](adr/0003-do-not-model-provider-and-workflow-persistence-as-atomic.md)
-- [ADR 0004: Use Request ID as the Provisioning Idempotency Identity](adr/0004-use-request-id-as-provisioning-idempotency-identity.md)
+The same-origin browser API provides antiforgery/session operations, participant-
+filtered request list/detail queries, business and DevOps decision subresources, and
+DevOps-only retry. It exposes no draft or request-creation POST. Unsafe browser actions
+require antiforgery validation.
 
-## Interface boundaries
+Demo browser authentication maps one of six fixed keys to server-owned claims and
+issues an HttpOnly, Secure, SameSite Strict cookie. Teams uses a separate Azure Bot
+Service bearer policy; the actor resolver additionally requires the configured tenant,
+`msteams` channel, personal non-group conversation, and stable actor/conversation
+identifiers.
 
-### Browser API
+The stateless `/mcp` route is unauthenticated in the local MVP. Its normal consumer is
+the server-side interpreter, and its fixed synthetic read-only scope makes this
+acceptable only under the current local assumptions. Real or sensitive data requires
+endpoint authentication, authorization, and network controls.
 
-The `/api` surface is a same-origin adapter for the co-hosted React request register,
-not a general public API. It provides:
+## Failure and observability
 
-- antiforgery and demo-session operations;
-- request list and detail queries;
-- business and DevOps decision subresources; and
-- DevOps-only retry from `ProvisioningFailed`.
+Expected invalid input, validation, authentication, authorization, not-found,
+transition, concurrency, timeout, cancellation, dependency, and provider failures use
+typed outcomes. Browser failures become safe Problem Details; preparation failures
+become typed Teams responses.
 
-It does not map `POST /api/request-drafts/prepare` or a request-creating
-`POST /api/requests`. Existing request rows and downstream workflow contracts are
-unchanged.
+`CorrelationMiddleware` assigns `X-Correlation-ID` and carries it through response
+metadata, logging scopes, persisted workflow evidence, and safe errors. Model, MCP,
+workflow, and provisioning operations record duration and outcome without requiring
+secrets, raw prompts, transcripts, card bodies, or complete MCP payloads.
 
-Unsafe endpoints require antiforgery validation. Request bodies do not accept
-authoritative actor, role claims, approver identity, approval assertions, duration,
-or replacement provisioning scope. The detailed shapes are in the
-[UI API contract](../specs/001-governed-production-access/contracts/ui-api.md).
+The synthetic provider has a ten-second deadline. OpenTelemetry export is not
+configured; the host exposes an `ActivitySource` as an optional instrumentation seam.
 
-### MCP
+## Frontend and tests
 
-The stateless `/mcp` endpoint exposes stored, read-only request context. MCP types are
-translated to the Core request-context port. It exposes no resources, prompts,
-generic queries, arbitrary database access, workflow commands, approvals,
-provisioning, or revocation.
+Vite builds React assets into `GovernedAccess.Web/wwwroot`; ASP.NET Core serves them
+and owns the SPA fallback. React Router owns the request list and detail routes. The
+browser never calls MCP or the provisioner directly.
 
-Its exact allowlist contains `get_production_environment`, which provides bounded
-discovery and exact lookup with authoritative client and assigned-role context, and
-exact-only `get_incident`. It exposes no separate role-listing capability. The model
-interprets readable environment wording against the bounded catalog, while Core
-independently validates every proposed environment, derived client, role assignment,
-and optional exact incident identifier.
+Core rules use unit tests. SQLite, MAF, MCP, authentication, HTTP, concurrency, and
+provider coordination use component or full-host tests. Frontend tests cover session
+and workflow wiring. No automated suite requires a live model or external production
+system. Test ownership and the required command sequence are in the
+[testing strategy](testing-strategy.md).
 
-Tool visibility and annotations are not authorization. Safety comes from the narrow
-capability set, typed schemas, stored-data lookup, and the complete absence of
-state-changing dependencies in the MCP project.
+## Deliberate limits
 
-### Internal ports
+The architecture excludes real production access and identity federation, mutable
+enterprise reference integrations, automated revocation, a public provisioning API,
+background reconciliation, message brokers, distributed transactions, generic
+workflow engines, large retrieval systems, multiple executable services, and a
+separately deployed frontend.
 
-Core depends on focused interfaces:
-
-- `IRequestContextReader`;
-- `IWorkflowStore`;
-- `IRequestPreparationInterpreter` and `IRequestIntakeStore`;
-- `IAccessProvisioner`; and
-- `IClock`.
-
-These interfaces exist at concrete infrastructure boundaries. The application does
-not introduce a generic repository, workflow engine, event bus, or provider-neutral
-abstraction without a current implementation need.
-
-## Authentication and request security
-
-Demo authentication maps one fixed principal key to immutable server-side claims and
-issues an HttpOnly, Secure, SameSite Strict cookie. Authentication failures return
-`401` and authorization failures return `403` instead of browser redirects.
-
-The React client obtains an antiforgery token and includes `X-XSRF-TOKEN` on unsafe
-same-origin requests. UI capabilities and `availableActions` are presentation hints;
-controllers and application services enforce every protected action independently.
-
-Participant filtering prevents unrelated principals from discovering request detail.
-The wrong client business approver receives no authority over another client's
-request.
-
-A fuller threat and control analysis is in the
-[security and trust model](security-model.md).
-
-## Failure, cancellation, and observability
-
-Expected failures cross application boundaries as typed outcomes and become safe
-Problem Details or typed draft results. Categories include invalid input, validation,
-unauthenticated, unauthorized, not found, invalid transition, concurrency conflict,
-timeout, cancellation, unavailability, and dependency failure.
-
-Timeout defaults are:
-
-| Boundary | Default |
-|---|---:|
-| Teams activity HTTP request, including MCP and model work | 100 seconds |
-| Synthetic provisioning operation | 10 seconds |
-
-Caller cancellation is linked through asynchronous boundaries. Cancellation does not
-convert a caller-aborted provider operation into a persisted retryable provider
-failure.
-
-`CorrelationMiddleware` assigns an `X-Correlation-ID` from the current trace ID or a
-new GUID and places it in the response, logging scope, persisted request/evidence, and
-safe Problem Details. Model, MCP, workflow, and provisioning operations record
-duration and outcome metadata. Raw prompts, secrets, and complete MCP payloads are not
-required for normal logging.
-
-OpenTelemetry export is not configured. The application exposes an `ActivitySource`
-as an optional instrumentation seam.
-
-## Frontend build and hosting
-
-The React application is source input to `GovernedAccess.Web`, not a separate
-production service.
-
-- Vite writes hashed production assets to `GovernedAccess.Web/wwwroot`.
-- the Web project runs `npm ci` when the lockfile requires restoration;
-- the frontend build runs before .NET build or publish when inputs changed;
-- ASP.NET Core serves the generated assets and `index.html`;
-- React Router owns `/requests` and `/requests/:requestId`; and
-- Vite development mode proxies `/api` to ASP.NET Core for same-origin browser
-  behavior.
-
-The browser never calls MCP or the synthetic provisioner directly.
-
-## Testing architecture
-
-Unit tests reference Core and exercise deterministic domain and application rules.
-Component tests use real SQLite, native MAF sessions, or the MCP transport without
-starting the full application when that is the lowest faithful boundary. A small
-`WebApplicationFactory` slice is retained for authentication, middleware, Activity
-Protocol, logging, and one Teams-to-provisioning journey. Frontend tests exercise the
-thin React session and workflow wiring.
-
-No automated suite requires a live model or external production system. The
-[Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md) contains the
-detailed evidence matrix and manual demonstration scenarios.
-
-## Deliberate limitations
-
-The architecture intentionally does not include:
-
-- real production access or credentials;
-- a real identity provider;
-- mutable enterprise reference-data integration;
-- automated revocation;
-- multiple executable services;
-- a public provisioning endpoint;
-- a message broker, outbox, background reconciler, or distributed transaction;
-- a generic workflow engine;
-- a large retrieval subsystem; or
-- independently deployed frontend infrastructure.
-
-These are not missing layers required by the current MVP. A new requirement for real
-credentials, independent ownership, mutable systems of record, automatic
-reconciliation, separate scaling, or a separately versioned contract should trigger
-a new ADR before changing the deployment or trust boundaries.
-
-## Related documentation
-
-- [Product baseline](governed-production-access-product-baseline.md)
-- [Security and trust model](security-model.md)
-- [Local development guide](local-development.md)
-- [Testing strategy](testing-strategy.md)
-- [Request intake orchestration rules](request-intake-orchestration.md)
-- [Architecture decision index](adr/README.md)
-- [Teams intake feature specification](../specs/002-teams-access-intake/spec.md)
-- [Teams intake implementation plan](../specs/002-teams-access-intake/plan.md)
-- [Teams intake data model](../specs/002-teams-access-intake/data-model.md)
-- [Governed workflow data model](../specs/001-governed-production-access/data-model.md)
-- [UI API contract](../specs/001-governed-production-access/contracts/ui-api.md)
-- [Current MCP tool contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
-- [Teams intake quickstart](../specs/002-teams-access-intake/quickstart.md)
-- [ADR 0001: Use One Deployable Service, Including the MCP Endpoint](adr/0001-use-one-deployable-service-including-mcp.md)
+New requirements for real credentials, mutable authorities, automatic reconciliation,
+independent ownership, separate scaling, or versioned external contracts require a new
+[architecture decision](adr/README.md).

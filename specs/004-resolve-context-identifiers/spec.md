@@ -131,8 +131,8 @@ normally while the description is never converted into an incident identifier.
    incident identifier, **When** the assistant prepares the request, **Then** it does
    not search for or infer an incident and asks the developer to provide the precise
    identifier or continue without an incident.
-3. **Given** an exact incident identifier belongs to a different client or
-   environment, is inactive, or does not exist, **When** it is validated, **Then** it
+3. **Given** an exact incident identifier belongs to a different environment, is
+   inactive, or does not exist, **When** it is validated, **Then** it
    is rejected and no final request containing that incident is displayed.
 
 ---
@@ -253,7 +253,9 @@ fails safely without creating or advancing a request.
   the resolved environment before it can appear in a final request.
 - **FR-014**: The assistant MUST determine or clarify the requested role using the
   authoritative roles included with the resolved environment. The model-visible
-  context surface MUST NOT expose a separate role-listing capability.
+  context surface MUST NOT expose a separate role-listing capability. Every role
+  clarification MUST display all and only the authoritative role IDs returned for the
+  selected environment, including when only one role is available.
 - **FR-015**: Resolving or changing an environment MUST cause the client, requested
   role, and supplied incident to be re-evaluated; incompatible dependent values MUST
   not be carried into a final request.
@@ -342,9 +344,10 @@ fails safely without creating or advancing a request.
   actions remain the only approval decisions.
 - **Immutable scope and client isolation**: Environment resolution must honor the
   stored environment-to-client relationship and reject conflicting client wording.
-  Exact incident identifiers remain subject to stored client and environment
-  relationships. Confirmation binds the resolved scope to a new immutable request
-  ID; corrections after submission require a new request and new approvals.
+  Exact incident identifiers remain subject to their stored environment relationship,
+  which determines the client. Confirmation binds the resolved scope to a new
+  immutable request ID; corrections after submission require a new request and new
+  approvals.
 - **AI and MCP boundary**: Model output remains untrusted and schema-validated. The
   allowlist contains exactly `get_production_environment` and `get_incident`.
   Environment context provides bounded discovery, exact lookup, authoritative client
@@ -412,7 +415,8 @@ fails safely without creating or advancing a request.
 - **Negative coverage**: Verify invented or absent environment identifiers,
   ambiguous descriptions, no environment match, conflicting client terms, incident
   titles and partial identifiers, nonexistent or inactive exact incident identifiers,
-  cross-client incidents, unsupported roles, malformed model output, unapproved or
+  cross-environment incidents, unsupported roles, malformed model output, unapproved
+  or
   missing tools, context failure and timeout, lost conversation history,
   prompt-injection attempts, stale context at confirmation, concurrent conversations,
   replay behavior, silent typo correction, fallback suggestions absent from the

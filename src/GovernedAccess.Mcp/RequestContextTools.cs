@@ -88,7 +88,6 @@ public sealed partial class RequestContextTools(
                 incident.Id,
                 incident.Title,
                 incident.Status.ToString(),
-                incident.ClientId,
                 incident.EnvironmentId),
             cancellationToken);
     }
@@ -281,8 +280,7 @@ public sealed record IncidentToolResult(
     string IncidentId,
     string Title,
     string Status,
-    string ClientId,
-    string? EnvironmentId);
+    string EnvironmentId);
 
 public sealed record McpFailureEnvelope(
     string Outcome,

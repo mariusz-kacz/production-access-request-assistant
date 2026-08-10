@@ -1,4 +1,5 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
 
 namespace GovernedAccess.Core.Ports;
 
@@ -119,9 +120,9 @@ public enum RequestClarificationTarget
 }
 
 /// <summary>
-/// One closed, bounded clarification proposed by an untrusted interpreter. Choices
-/// remain in process-local model history and are deliberately absent from this
-/// application contract.
+/// One closed, bounded clarification proposed by an untrusted interpreter. Optional
+/// environment identifiers remain turn-local and require authoritative reload before
+/// rendering; they are not persisted as candidate or authorization evidence.
 /// </summary>
 public sealed record RequestClarificationProposal
 {

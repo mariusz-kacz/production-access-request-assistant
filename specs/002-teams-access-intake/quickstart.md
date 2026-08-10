@@ -120,17 +120,20 @@ Repeat with two active intakes and verify their histories never cross. Deliver t
 turns concurrently for one intake and verify the complete load/run/save sequences are
 serialized, while different intake IDs retain independent gates and sessions.
 
-## Scenario 3: Immutable Card and Start-over
+## Scenario 3: Discuss and Revise an Immutable Draft
 
-After receiving a final card, send a new request-intent message rather than clicking
-the card.
+After receiving a final card, first ask about alternate roles or environments without
+requesting a change. Then send an explicit revision instruction.
 
 Verify:
 
-- the displayed snapshot is never edited;
-- the old preparation becomes `Superseded`;
+- discussion returns guidance while the original preparation and card remain active;
+- the explicit change produces a different assessed candidate and creates a
+  replacement preparation;
+- the prior card becomes a non-actionable **Draft being revised** status;
+- the prior preparation becomes `Superseded`;
 - the old card cannot submit;
-- a new collecting conversation/preparation begins; and
+- the revised review card contains the updated validated candidate; and
 - no access request was created by text.
 
 ## Scenario 4: Replay and Concurrency

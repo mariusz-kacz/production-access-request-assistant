@@ -21,12 +21,7 @@ public sealed class RequestDecisionsController : ControllerBase
         [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
-        var decision = request.Decision switch
-        {
-            "Approve" => ApprovalOutcome.Approved,
-            "Reject" => ApprovalOutcome.Rejected,
-            _ => (ApprovalOutcome?)null,
-        };
+        var decision = ParseDecision(request.Decision);
 
         if (decision is null)
         {
@@ -37,7 +32,8 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await workflowService.DecideBusinessAsync(
+        var outcome = await workflowService.DecideAsync(
+            ApprovalStage.Business,
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -64,12 +60,7 @@ public sealed class RequestDecisionsController : ControllerBase
         [FromServices] AccessRequestWorkflowService workflowService,
         CancellationToken cancellationToken)
     {
-        var decision = request.Decision switch
-        {
-            "Approve" => ApprovalOutcome.Approved,
-            "Reject" => ApprovalOutcome.Rejected,
-            _ => (ApprovalOutcome?)null,
-        };
+        var decision = ParseDecision(request.Decision);
 
         if (decision is null)
         {
@@ -80,7 +71,8 @@ public sealed class RequestDecisionsController : ControllerBase
                 .ToProblemDetails(HttpContext);
         }
 
-        var outcome = await workflowService.DecideDevOpsAsync(
+        var outcome = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             requestId,
             User.FindFirstValue(ClaimTypes.NameIdentifier),
             decision.Value,
@@ -107,6 +99,14 @@ public sealed class RequestDecisionsController : ControllerBase
                     completed.Grant.ActivatedAt,
                     completed.Grant.ExpiresAt)));
     }
+
+    private static ApprovalOutcome? ParseDecision(string? decision) =>
+        decision switch
+        {
+            "Approve" => ApprovalOutcome.Approved,
+            "Reject" => ApprovalOutcome.Rejected,
+            _ => null,
+        };
 }
 
 public sealed record BusinessDecisionRequest(string? Decision, string? Comment);

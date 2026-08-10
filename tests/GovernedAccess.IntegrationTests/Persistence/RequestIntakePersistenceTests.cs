@@ -34,7 +34,7 @@ public sealed class RequestIntakePersistenceTests
 
         await using (var context = new GovernedAccessDbContext(options))
         {
-            var outcome = await CreateConfirmationService(context).ConfirmAsync(
+            var outcome = await CreateConfirmationService(context).ConfirmDraftAsync(
                 ConfirmationCommand(),
                 cancellationToken);
 
@@ -112,7 +112,7 @@ public sealed class RequestIntakePersistenceTests
 
         await using (var context = new GovernedAccessDbContext(options))
         {
-            var outcome = await CreateConfirmationService(context).ConfirmAsync(
+            var outcome = await CreateConfirmationService(context).ConfirmDraftAsync(
                 ConfirmationCommand(),
                 cancellationToken);
 
@@ -298,14 +298,13 @@ public sealed class RequestIntakePersistenceTests
             .AddInterceptors(saveCounter)
             .Options;
 
-    private static RequestIntakeService CreateConfirmationService(
+    private static RequestSubmissionService CreateConfirmationService(
         GovernedAccessDbContext context)
     {
         var requestContext = new EfRequestContextReader(context);
         var clock = new DeterministicClock(ConfirmedAt);
-        var validator = new RequestValidator(requestContext);
-        return new RequestIntakeService(
-            new UnusedInterpreter(),
+        var validator = new AccessRequestValidator(requestContext);
+        return new RequestSubmissionService(
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
@@ -323,15 +322,6 @@ public sealed class RequestIntakePersistenceTests
                 DemoPrincipalKeys.Requester),
             SessionId,
             "confirm-correlation");
-
-    private sealed class UnusedInterpreter : IRequestPreparationInterpreter
-    {
-        public Task<RequestPreparationInterpretationResult> InterpretAsync(
-            RequestPreparationTurn turn,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException(
-                "Confirmation does not invoke request interpretation.");
-    }
 
     private sealed class SaveCounter : SaveChangesInterceptor
     {

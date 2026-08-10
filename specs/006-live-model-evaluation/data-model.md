@@ -3,7 +3,7 @@
 ## Overview
 
 The feature adds no persistent business entity. One checked-in dataset defines the
-18 scenarios. Runtime state remains in memory and in a disposable evaluation database
+20 scenarios. Runtime state remains in memory and in a disposable evaluation database
 until one JSON result and one Markdown summary are written.
 
 ## EvaluationDataset
@@ -12,9 +12,9 @@ until one JSON result and one Markdown summary are written.
 |------|------|-------|
 | `SchemaVersion` | integer | Version 1 only |
 | `DatasetVersion` | version string | Required in every run result |
-| `Scenarios` | ordered scenario list | Exactly 18 unique IDs |
+| `Scenarios` | ordered scenario list | Exactly 20 unique IDs |
 
-Dataset validation enforces the exact ID inventory, 5/4/3/3/2/1 category distribution,
+Dataset validation enforces the exact ID inventory, 5/4/3/4/3/1 category distribution,
 non-empty ordered turns, supported final fields, and the fixed synthetic identifiers
 and roles needed by expectations.
 
@@ -54,9 +54,17 @@ provider iterations, token usage, or assistant wording.
 | `Candidate` | sanitized final candidate facts | Application-owned only |
 | `ClarificationTarget` | nullable closed target | Application-owned result |
 | `ValidationCodes` | safe codes | No exception text |
+| `ModelResponse` | nullable bounded string | Final schema-validated clarification message |
 | `ElapsedMilliseconds` | non-negative integer | Total scenario time |
 | `SideEffects` | four counts | Every value must be zero |
 | `Failures` | expected-versus-observed facts | Empty for passing cases |
+
+The artifact projection adds diagnostics only for failed scenarios. Those diagnostics
+contain a deterministic summary and the sanitized observed final application state:
+candidate identifiers and justification presence, clarification target, environment
+option identifiers, application validation/provider codes, and the final bounded,
+schema-validated model response message when present. They never include requester
+messages, prompts, transcripts, raw payloads, or exception text.
 
 ## EvaluationRunResult
 
@@ -67,12 +75,13 @@ provider iterations, token usage, or assistant wording.
 | `StartedAt` / `CompletedAt` | UTC timestamps | Completed run has both |
 | `Status` | passed, failed, cancelled, prerequisiteFailed | Closed |
 | `ModelDeployment` | non-secret string | Endpoint excluded |
-| `Summary` | aggregate counts | Total 18; required passes 16 |
+| `Summary` | aggregate counts | Full run: total 20 and required passes 20; focused run: total 1 and required passes 1 |
 | `SideEffects` | aggregate counts | All zero required |
-| `Scenarios` | ordered result list | Dataset order |
+| `Scenarios` | ordered result list | All 20 in dataset order, or the one selected scenario |
 
-`Passed` requires at least 16 passing scenarios and zero workflow side effects.
-Latency is recorded but does not affect the threshold.
+`Passed` requires all 20 scenarios for the full baseline or the selected
+scenario for a focused run, plus zero workflow side effects. Latency is recorded but
+does not affect either threshold.
 
 ## Persistence
 

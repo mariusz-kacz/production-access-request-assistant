@@ -85,7 +85,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - The selected environment does not belong to the selected client.
 - The requested role is not assigned to the selected environment.
 - A requester or approver crafts a duration field; it is rejected or ignored and cannot alter the server-owned fixed eight-hour lifetime.
-- An incident is omitted when optional, unknown, inactive, or associated with a different client or environment.
+- An incident is omitted when optional, unknown, inactive, or associated with a different environment.
 - A wrong-client approver, requester, or other unauthorized principal attempts a protected decision or retry.
 - Concurrent or delayed decisions race after the request has already left the expected workflow state.
 - Provisioning fails after DevOps approval, times out after creating a grant, or receives duplicate retry attempts.
@@ -143,7 +143,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 - **Client**: A client boundary identified by a stable ID and associated with one or more production environments; authorization for one client never applies to another.
 - **Production Environment**: A client-owned target identified by a stable ID, with allowed roles and a configured business approver.
 - **Access Role**: A stable allowed access scope for a particular environment; roles have no generalized privilege ordering in this feature.
-- **Incident**: An optional stored record identified by a stable ID, with status and client or environment association used during validation.
+- **Incident**: An optional stored record identified by a stable ID, with status and a required environment association used during validation.
 - **Access Request**: The requester's immutable submitted client, environment, role, justification, optional incident, workflow status, timestamps, and correlation identifier.
 - **Approval Decision**: Authenticated business or DevOps evidence bound to one exact immutable request ID and role, including decision, approver, timestamp, and optional comment.
 - **Access Grant**: The synthetic, fixed eight-hour result of successful protected provisioning, bound to the approved requester, immutable request ID, environment, role, activation, expiry, and correlation.
@@ -167,7 +167,7 @@ As an authenticated DevOps approver, I can retry a failed provisioning attempt w
 
 ## Assumptions
 
-- This is a portfolio-grade, locally demonstrable vertical slice; all identities, enterprise context, incidents, and access grants are synthetic and no real production access is created.
+- This is a focused, locally demonstrable vertical slice; all identities, enterprise context, incidents, and access grants are synthetic and no real production access is created.
 - Client Alpha uses environment `PROD-ALPHA-EU`, allows `ProductionReadOnly` and `ProductionSupport`, and is assigned to the Client Alpha business approver.
 - Client Beta uses environment `PROD-BETA-UK`, allows only `ProductionReadOnly`, and is assigned to the Client Beta business approver.
 - Every successful grant lasts exactly eight hours, regardless of client or environment; duration is not requester- or approver-selectable.

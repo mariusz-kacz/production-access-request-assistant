@@ -35,29 +35,37 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         "Describe the temporary production access you need, including the client, environment, requested role, and operational justification.";
 
     private readonly TeamsActorResolver actorResolver;
-    private readonly RequestIntakeService intakeService;
+    private readonly RequestDraftService draftService;
+    private readonly RequestSubmissionService submissionService;
     private readonly PreparedRequestCardFactory cardFactory;
+    private readonly TeamsDraftCardTracker cardTracker;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
     private readonly RequestPreparationModelMetadata modelMetadata;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
-        RequestIntakeService intakeService,
+        RequestDraftService draftService,
+        RequestSubmissionService submissionService,
         PreparedRequestCardFactory cardFactory,
+        TeamsDraftCardTracker cardTracker,
         ILogger<TeamsAccessRequestAgent> logger,
         RequestPreparationModelMetadata modelMetadata)
         : base(options)
     {
         ArgumentNullException.ThrowIfNull(actorResolver);
-        ArgumentNullException.ThrowIfNull(intakeService);
+        ArgumentNullException.ThrowIfNull(draftService);
+        ArgumentNullException.ThrowIfNull(submissionService);
         ArgumentNullException.ThrowIfNull(cardFactory);
+        ArgumentNullException.ThrowIfNull(cardTracker);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelMetadata);
 
         this.actorResolver = actorResolver;
-        this.intakeService = intakeService;
+        this.draftService = draftService;
+        this.submissionService = submissionService;
         this.cardFactory = cardFactory;
+        this.cardTracker = cardTracker;
         this.logger = logger;
         this.modelMetadata = modelMetadata;
 
@@ -113,7 +121,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         }
 
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.PrepareAsync(
+        var outcome = await draftService.PrepareAsync(
             new PrepareAccessRequestCommand(
                 actor,
                 latestMessage,
@@ -148,7 +156,26 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         switch (outcome.Kind)
         {
+            case RequestPreparationResultKind.DraftDiscussion:
+                await SendTextAsync(
+                    turnContext,
+                    RenderMessageWithEnvironmentChoices(
+                        outcome.DiscussionMessage!,
+                        outcome.EnvironmentChoices),
+                    InputHints.AcceptingInput,
+                    cancellationToken);
+                return;
+
             case RequestPreparationResultKind.ClarificationRequired:
+                if (!outcome.PreservesReadyDraft)
+                {
+                    await DisableTrackedDraftCardAsync(
+                        turnContext,
+                        actor,
+                        "Draft being revised",
+                        "This draft is no longer ready for submission. Continue in the chat to complete the revised details.",
+                        cancellationToken);
+                }
                 await SendTextAsync(
                     turnContext,
                     RenderClarification(
@@ -159,6 +186,12 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 return;
 
             case RequestPreparationResultKind.CandidateRejected:
+                await DisableTrackedDraftCardAsync(
+                    turnContext,
+                    actor,
+                    "Draft being revised",
+                    "This draft is no longer ready for submission. Correct the details in the chat to prepare a revised draft.",
+                    cancellationToken);
                 await SendTextAsync(
                     turnContext,
                     RenderCandidateRejection(outcome.ValidationErrors),
@@ -169,6 +202,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestPreparationResultKind.ReadyForConfirmation:
                 await SendReadyCardAsync(
                     turnContext,
+                    actor,
                     outcome.Session!,
                     cancellationToken);
                 return;
@@ -193,7 +227,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         CancellationToken cancellationToken)
     {
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.ResetAsync(
+        var outcome = await draftService.ResetAsync(
             new ResetRequestIntakeCommand(actor, correlationId),
             cancellationToken);
         if (logger.IsEnabled(LogLevel.Information))
@@ -220,6 +254,19 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         switch (outcome.Kind)
         {
             case RequestIntakeResetResultKind.Reset:
+                await DisableTrackedDraftCardAsync(
+                    turnContext,
+                    actor,
+                    "Draft discarded",
+                    "This draft was discarded and can no longer be submitted.",
+                    cancellationToken);
+                await SendTextAsync(
+                    turnContext,
+                    ResetSucceededMessage,
+                    InputHints.ExpectingInput,
+                    cancellationToken);
+                return;
+
             case RequestIntakeResetResultKind.AlreadyClear:
                 await SendTextAsync(
                     turnContext,
@@ -266,7 +313,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         var correlationId = CreateCorrelationId();
         var startedAt = Stopwatch.GetTimestamp();
-        var outcome = await intakeService.ConfirmAsync(
+        var outcome = await submissionService.ConfirmDraftAsync(
             new ConfirmRequestIntakeCommand(
                 actor,
                 preparationId,
@@ -298,12 +345,24 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 outcome.Failure?.Code);
         }
 
+        if (outcome.Kind is RequestConfirmationResultKind.Submitted
+            or RequestConfirmationResultKind.AlreadySubmitted)
+        {
+            cardTracker.TryRemove(actor, preparationId);
+        }
+
         return outcome.Kind switch
         {
             RequestConfirmationResultKind.Submitted
                 or RequestConfirmationResultKind.AlreadySubmitted =>
                 AdaptiveCardInvokeResponseFactory.AdaptiveCard(
                     CreateSubmittedCard(outcome)),
+            RequestConfirmationResultKind.Failed
+                when TryCreateInactiveConfirmationCard(
+                    outcome.Failure!,
+                    out var inactiveCard) =>
+                AdaptiveCardInvokeResponseFactory.AdaptiveCard(
+                    inactiveCard.ToJsonString()),
             RequestConfirmationResultKind.Failed =>
                 AdaptiveCardInvokeResponseFactory.Message(
                     CreateConfirmationFailureMessage(outcome.Failure!)),
@@ -314,6 +373,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
     private async Task SendReadyCardAsync(
         ITurnContext turnContext,
+        AuthenticatedChannelActor actor,
         RequestIntakeSession session,
         CancellationToken cancellationToken)
     {
@@ -329,11 +389,141 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        await turnContext.SendActivityAsync(
+        await DisableTrackedDraftCardAsync(
+            turnContext,
+            actor,
+            "Draft being revised",
+            "This draft was replaced by a revised version and can no longer be submitted. Use the latest request draft card.",
+            cancellationToken);
+
+        var response = await turnContext.SendActivityAsync(
             MessageFactory.Attachment(
                 cardResult.Value,
                 inputHint: InputHints.AcceptingInput),
             cancellationToken);
+        if (!string.IsNullOrWhiteSpace(response.Id))
+        {
+            cardTracker.Set(actor, session.Id, response.Id);
+        }
+    }
+
+    private async Task DisableTrackedDraftCardAsync(
+        ITurnContext turnContext,
+        AuthenticatedChannelActor actor,
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        if (!cardTracker.TryRemove(actor, out var current))
+        {
+            return;
+        }
+
+        _ = await TryUpdateCardActivityAsync(
+            turnContext,
+            current.ActivityId,
+            CreateInactiveDraftCardAttachment(title, message),
+            cancellationToken);
+    }
+
+    private async Task<bool> TryUpdateCardActivityAsync(
+        ITurnContext turnContext,
+        string activityId,
+        Attachment attachment,
+        CancellationToken cancellationToken)
+    {
+        var replacement = turnContext.Activity.CreateReply();
+        replacement.Id = activityId;
+        replacement.InputHint = InputHints.IgnoringInput;
+        replacement.Attachments = [attachment];
+
+        try
+        {
+            await turnContext.UpdateActivityAsync(replacement, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            LogDraftCardUpdateFailed(
+                logger,
+                turnContext.Activity.ChannelId ?? "unknown",
+                turnContext.Activity.Conversation.Id,
+                exception.GetType().Name);
+            return false;
+        }
+    }
+
+    private static Attachment CreateInactiveDraftCardAttachment(
+        string title,
+        string message)
+    {
+        return new Attachment
+        {
+            ContentType = PreparedRequestCardFactory.AdaptiveCardContentType,
+            Content = JsonSerializer.SerializeToElement(
+                CreateInactiveDraftCard(title, message)),
+        };
+    }
+
+    private static JsonObject CreateInactiveDraftCard(
+        string title,
+        string message) =>
+        new()
+        {
+            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+            ["type"] = "AdaptiveCard",
+            ["version"] = "1.5",
+            ["body"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["type"] = "TextBlock",
+                    ["size"] = "Medium",
+                    ["weight"] = "Bolder",
+                    ["text"] = title,
+                    ["wrap"] = true,
+                },
+                new JsonObject
+                {
+                    ["type"] = "TextBlock",
+                    ["text"] = message,
+                    ["wrap"] = true,
+                },
+            },
+        };
+
+    private static bool TryCreateInactiveConfirmationCard(
+        ApplicationFailure failure,
+        out JsonObject card)
+    {
+        (string Title, string Message)? content = failure.Code switch
+        {
+            RequestSubmissionService.SupersededCode => (
+                "Draft replaced",
+                "This draft was replaced by a newer version and can no longer be submitted. Use the latest request draft card."),
+            RequestSubmissionService.ExpiredCode => (
+                "Draft expired",
+                "This draft expired and can no longer be submitted. Continue in the chat to prepare a new draft."),
+            RequestSubmissionService.InvalidatedCode => (
+                "Draft no longer valid",
+                "This draft is no longer valid against current production context and cannot be submitted."),
+            _ => null,
+        };
+
+        if (content is null)
+        {
+            card = null!;
+            return false;
+        }
+
+        card = CreateInactiveDraftCard(
+            content.Value.Title,
+            content.Value.Message);
+        return true;
     }
 
     private static Task SendFailureAsync(
@@ -343,13 +533,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     {
         var message = failure.Code switch
         {
-            RequestIntakeService.MalformedModelOutputCode =>
+            RequestDraftService.MalformedModelOutputCode =>
                 "The assistant response could not be validated. No request was submitted; please try again.",
-            RequestIntakeService.ModelTimeoutCode =>
+            RequestDraftService.ModelTimeoutCode =>
                 "Request preparation timed out before any request was submitted. Please try again.",
-            RequestIntakeService.ModelCancelledCode =>
+            RequestDraftService.ModelCancelledCode =>
                 "Request preparation was cancelled before any request was submitted. Send the request again when you are ready.",
-            RequestIntakeService.ModelUnavailableCode =>
+            RequestDraftService.ModelUnavailableCode =>
                 "Request preparation is temporarily unavailable. No request was submitted; please try again later.",
             _ => CreateGenericPreparationFailureMessage(failure.Kind),
         };
@@ -429,14 +619,21 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
     private static string RenderClarification(
         RequestClarificationProposal clarification,
+        IReadOnlyList<RequestEnvironmentChoice> environmentChoices) =>
+        RenderMessageWithEnvironmentChoices(
+            clarification.Message,
+            environmentChoices);
+
+    private static string RenderMessageWithEnvironmentChoices(
+        string text,
         IReadOnlyList<RequestEnvironmentChoice> environmentChoices)
     {
         if (environmentChoices.Count == 0)
         {
-            return clarification.Message;
+            return text;
         }
 
-        var message = new StringBuilder(clarification.Message);
+        var message = new StringBuilder(text);
         message.AppendLine();
 
         foreach (var choice in environmentChoices.OrderBy(
@@ -495,15 +692,15 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     {
         return failure.Code switch
         {
-            RequestIntakeService.ForbiddenCode =>
+            RequestSubmissionService.ForbiddenCode =>
                 CreateConcealedConfirmationMessage(),
-            RequestIntakeService.ExpiredCode =>
+            RequestSubmissionService.ExpiredCode =>
                 "This prepared request has expired. No request was submitted; start a new request in this chat.",
-            RequestIntakeService.SupersededCode =>
+            RequestSubmissionService.SupersededCode =>
                 "This prepared request was replaced by a newer preparation. No request was submitted; use the latest card or start a new request.",
-            RequestIntakeService.InvalidatedCode =>
+            RequestSubmissionService.InvalidatedCode =>
                 "This prepared request is no longer valid against current production context. No request was submitted; start a new request in this chat.",
-            RequestIntakeService.NotReadyCode =>
+            RequestSubmissionService.NotReadyCode =>
                 "This preparation is not ready for confirmation. No request was submitted; continue the request in this chat.",
             _ => CreateGenericConfirmationFailureMessage(failure.Kind),
         };
@@ -675,4 +872,15 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         Guid? sessionId,
         ApplicationFailureKind? failureKind,
         string? failureCode);
+
+    [LoggerMessage(
+        EventId = 1004,
+        EventName = "TeamsDraftCardUpdateFailed",
+        Level = LogLevel.Warning,
+        Message = "Teams draft-card presentation update failed for channel {Channel} and conversation {ConversationId}. Failure type {FailureType}; durable intake validation remains authoritative.")]
+    private static partial void LogDraftCardUpdateFailed(
+        ILogger logger,
+        string? channel,
+        string conversationId,
+        string failureType);
 }

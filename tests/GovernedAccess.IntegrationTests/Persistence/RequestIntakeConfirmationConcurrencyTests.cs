@@ -34,10 +34,10 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         {
             var service = CreateService(context);
 
-            var first = await service.ConfirmAsync(
+            var first = await service.ConfirmDraftAsync(
                 ConfirmationCommand("sequential-first"),
                 cancellationToken);
-            var replay = await service.ConfirmAsync(
+            var replay = await service.ConfirmDraftAsync(
                 ConfirmationCommand("sequential-replay"),
                 cancellationToken);
 
@@ -70,10 +70,10 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
             new GovernedAccessDbContext(winnerOptions);
         await using var contenderContext =
             new GovernedAccessDbContext(contenderOptions);
-        var winnerTask = CreateService(winnerContext).ConfirmAsync(
+        var winnerTask = CreateService(winnerContext).ConfirmDraftAsync(
             ConfirmationCommand("concurrent-winner"),
             cancellationToken);
-        var contenderTask = CreateService(contenderContext).ConfirmAsync(
+        var contenderTask = CreateService(contenderContext).ConfirmDraftAsync(
             ConfirmationCommand("concurrent-contender"),
             cancellationToken);
 
@@ -161,13 +161,12 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         return builder.Options;
     }
 
-    private static RequestIntakeService CreateService(
+    private static RequestSubmissionService CreateService(
         GovernedAccessDbContext context)
     {
         var requestContext = new EfRequestContextReader(context);
-        var validator = new RequestValidator(requestContext);
-        return new RequestIntakeService(
-            new UnusedInterpreter(),
+        var validator = new AccessRequestValidator(requestContext);
+        return new RequestSubmissionService(
             validator,
             requestContext,
             new EfRequestIntakeStore(context),
@@ -264,12 +263,4 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         }
     }
 
-    private sealed class UnusedInterpreter : IRequestPreparationInterpreter
-    {
-        public Task<RequestPreparationInterpretationResult> InterpretAsync(
-            RequestPreparationTurn turn,
-            CancellationToken cancellationToken) =>
-            throw new NotSupportedException(
-                "Confirmation does not invoke request interpretation.");
-    }
 }

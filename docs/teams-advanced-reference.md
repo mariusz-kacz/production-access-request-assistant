@@ -42,7 +42,7 @@ and [Teams custom-app policy guidance](https://learn.microsoft.com/en-us/microso
 ### Recommended: Teams-managed
 
 The quickstart creates a Teams-managed app and multitenant bot registration. This is
-the default for the E5-only portfolio environment because it does not require an
+the default for the E5-only development environment because it does not require an
 Azure subscription.
 
 The ignored `.teams-dev.local.json` file records the tunnel ID, local port, Teams app
@@ -233,6 +233,8 @@ lookup and return assigned roles with authoritative client context. Incident cal
 remain exact-identifier-only. For an identifier-like environment value, only typed
 exact `NotFound` permits discovery fallback; timeout, cancellation, invalid input,
 unavailability, or malformed results fail without fallback.
+The current interpreter uses a stricter policy and does not request discovery even
+after exact `NotFound`; it asks for a corrected identifier with no environment options.
 
 An exact `/new` message is handled before the provider boundary. It resets only the
 authenticated conversation's active unsubmitted preparation, invokes no model or MCP

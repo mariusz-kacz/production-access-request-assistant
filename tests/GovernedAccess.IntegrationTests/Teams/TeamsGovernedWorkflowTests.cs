@@ -41,6 +41,8 @@ public sealed class TeamsGovernedWorkflowTests
                 ProtocolJsonSerializer.SerializationOptions,
                 cancellationToken);
             preparationResponse.EnsureSuccessStatusCode();
+            var preparationBody = await preparationResponse.Content
+                .ReadAsStringAsync(cancellationToken);
 
             await using (var scope = factory.Services.CreateAsyncScope())
             {
@@ -53,6 +55,14 @@ public sealed class TeamsGovernedWorkflowTests
 
             Assert.Equal(RequestIntakeStatus.Ready, intake.Status);
             Assert.NotNull(intake.ReservedRequestId);
+            Assert.DoesNotContain(
+                intake.ReservedRequestId.Value.ToString("D"),
+                preparationBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                "Request ID",
+                preparationBody,
+                StringComparison.Ordinal);
 
             using var confirmationResponse = await teamsClient.PostAsJsonAsync(
                 "/api/messages",

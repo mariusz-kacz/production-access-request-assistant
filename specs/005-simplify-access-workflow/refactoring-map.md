@@ -80,7 +80,7 @@ the query/controller path derives them from `AccessRequest.Details`.
 
 ### Confirmation boundary
 
-- `RequestIntakeService` reloads the ready intake; `AuthenticatedChannelActor` verifies
+- `RequestSubmissionService` reloads the ready intake; `AuthenticatedChannelActor` verifies
   its exact tenant, channel, conversation, actor, and requester ownership binding.
 - The aggregate restores the flattened ready snapshot as `PreparedDetails`, and the
   validator revalidates that canonical value and requester against authoritative data.

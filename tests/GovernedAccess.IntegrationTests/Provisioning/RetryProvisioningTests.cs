@@ -189,7 +189,8 @@ public sealed class RetryProvisioningComponentTests
             fixture.Clock.UtcNow,
             cancellationToken);
 
-        var initial = await service.DecideDevOpsAsync(
+        var initial = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -277,7 +278,8 @@ public sealed class RetryProvisioningComponentTests
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }
@@ -298,17 +300,19 @@ public sealed class RetryProvisioningComponentTests
                 DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
-        var applied = Assert.IsType<BusinessDecisionApplied>(
-            BusinessDecisionPolicy.Apply(
+        var applied = Assert.IsType<ApprovalDecisionApplied>(
+            ApprovalDecisionPolicy.Apply(
                 request,
-                new BusinessDecisionCommand(
+                ApprovalStage.Business,
+                priorApproval: null,
+                new ApprovalCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
                     DemoDataIds.ClientAlphaApproverPrincipalId,
                     null,
                     occurredAt,
                     "business-correlation"),
-                hasExistingBusinessDecision: false));
+                hasExistingDecision: false));
         dbContext.AccessRequests.Add(request);
         dbContext.ApprovalDecisions.Add(applied.Decision);
         await dbContext.SaveChangesAsync(cancellationToken);

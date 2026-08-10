@@ -17,7 +17,7 @@ public sealed class AccessRequestsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<RequestListResponse>> GetListAsync(
         [FromQuery] string? status,
-        [FromServices] RequestQueryService queryService,
+        [FromServices] AccessRequestQueryService queryService,
         CancellationToken cancellationToken)
     {
         RequestStatus? statusFilter = null;
@@ -56,7 +56,7 @@ public sealed class AccessRequestsController : ControllerBase
     [HttpGet("{requestId:guid}")]
     public async Task<ActionResult<RequestDetailResponse>> GetDetailAsync(
         Guid requestId,
-        [FromServices] RequestQueryService queryService,
+        [FromServices] AccessRequestQueryService queryService,
         CancellationToken cancellationToken)
     {
         var result = await queryService.GetDetailAsync(

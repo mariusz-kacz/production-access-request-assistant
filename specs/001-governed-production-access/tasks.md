@@ -93,12 +93,12 @@
 
 ### Tests for User Story 2
 
-- [X] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/BusinessDecisionPolicyTests.cs`
+- [X] T039 [P] [US2] Add unit tests for business decision state transitions, exact scope binding, rejection, and duplicate-stage prevention in `tests/GovernedAccess.UnitTests/ApprovalDecisionPolicyTests.cs`
 - [X] T040 [P] [US2] Add integration tests for configured approver resolution, wrong-client rejection, duplicate/invalid transition, actor over-posting, audit evidence, and antiforgery in `tests/GovernedAccess.IntegrationTests/Approvals/BusinessDecisionTests.cs`
 
 ### Implementation for User Story 2
 
-- [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/BusinessDecisionPolicy.cs`
+- [X] T042 [P] [US2] Implement immutable-request business approval/rejection transition rules in `src/GovernedAccess.Core/Domain/ApprovalDecisionPolicy.cs`
 - [X] T043 [US2] Implement authenticated environment-responsibility authorization, decision persistence, concurrency handling, and auditing in `src/GovernedAccess.Core/Application/BusinessDecisionService.cs`
 - [X] T044 [US2] Implement `POST /api/requests/{requestId}/business-decisions` with the restricted request body in `src/GovernedAccess.Web/Controllers/RequestDecisionsController.cs`
 - [X] T045 [P] [US2] Implement business approve/reject controls driven by server-computed actions in `src/GovernedAccess.Web/ClientApp/src/components/BusinessDecisionPanel.tsx`
@@ -129,13 +129,13 @@
 
 ### Tests for User Story 3
 
-- [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and a provisioning operation keyed by request ID in `tests/GovernedAccess.UnitTests/DevOpsDecisionPolicyTests.cs`
+- [X] T054 [P] [US3] Add unit tests for exact role, fixed eight-hour grant scope, rejection, transition, and a provisioning operation keyed by request ID in `tests/GovernedAccess.UnitTests/ApprovalDecisionPolicyTests.cs`
 - [X] T055 [P] [US3] Add protected handler tests for persisted request/approval/operation reload, immutable-scope consistency, fixed eight-hour expiry, missing approval, and caller-assertion distrust in `tests/GovernedAccess.IntegrationTests/Provisioning/ProtectedProvisioningTests.cs`
 - [X] T056 [P] [US3] Add API tests for DevOps authentication, crafted scope/duration over-posting, rejection, antiforgery, fixed eight-hour expiry, and typed provisioning failure in `tests/GovernedAccess.IntegrationTests/Approvals/DevOpsDecisionTests.cs`
 
 ### Implementation for User Story 3
 
-- [X] T057 [P] [US3] Implement DevOps decision rules using the request UUID as the provisioning operation key and provider idempotency identity in `src/GovernedAccess.Core/Domain/DevOpsDecisionPolicy.cs`
+- [X] T057 [P] [US3] Implement DevOps decision rules using the request UUID as the provisioning operation key and provider idempotency identity in `src/GovernedAccess.Core/Domain/ApprovalDecisionPolicy.cs`
 - [X] T058 [P] [US3] Define the provider-neutral synthetic provisioning port and typed timeout/failure outcomes in `src/GovernedAccess.Core/Ports/Provisioning.cs`
 - [X] T059 [US3] Implement the protected provisioning handler that reloads request, approvals, and operation evidence, validates immutable scope, and finalizes grant/workflow/audit state in `src/GovernedAccess.Core/Application/ProtectedProvisioningService.cs`
 - [X] T060 [P] [US3] Implement the 10-second controllable synthetic get-or-create provisioner with linked cancellation in `src/GovernedAccess.Web/Provisioning/SyntheticAccessProvisioner.cs`
@@ -241,8 +241,8 @@ T035 client.ts | T036 contracts.ts
 ## Parallel Example: User Story 2
 
 ```text
-T039 BusinessDecisionPolicyTests.cs | T040 BusinessDecisionTests.cs | T050 RequestDetailQueryTests.cs
-T042 BusinessDecisionPolicy.cs | T045 BusinessDecisionPanel.tsx
+T039 ApprovalDecisionPolicyTests.cs | T040 BusinessDecisionTests.cs | T050 RequestDetailQueryTests.cs
+T042 ApprovalDecisionPolicy.cs | T045 BusinessDecisionPanel.tsx
 T047 AppSession.test.tsx -> T048 DemoIdentitySelector.tsx -> T049 App.tsx
 T050 RequestDetailQueryTests.cs -> T051 RequestQueryService.cs -> T052 AccessRequestsController.cs -> T053 request-detail route
 ```
@@ -250,8 +250,8 @@ T050 RequestDetailQueryTests.cs -> T051 RequestQueryService.cs -> T052 AccessReq
 ## Parallel Example: User Story 3
 
 ```text
-T054 DevOpsDecisionPolicyTests.cs | T055 ProtectedProvisioningTests.cs | T056 DevOpsDecisionTests.cs
-T057 DevOpsDecisionPolicy.cs | T058 Provisioning.cs | T060 SyntheticAccessProvisioner.cs | T063 DevOpsDecisionPanel.tsx
+T054 ApprovalDecisionPolicyTests.cs | T055 ProtectedProvisioningTests.cs | T056 DevOpsDecisionTests.cs
+T057 ApprovalDecisionPolicy.cs | T058 Provisioning.cs | T060 SyntheticAccessProvisioner.cs | T063 DevOpsDecisionPanel.tsx
 ```
 
 ## Parallel Example: User Story 4

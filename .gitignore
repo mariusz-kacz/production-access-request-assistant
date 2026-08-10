@@ -87,3 +87,12 @@ Desktop.ini
 .codex/
 .agents/
 /docs/demo-guide.md
+
+# Reviewed live-model evaluation evidence
+!/[Aa]rtifacts/
+/[Aa]rtifacts/*
+!/[Aa]rtifacts/live-model-evaluation/
+/[Aa]rtifacts/live-model-evaluation/*
+!/[Aa]rtifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/
+!/[Aa]rtifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/report.md
+!/[Aa]rtifacts/live-model-evaluation/run-e3b35f6e43844ad199c22e7fb0518eff/result.json

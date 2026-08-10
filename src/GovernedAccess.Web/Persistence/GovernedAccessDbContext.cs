@@ -180,15 +180,11 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
         entity.ToTable("Incidents");
         entity.HasKey(incident => incident.Id);
         entity.Property(incident => incident.Id).HasMaxLength(IdentifierLength);
-        entity.Property(incident => incident.ClientId).HasMaxLength(IdentifierLength);
-        entity.Property(incident => incident.EnvironmentId).HasMaxLength(IdentifierLength);
+        entity.Property(incident => incident.EnvironmentId)
+            .HasMaxLength(IdentifierLength)
+            .IsRequired();
         entity.Property(incident => incident.Title).HasMaxLength(DisplayNameLength);
         entity.Property(incident => incident.Status).HasConversion<string>().HasMaxLength(16);
-
-        entity.HasOne<Client>()
-            .WithMany()
-            .HasForeignKey(incident => incident.ClientId)
-            .OnDelete(DeleteBehavior.Restrict);
 
         entity.HasOne<ProductionEnvironment>()
             .WithMany()

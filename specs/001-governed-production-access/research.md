@@ -91,7 +91,7 @@ project-per-layer structure (more ceremony than this MVP needs).
 
 **Decision**: Use `AccessRequestWorkflowService` as the single application
 coordinator for authenticated business decisions, DevOps decisions, and provisioning
-retry. Keep `RequestSubmissionService` and `RequestQueryService` focused on request
+retry. Keep `RequestSubmissionService` and `AccessRequestQueryService` focused on request
 creation and read projections. Keep `ProtectedProvisioningService` separate as the
 internal boundary that reloads persisted evidence and invokes the synthetic provider.
 
@@ -354,7 +354,7 @@ outcomes. Validate behavior with the existing thin React smokes plus a short man
 route/state matrix rather than screenshot-heavy testing.
 
 **Rationale**: These constraints make the interface reliably usable and objective
-without expanding the portfolio MVP into a design-system or exhaustive browser-test
+without expanding the local MVP into a design-system or exhaustive browser-test
 project. Existing workflow authorization remains covered by .NET tests.
 
 **Alternatives considered**: Color-only badges (inaccessible); animated transitions

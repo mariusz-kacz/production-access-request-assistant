@@ -101,7 +101,7 @@ appropriate when context comes from mutable systems of record. It is rejected fo
 MVP because the exact synthetic dataset cannot change through supported application
 behavior and conflicts cause startup failure.
 
-### Reuse `RequestValidator` during provisioning
+### Reuse `AccessRequestValidator` during provisioning
 
 This would reduce duplicated comparison code but retain unnecessary context reads and
 failure modes. It would also mix caller-input validation concerns such as required

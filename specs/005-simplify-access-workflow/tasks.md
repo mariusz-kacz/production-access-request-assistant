@@ -268,7 +268,7 @@ Stop and review the architecture before Task 3.
 
 ## Objective
 
-Reduce `RequestIntakeService` complexity now that validated request details have one authoritative representation.
+Keep `RequestDraftService` and `RequestSubmissionService` focused now that validated request details have one authoritative representation.
 
 ## Work
 
@@ -374,8 +374,7 @@ Review:
 
 * business decision evidence;
 * DevOps decision evidence;
-* `BusinessDecisionPolicy`;
-* `DevOpsDecisionPolicy`;
+* the stage-aware `ApprovalDecisionPolicy`;
 * `WorkflowEvidencePolicy`;
 * `AccessRequestWorkflowService`.
 

@@ -1,5 +1,5 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.Drafts;
 
 namespace GovernedAccess.Core.Ports;
 
@@ -177,6 +177,7 @@ public sealed record RequestEnvironmentChoice
 
 public enum RequestPreparationResultKind
 {
+    DraftDiscussion,
     ClarificationRequired,
     ReadyForConfirmation,
     CandidateRejected,
@@ -191,6 +192,7 @@ public sealed class RequestPreparationResult
 {
     private RequestPreparationResult(
         RequestPreparationResultKind kind,
+        string? discussionMessage = null,
         RequestClarificationProposal? clarification = null,
         IReadOnlyList<RequestEnvironmentChoice>? environmentChoices = null,
         RequestIntakeSession? session = null,
@@ -198,6 +200,7 @@ public sealed class RequestPreparationResult
         ApplicationFailure? failure = null)
     {
         Kind = kind;
+        DiscussionMessage = discussionMessage;
         Clarification = clarification;
         EnvironmentChoices = environmentChoices ?? [];
         Session = session;
@@ -207,15 +210,81 @@ public sealed class RequestPreparationResult
 
     public RequestPreparationResultKind Kind { get; }
 
+    public string? DiscussionMessage { get; }
+
     public RequestClarificationProposal? Clarification { get; }
 
     public IReadOnlyList<RequestEnvironmentChoice> EnvironmentChoices { get; }
 
     public RequestIntakeSession? Session { get; }
 
+    /// <summary>
+    /// Indicates that a clarification concerns a possible revision while the
+    /// existing immutable ready draft remains active and confirmable.
+    /// </summary>
+    public bool PreservesReadyDraft =>
+        Kind == RequestPreparationResultKind.ClarificationRequired
+        && Session?.Status == RequestIntakeStatus.Ready;
+
     public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
 
     public ApplicationFailure? Failure { get; }
+
+    public static RequestPreparationResult DraftDiscussion(
+        string message,
+        RequestIntakeSession session,
+        IEnumerable<RequestEnvironmentChoice>? environmentChoices = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.Status != RequestIntakeStatus.Ready)
+        {
+            throw new ArgumentException(
+                "Draft discussion requires an active ready intake.",
+                nameof(session));
+        }
+
+        message = message.Trim();
+        if (message.Length > RequestClarificationProposal.MaximumMessageLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(message),
+                message.Length,
+                $"A draft-discussion message cannot exceed {RequestClarificationProposal.MaximumMessageLength} characters.");
+        }
+
+        var choices = environmentChoices?.ToArray() ?? [];
+        if (choices.Length
+            > RequestClarificationProposal.MaximumEnvironmentOptionCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(environmentChoices),
+                choices.Length,
+                $"A draft discussion cannot contain more than {RequestClarificationProposal.MaximumEnvironmentOptionCount} environment choices.");
+        }
+
+        foreach (var choice in choices)
+        {
+            ArgumentNullException.ThrowIfNull(choice);
+        }
+
+        if (choices
+                .Select(choice => choice.EnvironmentId)
+                .Distinct(StringComparer.Ordinal)
+                .Count()
+            != choices.Length)
+        {
+            throw new ArgumentException(
+                "Draft-discussion environment choices must have unique identifiers.",
+                nameof(environmentChoices));
+        }
+
+        return new(
+            RequestPreparationResultKind.DraftDiscussion,
+            discussionMessage: message,
+            environmentChoices: Array.AsReadOnly(choices),
+            session: session);
+    }
 
     public static RequestPreparationResult ClarificationRequired(
         RequestClarificationProposal clarification,
@@ -228,6 +297,28 @@ public sealed class RequestPreparationResult
             RequestPreparationResultKind.ClarificationRequired,
             clarification: clarification,
             environmentChoices: Array.AsReadOnly(environmentChoices.ToArray()));
+    }
+
+    public static RequestPreparationResult ClarificationRequiredWithActiveDraft(
+        RequestClarificationProposal clarification,
+        IEnumerable<RequestEnvironmentChoice> environmentChoices,
+        RequestIntakeSession activeReadySession)
+    {
+        ArgumentNullException.ThrowIfNull(clarification);
+        ArgumentNullException.ThrowIfNull(environmentChoices);
+        ArgumentNullException.ThrowIfNull(activeReadySession);
+        if (activeReadySession.Status != RequestIntakeStatus.Ready)
+        {
+            throw new ArgumentException(
+                "An active-draft clarification requires a ready intake.",
+                nameof(activeReadySession));
+        }
+
+        return new(
+            RequestPreparationResultKind.ClarificationRequired,
+            clarification: clarification,
+            environmentChoices: Array.AsReadOnly(environmentChoices.ToArray()),
+            session: activeReadySession);
     }
 
     public static RequestPreparationResult ReadyForConfirmation(

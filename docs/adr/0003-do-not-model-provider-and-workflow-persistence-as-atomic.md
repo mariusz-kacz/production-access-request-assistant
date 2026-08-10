@@ -99,7 +99,7 @@ applies at the local save.
 
 This can provide durable delivery and automated reconciliation, but it adds worker
 lifecycle, polling or messaging, operational state, and eventual-consistency behavior.
-Those concerns are outside the single-host portfolio MVP.
+Those concerns are outside the current single-host MVP.
 
 ### Add compensation or automatic revocation
 

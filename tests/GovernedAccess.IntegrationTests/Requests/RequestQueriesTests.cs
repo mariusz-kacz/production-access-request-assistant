@@ -465,7 +465,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysFailProvisioner(),
             fixture.Clock);
-        var failed = await workflowService.DecideDevOpsAsync(
+        var failed = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             failedRequest.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -484,10 +485,10 @@ public sealed class RequestQueryComponentTests
             DemoDataIds.DevOpsApproverPrincipalId,
             cancellationToken);
         Assert.Equal(
-            RequestQueryService.DevOpsDecisionAction,
+            AccessRequestQueryService.DevOpsDecisionAction,
             Assert.Single(decisionDetail.Value.AvailableActions));
         Assert.Equal(
-            RequestQueryService.RetryProvisioningAction,
+            AccessRequestQueryService.RetryProvisioningAction,
             Assert.Single(retryDetail.Value.AvailableActions));
 
         var requesterDecisionDetail = await queryService.GetDetailAsync(
@@ -522,7 +523,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysSucceedProvisioner(fixture.Clock),
             fixture.Clock);
-        var activation = await workflowService.DecideDevOpsAsync(
+        var activation = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -547,14 +549,16 @@ public sealed class RequestQueryComponentTests
         Assert.Equal("request_not_found", detail.Failure.Code);
     }
 
-    private static RequestQueryService CreateQueryService(
+    private static AccessRequestQueryService CreateQueryService(
         GovernedAccessDbContext dbContext,
         IClock clock)
     {
         var requestContext = new EfRequestContextReader(dbContext);
-        return new RequestQueryService(
+        var workflowStore = new EfWorkflowStore(dbContext);
+        return new AccessRequestQueryService(
             requestContext,
-            new EfWorkflowStore(dbContext),
+            workflowStore,
+            new AccessRequestVisibilityPolicy(requestContext, workflowStore),
             clock);
     }
 
@@ -568,7 +572,8 @@ public sealed class RequestQueryComponentTests
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }
@@ -594,10 +599,12 @@ public sealed class RequestQueryComponentTests
         AccessRequest request,
         DateTimeOffset decidedAt)
     {
-        return Assert.IsType<BusinessDecisionApplied>(
-            BusinessDecisionPolicy.Apply(
+        return Assert.IsType<ApprovalDecisionApplied>(
+            ApprovalDecisionPolicy.Apply(
                 request,
-                new BusinessDecisionCommand(
+                ApprovalStage.Business,
+                priorApproval: null,
+                new ApprovalCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
                     request.Details.ClientId == DemoDataIds.ClientAlphaId
@@ -606,7 +613,7 @@ public sealed class RequestQueryComponentTests
                     null,
                     decidedAt,
                     "business-correlation"),
-                hasExistingBusinessDecision: false)).Decision;
+                hasExistingDecision: false)).Decision;
     }
 
     private sealed class AlwaysFailProvisioner : IAccessProvisioner

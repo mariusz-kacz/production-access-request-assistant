@@ -19,7 +19,7 @@ implementation while matching the Foundry project `/openai/v1` endpoint.
 - Refactor to a provider-specific Agent Framework agent: rejected because hosted
   tools and a second agent construction path are unnecessary; the existing local MCP
   and structured `IChatClient` path already meets the feature.
-- Call the provider directly from `RequestIntakeService`: rejected because it would
+- Call the provider directly from `RequestDraftService`: rejected because it would
   leak provider concerns across the infrastructure boundary and bypass MAF history
   and tool controls.
 - Add a general multi-provider router: rejected because the scope calls for one
@@ -75,7 +75,7 @@ unauthorized credentials naturally become a safe provider-unavailable turn outco
 
 - Foundry API key in user secrets: rejected because it adds a high-value shared
   secret when the developer identity path is available.
-- Client secret service principal: rejected for the local portfolio exercise because
+- Client secret service principal: rejected for the local live-model exercise because
   it introduces secret lifecycle and broader setup with no benefit.
 - Managed identity only: rejected because the current target is local execution, not
   an Azure-hosted production deployment.
@@ -123,7 +123,7 @@ preventing failed turns from saving session or workflow state.
 **Alternatives considered**:
 
 - Add a shorter interpreter deadline: rejected because conversational reply headroom
-  does not justify a second timer for this portfolio scope.
+  does not justify a second timer for this local scope.
 - Separate per-provider and per-tool deadlines: rejected as overall controls because
   their budgets could accumulate beyond the endpoint deadline.
 
@@ -143,7 +143,7 @@ client isolation, requester confirmation, approvals, or provisioning.
 - Relax schema for provider compatibility: rejected because malformed or extra model
   output must remain untrusted.
 - Give the real provider direct data access: rejected because the real loopback MCP
-  boundary is a portfolio requirement and must remain visible in the exercised path.
+  boundary is an explicit requirement and must remain visible in the exercised path.
 - Add a submission or approval tool: rejected because the model is not an
   authorization boundary.
 

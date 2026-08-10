@@ -109,7 +109,7 @@ public sealed class TeamsIntakeLoggingTests
             capturedText,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "Confirm production access request",
+            "Review request draft",
             capturedText,
             StringComparison.Ordinal);
         Assert.DoesNotContain(FoundryEndpoint, capturedText, StringComparison.Ordinal);
