@@ -896,11 +896,22 @@ public sealed class RequestIntakeServiceTests
         private RequestIntakeSession? session;
 
         public IntakeScenario(
+            RequestPreparationInterpretationFailure? interpretationFailure = null,
             RequestPreparationProposal? proposal = null,
             RequestIntakeSession? initialSession = null)
         {
-            interpretation = new RequestPreparationInterpretationSucceeded(
-                proposal ?? ValidCandidateProposal());
+            if (interpretationFailure is not null
+                && proposal is not null)
+            {
+                throw new ArgumentException(
+                    "A scenario cannot define both a proposal and an interpretation failure.");
+            }
+
+            interpretation = interpretationFailure is not null
+                ? new RequestPreparationInterpretationFailed(
+                    interpretationFailure.Value)
+                : new RequestPreparationInterpretationSucceeded(
+                    proposal ?? ValidCandidateProposal());
             session = initialSession;
 
             var validator = new RequestValidator(this);
