@@ -28,7 +28,7 @@ The governing boundary is:
 
 ## Per-turn algorithm
 
-For each non-command requester message, `RequestIntakeService` performs exactly one
+For each non-command requester message, `RequestDraftService` performs exactly one
 interpretation attempt:
 
 1. Load or create the active intake and its last accepted candidate. An unexpired
@@ -182,7 +182,7 @@ accepts the new proposal.
 
 - A model-declared `kind: candidate` cannot override missing-field or policy errors.
 - The application alone decides whether the candidate is ready.
-- `RequestIntakeService` performs one candidate assessment per interpretation; the
+- `RequestDraftService` performs one candidate assessment per interpretation; the
   strict validator is run again only at later persisted-state trust boundaries such as
   confirmation and submission.
 - Collecting intake persists only the sanitized candidate and lifecycle metadata.

@@ -1,3 +1,4 @@
+using GovernedAccess.Core.Application;
 using GovernedAccess.Web.Ai;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
@@ -46,6 +47,7 @@ public static class TeamsAgentRegistration
                     .Value
                     .TrustedWebBaseUri));
         builder.Services.AddRequestPreparation();
+        builder.Services.AddScoped<RequestSubmissionService>();
         builder.Services.AddSingleton<TeamsDraftCardTracker>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();

@@ -57,7 +57,7 @@ preparation composition, and strict dataset loading required by every user story
 **Critical**: No user story work begins until this phase is complete.
 
 - [X] T002 [P] Replace the preliminary evaluation records with the final dataset, scenario, expectation, final application-outcome, scenario-result, run-result, category-summary, and workflow-side-effect records in `src/GovernedAccess.Web/Evaluation/EvaluationDataset.cs` and `src/GovernedAccess.Web/Evaluation/EvaluationResults.cs`, and remove the obsolete `src/GovernedAccess.Web/Evaluation/EvaluationObservationScope.cs`
-- [X] T003 [P] Extract shared MAF session, coordinator, interpreter, EF intake-store, and `RequestIntakeService` registration into `src/GovernedAccess.Web/Ai/RequestPreparationRegistration.cs` and update `src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs` to consume it without changing normal Teams behavior
+- [X] T003 [P] Extract shared MAF session, coordinator, interpreter, EF intake-store, and request-draft service registration into `src/GovernedAccess.Web/Ai/RequestPreparationRegistration.cs` and update `src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs` to consume it without changing normal Teams behavior
 - [X] T004 Add one mode-neutral lazy MCP endpoint resolver in `src/GovernedAccess.Web/Ai/RequestPreparationMcpEndpoint.cs`, have normal and evaluation host composition supply their respective validated base URIs, and refactor `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs` to use it without depending on Teams options or adding evaluation observations
 - [X] T005 Implement closed case-sensitive JSON Schema validation, supported-version loading, and thin dataset deserialization in `src/GovernedAccess.Web/Evaluation/EvaluationDatasetLoader.cs`
 
@@ -88,7 +88,7 @@ and zero requests, decisions, operations, or grants.
 - [X] T007 [P] [US1] Implement strict `evaluate-live-model` argument parsing, trusted output-parent resolution, live-profile prerequisite checks, cancellation handling, and exit-code mapping in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
 - [X] T008 [P] [US1] Implement loopback-only evaluation host composition, unique temporary SQLite ownership, synthetic seeding, host disposal, and exact database/sidecar cleanup in `src/GovernedAccess.Web/Evaluation/EvaluationHosting.cs`
 - [X] T009 [US1] Select normal or evaluation composition before service registration, map only the read-only `/mcp` endpoint in evaluation mode, start the host before resolving the command, and stop with the command exit code in `src/GovernedAccess.Web/Program.cs`
-- [X] T010 [US1] Implement sequential scenario and turn execution through `RequestIntakeService.PrepareAsync`, isolated actor/conversation/correlation identities, starting-candidate setup, linked per-turn timeout, cancellation classification, scenario-level elapsed time, final typed result capture, and workflow-table counts in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
+- [X] T010 [US1] Implement sequential scenario and turn execution through `RequestDraftService.PrepareAsync`, isolated actor/conversation/correlation identities, starting-candidate setup, linked per-turn timeout, cancellation classification, scenario-level elapsed time, final typed result capture, and workflow-table counts in `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationRunner.cs`
 
 **Checkpoint**: The command is independently runnable with deterministic test
 configuration, exposes no confirmation or workflow endpoints, and returns isolated

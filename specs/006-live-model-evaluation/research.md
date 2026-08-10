@@ -2,7 +2,7 @@
 
 ## R1. Black-box evaluation boundary
 
-**Decision**: Execute the real `RequestIntakeService.PrepareAsync` path but grade only
+**Decision**: Execute the real `RequestDraftService.PrepareAsync` path but grade only
 its final application-owned result and selected final facts.
 
 **Rationale**: This measures user-visible end-to-end behavior while preserving model

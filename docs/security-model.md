@@ -424,7 +424,7 @@ conversation from authenticated SDK context and maps the actor server-side to th
 fixed synthetic requester. The action carries only a schema version and opaque intake
 ID; payload identity, role, duration, approval, and scope fields are rejected.
 
-`RequestIntakeService` reloads the intake, verifies exact actor/conversation ownership,
+`RequestSubmissionService` reloads the intake, verifies exact actor/conversation ownership,
 readiness, expiry, and supersession, and revalidates the prepared canonical details.
 The same confirmation use case constructs `AccessRequest` with the reserved
 server-generated request ID and stages request-created audit evidence. One shared
@@ -613,7 +613,7 @@ Security behavior is exercised by automated tests, including:
   serialization, and last-good-session preservation;
 - [Teams actor tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs):
   channel, tenant, personal-conversation, actor, and forged-payload boundaries;
-- [request-intake unit tests](../tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs):
+- [request-draft and submission unit tests](../tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs):
   ownership, terminal states, stale context, deterministic option reload, invalid
   option rejection, ready-draft discussion identity preservation, changed-candidate
   replacement, candidate preservation, and confirmation behavior;

@@ -30,7 +30,7 @@ internal static class RequestPreparationRegistration
                 serviceProvider.GetRequiredService<
                     RequestPreparationMcpEndpoint>(),
                 serviceProvider.GetRequiredService<IHttpClientFactory>()));
-        services.AddScoped<RequestIntakeService>();
+        services.AddScoped<RequestDraftService>();
 
         return services;
     }

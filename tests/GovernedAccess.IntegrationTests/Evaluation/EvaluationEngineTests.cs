@@ -400,7 +400,7 @@ public sealed class EvaluationEngineTests
                             "INC-1042"),
                         null,
                         [],
-                        [RequestIntakeService.ModelTimeoutCode],
+                        [RequestDraftService.ModelTimeoutCode],
                         "Please choose the production environment to continue."),
                     100_001,
                     WorkflowSideEffectCounts.None,
@@ -453,7 +453,7 @@ public sealed class EvaluationEngineTests
                 diagnostics.GetProperty("summary").GetString(),
                 StringComparison.Ordinal);
             Assert.Equal(
-                RequestIntakeService.ModelTimeoutCode,
+                RequestDraftService.ModelTimeoutCode,
                 diagnostics.GetProperty("validationCodes")[0].GetString());
             Assert.Equal(
                 "Please choose the production environment to continue.",
@@ -465,7 +465,7 @@ public sealed class EvaluationEngineTests
                     .GetString());
             Assert.Contains("Observed application state", report, StringComparison.Ordinal);
             Assert.Contains(
-                $"Application codes: `{RequestIntakeService.ModelTimeoutCode}`",
+                $"Application codes: `{RequestDraftService.ModelTimeoutCode}`",
                 report,
                 StringComparison.Ordinal);
             Assert.Contains(

@@ -19,7 +19,7 @@ includes every `[Fact]` and every discovered `[Theory]` row.
 | Unit / `AccessGrantTests` | 1 | Unit | Keep |
 | Unit / `BusinessDecisionPolicyTests` | 3 | Unit | Expand business transition permutations here |
 | Unit / `DevOpsDecisionPolicyTests` | 6 | Unit | Expand DevOps transition and immutable-scope permutations here |
-| Unit / `RequestIntakeServiceTests` | 16 | Unit | Keep deterministic intake policy coverage |
+| Unit / `RequestDraftAndSubmissionServiceTests` | 16 | Unit | Keep deterministic draft and submission policy coverage |
 | Unit / `RequestPreparationTests` | 7 | Unit | Keep aggregate/proposal invariants |
 | Unit / `RequestValidationTests` | 17 | Unit | Keep authoritative candidate validation permutations |
 | Unit / `WorkflowEvidencePolicyTests` | 5 | Unit | Expand immutable workflow-evidence negatives here |
@@ -139,7 +139,8 @@ resolver policy assertion.
 - Participant visibility and action capabilities execute directly through
   `RequestQueryService`; one hosted enriched-detail response contract remains.
 - Candidate identifier and missing-field matrices execute through deterministic MAF,
-  `RequestIntakeService`, authoritative seeded context, and SQLite without a host.
+  `RequestDraftService`, `RequestSubmissionService`, authoritative seeded context,
+  and SQLite without a host.
 - The five-scenario utterance matrix and intake-history isolation execute directly
   through MAF/native sessions. One complete hosted preparation and one multi-turn
   hosted clarification still prove Activity Protocol and Adaptive Card wiring.

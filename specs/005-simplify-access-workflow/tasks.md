@@ -268,7 +268,7 @@ Stop and review the architecture before Task 3.
 
 ## Objective
 
-Reduce `RequestIntakeService` complexity now that validated request details have one authoritative representation.
+Keep `RequestDraftService` and `RequestSubmissionService` focused now that validated request details have one authoritative representation.
 
 ## Work
 

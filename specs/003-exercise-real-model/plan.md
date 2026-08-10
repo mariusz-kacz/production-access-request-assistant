@@ -117,7 +117,7 @@ specs/003-exercise-real-model/
 ```text
 src/
 |-- GovernedAccess.Core/                  # Provider-neutral reset lifecycle
-|   |-- Application/RequestIntakeService.cs       # Reset active intake operation
+|   |-- Application/RequestDraftService.cs        # Reset active intake operation
 |   |-- Domain/RequestIntakeSession.cs            # Reuse terminal supersession
 |   |-- Ports/RequestDrafting.cs
 |   `-- Ports/RequestIntake.cs                     # Reset command/outcome contract
@@ -140,7 +140,7 @@ src/
 
 tests/
 |-- GovernedAccess.UnitTests/
-|   `-- RequestIntakeServiceTests.cs                # Reset lifecycle transitions
+|   `-- RequestDraftAndSubmissionServiceTests.cs    # Reset lifecycle transitions
 `-- GovernedAccess.IntegrationTests/
     |-- Ai/
     |   |-- RequestPreparationChatRegistrationTests.cs

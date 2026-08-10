@@ -52,14 +52,21 @@ public sealed class ProgramCompositionTests(
         var dbContext = services.GetRequiredService<GovernedAccessDbContext>();
         var intakeStore = services.GetRequiredService<IRequestIntakeStore>();
         var workflowStore = services.GetRequiredService<IWorkflowStore>();
-        var intakeService = services.GetRequiredService<RequestIntakeService>();
+        var draftService = services.GetRequiredService<RequestDraftService>();
+        var submissionService = services.GetRequiredService<RequestSubmissionService>();
 
         Assert.Same(
             intakeStore,
             services.GetRequiredService<IRequestIntakeStore>());
         Assert.Contains(
-            GetPrivateDependencies(intakeService),
+            GetPrivateDependencies(draftService),
             dependency => ReferenceEquals(dependency, intakeStore));
+        Assert.Contains(
+            GetPrivateDependencies(submissionService),
+            dependency => ReferenceEquals(dependency, intakeStore));
+        Assert.Contains(
+            GetPrivateDependencies(submissionService),
+            dependency => ReferenceEquals(dependency, workflowStore));
         Assert.Contains(
             GetPrivateDependencies(intakeStore),
             dependency => ReferenceEquals(dependency, dbContext));

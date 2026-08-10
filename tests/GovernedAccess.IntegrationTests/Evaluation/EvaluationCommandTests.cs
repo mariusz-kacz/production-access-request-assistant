@@ -301,7 +301,7 @@ public sealed class EvaluationCommandTests
                 NormalizedIntakeOutcome.ProviderFailure,
                 scenario.FinalOutcome!.Kind);
             Assert.Contains(
-                RequestIntakeService.ModelTimeoutCode,
+                RequestDraftService.ModelTimeoutCode,
                 scenario.FinalOutcome.ValidationCodes);
             Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
         }

@@ -81,7 +81,7 @@ focused tests pass.
 - [X] T005 [P] Define the non-persistent `ProductionEnvironmentContext` projection and exact/list reader operations while retaining exact environment-role validation in `src/GovernedAccess.Core/Ports/CorePorts.cs`
 - [X] T006 [P] Extend the untrusted clarification proposal and application result contracts with bounded `EnvironmentOptionIds` and validated environment-choice records, and remove `RequestClarificationTarget.ClientId`, in `src/GovernedAccess.Core/Ports/RequestDrafting.cs` and `src/GovernedAccess.Core/Ports/RequestIntake.cs`
 - [X] T007 Implement no-tracking exact/list environment context aggregation over clients, environments, and roles with stable ordinal ordering and a load-at-most-21 fail-closed cap, and remove the obsolete role-list reader operation, in `src/GovernedAccess.Web/Persistence/EfRequestContextReader.cs`
-- [X] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
+- [X] T008 Update request-context test doubles for the new exact/list projection operations and removed role-list operation without adding duplicate test cases in `tests/GovernedAccess.UnitTests/RequestValidationTests.cs`, `tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs`, and `tests/GovernedAccess.IntegrationTests/Mcp/McpFailureTests.cs`
 
 **Checkpoint**: Core contracts and persistence can return authoritative, ordered
 environment/client/role context without any MCP or AI SDK types.
@@ -104,7 +104,7 @@ discovery and explicit confirmation of any proposed alternative.
 ### Tests for User Story 1
 
 - [X] T009 [P] [US1] Rewrite the existing MCP contract and MAF catalog assertions for exactly two read-only tools, `{}` discovery, exact environment lookup, a common `environments` envelope, authoritative client display data, embedded ordered roles, and the unchanged exact incident contract; modify existing tests rather than adding parallel contract cases in `tests/GovernedAccess.IntegrationTests/Mcp/McpContractTests.cs` and `tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs`
-- [X] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs`
+- [X] T010 [P] [US1] Add the minimum application-service unit coverage for structured choices: one valid authoritative option remains an unresolved clarification outside durable candidate scope, and one unknown option is rejected while unrelated valid candidate fields are preserved; rely on T003 for duplicate/count invariants in `tests/GovernedAccess.UnitTests/RequestDraftAndSubmissionServiceTests.cs`
 
 ### Implementation for User Story 1
 
@@ -112,7 +112,7 @@ discovery and explicit confirmation of any proposed alternative.
 - [X] T012 [US1] Register exactly `get_production_environment` and `get_incident` and remove `get_available_roles` registration in `src/GovernedAccess.Mcp/McpRegistration.cs`
 - [X] T013 [P] [US1] Update the MAF allowlist, instructions, response schema, and payload parser so readable context is instructed to use direct discovery and identifier-like input is instructed to use exact lookup before typed-`NotFound` fallback in `src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs`
 - [X] T014 [P] [US1] Update deterministic runtime chat responses to the feature-004 proposal schema and remove client-ID clarification and separate-role-tool assumptions in `src/GovernedAccess.Web/Ai/DeterministicChatClient.cs`
-- [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestIntakeService.cs`
+- [X] T015 [US1] Validate and authoritatively reload structured environment option IDs, reject an invalid option set before returning its associated model message, keep choices out of durable candidate scope, preserve unrelated valid candidate fields, and return the bounded model clarification with application-owned authoritative choice records in `src/GovernedAccess.Core/Application/RequestDraftService.cs`
 - [X] T016 [US1] Present the bounded model-authored clarification message as non-authoritative text and append authoritative choice records, including a one-option correction, without parsing prose into choices or advancing workflow state, in `src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`
 
 **Checkpoint**: The application exposes the bounded authoritative environment context,

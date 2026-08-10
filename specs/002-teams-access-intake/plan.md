@@ -89,7 +89,7 @@ integration
 
 | Gate | Pre-research result | Design evidence |
 |---|---|---|
-| **Human authority** | PASS | Conversation turns can update only intake state. Authenticated requester confirmation is handled by the unified `RequestIntakeService`; business and DevOps approvals remain explicit authenticated Web actions. |
+| **Human authority** | PASS | Conversation turns can update only intake state. `RequestDraftService` prepares drafts, while authenticated requester confirmation is handled deterministically by `RequestSubmissionService`; business and DevOps approvals remain explicit authenticated Web actions. |
 | **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals `get_production_environment` and `get_incident` before passing only those tools to MAF; assigned roles arrive within authoritative environment context. |
 | **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
@@ -127,8 +127,8 @@ src/
 │   ├── Domain/
 │   │   └── RequestIntakeSession.cs
 │   ├── Application/
-│   │   ├── RequestIntakeService.cs
-│   │   └── RequestSubmissionService.cs   # Confirmation-only staging seam
+│   │   ├── RequestDraftService.cs
+│   │   └── RequestSubmissionService.cs
 │   └── Ports/
 │       ├── RequestDrafting.cs       # Evolved provider-neutral turn contract
 │       └── RequestIntake.cs
@@ -157,7 +157,7 @@ src/
     └── Program.cs
 tests/
 ├── GovernedAccess.UnitTests/
-│   └── RequestIntakeServiceTests.cs
+│   └── RequestDraftAndSubmissionServiceTests.cs
 └── GovernedAccess.IntegrationTests/
     ├── Mcp/
     ├── Persistence/

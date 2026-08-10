@@ -19,7 +19,7 @@ implementation while matching the Foundry project `/openai/v1` endpoint.
 - Refactor to a provider-specific Agent Framework agent: rejected because hosted
   tools and a second agent construction path are unnecessary; the existing local MCP
   and structured `IChatClient` path already meets the feature.
-- Call the provider directly from `RequestIntakeService`: rejected because it would
+- Call the provider directly from `RequestDraftService`: rejected because it would
   leak provider concerns across the infrastructure boundary and bypass MAF history
   and tool controls.
 - Add a general multi-provider router: rejected because the scope calls for one

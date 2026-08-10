@@ -185,7 +185,8 @@ request and response shapes, call application services, and map typed failures.
 | `AIHostAgent` with `InMemoryAgentSessionStore` | Load and save MAF-owned conversation sessions by server-generated intake ID for the process lifetime. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
 | `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
 | `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
-| `RequestIntakeService` | Coordinate compact preparation and deterministic confirmation over one intake aggregate. | Model-supplied authority or downstream approval. |
+| `RequestDraftService` | Coordinate model-assisted preparation, deterministic candidate assessment, and draft reset over one intake aggregate. | Request submission, human authority, or downstream approval. |
+| `RequestSubmissionService` | Reload and confirm one owned ready draft, revalidate authoritative context, and atomically stage the immutable request and audit evidence. | Model interpretation or approval. |
 | `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
 | `ProtectedProvisioningService` | Reload request-bound workflow evidence, derive provider input from `AccessRequest.Details`, call the provider, and persist the operation outcome. | Business or DevOps approval. |
 | `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
@@ -273,7 +274,7 @@ provisioning, retry, and revocation surfaces are unavailable in this mode.
 The evaluator loads and validates the complete checked-in 20-scenario dataset. It
 runs every conversation sequentially by default, or one exact case-sensitive
 scenario selected with `--scenario`, through the real
-`RequestIntakeService.PrepareAsync` boundary. Each scenario receives distinct actor,
+`RequestDraftService.PrepareAsync` boundary. Each scenario receives distinct actor,
 conversation, intake, and correlation identities.
 The configured Foundry Responses client and the real MCP transport execute normally,
 but evaluation treats both as a black box: it records no prompts, transcripts,
@@ -311,7 +312,8 @@ sequenceDiagram
     actor User
     participant Teams
     participant Agent as TeamsAccessRequestAgent
-    participant Intake as RequestIntakeService
+    participant DraftService as RequestDraftService
+    participant Submit as RequestSubmissionService
     participant Draft as MafRequestPreparationInterpreter
     participant Memory as Native MAF session store
     participant Gate as Per-intake turn coordinator
@@ -323,8 +325,8 @@ sequenceDiagram
 
     User->>Teams: Describe request
     Teams->>Agent: Authenticated personal activity
-    Agent->>Intake: PrepareAsync(actor, latest message)
-    Intake->>Draft: Intake ID + complete candidate + latest message
+    Agent->>DraftService: PrepareAsync(actor, latest message)
+    DraftService->>Draft: Intake ID + complete candidate + latest message
     Draft->>McpClient: Initialize and list tools
     McpClient->>McpServer: Streamable HTTP
     McpServer-->>McpClient: Exactly two read-only tools
@@ -345,21 +347,21 @@ sequenceDiagram
     Draft->>Draft: Strict schema parsing and boundary translation
     Draft-->>Gate: Successfully validated outcome
     Gate->>Memory: Save native session
-    Draft-->>Intake: Untrusted candidate + optional message/environment option IDs
-    Intake->>Context: Reload options and validate every identifier and relationship
+    Draft-->>DraftService: Untrusted candidate + optional message/environment option IDs
+    DraftService->>Context: Reload options and validate every identifier and relationship
     Context->>DB: Query authoritative records
     alt Identifier or candidate value is rejected
-        Intake->>Intake: Clear rejected fields and preserve validated fields
-        Intake->>DB: Persist sanitized candidate and typed validation errors
+        DraftService->>DraftService: Clear rejected fields and preserve validated fields
+        DraftService->>DB: Persist sanitized candidate and typed validation errors
     else Candidate is accepted
-        Intake->>DB: Persist clarification or immutable ready scope
+        DraftService->>DB: Persist clarification or immutable ready scope
     end
     Agent-->>Teams: Clarification, safe failure, or immutable card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated Action.Execute
-    Agent->>Intake: ConfirmAsync(actor, intake ID)
-    Intake->>DB: Reload ownership/status/scope and revalidate
-    Intake->>DB: One save: submitted intake + request + audit
+    Agent->>Submit: ConfirmDraftAsync(actor, intake ID)
+    Submit->>DB: Reload ownership/status/scope and revalidate
+    Submit->>DB: One save: submitted intake + request + audit
     Agent-->>Teams: Stable request ID and trusted Web link
 ```
 
@@ -490,7 +492,7 @@ stateDiagram-v2
 
 1. The Teams boundary derives actor, tenant, and conversation from authenticated
    activity context.
-2. `RequestIntakeService` reloads the ready intake, verifies the typed actor ownership
+2. `RequestSubmissionService` reloads the ready intake, verifies the typed actor ownership
    binding plus status/expiry, and revalidates its immutable `PreparedDetails`.
 3. The same confirmation use case constructs the request with the server-reserved ID
    and canonical `ValidatedRequestDetails`, then stages request-created audit evidence.

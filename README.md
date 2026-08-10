@@ -46,7 +46,7 @@ Microsoft Teams personal chat
 +-----------------------------------------------------------------------+
 | GovernedAccess.Web                                                    |
 |                                                                       |
-| /api/messages -> Teams adapter -> RequestIntakeService                |
+| /api/messages -> Teams adapter -> Draft + submission services        |
 |                       |                |                               |
 |                       v                v                               |
 |                 MAF ChatClientAgent  EF Core / SQLite                  |
