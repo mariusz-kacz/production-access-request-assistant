@@ -94,6 +94,9 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             scope.ServiceProvider
                 .GetRequiredService<SyntheticAccessProvisionerControl>()
                 .Reset();
+            scope.ServiceProvider
+                .GetRequiredService<TeamsDraftCardTracker>()
+                .Clear();
 
             await dbContext.Database.EnsureCreatedAsync(cancellationToken);
             await ClearDatabaseAsync(dbContext, cancellationToken);

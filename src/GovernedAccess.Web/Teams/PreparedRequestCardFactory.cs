@@ -109,9 +109,6 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         var facts = new JsonArray
         {
             CreateFact(
-                "Request ID",
-                session.ReservedRequestId.Value.ToString("D")),
-            CreateFact(
                 "Client",
                 FormatDisplayValue(
                     client.DisplayName,
@@ -158,14 +155,14 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                     ["type"] = "TextBlock",
                     ["size"] = "Large",
                     ["weight"] = "Bolder",
-                    ["text"] = "Confirm production access request",
+                    ["text"] = "Review request draft",
                     ["wrap"] = true,
                 },
                 new JsonObject
                 {
                     ["type"] = "TextBlock",
                     ["text"] =
-                        "Review the immutable request below. Confirming submits it for business approval; it does not approve or grant production access.",
+                        "Review the draft below. To change any details, send another message. Confirming submits it for business approval; it does not approve or grant production access.",
                     ["wrap"] = true,
                 },
                 new JsonObject

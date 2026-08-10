@@ -8,7 +8,7 @@
 
 **Input**: User description: "Provide a Teams-only conversational access-request
 assistant that clarifies a developer's intent, gathers only approved read-only
-context, presents one immutable final request for explicit requester confirmation,
+context, presents one immutable request draft for explicit requester confirmation,
 and then hands the submitted request to the existing deterministic approval and
 provisioning workflow."
 
@@ -18,8 +18,8 @@ provisioning workflow."
 
 An authenticated developer describes the temporary production access they need in a
 personal Teams conversation. The assistant gathers the necessary request context and,
-when the request is deterministically complete and valid, presents an exact final
-request summary. The developer confirms that summary, receives a stable request ID,
+when the request is deterministically complete and valid, presents an exact review
+draft. The developer confirms that draft, receives a stable request ID,
 and can follow the request in the existing web application. Confirmation submits the
 request for later approval; it does not approve or grant access.
 
@@ -27,7 +27,7 @@ request for later approval; it does not approve or grant access.
 entry point without changing who approves or provisions access.
 
 **Independent Test**: Start with a complete access description from an authenticated
-developer, confirm the displayed final request, and verify that exactly one immutable
+developer, confirm the displayed ready draft, and verify that exactly one immutable
 request enters the existing workflow with the displayed scope and authenticated
 requester.
 
@@ -35,19 +35,26 @@ requester.
 
 1. **Given** an authenticated developer in a personal Teams conversation and a
    complete, valid access description, **When** the assistant finishes preparation,
-   **Then** it displays a final request containing the canonical client, environment,
+   **Then** it displays a ready request draft containing the canonical client, environment,
    requested role, justification, optional incident, fixed eight-hour lifetime, and
    an unambiguous statement that no access has yet been approved or granted.
-2. **Given** a valid final request is displayed, **When** its owning developer selects
+2. **Given** a valid ready request draft is displayed, **When** its owning developer selects
    **Confirm and submit** before it expires, **Then** exactly one immutable access
    request with the displayed scope is submitted under the fixed synthetic requester
    and begins awaiting business approval.
 3. **Given** confirmation has submitted a request, **When** the developer receives the
    result, **Then** the result contains the stable request ID and a way to open that
    request in the existing web application.
-4. **Given** a developer sends ordinary conversation text after a final request is
-   displayed, **When** the message is processed, **Then** the displayed request is not
-   changed and no request is submitted.
+4. **Given** a ready request draft is displayed, **When** the developer asks about
+   alternate roles, environments, tradeoffs, or a hypothetical change without
+   requesting a revision, **Then** the assistant answers from approved read-only
+   context while the same draft, preparation identity, deadline, and confirmation
+   card remain active.
+5. **Given** a ready request draft is displayed, **When** the developer explicitly
+   changes one or more fields and deterministic assessment produces a different
+   candidate, **Then** the prior immutable draft is superseded and a replacement
+   preparation carries forward every unrelated validated field without submitting a
+   request.
 
 ---
 
@@ -56,14 +63,14 @@ requester.
 An authenticated developer can begin with incomplete or ambiguous intent. The
 assistant asks focused follow-up questions, uses process-local conversation history
 to understand replies in context, and carries forward the current typed candidate
-values. A final request is not shown until authoritative,
+values. A ready request draft is not shown until authoritative,
 deterministic validation confirms that every required field is complete and valid.
 
 **Why this priority**: Conversational clarification is the principal user benefit over
 the existing one-shot draft experience.
 
 **Independent Test**: Begin with a description missing at least two required values,
-answer the assistant's questions over multiple turns, and verify that no final request
+answer the assistant's questions over multiple turns, and verify that no ready draft
 appears until all required values pass deterministic validation.
 
 **Acceptance Scenarios**:
@@ -71,7 +78,7 @@ appears until all required values pass deterministic validation.
 1. **Given** a developer omits a required request value, **When** the assistant
    processes the description, **Then** it asks one focused question, may present
    choices grounded in the approved read-only context when applicable, and does not
-   display a final request.
+   display a ready request draft.
 2. **Given** the assistant proposes an identifier that does not exist or conflicts
    with authoritative client, environment, role, or incident data, **When** the
    candidate is checked, **Then** the invalid value is not accepted and the developer
@@ -100,27 +107,27 @@ appears until all required values pass deterministic validation.
 
 ### User Story 3 - Safely Handle Expiry, Replay, and Failure (Priority: P3)
 
-A developer receives safe, comprehensible behavior when a final request expires, a
+A developer receives safe, comprehensible behavior when a ready request draft expires, a
 confirmation is delivered more than once, or an AI or context dependency fails.
 Retries cannot create duplicate requests or expand request scope.
 
 **Why this priority**: Teams actions and model operations can be retried or fail, and
 safe recovery is required before this channel can be trusted for request submission.
 
-**Independent Test**: Exercise an expired final request, a repeated confirmation, and
+**Independent Test**: Exercise an expired ready draft, a repeated confirmation, and
 each typed preparation failure; verify that only the valid first confirmation can
 create a request and that recovery guidance never changes workflow state.
 
 **Acceptance Scenarios**:
 
-1. **Given** a final request is more than 30 minutes old, **When** its confirmation is
+1. **Given** a ready request draft is more than 30 minutes old, **When** its confirmation is
    selected, **Then** no request is submitted and the developer is told to begin a
    new preparation.
-2. **Given** a final request has already been submitted, **When** the same confirmation
+2. **Given** a ready request draft has already been submitted, **When** the same confirmation
    is delivered again, **Then** the existing request ID is returned and no duplicate
    request or audit history is created.
 3. **Given** a different authenticated developer attempts to confirm another
-   developer's final request, **When** the action is evaluated, **Then** it is rejected
+   developer's ready request draft, **When** the action is evaluated, **Then** it is rejected
    without revealing or submitting the request scope.
 4. **Given** model interpretation or approved context lookup times out, is
    unavailable, is cancelled, or produces malformed output, **When** the turn ends,
@@ -183,10 +190,12 @@ form, and session capability are absent while approval and retry endpoints remai
 
 ### Edge Cases
 
-- A developer starts a new preparation while another preparation or final request is
-  active in the same personal conversation; the older preparation is superseded and
-  can no longer be confirmed.
-- The final request expires while the developer is viewing it.
+- A developer discusses alternatives while a ready draft is active; the existing
+  preparation and card remain confirmable because the assessed candidate is unchanged.
+- A developer explicitly revises a ready draft; the older preparation is superseded,
+  its card becomes non-actionable when presentation metadata is available, and any
+  stale confirmation is rejected by durable status validation.
+- The ready request draft expires while the developer is viewing it.
 - Teams redelivers the same confirmation concurrently or after a response is lost.
 - A confirmation carries an unknown, malformed, expired, superseded, or already-used
   preparation reference.
@@ -226,18 +235,20 @@ form, and session capability are absent while approval and retry endpoints remai
 - **FR-005**: The assistant MUST interpret request intent, carry forward candidate
   values across turns, use process-local conversation history to interpret
   follow-up answers, and ask one focused clarification at a time.
-- **FR-006**: The assistant MUST receive exactly the existing three approved
-  read-only context capabilities for production environment, incident, and available
-  role data and MUST receive no additional context or state-changing capability.
+- **FR-006**: The assistant MUST receive exactly `get_production_environment` and
+  `get_incident`. Environment results MUST include authoritative client relationships
+  and assigned roles; no separate role-listing or state-changing capability is
+  available.
 - **FR-007**: Every assistant turn MUST produce a closed, schema-valid proposal to
   supply the complete nullable candidate snapshot and either one typed clarification
-  target and bounded message or no clarification; arbitrary assistant prose MUST NOT
-  determine readiness or cause a state change.
+  target, bounded message, and optional bounded environment option identifiers or no
+  clarification; arbitrary assistant prose MUST NOT determine readiness or cause a
+  state change.
 - **FR-008**: Every model-proposed client, environment, role, incident, and business
   value MUST be checked against authoritative stored data and existing request rules.
 - **FR-009**: The system MUST determine readiness using deterministic validation and
   MUST NOT rely on the assistant's assertion that all open points are resolved.
-- **FR-010**: The system MUST NOT display a final request until all required values
+- **FR-010**: The system MUST NOT display a ready request draft until all required values
   are present, canonical, mutually consistent, and valid at the time of preparation.
 - **FR-011**: When a request becomes ready, the system MUST create a server-owned
   prepared-request snapshot containing a server-generated preparation reference, a
@@ -246,18 +257,22 @@ form, and session capability are absent while approval and retry endpoints remai
   binding, and correlation metadata.
 - **FR-012**: A prepared request MUST expire 30 minutes after it becomes ready for
   confirmation.
-- **FR-013**: Creating another preparation or final request for the same authenticated
-  developer and personal conversation MUST supersede any earlier unsubmitted
-  preparation.
-- **FR-014**: The final request MUST display the canonical client, environment,
+- **FR-013**: Discussion that leaves an active ready candidate unchanged MUST preserve
+  its preparation identity and confirmability. When deterministic assessment produces
+  a different candidate, the system MUST supersede the prior unsubmitted preparation
+  before persisting its replacement.
+- **FR-014**: The ready request draft MUST display the canonical client, environment,
   requested role, justification, optional incident, and fixed eight-hour lifetime,
   and MUST explain that requester confirmation submits the request but does not
-  approve or grant access.
-- **FR-015**: The final request MUST expose one state-changing action labeled
+  approve or grant access. It MUST NOT display the server-reserved request ID before
+  successful submission.
+- **FR-015**: The ready request draft MUST expose one state-changing action labeled
   **Confirm and submit** and MUST NOT offer editing, approval, provisioning, duration,
   approver-selection, or scope-changing actions.
-- **FR-016**: After a final request is displayed, conversation text MUST NOT alter or
-  submit it; correction MUST require a new preparation that supersedes the old one.
+- **FR-016**: Conversation text MUST NOT mutate or submit the immutable ready snapshot.
+  Natural-language discussion with an unchanged assessed candidate MUST leave it
+  active. An explicit revision MUST create a replacement preparation and make the
+  prior preparation non-confirmable only when the assessed candidate changes.
 - **FR-017**: The confirmation action MUST carry only an opaque prepared-request
   reference and presentation metadata; it MUST NOT carry trusted identity, role,
   approver, duration, approval, validation, or request-scope assertions.
@@ -282,10 +297,10 @@ form, and session capability are absent while approval and retry endpoints remai
 - **FR-023**: The assistant and its context capabilities MUST NOT be able to submit a
   request, record either approval, transition workflow state, provision or revoke
   access, retry provisioning, or access arbitrary stored data.
-- **FR-024**: Preparation MUST expose safe typed outcomes for clarification required,
-  deterministically rejected candidate with application-owned provenance, ready for
-  confirmation, malformed model output, timeout, cancellation, and dependency
-  unavailability.
+- **FR-024**: Preparation MUST expose safe typed outcomes for ready-draft discussion,
+  clarification required, deterministically rejected candidate with application-owned
+  provenance, ready for confirmation, malformed model output, timeout, cancellation,
+  and dependency unavailability.
 - **FR-025**: Active conversation content MUST remain only in process-local memory for
   the host lifetime, MUST NOT be written to the
   application database or persisted as a transcript, and MUST be discarded on
@@ -320,7 +335,9 @@ form, and session capability are absent while approval and retry endpoints remai
   notifications.
 - Real corporate identity, tenant onboarding, user consent, directory integration,
   or production access.
-- Requester editing after the final request is displayed.
+- Editing a ready draft in place or modifying any submitted request. Pre-submission
+  correction creates a replacement preparation; post-submission correction creates a
+  new request and requires new approvals.
 - Model-visible submission, approval, provisioning, revocation, retry, workflow,
   database, or generic-query actions.
 - Autonomous execution, multiple collaborating agents, agent-to-agent communication,
@@ -355,8 +372,9 @@ form, and session capability are absent while approval and retry endpoints remai
 - **AI and MCP boundary**: AI may interpret intent, preserve conversational context,
   ask questions, and propose a typed candidate. Every proposal is schema-validated
   and deterministically checked. The allowlist remains exactly
-  `get_production_environment`, `get_incident`, and `get_available_roles`; all remain
-  read-only. Model and MCP contracts are translated outside domain rules. The model
+  `get_production_environment` and `get_incident`; both remain read-only, and
+  environment context carries its assigned roles. Model and MCP contracts are
+  translated outside domain rules. The model
   receives no submission, approval, workflow, provisioning, revocation, retry,
   arbitrary-database, or generic-query capability.
 - **Provisioning and idempotency**: Provisioning is unaffected and remains unavailable
@@ -400,9 +418,10 @@ form, and session capability are absent while approval and retry endpoints remai
 - **Integration/contract coverage**: Verify authenticated personal-chat intake,
   fixed synthetic requester mapping, history-backed multi-turn interpretation,
   process-local history isolation and restart recovery, durable candidate
-  carry-forward, exact final-request presentation, opaque confirmation actions,
+  carry-forward, ready-draft discussion, replacement preparation, stale-card
+  rejection, exact review-card presentation, opaque confirmation actions,
   persistence, repeated confirmation, stable request links, and continued web
-  behavior. Verify the exact three-tool read-only context contract and model tool
+  behavior. Verify the exact two-tool read-only context contract and model tool
   allowlist. No automated test may require a live model; deterministic fake behavior
   must cover history-sensitive clarification and candidate proposals.
 - **Negative coverage**: Verify unauthenticated or non-personal activities, forged
@@ -419,11 +438,11 @@ form, and session capability are absent while approval and retry endpoints remai
 ### Measurable Outcomes
 
 - **SC-001**: In a representative suite of complete and incomplete request
-  descriptions, at least 90% reach an accurate final request within five developer
+  descriptions, at least 90% reach an accurate ready request draft within five developer
   messages without manual use of the web request-entry form.
 - **SC-002**: For a complete valid description under normal local conditions, a
-  developer can reach and confirm the final request in under three minutes.
-- **SC-003**: 100% of displayed final requests pass deterministic validation at the
+  developer can reach and confirm the ready request draft in under three minutes.
+- **SC-003**: 100% of displayed ready request drafts pass deterministic validation at the
   time they are displayed and visibly distinguish requester confirmation from
   business approval, DevOps approval, and access grant.
 - **SC-004**: Repeated or concurrent confirmation of the same prepared request creates
@@ -435,7 +454,7 @@ form, and session capability are absent while approval and retry endpoints remai
   existing business approval, DevOps approval, provisioning failure/retry, and
   idempotent provisioning scenarios without channel-specific exceptions.
 - **SC-007**: In a five-person comprehension review, at least four participants
-  correctly state after seeing the final request that selecting **Confirm and
+  correctly state after seeing the ready request draft that selecting **Confirm and
   submit** does not approve or grant production access.
 - **SC-008**: All automated acceptance scenarios run without a live model or real
   production identity, environment, or access provider.
@@ -461,11 +480,11 @@ form, and session capability are absent while approval and retry endpoints remai
   Durable session persistence, removal lifecycle, and conversation compaction are
   deferred until operational requirements justify them.
 - A ready prepared request expires after 30 minutes; an expired, superseded, or
-  incorrect final request must be replaced by starting a new preparation.
+  incorrect ready draft must be replaced by starting a new preparation.
 - The React application remains a request register and governed approval/retry
   surface; it does not create requests.
 - Later Teams notifications for approval, rejection, provisioning, expiry, or retry
   are deferred.
-- The fixed synthetic reference dataset, exact three-tool MCP surface, two human
+- The fixed synthetic reference dataset, exact two-tool MCP surface, two human
   approval stages, immutable submitted scope, fixed eight-hour lifetime, and protected
   idempotent provisioning remain the product baseline.

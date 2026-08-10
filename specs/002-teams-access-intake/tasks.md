@@ -26,8 +26,9 @@ goal and independent test.
 
 - Domain and application contracts stay free of Microsoft Agent Framework,
   Microsoft 365 Agents SDK, Activity Protocol, Adaptive Card, and MCP SDK types.
-- The exact model-visible tool set remains `get_production_environment`,
-  `get_incident`, and `get_available_roles`; no state-changing tool is introduced.
+- The exact model-visible tool set remains `get_production_environment` and
+  `get_incident`; environment context includes assigned roles and no state-changing
+  or separate role-listing tool is introduced.
 - Requester confirmation is a deterministic authenticated application action, not a
   MAF tool-approval continuation.
 - Unit and integration tests cover authorization, ownership, immutable scope,
@@ -135,7 +136,7 @@ Microsoft Agents, Adaptive Card, and MCP SDK types.
 
 ### Simplification Guardrails
 
-- Preserve authenticated actor/conversation binding, exact three-tool MCP allowlist,
+- Preserve authenticated actor/conversation binding, exact two-tool MCP allowlist,
   strict model proposal validation, authoritative identifier validation, immutable
   ready scope, 30-minute expiry, reserved request ID, one-save confirmation,
   requester/business/DevOps separation, and existing provisioning rules.
@@ -278,12 +279,12 @@ re-clarification without losing the durable candidate or guessing a selection.
 
 ### Vertical Implementation Sequence for User Story 2
 
-- [X] T059 [US2] Replace the persisted clarification-option contract with a complete nullable candidate snapshot, optional closed `{ target, message }` clarification proposal, and run-scoped validation feedback; remove `RequestClarificationContext` from src/GovernedAccess.Core/Ports/RequestDrafting.cs, src/GovernedAccess.Core/Domain/RequestClarificationContext.cs, and specs/002-teams-access-intake/contracts/request-intake-proposal.schema.json
+- [X] T059 [US2] Replace persisted clarification state with a complete nullable candidate snapshot, optional closed `{ target, message, environmentOptionIds }` clarification proposal whose bounded environment IDs remain turn-local, and run-scoped validation feedback; remove `RequestClarificationContext` from src/GovernedAccess.Core/Ports/RequestDrafting.cs, src/GovernedAccess.Core/Domain/RequestClarificationContext.cs, and specs/002-teams-access-intake/contracts/request-intake-proposal.schema.json
 - [X] T060 [US2] Verify strict proposal invariants, complete-snapshot replacement including `null` clearing, deterministic readiness precedence, supersession, and terminal content disposal in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.UnitTests/RequestPreparationTests.cs
 - [X] T061 [US2] Replace the superseded custom MAF session cache and its smoke tests with matched `Microsoft.Agents.AI.Hosting` 1.15.0-preview.260722.1, native `AIHostAgent`/`AgentSessionStore`/`InMemoryAgentSessionStore`, plus one process-lifetime exact per-intake coordinator that serializes get/run/save without eviction, removal, stripes, or stale-entry retry loops in src/GovernedAccess.Web/GovernedAccess.Web.csproj, src/GovernedAccess.Web/Ai/MafConversationTurnCoordinator.cs, src/GovernedAccess.Web/Ai/MafConversationSessionCache.cs, and tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionCacheSmokeTests.cs
 - [X] T062 [US2] Refactor MAF intake to load and save the native in-memory session by intake ID, supply current durable candidate and validation feedback on every run, rely on restored conversation messages without an application history marker, save only completed schema-valid turns, retain the last saved snapshot after failure/cancellation/malformed output, enforce the strict candidate-plus-message response, and require self-contained re-clarification when relative text arrives without its preceding question in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs and src/GovernedAccess.Web/Ai/DeterministicChatClient.cs
-- [X] T063 [US2] Replace accepted collecting state with the complete canonical candidate snapshot, remove clarification persistence and option membership logic, and retain deterministic readiness and supersession in src/GovernedAccess.Core/Application/RequestIntakeService.cs, src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs, and src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
-- [X] T064 [US2] Register the native in-memory session store and process-lifetime turn coordinator as singletons, render the model clarification message without application-managed options, preserve candidate-rejection provenance, and never use MAF history during confirmation in src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
+- [X] T063 [US2] Replace accepted collecting state with the complete canonical candidate snapshot, remove clarification and option persistence, validate proposed environment options as turn-local authoritative presentation data, and retain deterministic readiness and supersession in src/GovernedAccess.Core/Application/RequestIntakeService.cs, src/GovernedAccess.Core/Domain/RequestIntakeSession.cs, src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs, and src/GovernedAccess.Web/Persistence/EfRequestIntakeStore.cs
+- [X] T064 [US2] Register the native in-memory session store and process-lifetime turn coordinator as singletons, render the bounded model clarification message with application-validated authoritative environment choices, preserve candidate-rejection provenance, and never use MAF history during confirmation in src/GovernedAccess.Web/Teams/TeamsAgentRegistration.cs and src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 - [X] T065 [P] [US2] Verify two missing values, direct and ordinal replies through active MAF history, complete candidate carry-forward, actor/intake isolation, no option/transcript/session persistence in SQLite, final-card timing, start-over supersession, immutable old-card behavior, and no text-triggered submission in tests/GovernedAccess.IntegrationTests/Teams/TeamsClarificationTests.cs
 - [X] T066 [P] [US2] Verify native session reuse, process-restart-equivalent session loss, no guessed relative selection, durable-candidate recovery, exact per-intake concurrent-turn serialization, independent intake progress, and preservation of the last successfully saved session after a failed turn in tests/GovernedAccess.IntegrationTests/Ai/MafConversationSessionStoreTests.cs
 - [X] T067 [P] [US2] Verify unknown and cross-client identifiers, false model-complete rejection, available-role discovery, and representative complete and incomplete utterances reach accurate preparation within five developer messages in tests/GovernedAccess.IntegrationTests/Teams/TeamsCandidateValidationTests.cs and tests/GovernedAccess.IntegrationTests/Teams/TeamsConversationQualityTests.cs
@@ -379,7 +380,7 @@ operation, or grant.
 - [X] T080 [US3] Verify wrong-channel, non-personal, disallowed-tenant, missing-actor, and forged identity/scope behavior directly against TeamsActorResolver, then add unauthenticated activity, unknown verb, and unsupported schema-version rows to the existing hosted Teams suites without creating another full-host fixture/class in tests/GovernedAccess.IntegrationTests/Teams/TeamsActorResolverComponentTests.cs, tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs, and tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs
 - [X] T081 [US3] Require exact MCP catalog equality, propagate caller cancellation from the request deadline, and translate provider failures to safe outcomes in src/GovernedAccess.Web/Ai/MafRequestPreparationInterpreter.cs
 - [X] T082 [P] [US3] Verify malformed or unsupported proposals, prompt injection, caller cancellation, dependency unavailability, unchanged last-saved MAF session, and no workflow state as direct interpreter component tests without `WebApplicationFactory` in tests/GovernedAccess.IntegrationTests/Ai/MafRequestPreparationFailureTests.cs
-- [X] T083 [P] [US3] Verify exact three-tool allowlisting, missing/extra catalog failure, tool cancellation/unavailability, and absence of state-changing tools through the lightweight MCP test host and direct interpreter component boundary without starting the full application in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
+- [X] T083 [P] [US3] Verify exact two-tool allowlisting with roles embedded in environment context, missing/extra catalog failure, tool cancellation/unavailability, and absence of state-changing or separate role-listing tools through the lightweight MCP test host and direct interpreter component boundary without starting the full application in tests/GovernedAccess.IntegrationTests/Mcp/MafToolBoundaryTests.cs
 - [X] T084 [US3] Extend direct `ILogger<TeamsAccessRequestAgent>` metadata for preparation and confirmation replay/rejection without adding Core logging dependencies or logging/persisting a parallel intake or MAF-session history in src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs
 
 **Checkpoint**: The Teams intake path meets the expiry, replay, concurrency, failure,
@@ -609,3 +610,19 @@ infrastructure.
   multiple agents, model-visible state changes, or a second executable.
 - Commit after each task or coherent task group and stop at each checkpoint for
   independent validation.
+
+---
+
+## Phase 10: Ready Draft Discussion and Revision
+
+**Purpose**: Let a requester discuss a complete ready draft without invalidating its
+card, and create a separately confirmable immutable preparation only after the
+deterministically assessed candidate changes.
+
+- [X] T091 [US1] Amend ready-draft acceptance scenarios and functional requirements for discussion, natural-language revision, hidden pre-submission request identity, immutable replacement preparations, and the exact two-tool MCP boundary in specs/002-teams-access-intake/spec.md
+- [X] T092 [P] [US1] Synchronize the proposal schema, data model, research decisions, plan boundaries, card contract, activity contract, quickstart, and validation evidence with `DraftDiscussion`, bounded authoritative environment choices, and replacement preparation behavior in specs/002-teams-access-intake/
+- [X] T093 [US1] Preserve an unexpired ready candidate through interpretation, return `DraftDiscussion` only for an unchanged ready assessment, and supersede/create a new intake before persisting a changed ready, incomplete, or rejected candidate in src/GovernedAccess.Core/Application/RequestIntakeService.cs and src/GovernedAccess.Core/Ports/RequestIntake.cs
+- [X] T094 [US1] Title the card **Review request draft**, hide the reserved request ID until submission, track the latest card as process-local presentation metadata, make replaced cards non-actionable, and return non-actionable invoke responses for stale terminal drafts in src/GovernedAccess.Web/Teams/
+- [X] T095 [P] [US1] Cover ready-draft discussion identity preservation, equivalent candidates, invalid alternatives, model failure, explicit revision, hidden request identity, stale-card invocation, and exact tracker binding in tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs and tests/GovernedAccess.IntegrationTests/Teams/
+- [ ] T096 [P] [US1] Add an adapter-level Teams test that captures `UpdateActivityAsync` and proves a changed assessed candidate makes the prior activity **Draft being revised**, sends a separate latest review card, and remains safely confirmable or rejectable when the presentation update fails
+- [X] T097 [P] [US1] Synchronize current architecture, security, orchestration, testing, product-baseline, and feature validation documentation with the distinction between unchanged discussion and changed-candidate replacement in docs/ and specs/002-teams-access-intake/validation.md

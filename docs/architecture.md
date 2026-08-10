@@ -322,6 +322,27 @@ and returns typed deterministic correction guidance without another model call. 
 an owned, unexpired ready intake can be confirmed. The model and MCP never receive a
 submit capability.
 
+When the requester sends another natural-language message while an unexpired ready
+draft is active, the interpreter receives its validated candidate without first
+changing durable state. Questions about alternate roles, environments, or hypothetical
+changes return bounded model-authored discussion while the same draft and confirmation
+card remain active. Only when deterministic assessment produces a candidate snapshot
+different from the ready candidate does Core supersede the immutable ready snapshot
+and persist a replacement preparation. That replacement can be ready, incomplete, or
+rejected; unrelated valid fields are preserved exactly as they are before the draft
+card is shown. The superseded card cannot be confirmed, and no access request exists
+until the requester confirms the latest ready draft.
+
+The Teams adapter retains the latest sent draft-card activity ID as process-local
+presentation metadata. An assessed candidate change makes that prior activity
+non-actionable as a **Draft being revised** card and sends the latest candidate as a
+separate review card.
+Clarification or validation rejection after an assessed candidate change, and explicit
+reset, similarly replace a tracked card with a non-actionable status card. Discussion
+does not alter the card. If presentation metadata is unavailable after restart or a
+channel update fails, durable intake status remains authoritative: invoking a stale
+card is rejected and replaces that clicked card with a non-actionable response.
+
 ### Explicit preparation reset
 
 The Teams adapter intercepts only an exact trimmed, case-insensitive `/new` message

@@ -81,6 +81,7 @@ public sealed class RequestIntakeService
         var session = sessionResult.IsSuccess
             ? sessionResult.Value
             : CreateSession(command);
+        RequestCandidate? readyCandidate = null;
 
         if (session.Status == RequestIntakeStatus.Ready)
         {
@@ -88,21 +89,21 @@ public sealed class RequestIntakeService
             if (session.IsExpired(occurredAt))
             {
                 session.MarkExpired(occurredAt, command.CorrelationId);
+
+                var lifecycleSave = await intakeStore.SaveChangesAsync(
+                    cancellationToken);
+                if (lifecycleSave.IsFailure)
+                {
+                    return RequestPreparationResult.Failed(
+                        lifecycleSave.Failure!);
+                }
+
+                session = CreateSession(command);
             }
             else
             {
-                session.MarkSuperseded(occurredAt, command.CorrelationId);
+                readyCandidate = ToCandidate(session);
             }
-
-            var lifecycleSave = await intakeStore.SaveChangesAsync(
-                cancellationToken);
-            if (lifecycleSave.IsFailure)
-            {
-                return RequestPreparationResult.Failed(
-                    lifecycleSave.Failure!);
-            }
-
-            session = CreateSession(command);
         }
         else if (session.Status != RequestIntakeStatus.Collecting)
         {
@@ -140,6 +141,36 @@ public sealed class RequestIntakeService
         {
             return RequestPreparationResult.Failed(
                 assessmentResult.Failure!);
+        }
+
+        if (readyCandidate is not null)
+        {
+            var assessedCandidate = ToCandidate(assessmentResult.Value);
+            if (assessmentResult.Value is RequestCandidateAssessmentReady
+                && MatchesCandidate(readyCandidate, assessedCandidate))
+            {
+                return proposal.Kind == RequestPreparationProposalKind.Clarification
+                    ? await CreateDraftDiscussionAsync(
+                        session,
+                        proposal.Clarification!,
+                        cancellationToken)
+                    : RequestPreparationResult.DraftDiscussion(
+                        "The current draft remains ready for confirmation.",
+                        session);
+            }
+
+            session.MarkSuperseded(
+                clock.UtcNow.ToUniversalTime(),
+                command.CorrelationId);
+            var supersessionSave = await intakeStore.SaveChangesAsync(
+                cancellationToken);
+            if (supersessionSave.IsFailure)
+            {
+                return RequestPreparationResult.Failed(
+                    supersessionSave.Failure!);
+            }
+
+            session = CreateSession(command);
         }
 
         if (assessmentResult.Value
@@ -451,57 +482,20 @@ public sealed class RequestIntakeService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var environmentChoices = new List<RequestEnvironmentChoice>(
-            clarification.EnvironmentOptionIds.Count);
-        foreach (var environmentOptionId in clarification.EnvironmentOptionIds)
+        var choicesResult = await ResolveEnvironmentChoicesAsync(
+            clarification,
+            cancellationToken);
+        if (choicesResult.IsFailure)
         {
-            var contextResult =
-                await requestContext.GetProductionEnvironmentContextAsync(
-                    environmentOptionId,
-                    cancellationToken);
-            if (contextResult.IsFailure)
-            {
-                if (contextResult.Failure!.Kind
-                    != ApplicationFailureKind.NotFound)
-                {
-                    return RequestPreparationResult.Failed(
-                        contextResult.Failure);
-                }
-
-                return await PersistRejectedCandidateAsync(
+            return choicesResult.Failure!.Kind == ApplicationFailureKind.InvalidInput
+                ? await PersistRejectedCandidateAsync(
                     session,
                     candidate,
                     [InvalidEnvironmentOptionError()],
                     correlationId,
-                    cancellationToken);
-            }
-
-            var context = contextResult.Value;
-            if (!string.Equals(
-                    context.Environment.Id,
-                    environmentOptionId,
-                    StringComparison.Ordinal))
-            {
-                return await PersistRejectedCandidateAsync(
-                    session,
-                    candidate,
-                    [InvalidEnvironmentOptionError()],
-                    correlationId,
-                    cancellationToken);
-            }
-
-            environmentChoices.Add(
-                new RequestEnvironmentChoice(
-                    context.Environment.Id,
-                    context.Environment.DisplayName,
-                    context.Client.Id,
-                    context.Client.DisplayName));
+                    cancellationToken)
+                : RequestPreparationResult.Failed(choicesResult.Failure);
         }
-
-        environmentChoices.Sort(
-            static (left, right) => StringComparer.Ordinal.Compare(
-                left.EnvironmentId,
-                right.EnvironmentId));
 
         session.UpdateCandidate(
             candidate.ClientId,
@@ -517,8 +511,91 @@ public sealed class RequestIntakeService
             ? RequestPreparationResult.Failed(saveResult.Failure!)
             : RequestPreparationResult.ClarificationRequired(
                 clarification,
-                environmentChoices);
+                choicesResult.Value);
     }
+
+    private async Task<RequestPreparationResult> CreateDraftDiscussionAsync(
+        RequestIntakeSession session,
+        RequestClarificationProposal discussion,
+        CancellationToken cancellationToken)
+    {
+        var choicesResult = await ResolveEnvironmentChoicesAsync(
+            discussion,
+            cancellationToken);
+        if (choicesResult.IsFailure)
+        {
+            return choicesResult.Failure!.Kind == ApplicationFailureKind.InvalidInput
+                ? RequestPreparationResult.DraftDiscussion(
+                    "The suggested alternatives could not be validated.",
+                    session)
+                : RequestPreparationResult.Failed(choicesResult.Failure);
+        }
+
+        return RequestPreparationResult.DraftDiscussion(
+            discussion.Message,
+            session,
+            choicesResult.Value);
+    }
+
+    private async Task<ApplicationResult<IReadOnlyList<RequestEnvironmentChoice>>>
+        ResolveEnvironmentChoicesAsync(
+            RequestClarificationProposal clarification,
+            CancellationToken cancellationToken)
+    {
+        var environmentChoices = new List<RequestEnvironmentChoice>(
+            clarification.EnvironmentOptionIds.Count);
+        foreach (var environmentOptionId in clarification.EnvironmentOptionIds)
+        {
+            var contextResult =
+                await requestContext.GetProductionEnvironmentContextAsync(
+                    environmentOptionId,
+                    cancellationToken);
+            if (contextResult.IsFailure)
+            {
+                if (contextResult.Failure!.Kind
+                    != ApplicationFailureKind.NotFound)
+                {
+                    return ApplicationResult.Failed<
+                        IReadOnlyList<RequestEnvironmentChoice>>(
+                        contextResult.Failure);
+                }
+
+                return InvalidEnvironmentChoiceResolution();
+            }
+
+            var context = contextResult.Value;
+            if (!string.Equals(
+                    context.Environment.Id,
+                    environmentOptionId,
+                    StringComparison.Ordinal))
+            {
+                return InvalidEnvironmentChoiceResolution();
+            }
+
+            environmentChoices.Add(
+                new RequestEnvironmentChoice(
+                    context.Environment.Id,
+                    context.Environment.DisplayName,
+                    context.Client.Id,
+                    context.Client.DisplayName));
+        }
+
+        environmentChoices.Sort(
+            static (left, right) => StringComparer.Ordinal.Compare(
+                left.EnvironmentId,
+                right.EnvironmentId));
+
+        return ApplicationResult.Succeeded<IReadOnlyList<RequestEnvironmentChoice>>(
+            environmentChoices.AsReadOnly());
+    }
+
+    private static ApplicationResult<IReadOnlyList<RequestEnvironmentChoice>>
+        InvalidEnvironmentChoiceResolution() =>
+        ApplicationResult.Failed<IReadOnlyList<RequestEnvironmentChoice>>(
+            new ApplicationFailure(
+                ApplicationFailureKind.InvalidInput,
+                "environment_option_not_found",
+                "A proposed production environment option does not exist."));
 
     private static FieldValidationError InvalidEnvironmentOptionError() =>
         new(
@@ -558,6 +635,27 @@ public sealed class RequestIntakeService
             session.RequestedRoleId,
             session.Justification,
             session.IncidentId);
+
+    private static RequestCandidate ToCandidate(
+        RequestCandidateAssessment assessment) =>
+        assessment switch
+        {
+            RequestCandidateAssessmentRejected rejected => rejected.Candidate,
+            RequestCandidateAssessmentIncomplete incomplete => incomplete.Candidate,
+            RequestCandidateAssessmentReady ready => new RequestCandidate(
+                ready.Fields.ClientId,
+                ready.Fields.EnvironmentId,
+                ready.Fields.RequestedRoleId,
+                ready.Fields.Justification,
+                ready.Fields.IncidentId),
+            _ => throw new InvalidOperationException(
+                "The request candidate assessment is unsupported."),
+        };
+
+    private static bool MatchesCandidate(
+        RequestCandidate expected,
+        RequestCandidate actual) =>
+        expected == actual;
 
     private static bool IsClarificationUnresolved(
         RequestCandidate candidate,

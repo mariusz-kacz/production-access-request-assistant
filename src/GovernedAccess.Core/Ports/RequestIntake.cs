@@ -164,6 +164,7 @@ public sealed record RequestEnvironmentChoice
 
 public enum RequestPreparationResultKind
 {
+    DraftDiscussion,
     ClarificationRequired,
     ReadyForConfirmation,
     CandidateRejected,
@@ -178,6 +179,7 @@ public sealed class RequestPreparationResult
 {
     private RequestPreparationResult(
         RequestPreparationResultKind kind,
+        string? discussionMessage = null,
         RequestClarificationProposal? clarification = null,
         IReadOnlyList<RequestEnvironmentChoice>? environmentChoices = null,
         RequestIntakeSession? session = null,
@@ -185,6 +187,7 @@ public sealed class RequestPreparationResult
         ApplicationFailure? failure = null)
     {
         Kind = kind;
+        DiscussionMessage = discussionMessage;
         Clarification = clarification;
         EnvironmentChoices = environmentChoices ?? [];
         Session = session;
@@ -193,6 +196,8 @@ public sealed class RequestPreparationResult
     }
 
     public RequestPreparationResultKind Kind { get; }
+
+    public string? DiscussionMessage { get; }
 
     public RequestClarificationProposal? Clarification { get; }
 
@@ -203,6 +208,62 @@ public sealed class RequestPreparationResult
     public IReadOnlyList<FieldValidationError> ValidationErrors { get; }
 
     public ApplicationFailure? Failure { get; }
+
+    public static RequestPreparationResult DraftDiscussion(
+        string message,
+        RequestIntakeSession session,
+        IEnumerable<RequestEnvironmentChoice>? environmentChoices = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        ArgumentNullException.ThrowIfNull(session);
+        if (session.Status != RequestIntakeStatus.Ready)
+        {
+            throw new ArgumentException(
+                "Draft discussion requires an active ready intake.",
+                nameof(session));
+        }
+
+        message = message.Trim();
+        if (message.Length > RequestClarificationProposal.MaximumMessageLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(message),
+                message.Length,
+                $"A draft-discussion message cannot exceed {RequestClarificationProposal.MaximumMessageLength} characters.");
+        }
+
+        var choices = environmentChoices?.ToArray() ?? [];
+        if (choices.Length
+            > RequestClarificationProposal.MaximumEnvironmentOptionCount)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(environmentChoices),
+                choices.Length,
+                $"A draft discussion cannot contain more than {RequestClarificationProposal.MaximumEnvironmentOptionCount} environment choices.");
+        }
+
+        foreach (var choice in choices)
+        {
+            ArgumentNullException.ThrowIfNull(choice);
+        }
+
+        if (choices
+                .Select(choice => choice.EnvironmentId)
+                .Distinct(StringComparer.Ordinal)
+                .Count()
+            != choices.Length)
+        {
+            throw new ArgumentException(
+                "Draft-discussion environment choices must have unique identifiers.",
+                nameof(environmentChoices));
+        }
+
+        return new(
+            RequestPreparationResultKind.DraftDiscussion,
+            discussionMessage: message,
+            environmentChoices: Array.AsReadOnly(choices),
+            session: session);
+    }
 
     public static RequestPreparationResult ClarificationRequired(
         RequestClarificationProposal clarification) =>

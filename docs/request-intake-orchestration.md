@@ -31,7 +31,8 @@ The governing boundary is:
 For each non-command requester message, `RequestIntakeService` performs exactly one
 interpretation attempt:
 
-1. Load or create the collecting intake and its last accepted candidate.
+1. Load or create the active intake and its last accepted candidate. An unexpired
+   `Ready` intake remains unchanged while the new turn is interpreted.
 2. Ask the model for one complete nullable candidate snapshot.
 3. Schema-validate and translate the proposal.
 4. Assess the candidate in one authoritative pass: validate every supplied value,
@@ -39,15 +40,38 @@ interpretation attempt:
    whether the result is rejected, incomplete, or ready.
 5. For an environment clarification, validate and reload every structured
    `environmentOptionIds` value before accepting its associated model message.
-6. Persist either the ready candidate, a focused clarification with its sanitized
+6. If an existing ready candidate and the assessed candidate are identical, return
+   bounded discussion without persisting or changing confirmation identity. Otherwise,
+   supersede that ready snapshot and create a replacement intake before continuing.
+7. Persist either the ready candidate, a focused clarification with its sanitized
    candidate, or the sanitized rejected candidate and deterministic errors. Choice
    lists and rejected potential identifiers remain turn-local and are not persisted.
-7. When a value or option set is rejected, return transparent application-owned
+8. When a value or option set is rejected, return transparent application-owned
    correction guidance and wait for the requester to provide new information in a
    later turn.
 
 The application never asks the model to reinterpret the same requester message after
 authoritative validation has rejected a value.
+
+## Ready draft discussion and revision
+
+An unexpired ready intake is an immutable confirmation snapshot, but it can remain the
+context for another natural-language turn:
+
+- Questions about alternatives, roles, environments, tradeoffs, or hypothetical
+  changes must preserve the complete candidate. The application returns
+  `DraftDiscussion`; the preparation ID, reserved request ID, deadline, and existing
+  card remain active.
+- A proposed candidate response that is value-equal to the ready candidate also leaves
+  that draft active and creates no replacement card.
+- When deterministic assessment produces a different candidate, Core first marks the
+  old intake `Superseded`, then creates a new intake and persists the replacement as
+  ready, incomplete, or rejected.
+- The old card's preparation ID therefore remains bound to a terminal snapshot and can
+  never confirm the replacement candidate.
+- The Teams adapter may use process-local activity metadata to change the prior card to
+  **Draft being revised**. This is presentation only; stale confirmation is rejected
+  from durable intake status even when that update cannot be performed.
 
 ## Partial candidate validation
 
@@ -205,6 +229,8 @@ them. Tests assert:
 - one authoritative candidate assessment per intake turn;
 - single-pass interpretation and deterministic rejection;
 - preservation of unrelated validated fields;
+- ready-draft discussion without a lifecycle or identity change;
+- changed-candidate supersession and replacement preparation;
 - sanitized persistence after rejection;
 - model-history reuse, isolation, failure, and reset behavior;
 - the exact two-tool MCP capability boundary, discovery/exact contracts, typed
@@ -213,7 +239,7 @@ them. Tests assert:
   authoritative choice rendering for valid choices; and
 - cancellation and typed provider failures.
 
-Natural-language interpretation, relative-answer quality, latency, cost, and
-provider safety are evaluated through the optional live-model semantic matrix in the
-[feature-004 quickstart](../specs/004-resolve-context-identifiers/quickstart.md). It is
-release evidence, not CI, and cannot confirm or submit a request.
+Natural-language interpretation, relative-answer quality, latency, cost, and provider
+safety are evaluated through the bounded live-model outcome evaluation in the
+[feature-006 quickstart](../specs/006-live-model-evaluation/quickstart.md). It is release
+evidence, not CI, and cannot confirm or submit a request.

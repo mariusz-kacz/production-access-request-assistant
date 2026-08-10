@@ -167,7 +167,7 @@ validate:
 
 1. complete request preparation and confirmation;
 2. history-sensitive multi-turn clarification;
-3. immutable card supersession;
+3. ready-draft discussion and immutable replacement;
 4. replay and concurrency;
 5. trust-boundary and dependency failures; and
 6. business approval, DevOps approval, and provisioning.
