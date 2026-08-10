@@ -11,6 +11,11 @@ namespace GovernedAccess.IntegrationTests.Ai;
 
 public sealed class MafRequestPreparationFailureTests
 {
+    private const string ClarificationResponse =
+        """
+        {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":null,"incidentId":null},"clarification":{"target":"justification","message":"What operational problem or intended outcome requires access?","environmentOptionIds":[]}}
+        """;
+
     public static TheoryData<string> RejectedProposalPayloads => new()
     {
         // Truncated JSON.
@@ -81,6 +86,45 @@ public sealed class MafRequestPreparationFailureTests
         Assert.Equal(
             RequestPreparationInterpretationFailure.Unavailable,
             failure.Failure);
+    }
+
+    [Fact]
+    public async Task InstructionsPreserveAllGenericProductionTiersAndRejectScopeOnlyJustification()
+    {
+        var chatClient = new RecordingChatClient(ClarificationResponse);
+        var interpreter = CreateInterpreter(chatClient);
+
+        var outcome = await interpreter.InterpretAsync(
+            CreateTurn(
+                Guid.NewGuid(),
+                "Use generic production and investigate the environment."),
+            TestContext.Current.CancellationToken);
+
+        Assert.IsType<RequestPreparationInterpretationSucceeded>(outcome);
+        var invocation = Assert.IsType<ModelExecutionChatInvocation>(
+            chatClient.LastInvocation);
+        var instructions = Assert.IsType<string>(invocation.Options?.Instructions);
+
+        Assert.Contains(
+            "bare word \"production\" is not a primary-tier selector",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "both primary-production",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "recovery-production environments remain plausible",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "scope-only wording, not as a task or outcome",
+            instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "null and return a justification clarification",
+            instructions,
+            StringComparison.Ordinal);
     }
 
     private static MafRequestPreparationInterpreter CreateInterpreter(
