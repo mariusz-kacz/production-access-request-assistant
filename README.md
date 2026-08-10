@@ -252,6 +252,7 @@ specs/
 - [Teams quickstart](docs/teams-quickstart.md)
 - [Teams advanced reference](docs/teams-advanced-reference.md)
 - [Testing strategy](docs/testing-strategy.md)
+- [Live-model evaluation guide](docs/live-model-evaluation.md)
 - [Teams access-intake specification](specs/002-teams-access-intake/spec.md)
 - [Teams access-intake implementation plan](specs/002-teams-access-intake/plan.md)
 - [Teams access-intake data model](specs/002-teams-access-intake/data-model.md)
