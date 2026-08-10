@@ -1,4 +1,7 @@
-namespace GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.ReferenceData;
+
+namespace GovernedAccess.Core.Domain.Drafts;
 
 public enum RequestIntakeStatus
 {

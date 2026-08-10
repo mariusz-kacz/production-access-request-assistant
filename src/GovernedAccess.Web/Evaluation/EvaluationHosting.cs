@@ -63,7 +63,8 @@ internal sealed class EvaluationHosting : IAsyncDisposable
             options.UseSqlite($"Data Source={databasePath}"));
         builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
         builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-        builder.Services.AddScoped<RequestValidator>();
+        builder.Services.AddScoped<RequestDraftValidator>();
+        builder.Services.AddScoped<AccessRequestValidator>();
         builder.Services.AddHttpClient();
         builder.Services.AddRequestPreparationChat(builder.Configuration);
         builder.Services.AddSingleton<IClock, SystemClock>();

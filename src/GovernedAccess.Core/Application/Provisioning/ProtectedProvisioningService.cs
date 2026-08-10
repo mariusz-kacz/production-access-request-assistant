@@ -1,7 +1,7 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.Provisioning;
 
 public abstract record ProtectedProvisioningOutcome;
 

@@ -1,7 +1,8 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.AccessRequests;
 
 /// <summary>
 /// Confirms a prepared draft by reloading authoritative context and atomically
@@ -15,14 +16,14 @@ public sealed class RequestSubmissionService
     public const string InvalidatedCode = "prepared_request_invalidated";
     public const string NotReadyCode = "prepared_request_not_ready";
 
-    private readonly RequestValidator requestValidator;
+    private readonly AccessRequestValidator requestValidator;
     private readonly IRequestContextReader requestContext;
     private readonly IRequestIntakeStore intakeStore;
     private readonly IWorkflowStore workflowStore;
     private readonly IClock clock;
 
     public RequestSubmissionService(
-        RequestValidator requestValidator,
+        AccessRequestValidator requestValidator,
         IRequestContextReader requestContext,
         IRequestIntakeStore intakeStore,
         IWorkflowStore workflowStore,

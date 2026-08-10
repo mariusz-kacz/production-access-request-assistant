@@ -322,7 +322,8 @@ not use `dangerouslySetInnerHTML` or another raw HTML rendering path.
 
 ## Request visibility
 
-`RequestQueryService` calculates participation on the server:
+`AccessRequestVisibilityPolicy` calculates participation on the server and
+`AccessRequestQueryService` applies that result to its projections:
 
 - the requester can view their own request;
 - the configured business approver can view the responsible client's request;

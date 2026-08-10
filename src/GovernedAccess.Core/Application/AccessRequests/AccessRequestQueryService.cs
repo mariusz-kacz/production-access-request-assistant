@@ -1,7 +1,7 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.AccessRequests;
 
 public sealed record RequestListItemView(
     Guid RequestId,
@@ -86,27 +86,34 @@ public sealed record RequestDetailView(
 /// hints from current authoritative state. Available actions never replace command
 /// authorization.
 /// </summary>
-public sealed class RequestQueryService
+public sealed class AccessRequestQueryService
 {
-    public const string BusinessDecisionAction = "decideBusinessRequest";
-    public const string DevOpsDecisionAction = "decideDevOpsRequest";
-    public const string RetryProvisioningAction = "retryProvisioning";
+    public const string BusinessDecisionAction =
+        AccessRequestVisibilityPolicy.BusinessDecisionAction;
+    public const string DevOpsDecisionAction =
+        AccessRequestVisibilityPolicy.DevOpsDecisionAction;
+    public const string RetryProvisioningAction =
+        AccessRequestVisibilityPolicy.RetryProvisioningAction;
 
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
+    private readonly AccessRequestVisibilityPolicy visibilityPolicy;
     private readonly IClock clock;
 
-    public RequestQueryService(
+    public AccessRequestQueryService(
         IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
+        AccessRequestVisibilityPolicy visibilityPolicy,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
+        ArgumentNullException.ThrowIfNull(visibilityPolicy);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
+        this.visibilityPolicy = visibilityPolicy;
         this.clock = clock;
     }
 
@@ -148,7 +155,7 @@ public sealed class RequestQueryService
                 continue;
             }
 
-            var participantResult = await GetParticipantAccessAsync(
+            var participantResult = await visibilityPolicy.EvaluateAsync(
                 principal,
                 request,
                 decisions: null,
@@ -165,10 +172,6 @@ public sealed class RequestQueryService
                 continue;
             }
 
-            var availableActions = GetAvailableActions(
-                principal,
-                request,
-                participant.IsResponsibleBusinessApprover);
             items.Add(new RequestListItemView(
                 request.Id,
                 request.RequesterId,
@@ -176,7 +179,7 @@ public sealed class RequestQueryService
                 request.Details.EnvironmentId,
                 request.Status,
                 request.LastModifiedAt,
-                availableActions.Count > 0));
+                participant.AvailableActions.Count > 0));
         }
 
         return ApplicationResult.Succeeded<IReadOnlyList<RequestListItemView>>(items);
@@ -223,7 +226,7 @@ public sealed class RequestQueryService
 
         var principal = principalResult.Value;
         var request = requestResult.Value;
-        var participantResult = await GetParticipantAccessAsync(
+        var participantResult = await visibilityPolicy.EvaluateAsync(
             principal,
             request,
             decisionsResult.Value,
@@ -276,10 +279,6 @@ public sealed class RequestQueryService
                 auditEventsResult.Failure!);
         }
 
-        var availableActions = GetAvailableActions(
-            principal,
-            request,
-            participant.IsResponsibleBusinessApprover);
         return ApplicationResult.Succeeded(
             new RequestDetailView(
                 request.Id,
@@ -292,7 +291,7 @@ public sealed class RequestQueryService
                 request.Status,
                 request.CreatedAt,
                 request.LastModifiedAt,
-                availableActions,
+                participant.AvailableActions,
                 new RequestValidationView(
                     IsValid: true,
                     FieldErrors: []),
@@ -331,132 +330,6 @@ public sealed class RequestQueryService
                     "authenticated_principal_not_found",
                     "The authenticated principal is unavailable.")
                 : principalResult;
-    }
-
-    private async Task<ApplicationResult<ParticipantAccess>> GetParticipantAccessAsync(
-        AuthenticatedPrincipal principal,
-        AccessRequest request,
-        IReadOnlyList<ApprovalDecision>? decisions,
-        CancellationToken cancellationToken)
-    {
-        if (IsRequester(principal, request))
-        {
-            return ApplicationResult.Succeeded(
-                new ParticipantAccess(
-                    IsParticipant: true,
-                    IsResponsibleBusinessApprover: false));
-        }
-
-        if (principal.Kind == PrincipalKind.DevOpsApprover)
-        {
-            if (request.Status is
-                RequestStatus.AwaitingDevOpsApproval or
-                RequestStatus.ProvisioningFailed or
-                RequestStatus.Active)
-            {
-                return ApplicationResult.Succeeded(
-                    new ParticipantAccess(
-                        IsParticipant: true,
-                        IsResponsibleBusinessApprover: false));
-            }
-
-            if (request.Status != RequestStatus.Rejected)
-            {
-                return ApplicationResult.Succeeded(ParticipantAccess.None);
-            }
-
-            if (decisions is null)
-            {
-                var decisionsResult = await workflowStore.ListApprovalDecisionsAsync(
-                    request.Id,
-                    cancellationToken);
-                if (decisionsResult.IsFailure)
-                {
-                    return ApplicationResult.Failed<ParticipantAccess>(
-                        decisionsResult.Failure!);
-                }
-
-                decisions = decisionsResult.Value;
-            }
-
-            var hasDevOpsDecision = decisions.Any(
-                decision => decision.Stage == ApprovalStage.DevOps);
-            return ApplicationResult.Succeeded(
-                hasDevOpsDecision
-                    ? new ParticipantAccess(
-                        IsParticipant: true,
-                        IsResponsibleBusinessApprover: false)
-                    : ParticipantAccess.None);
-        }
-
-        if (principal.Kind != PrincipalKind.BusinessApprover
-            || !StringComparer.Ordinal.Equals(
-                principal.ClientId,
-                request.Details.ClientId))
-        {
-            return ApplicationResult.Succeeded(ParticipantAccess.None);
-        }
-
-        var environmentContextResult = await requestContext.GetProductionEnvironmentContextAsync(
-            request.Details.EnvironmentId,
-            cancellationToken);
-        if (environmentContextResult.IsFailure)
-        {
-            return environmentContextResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? ApplicationResult.Succeeded(ParticipantAccess.None)
-                : ApplicationResult.Failed<ParticipantAccess>(
-                    environmentContextResult.Failure);
-        }
-
-        var environmentContext = environmentContextResult.Value;
-        var environment = environmentContext.Environment;
-        var isResponsibleApprover = StringComparer.Ordinal.Equals(
-                environment.ClientId,
-                request.Details.ClientId)
-            && StringComparer.Ordinal.Equals(
-                environmentContext.Client.Id,
-                request.Details.ClientId)
-            && StringComparer.Ordinal.Equals(
-                environmentContext.Client.BusinessApproverPrincipalId,
-                principal.Id);
-        return ApplicationResult.Succeeded(
-            isResponsibleApprover
-                ? new ParticipantAccess(
-                    IsParticipant: true,
-                    IsResponsibleBusinessApprover: true)
-                : ParticipantAccess.None);
-    }
-
-    private static IReadOnlyList<string> GetAvailableActions(
-        AuthenticatedPrincipal principal,
-        AccessRequest request,
-        bool isResponsibleBusinessApprover)
-    {
-        if (isResponsibleBusinessApprover
-            && request.Status == RequestStatus.AwaitingBusinessApproval)
-        {
-            return [BusinessDecisionAction];
-        }
-
-        if (principal.Kind != PrincipalKind.DevOpsApprover)
-        {
-            return [];
-        }
-
-        return request.Status switch
-        {
-            RequestStatus.AwaitingDevOpsApproval => [DevOpsDecisionAction],
-            RequestStatus.ProvisioningFailed => [RetryProvisioningAction],
-            _ => [],
-        };
-    }
-
-    private static bool IsRequester(
-        AuthenticatedPrincipal principal,
-        AccessRequest request)
-    {
-        return principal.Kind == PrincipalKind.Requester
-            && StringComparer.Ordinal.Equals(principal.Id, request.RequesterId);
     }
 
     private static ApprovalDecisionView ToView(
@@ -542,12 +415,4 @@ public sealed class RequestQueryService
             new ApplicationFailure(kind, code, message));
     }
 
-    private readonly record struct ParticipantAccess(
-        bool IsParticipant,
-        bool IsResponsibleBusinessApprover)
-    {
-        public static ParticipantAccess None { get; } = new(
-            IsParticipant: false,
-            IsResponsibleBusinessApprover: false);
-    }
 }

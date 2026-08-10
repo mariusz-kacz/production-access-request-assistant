@@ -91,7 +91,7 @@ project-per-layer structure (more ceremony than this MVP needs).
 
 **Decision**: Use `AccessRequestWorkflowService` as the single application
 coordinator for authenticated business decisions, DevOps decisions, and provisioning
-retry. Keep `RequestSubmissionService` and `RequestQueryService` focused on request
+retry. Keep `RequestSubmissionService` and `AccessRequestQueryService` focused on request
 creation and read projections. Keep `ProtectedProvisioningService` separate as the
 internal boundary that reloads persisted evidence and invokes the synthetic provider.
 

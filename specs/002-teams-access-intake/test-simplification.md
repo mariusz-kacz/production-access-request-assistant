@@ -60,7 +60,7 @@ concurrency**, and **6 React component** cases.
 | Business approver responsibility, transition, duplicate decision, exact role | Unit policy/application tests | One authenticated, antiforgery-protected overposting HTTP case plus security inventory |
 | DevOps identity, transition, exact business-approved role, fixed duration | Unit policy/application tests | One authenticated overposting HTTP case and one typed failure response |
 | Retry authorization, failed-state restriction, persisted evidence, idempotency | Real-SQLite application/provisioning components | One non-DevOps HTTP rejection; complete security antiforgery inventory |
-| Participant request visibility and available actions | Real-SQLite `RequestQueryService` components | Representative GET contract and global unauthenticated API rejection |
+| Participant request visibility and available actions | Real-SQLite `AccessRequestQueryService` components | Representative GET contract and global unauthenticated API rejection |
 | Immutable request/approval/operation/grant scope | Unit evidence policies plus real-SQLite provisioning components | `ApiSecurityTests` crafted-payload journey |
 | Model proposal schema, utterance interpretation, history/restart semantics | Direct deterministic-chat/MAF components | One complete and one multi-turn hosted Teams transport-to-card scenario |
 | Authenticated Teams actor and Activity Protocol mapping | Core/application components where possible | Hosted `/api/messages` authentication, actor mapping, route order, card serialization |
@@ -136,7 +136,7 @@ resolver policy assertion.
 - Retry lost-response convergence, invalid-state rejection, and stored-operation
   mismatch execute as real-SQLite components; one hosted actor rejection remains.
 - Participant visibility and action capabilities execute directly through
-  `RequestQueryService`; one hosted enriched-detail response contract remains.
+  `AccessRequestQueryService`; one hosted enriched-detail response contract remains.
 - Candidate identifier and missing-field matrices execute through deterministic MAF,
   `RequestDraftService`, `RequestSubmissionService`, authoritative seeded context,
   and SQLite without a host.

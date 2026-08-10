@@ -9,7 +9,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task CandidateAssessmentClearsAnUnknownPartialClientImmediately()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
         var result = await validator.AssessCandidateAsync(
             new RequestCandidate(
@@ -32,7 +32,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task CandidateAssessmentDerivesCanonicalClientFromEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
         var result = await validator.AssessCandidateAsync(
             new RequestCandidate(
@@ -53,7 +53,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task CandidateAssessmentDerivesCanonicalScopeFromActiveIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
         var result = await validator.AssessCandidateAsync(
             new RequestCandidate(
@@ -75,7 +75,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task CandidateAssessmentClearsOnlyAnUnknownIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
         var candidate = new RequestCandidate(
             "client-alpha",
             "PROD-ALPHA-EU",
@@ -104,7 +104,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task CandidateAssessmentClearsARoleUnavailableForCanonicalEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new RequestDraftValidator(new StubRequestContextReader());
 
         var result = await validator.AssessCandidateAsync(
             new RequestCandidate(
@@ -128,7 +128,7 @@ public sealed class RequestValidationTests
     public async Task CandidateAssessmentReturnsReadyAfterOneAuthoritativePass()
     {
         var requestContext = new StubRequestContextReader();
-        var validator = new RequestValidator(requestContext);
+        var validator = new RequestDraftValidator(requestContext);
 
         var result = await validator.AssessCandidateAsync(
             new RequestCandidate(
@@ -152,7 +152,7 @@ public sealed class RequestValidationTests
     public async Task RevalidateAsyncReturnsTheCanonicalDetailsForAValidRequest()
     {
         var requestContext = new StubRequestContextReader();
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var expected = ValidDetails();
         var result = await validator.RevalidateAsync(
@@ -166,7 +166,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncAllowsAnOmittedIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(incidentId: null),
@@ -179,7 +179,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnUnknownClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(clientId: "client-unknown"),
@@ -191,7 +191,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnUnknownEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(environmentId: "PROD-UNKNOWN"),
@@ -203,7 +203,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnEnvironmentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(environmentId: "PROD-BETA-UK"),
@@ -218,7 +218,7 @@ public sealed class RequestValidationTests
     public async Task RevalidateAsyncRejectsASupportedRoleThatIsNotAllowedForTheEnvironment(
         string roleId)
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(roleId: roleId),
@@ -230,7 +230,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnUnknownIncident()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(incidentId: "INC-UNKNOWN"),
@@ -244,7 +244,7 @@ public sealed class RequestValidationTests
     {
         var requestContext = new StubRequestContextReader();
         requestContext.AlphaIncident.SetStatus(IncidentStatus.Inactive);
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var result = await validator.RevalidateAsync(
             ValidDetails(),
@@ -256,7 +256,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnIncidentOwnedByAnotherClient()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(incidentId: "INC-BETA"),
@@ -268,7 +268,7 @@ public sealed class RequestValidationTests
     [Fact]
     public async Task RevalidateAsyncRejectsAnIncidentAssociatedWithAnotherEnvironment()
     {
-        var validator = new RequestValidator(new StubRequestContextReader());
+        var validator = new AccessRequestValidator(new StubRequestContextReader());
 
         var result = await validator.RevalidateAsync(
             ValidDetails(incidentId: "INC-ALPHA-OTHER"),
@@ -287,7 +287,7 @@ public sealed class RequestValidationTests
                 "request_context_unavailable",
                 "Request context is unavailable."),
         };
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
 
         var result = await validator.RevalidateAsync(
             ValidDetails(),

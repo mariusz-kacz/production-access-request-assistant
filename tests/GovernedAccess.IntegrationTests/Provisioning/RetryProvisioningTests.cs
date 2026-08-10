@@ -278,7 +278,8 @@ public sealed class RetryProvisioningComponentTests
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }

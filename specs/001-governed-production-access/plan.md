@@ -60,7 +60,7 @@ independent provisioning trust boundary remain unchanged.
 | Responsibility | Current application owner |
 |---|---|
 | Validate and submit an immutable request | `RequestSubmissionService` |
-| Produce participant-authorized list and detail projections | `RequestQueryService` |
+| Produce participant-authorized list and detail projections | `AccessRequestQueryService` |
 | Coordinate authenticated business decisions, DevOps decisions, and provisioning retry | `AccessRequestWorkflowService` |
 | Reload persisted authorization evidence and execute idempotent provisioning | `ProtectedProvisioningService` |
 
@@ -298,7 +298,7 @@ thin React presentation.
   resolved from authenticated `ClaimsPrincipal`; business scope and approver
   responsibility are loaded by the server.
 - `RequestSubmissionService` owns validated immutable request creation, and
-  `RequestQueryService` owns participant-authorized read projections. Neither
+  `AccessRequestQueryService` owns participant-authorized read projections. Neither
   coordinates approval or provisioning commands.
 - `AccessRequestWorkflowService` is the single application coordinator for business
   decisions, DevOps decisions, and provisioning retry. It resolves trusted actor and

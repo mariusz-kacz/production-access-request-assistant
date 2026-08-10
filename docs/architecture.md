@@ -184,22 +184,25 @@ request and response shapes, call application services, and map typed failures.
 | `MafRequestPreparationInterpreter` | Discover the exact MCP allowlist, invoke the agent turn under request cancellation, schema-parse its proposal, and translate provider contracts. | Readiness, approval, authorization, workflow state, or provisioning. |
 | `AIHostAgent` with `InMemoryAgentSessionStore` | Load and save MAF-owned conversation sessions by server-generated intake ID for the process lifetime. | Durable workflow state, candidate truth, readiness, confirmation, or authorization. |
 | `MafConversationTurnCoordinator` | Serialize the complete native session load, agent run, and successful save sequence with one exact process-lifetime gate per intake. | Session retention policy, durable state, or workflow transitions. |
-| `RequestValidator` | Validate current client, environment, role, justification, and incident context. | Human authority or approval outcome. |
+| `RequestDraftValidator` | Assess model-proposed fields against authoritative context and construct canonical draft details. | Human authority or approval outcome. |
+| `AccessRequestValidator` | Revalidate canonical request details against current authoritative context. | Human authority or approval outcome. |
 | `RequestDraftService` | Coordinate model-assisted preparation, deterministic candidate assessment, and draft reset over one intake aggregate. | Request submission, human authority, or downstream approval. |
 | `RequestSubmissionService` | Reload and confirm one owned ready draft, revalidate authoritative context, and atomically stage the immutable request and audit evidence. | Model interpretation or approval. |
 | `AccessRequestWorkflowService` | Coordinate business decisions, DevOps decisions, and retry using authenticated principals and deterministic policies. | Provider execution based on caller assertions. |
 | `ProtectedProvisioningService` | Reload request-bound workflow evidence, derive provider input from `AccessRequest.Details`, call the provider, and persist the operation outcome. | Business or DevOps approval. |
-| `RequestQueryService` | Return participant-authorized lists and detail projections with server-computed available actions. | Authorization based on UI visibility. |
+| `AccessRequestVisibilityPolicy` | Determine participant visibility and server-computed presentation actions. | Command authorization or workflow transitions. |
+| `AccessRequestQueryService` | Return participant-authorized lists and detail projections using the visibility policy. | Authorization based on UI visibility. |
 | EF adapters | Translate Core persistence and context ports to SQLite. | Domain policy. |
 | Synthetic provisioner | Create or return one local grant using the immutable request ID. | Eligibility, role selection, or approval validity. |
 
 ## Authority, validation, and invariant ownership
 
 Model output first becomes a mutable `RequestCandidate`. It is not authority, even
-when it contains every field. `RequestValidator` reloads the fixed reference context,
-checks identifier relationships, role assignment, justification, and optional
-incident, and is the only path that constructs `ValidatedRequestDetails` from that
-input. A ready intake persists one immutable validated snapshot so the requester can
+when it contains every field. `RequestDraftValidator` reloads the fixed reference
+context, checks identifier relationships, role assignment, justification, and
+optional incident, and is the only path that constructs `ValidatedRequestDetails`
+from that input. `AccessRequestValidator` rechecks that canonical snapshot before
+state-changing workflows. A ready intake persists one immutable validated snapshot so the requester can
 confirm exactly what was prepared. The aggregate exposes that flattened persistence
 state only as `PreparedDetails`, so downstream code continues with the canonical
 value instead of rebuilding another validation DTO.

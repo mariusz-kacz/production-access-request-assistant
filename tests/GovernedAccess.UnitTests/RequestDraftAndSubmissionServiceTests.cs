@@ -915,15 +915,16 @@ public sealed class RequestDraftAndSubmissionServiceTests
                     proposal ?? ValidCandidateProposal());
             session = initialSession;
 
-            var validator = new RequestValidator(this);
+            var draftValidator = new RequestDraftValidator(this);
+            var requestValidator = new AccessRequestValidator(this);
             draftService = new RequestDraftService(
                 this,
-                validator,
+                draftValidator,
                 this,
                 this,
                 this);
             submissionService = new RequestSubmissionService(
-                validator,
+                requestValidator,
                 this,
                 this,
                 this,

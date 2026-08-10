@@ -1,4 +1,4 @@
-namespace GovernedAccess.Core.Domain;
+namespace GovernedAccess.Core.Domain.ReferenceData;
 
 public static class ProductionRoleIds
 {

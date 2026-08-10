@@ -1,7 +1,8 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.AccessRequests;
+using GovernedAccess.Core.Domain.Drafts;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.Drafts;
 
 /// <summary>
 /// Coordinates channel-neutral request preparation and draft lifecycle operations.
@@ -26,14 +27,14 @@ public sealed class RequestDraftService
         "request_preparation_model_unavailable";
 
     private readonly IRequestPreparationInterpreter interpreter;
-    private readonly RequestValidator requestValidator;
+    private readonly RequestDraftValidator requestValidator;
     private readonly IRequestContextReader requestContext;
     private readonly IRequestIntakeStore intakeStore;
     private readonly IClock clock;
 
     public RequestDraftService(
         IRequestPreparationInterpreter interpreter,
-        RequestValidator requestValidator,
+        RequestDraftValidator requestValidator,
         IRequestContextReader requestContext,
         IRequestIntakeStore intakeStore,
         IClock clock)

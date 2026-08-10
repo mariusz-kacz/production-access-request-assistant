@@ -1,5 +1,5 @@
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Domain.Drafts;
 
 namespace GovernedAccess.Core.Ports;
 

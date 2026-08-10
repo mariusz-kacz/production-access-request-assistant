@@ -41,8 +41,11 @@ builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
     options.UseSqlite(databaseConnectionString));
 builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
 builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-builder.Services.AddScoped<RequestValidator>();
-builder.Services.AddScoped<RequestQueryService>();
+builder.Services.AddScoped<RequestDraftValidator>();
+builder.Services.AddScoped<AccessRequestValidator>();
+builder.Services.AddScoped<AccessRequestVisibilityPolicy>();
+builder.Services.AddScoped<AccessRequestCommandContextLoader>();
+builder.Services.AddScoped<AccessRequestQueryService>();
 builder.Services.AddScoped<ProtectedProvisioningService>();
 builder.Services.AddScoped<AccessRequestWorkflowService>();
 builder.Services.AddSingleton<SyntheticAccessProvisionerControl>();

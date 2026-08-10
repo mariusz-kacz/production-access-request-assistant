@@ -1,7 +1,8 @@
-using GovernedAccess.Core.Domain;
+using GovernedAccess.Core.Application.Provisioning;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Ports;
 
-namespace GovernedAccess.Core.Application;
+namespace GovernedAccess.Core.Application.AccessRequests;
 
 public sealed record ApprovalDecisionResult(
     AccessRequest Request,
@@ -53,25 +54,29 @@ public sealed class AccessRequestWorkflowService
 
     private readonly IRequestContextReader requestContext;
     private readonly IWorkflowStore workflowStore;
-    private readonly RequestValidator requestValidator;
+    private readonly AccessRequestCommandContextLoader commandContextLoader;
+    private readonly AccessRequestValidator requestValidator;
     private readonly ProtectedProvisioningService protectedProvisioning;
     private readonly IClock clock;
 
     public AccessRequestWorkflowService(
         IRequestContextReader requestContext,
         IWorkflowStore workflowStore,
-        RequestValidator requestValidator,
+        AccessRequestCommandContextLoader commandContextLoader,
+        AccessRequestValidator requestValidator,
         ProtectedProvisioningService protectedProvisioning,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(requestContext);
         ArgumentNullException.ThrowIfNull(workflowStore);
+        ArgumentNullException.ThrowIfNull(commandContextLoader);
         ArgumentNullException.ThrowIfNull(requestValidator);
         ArgumentNullException.ThrowIfNull(protectedProvisioning);
         ArgumentNullException.ThrowIfNull(clock);
 
         this.requestContext = requestContext;
         this.workflowStore = workflowStore;
+        this.commandContextLoader = commandContextLoader;
         this.requestValidator = requestValidator;
         this.protectedProvisioning = protectedProvisioning;
         this.clock = clock;
@@ -101,7 +106,7 @@ public sealed class AccessRequestWorkflowService
                 inputResult.Failure!);
         }
 
-        var commandContextResult = await LoadCommandContextAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
             authenticatedPrincipalId,
             correlationId,
@@ -280,7 +285,7 @@ public sealed class AccessRequestWorkflowService
             string? correlationId,
             CancellationToken cancellationToken)
     {
-        var commandContextResult = await LoadCommandContextAsync(
+        var commandContextResult = await commandContextLoader.LoadAsync(
             requestId,
             authenticatedPrincipalId,
             correlationId,
@@ -405,76 +410,6 @@ public sealed class AccessRequestWorkflowService
                     new PriorApprovalEvidence(Decision: null))
                 : ApplicationResult.Failed<PriorApprovalEvidence>(
                     priorApprovalResult.Failure);
-    }
-
-    private async Task<ApplicationResult<(
-        AccessRequest Request,
-        AuthenticatedPrincipal Principal,
-        string CorrelationId)>> LoadCommandContextAsync(
-            Guid requestId,
-            string? authenticatedPrincipalId,
-            string? correlationId,
-            CancellationToken cancellationToken)
-    {
-        if (requestId == Guid.Empty)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.InvalidInput,
-                "request_id_required",
-                "An access request identifier is required.");
-        }
-
-        var principalId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            authenticatedPrincipalId);
-        if (principalId is null)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.Unauthenticated,
-                "authentication_required",
-                "An authenticated workflow actor is required.");
-        }
-
-        var normalizedCorrelationId = AccessRequestNormalization.NormalizeOptionalIdentifier(
-            correlationId);
-        if (normalizedCorrelationId is null)
-        {
-            return FailedCommandContext(
-                ApplicationFailureKind.InvalidInput,
-                "correlation_id_required",
-                "A correlation identifier is required.");
-        }
-
-        var principalResult = await requestContext.GetPrincipalAsync(
-            principalId,
-            cancellationToken);
-        if (principalResult.IsFailure)
-        {
-            return principalResult.Failure!.Kind == ApplicationFailureKind.NotFound
-                ? FailedCommandContext(
-                    ApplicationFailureKind.Unauthenticated,
-                    "authenticated_principal_not_found",
-                    "The authenticated principal is unavailable.")
-                : ApplicationResult.Failed<(
-                    AccessRequest,
-                    AuthenticatedPrincipal,
-                    string)>(principalResult.Failure);
-        }
-
-        var requestResult = await workflowStore.GetRequestAsync(
-            requestId,
-            cancellationToken);
-        if (requestResult.IsFailure)
-        {
-            return ApplicationResult.Failed<(
-                AccessRequest,
-                AuthenticatedPrincipal,
-                string)>(requestResult.Failure!);
-        }
-
-        return ApplicationResult.Succeeded((
-            requestResult.Value,
-            principalResult.Value,
-            normalizedCorrelationId));
     }
 
     private async Task<ApplicationFailure> RecordRejectedAttemptAsync(
@@ -622,18 +557,6 @@ public sealed class AccessRequestWorkflowService
         where T : notnull =>
         ApplicationResult.Failed<T>(
             new ApplicationFailure(kind, code, message));
-
-    private static ApplicationResult<(
-        AccessRequest Request,
-        AuthenticatedPrincipal Principal,
-        string CorrelationId)> FailedCommandContext(
-            ApplicationFailureKind kind,
-            string code,
-            string message) =>
-        ApplicationResult.Failed<(
-            AccessRequest,
-            AuthenticatedPrincipal,
-            string)>(new ApplicationFailure(kind, code, message));
 
     private sealed record NormalizedDecisionInput(
         ApprovalOutcome Decision,

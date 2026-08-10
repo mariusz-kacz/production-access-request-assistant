@@ -165,7 +165,7 @@ public sealed class RequestIntakeConfirmationConcurrencyTests
         GovernedAccessDbContext context)
     {
         var requestContext = new EfRequestContextReader(context);
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
         return new RequestSubmissionService(
             validator,
             requestContext,

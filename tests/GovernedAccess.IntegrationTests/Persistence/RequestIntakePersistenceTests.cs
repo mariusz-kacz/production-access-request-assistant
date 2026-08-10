@@ -303,7 +303,7 @@ public sealed class RequestIntakePersistenceTests
     {
         var requestContext = new EfRequestContextReader(context);
         var clock = new DeterministicClock(ConfirmedAt);
-        var validator = new RequestValidator(requestContext);
+        var validator = new AccessRequestValidator(requestContext);
         return new RequestSubmissionService(
             validator,
             requestContext,

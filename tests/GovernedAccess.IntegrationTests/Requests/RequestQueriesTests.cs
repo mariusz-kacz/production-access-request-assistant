@@ -485,10 +485,10 @@ public sealed class RequestQueryComponentTests
             DemoDataIds.DevOpsApproverPrincipalId,
             cancellationToken);
         Assert.Equal(
-            RequestQueryService.DevOpsDecisionAction,
+            AccessRequestQueryService.DevOpsDecisionAction,
             Assert.Single(decisionDetail.Value.AvailableActions));
         Assert.Equal(
-            RequestQueryService.RetryProvisioningAction,
+            AccessRequestQueryService.RetryProvisioningAction,
             Assert.Single(retryDetail.Value.AvailableActions));
 
         var requesterDecisionDetail = await queryService.GetDetailAsync(
@@ -549,14 +549,16 @@ public sealed class RequestQueryComponentTests
         Assert.Equal("request_not_found", detail.Failure.Code);
     }
 
-    private static RequestQueryService CreateQueryService(
+    private static AccessRequestQueryService CreateQueryService(
         GovernedAccessDbContext dbContext,
         IClock clock)
     {
         var requestContext = new EfRequestContextReader(dbContext);
-        return new RequestQueryService(
+        var workflowStore = new EfWorkflowStore(dbContext);
+        return new AccessRequestQueryService(
             requestContext,
-            new EfWorkflowStore(dbContext),
+            workflowStore,
+            new AccessRequestVisibilityPolicy(requestContext, workflowStore),
             clock);
     }
 
@@ -570,7 +572,8 @@ public sealed class RequestQueryComponentTests
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
-            new RequestValidator(requestContext),
+            new AccessRequestCommandContextLoader(requestContext, workflowStore),
+            new AccessRequestValidator(requestContext),
             new ProtectedProvisioningService(workflowStore, provisioner, clock),
             clock);
     }
