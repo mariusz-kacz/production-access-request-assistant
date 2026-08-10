@@ -110,9 +110,10 @@ Sources: [MAF session model](https://learn.microsoft.com/en-us/agent-framework/a
 
 **Decision**: Require every MAF turn to produce the closed
 `request-intake-proposal.schema.json` contract: a complete nullable candidate snapshot
-and either one typed clarification target with a bounded user-facing message or a
-candidate proposal with no clarification. Deserialize strictly, reject extra fields,
-validate the kind/clarification pairing in the provider-neutral proposal constructor,
+and either one typed clarification target with a bounded user-facing message and a
+bounded environment-option ID array, or a candidate proposal with no clarification.
+Deserialize strictly, reject extra fields, validate the kind/clarification pairing in
+the provider-neutral proposal constructor, reload every proposed environment option,
 and let deterministic code canonicalize candidate values and decide readiness.
 The schema intentionally avoids conditional JSON Schema keywords that are not
 uniformly supported by structured-output model providers.
@@ -126,9 +127,10 @@ can canonicalize and validate the proposed fields against authoritative data.
 - Free-form assistant responses: difficult to validate and unsafe as a readiness
   signal.
 - A model-produced readiness boolean: duplicates a deterministic business rule.
-- A model-produced or application-persisted clarification option array: duplicates
-  conversation history and still cannot prove that the model mapped an ordinal phrase
-  to the semantically intended choice.
+- Persist complete clarification choices with the candidate: duplicates conversation
+  history. The selected design keeps bounded environment IDs turn-local, reloads them
+  authoritatively for rendering, and still relies on restored conversation history to
+  interpret later ordinal phrases.
 - Agent-generated Adaptive Cards: makes untrusted model content define the
   confirmation surface.
 
@@ -137,9 +139,10 @@ Source: [MAF structured outputs](https://learn.microsoft.com/en-us/agent-framewo
 ## 5. MCP Tool Integration
 
 **Decision**: Reuse the real loopback MCP endpoint. List its catalog, require exact
-set equality with `get_production_environment`, `get_incident`, and
-`get_available_roles`, then pass only those three `McpClientTool` instances to MAF.
-Keep the existing post-model authoritative validation.
+set equality with `get_production_environment` and `get_incident`, then pass only
+those two `McpClientTool` instances to MAF. Production-environment context includes
+the roles assigned to each environment. Keep the existing post-model authoritative
+validation.
 
 **Rationale**: This preserves the demonstrated MCP boundary and prevents accidental
 capability expansion. Tool annotations and visibility are not authorization.
@@ -225,15 +228,22 @@ a submitted request with an unsubmitted preparation marker.
 
 ## 9. Card Contract and Response Timing
 
-**Decision**: Render a server-owned Adaptive Card with no inputs and one
-`Action.Execute` verb. Its data contains only contract version and opaque preparation
-reference. Keep confirmation free of model and MCP calls and target completion within
-five seconds. Return deterministic submitted, already-submitted, expired,
-superseded, invalidated, unauthorized, or unavailable responses.
+**Decision**: Render a server-owned Adaptive Card titled **Review request draft** with
+no inputs and one `Action.Execute` verb. Its data contains only contract version and
+opaque preparation reference; the reserved request ID is hidden until submission.
+Questions about an active ready draft preserve the card when the assessed candidate is
+unchanged. A changed assessed candidate supersedes the old snapshot and uses
+process-local activity metadata to change its card to **Draft being revised** before a
+separate replacement card is sent. Keep confirmation free of model and MCP calls and
+target completion within five seconds. Return deterministic submitted,
+already-submitted, expired, superseded, invalidated, unauthorized, or unavailable
+responses.
 
 **Rationale**: `Action.Execute` supports current Teams invoke handling and replacement
-responses. A short deterministic path avoids background infrastructure. UI disabling
-is defense in depth; persisted idempotency is the control.
+responses. A short deterministic path avoids background infrastructure. Process-local
+card tracking improves clarity but is not durable evidence: old-card confirmation is
+rejected from persisted intake status even after restart or an activity-update failure.
+UI disabling is defense in depth; persisted idempotency is the control.
 
 **Alternatives considered**:
 

@@ -516,7 +516,7 @@ public sealed class RequestIntakeServiceTests
     }
 
     [Fact]
-    public async Task NewPreparationSupersedesReadyScopeBeforeCreatingAnotherSnapshot()
+    public async Task NaturalLanguageEditCarriesReadyCandidateIntoReplacementPreparation()
     {
         var previous = CreateCollectingSession();
         var previousRequestId = Guid.NewGuid();
@@ -525,10 +525,30 @@ public sealed class RequestIntakeServiceTests
             previousRequestId,
             IntakeScenario.CurrentTime,
             "previous-ready");
-        var scenario = new IntakeScenario(initialSession: previous);
+        const string revisedJustification =
+            "Diagnose customer-facing errors during the active incident.";
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Candidate,
+                new RequestCandidate(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    revisedJustification,
+                    "INC-1042"),
+                clarification: null),
+            initialSession: previous);
 
         var result = await scenario.PrepareResultAsync();
 
+        var turn = Assert.Single(scenario.InterpretationTurns);
+        Assert.Equal("client-alpha", turn.Candidate.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", turn.Candidate.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, turn.Candidate.RequestedRoleId);
+        Assert.Equal(
+            "Investigate the active production incident.",
+            turn.Candidate.Justification);
+        Assert.Equal("INC-1042", turn.Candidate.IncidentId);
         Assert.Equal(RequestIntakeStatus.Superseded, previous.Status);
         Assert.Equal(previousRequestId, previous.ReservedRequestId);
         Assert.Null(previous.ClientId);
@@ -541,7 +561,118 @@ public sealed class RequestIntakeServiceTests
             result.Kind);
         Assert.NotEqual(previous.Id, result.Session!.Id);
         Assert.Equal(RequestIntakeStatus.Ready, result.Session.Status);
+        Assert.Equal("client-alpha", result.Session.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", result.Session.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, result.Session.RequestedRoleId);
+        Assert.Equal(revisedJustification, result.Session.Justification);
+        Assert.Equal("INC-1042", result.Session.IncidentId);
         Assert.Equal(2, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task DraftDiscussionPreservesReadyCandidateAndConfirmationIdentity()
+    {
+        var ready = CreateReadySession(IntakeScenario.CurrentTime);
+        var preparationId = ready.Id;
+        var requestId = ready.ReservedRequestId;
+        const string discussionMessage =
+            "ProductionSupport is another available role for this environment.";
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    ready.ClientId,
+                    ready.EnvironmentId,
+                    ready.RequestedRoleId,
+                    ready.Justification,
+                    ready.IncidentId),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.RequestedRoleId,
+                    discussionMessage)),
+            initialSession: ready);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.DraftDiscussion, result.Kind);
+        Assert.Equal(discussionMessage, result.DiscussionMessage);
+        Assert.Same(ready, result.Session);
+        Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
+        Assert.Equal(preparationId, ready.Id);
+        Assert.Equal(requestId, ready.ReservedRequestId);
+        Assert.Equal("client-alpha", ready.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", ready.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, ready.RequestedRoleId);
+        Assert.Equal("INC-1042", ready.IncidentId);
+        Assert.Equal(0, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task EquivalentCandidateLeavesReadyDraftActiveWithoutNewCard()
+    {
+        var ready = CreateReadySession(IntakeScenario.CurrentTime);
+        var scenario = new IntakeScenario(initialSession: ready);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.DraftDiscussion, result.Kind);
+        Assert.Equal(
+            "The current draft remains ready for confirmation.",
+            result.DiscussionMessage);
+        Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
+        Assert.Equal(0, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task InvalidDiscussionOptionIsSuppressedWithoutChangingReadyDraft()
+    {
+        var ready = CreateReadySession(IntakeScenario.CurrentTime);
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Clarification,
+                new RequestCandidate(
+                    ready.ClientId,
+                    ready.EnvironmentId,
+                    ready.RequestedRoleId,
+                    ready.Justification,
+                    ready.IncidentId),
+                new RequestClarificationProposal(
+                    RequestClarificationTarget.EnvironmentId,
+                    "A suggested alternative is available.",
+                    ["PROD-UNKNOWN"])),
+            initialSession: ready);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.DraftDiscussion, result.Kind);
+        Assert.Equal(
+            "The suggested alternatives could not be validated.",
+            result.DiscussionMessage);
+        Assert.Empty(result.EnvironmentChoices);
+        Assert.Equal(
+            "PROD-UNKNOWN",
+            Assert.Single(scenario.EnvironmentContextLookupIds));
+        Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
+        Assert.Equal(0, scenario.SaveCount);
+    }
+
+    [Fact]
+    public async Task DiscussionFailureLeavesReadyDraftConfirmable()
+    {
+        var ready = CreateReadySession(IntakeScenario.CurrentTime);
+        var scenario = new IntakeScenario(
+            interpretationFailure:
+                RequestPreparationInterpretationFailure.Unavailable,
+            initialSession: ready);
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.Failed, result.Kind);
+        Assert.Equal(RequestIntakeService.ModelUnavailableCode, result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Ready, ready.Status);
+        Assert.NotNull(ready.ReservedRequestId);
+        Assert.Equal(0, scenario.SaveCount);
     }
 
     [Fact]
@@ -581,6 +712,12 @@ public sealed class RequestIntakeServiceTests
 
         var result = await scenario.PrepareResultAsync();
 
+        var turn = Assert.Single(scenario.InterpretationTurns);
+        Assert.Null(turn.Candidate.ClientId);
+        Assert.Null(turn.Candidate.EnvironmentId);
+        Assert.Null(turn.Candidate.RequestedRoleId);
+        Assert.Null(turn.Candidate.Justification);
+        Assert.Null(turn.Candidate.IncidentId);
         Assert.Equal(RequestIntakeStatus.Expired, previous.Status);
         Assert.Equal(previousRequestId, previous.ReservedRequestId);
         Assert.Null(previous.ClientId);
@@ -610,6 +747,84 @@ public sealed class RequestIntakeServiceTests
         Assert.Equal(saveCountAfterFirstConfirmation, scenario.SaveCount);
         Assert.Single(scenario.Requests);
         Assert.Single(scenario.AuditEvents);
+    }
+
+    [Theory]
+    [InlineData(false, RequestIntakeStatus.Superseded)]
+    [InlineData(true, RequestIntakeStatus.Expired)]
+    public async Task StartOverReturnsPersistenceFailureForTerminalLifecycleSave(
+        bool expired,
+        RequestIntakeStatus expectedStatus)
+    {
+        var readyAt = expired
+            ? IntakeScenario.CurrentTime
+                .Subtract(RequestIntakeSession.ConfirmationLifetime)
+            : IntakeScenario.CurrentTime;
+        var session = CreateReadySession(readyAt);
+        var scenario = new IntakeScenario(
+            proposal: new RequestPreparationProposal(
+                RequestPreparationProposalKind.Candidate,
+                new RequestCandidate(
+                    "client-alpha",
+                    "PROD-ALPHA-EU",
+                    ProductionRoleIds.ReadOnly,
+                    "Verify the mitigation for the active production incident.",
+                    "INC-1042"),
+                clarification: null),
+            initialSession: session)
+        {
+            SaveFailure = ForcedSaveFailure(),
+        };
+
+        var result = await scenario.PrepareResultAsync();
+
+        Assert.Equal(RequestPreparationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(expectedStatus, session.Status);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Same(session, scenario.Session);
+    }
+
+    [Fact]
+    public async Task LazyExpiryReturnsPersistenceFailureWhenStatusCannotBeSaved()
+    {
+        var session = CreateReadySession(
+            IntakeScenario.CurrentTime
+                .Subtract(RequestIntakeSession.ConfirmationLifetime));
+        var scenario = new IntakeScenario(initialSession: session)
+        {
+            SaveFailure = ForcedSaveFailure(),
+        };
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Expired, session.Status);
+        Assert.Equal(1, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
+    }
+
+    [Fact]
+    public async Task InvalidationReturnsPersistenceFailureWhenStatusCannotBeSaved()
+    {
+        var scenario = new IntakeScenario();
+        _ = await scenario.PrepareAsync();
+        scenario.RoleIsAvailable = false;
+        scenario.SaveFailure = ForcedSaveFailure();
+
+        var result = await scenario.ConfirmResultAsync(IntakeScenario.Owner);
+
+        Assert.Equal(RequestConfirmationResultKind.Failed, result.Kind);
+        Assert.Equal(ApplicationFailureKind.DependencyFailure, result.Failure!.Kind);
+        Assert.Equal("forced_save_failure", result.Failure!.Code);
+        Assert.Equal(RequestIntakeStatus.Invalidated, scenario.Session.Status);
+        Assert.Equal(2, scenario.SaveCount);
+        Assert.Empty(scenario.Requests);
+        Assert.Empty(scenario.AuditEvents);
     }
 
     [Fact]

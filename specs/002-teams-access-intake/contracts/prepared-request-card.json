@@ -7,21 +7,17 @@
       "type": "TextBlock",
       "size": "Large",
       "weight": "Bolder",
-      "text": "Confirm production access request",
+      "text": "Review request draft",
       "wrap": true
     },
     {
       "type": "TextBlock",
-      "text": "Review the immutable request below. Confirming submits it for business approval; it does not approve or grant production access.",
+      "text": "Review the draft below. To change any details, send another message. Confirming submits it for business approval; it does not approve or grant production access.",
       "wrap": true
     },
     {
       "type": "FactSet",
       "facts": [
-        {
-          "title": "Request ID",
-          "value": "${reservedRequestId}"
-        },
         {
           "title": "Client",
           "value": "${clientDisplayName} (${clientId})"

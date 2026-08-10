@@ -72,9 +72,10 @@ Representative coverage:
 - `RequestValidationTests`: client/environment relationship, allowed role,
   justification, and incident rules;
 - `RequestIntakeServiceTests`: authenticated ownership, deterministic readiness,
-  structured environment-option validation and authoritative reload, candidate
-  preservation, reserved identity, confirmation revalidation, and request creation
-  from canonical details;
+  structured environment-option validation and authoritative reload, ready-draft
+  discussion identity preservation, changed-candidate replacement, candidate
+  preservation, reserved identity, confirmation revalidation, exact immutable scope,
+  one-save staging outcomes, and request creation from canonical details;
 - `RequestPreparationTests`: clarification target and bounded unique option-list
   invariants independent of provider or transport contracts;
 - `BusinessDecisionPolicyTests`: state, rejection, and duplicate business decisions;
@@ -148,7 +149,7 @@ test level.
 | Hosting | Service composition, route mapping, static/SPAs fallbacks, and exact endpoint separation |
 | Authentication | Four fixed identities, server-issued claims, anonymous behavior, and session changes |
 | Antiforgery | Every unsafe API endpoint rejects missing tokens without protected side effects |
-| Teams preparation | Full host: authenticated personal activity, one authoritative clarification-rendering case, one reset case, safe provider failure, confirmation boundary, and one governed journey. Component/unit: strict proposal parsing, structured choice validation, single-pass candidate validation, sanitized rejection persistence, model-history isolation/restart behavior, and failure outcomes |
+| Teams preparation | Full host: authenticated personal activity, authoritative clarification rendering, ready-draft discussion and revision, hidden pre-submission request identity, reset, safe provider failure, confirmation boundary, and one governed journey. Component/unit: strict proposal parsing, structured choice validation, single-pass candidate validation, unchanged-draft identity preservation, changed-candidate replacement, sanitized rejection persistence, model-history isolation/restart behavior, and failure outcomes |
 | Teams-only creation | Teams confirmation creates one immutable request/audit event; former browser draft/submit calls create no state; no creation route, navigation, form, DTO, or capability |
 | Confirmation | Ownership/expiry/status checks, current-data revalidation, reserved request identity, exact scope, replay, one shared save, and no premature approval/grant |
 | MCP | Exact two-tool advertisement, `{}` discovery and exact environment lookup, embedded ordered roles, exact-only incident lookup, closed schemas, fail-closed overflow, typed failures, cancellation, forbidden capability absence, and exact-`NotFound`-only fallback gating |
@@ -165,6 +166,13 @@ Integration tests should assert both the response and persisted side effects. A
 rejected action is not safe merely because it returned an error; tests also verify
 that requests, decisions, operations, grants, and audit evidence changed only as
 intended.
+
+`TeamsDraftCardTrackerTests` pins exact actor/conversation binding, and stale invoke
+coverage proves a superseded preparation returns a non-actionable card without creating
+a request. Feature task T096 remains open for direct capture of the outbound
+`UpdateActivityAsync` call that changes the previously sent activity to **Draft being
+revised**; documentation does not treat that presentation update as authorization
+evidence.
 
 `TeamsOnlyRequestCreationTests` plus `ApiSecurityTests` pin the server boundary.
 `AppSession.test.tsx` and `UiWiringSmoke.test.tsx` pin the removed creation navigation,

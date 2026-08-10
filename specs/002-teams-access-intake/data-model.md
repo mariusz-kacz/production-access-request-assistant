@@ -5,7 +5,8 @@
 - Teams confirmation is the only request-creation path.
 - Model proposals and collecting candidate values are untrusted.
 - Authoritative validation alone can make an intake ready.
-- Ready scope is immutable; correction creates a new intake and request ID.
+- Ready scope is immutable; discussion preserves it and correction creates a new
+  intake and reserved request ID.
 - One `RequestIntakeSession` owns collecting, ready, and terminal evidence.
 - Confirmation stages the immutable request and request-created audit event and commits
   them with the intake transition in one shared `SaveChangesAsync`.
@@ -58,6 +59,8 @@ actors map to the same synthetic requester.
   MAF session store keys it by `RequestIntakeSession.Id`, isolates it per intake, and
   loses it on process termination without causing a domain transition.
 - `Ready` fixes canonical scope, reserved request identity, and expiry.
+- A ready-draft discussion that preserves the complete assessed candidate performs no
+  domain transition and retains the same preparation identity and deadline.
 - `Submitted`, `Superseded`, `Expired`, and `Invalidated` retain binding, status,
   reserved request identity, timestamps, and correlation metadata but clear candidate
   content.
@@ -68,7 +71,8 @@ actors map to the same synthetic requester.
 Collecting --valid and complete--> Ready
 Collecting --new preparation-----> Superseded
 Ready ------confirmed------------> Submitted
-Ready ------new preparation------> Superseded
+Ready ------unchanged discussion-> Ready
+Ready ------changed candidate----> Superseded + replacement Collecting/Ready intake
 Ready ------expiry observed------> Expired
 Ready ------stale context--------> Invalidated
 Submitted --duplicate confirm----> Submitted (same request ID, no new evidence)
@@ -80,12 +84,28 @@ The provider-neutral candidate contains nullable `ClientId`, `EnvironmentId`,
 `RequestedRoleId`, `Justification`, and `IncidentId`. `RequestValidator` owns
 canonicalization, relationship checks, and readiness.
 
-The optional clarification proposal contains one closed target (`ClientId`,
-`EnvironmentId`, `RequestedRoleId`, `Justification`, or `IncidentId`) and one
-non-empty user-facing message of at most 500 characters. It contains no structured
-option list. Any choices presented by the model remain part of the active MAF
-conversation history, while every identifier proposed on a later turn is still
+The optional clarification proposal contains one closed target (`EnvironmentId`,
+`RequestedRoleId`, `Justification`, or `IncidentId`), one non-empty user-facing
+message of at most 500 characters, and zero to 20 unique structured environment
+option IDs. Options may be non-empty only for `EnvironmentId`; the application reloads
+the complete set from authoritative environment context before rendering it. The
+option set remains turn-local and is not persisted. Conversation history retains the
+meaning needed for relative replies, while every later candidate identifier is still
 canonicalized against authoritative data.
+
+## Teams Draft Card Presentation Metadata
+
+`TeamsDraftCardTracker` is a process-local concurrent map keyed by the exact
+authenticated actor and conversation binding. Its value contains only the current
+preparation ID and Teams activity ID.
+
+- It lets the adapter replace a superseded card with a non-actionable **Draft being
+  revised** status and send the new ready snapshot as a separate card.
+- Discussion does not change or remove the tracked card.
+- Submission, reset, or replacement removes the applicable reference.
+- Tracker loss on restart or an activity-update failure does not change domain state;
+  confirmation always reloads `RequestIntakeSession` and rejects stale preparation
+  identifiers.
 
 ## Process-Local MAF Session Store
 

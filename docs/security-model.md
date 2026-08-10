@@ -181,6 +181,8 @@ description, or provider adapter would not preserve this boundary.
 | MCP cannot mutate workflow | The MCP project has only two read-only context tools and no workflow or provisioning dependency. |
 | Discovery cannot mask an exact-lookup failure | A fresh per-turn gate permits discovery after exact lookup only when the structured outcome is typed `NotFound`; other outcomes retain their explicit correction or retry semantics. |
 | Model prose cannot create selectable scope | Structured environment option IDs are independently validated and reloaded before the bounded model message or authoritative choices are rendered; prose is never parsed into scope or authority. |
+| Discussion cannot silently replace a ready scope | Core compares the complete deterministically assessed candidate with the immutable ready candidate. Equality preserves the same confirmation identity; any difference supersedes that identity and requires a separately confirmable preparation. |
+| A stale card cannot confirm revised fields | Every card carries its own opaque preparation ID. Confirmation reloads that exact durable intake and rejects superseded status; process-local card updates are presentation only. |
 | Provisioning does not trust its caller | The protected service accepts a request ID and reloads request, operation, and both approvals. |
 | Retry cannot replace scope | Retry has no body and reuses the same request, operation, evidence checks, and provider idempotency identity. |
 | Duplicate work cannot create multiple logical grants | Request ID is the idempotency identity; operation and grant constraints are unique per request; concurrent completion is reloaded. |
@@ -205,6 +207,24 @@ conversation. Reset records safe lifecycle metadata, clears the candidate throug
 existing terminal transition, creates no request, and cannot mutate an immutable
 submitted request. Longer messages containing `/new` remain untrusted conversational
 input.
+
+## Ready-draft revision and presentation boundary
+
+When another message arrives for an unexpired ready intake, the model receives the
+complete validated candidate before durable state changes. A discussion or hypothetical
+that returns the same deterministically assessed candidate produces `DraftDiscussion`
+and leaves the preparation ID, reserved request ID, deadline, and confirmation card
+active. If the assessed candidate differs, the application marks the old intake
+`Superseded` and creates a new intake before persisting the replacement outcome. The
+old card can therefore never submit fields shown only by the replacement card.
+
+`TeamsDraftCardTracker` stores only one preparation/activity reference per exact
+authenticated actor and conversation for the host lifetime. It lets the transport
+adapter replace a prior activity with a non-actionable **Draft being revised** card.
+The tracker is neither candidate state nor authorization evidence. Restart loss,
+missing activity metadata, or an `UpdateActivityAsync` failure can leave the old card
+visually actionable, but confirmation still reloads the terminal intake and returns a
+non-actionable stale-card response without creating workflow state.
 
 ## Conversation-memory boundary
 
@@ -595,10 +615,16 @@ Security behavior is exercised by automated tests, including:
   channel, tenant, personal-conversation, actor, and forged-payload boundaries;
 - [request-intake unit tests](../tests/GovernedAccess.UnitTests/RequestIntakeServiceTests.cs):
   ownership, terminal states, stale context, deterministic option reload, invalid
-  option rejection, candidate preservation, and confirmation behavior;
+  option rejection, ready-draft discussion identity preservation, changed-candidate
+  replacement, candidate preservation, and confirmation behavior;
 - [Teams preparation tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestPreparationTests.cs):
   bounded model-message preservation beside authoritative choices, prose-only option
-  exclusion, and zero request/approval/provisioning side effects;
+  exclusion, natural-language ready-draft revision, hidden pre-submission request
+  identity, and zero request/approval/provisioning side effects;
+- [Teams confirmation and card-tracker tests](../tests/GovernedAccess.IntegrationTests/Teams/TeamsRequestConfirmationTests.cs):
+  stale superseded-card rejection, non-actionable invoke replacement, and exact
+  process-local tracker binding. Direct outbound activity-update verification remains
+  tracked by feature task T096;
 - [confirmation concurrency tests](../tests/GovernedAccess.IntegrationTests/Persistence/RequestIntakeConfirmationConcurrencyTests.cs):
   one atomic submitted intake, request, and audit result under competing confirmations;
   and

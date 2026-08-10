@@ -177,6 +177,143 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
     }
 
     [Fact]
+    public async Task NaturalLanguageEditRevisesReadyDraftFromValidatedCandidate()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        const string originalJustification =
+            "Investigate customer-facing errors during the active incident.";
+        const string revisedJustification =
+            "Verify the mitigation for customer-facing errors during the active incident.";
+        const string discussionMessage =
+            "ProductionSupport and ProductionDeployment are also available for this environment.";
+        const string initialResponse =
+            """
+            {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active incident.","incidentId":"INC-1042"},"clarification":null}
+            """;
+        const string revisedResponse =
+            """
+            {"kind":"candidate","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Verify the mitigation for customer-facing errors during the active incident.","incidentId":"INC-1042"},"clarification":null}
+            """;
+        const string discussionResponse =
+            """
+            {"kind":"clarification","candidate":{"clientId":"client-alpha","environmentId":"PROD-ALPHA-EU","requestedRoleId":"ProductionReadOnly","justification":"Investigate customer-facing errors during the active incident.","incidentId":"INC-1042"},"clarification":{"target":"requestedRoleId","message":"ProductionSupport and ProductionDeployment are also available for this environment.","environmentOptionIds":[]}}
+            """;
+        var chatClient = new ScriptedChatClient(
+            initialResponse,
+            discussionResponse,
+            revisedResponse);
+        await using var factory = new GovernedAccessWebFactory(chatClient);
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = factory.CreateTeamsClient();
+
+        using var initialHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(CompleteRequest),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var initialBody = await initialHttpResponse.Content.ReadAsStringAsync(
+            cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, initialHttpResponse.StatusCode);
+        Assert.Contains("Review request draft", initialBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "To change any details, send another message.",
+            initialBody,
+            StringComparison.Ordinal);
+
+        Guid discussedPreparationId;
+        using (var discussionHttpResponse = await client.PostAsJsonAsync(
+                   "/api/messages",
+                   CreateExpectRepliesActivity(
+                       "What other roles could I use for this environment?"),
+                   ProtocolJsonSerializer.SerializationOptions,
+                   cancellationToken))
+        {
+            var discussionBody = await discussionHttpResponse.Content
+                .ReadAsStringAsync(cancellationToken);
+            Assert.Equal(HttpStatusCode.OK, discussionHttpResponse.StatusCode);
+            Assert.Contains(
+                discussionMessage,
+                discussionBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                PreparedRequestCardFactory.AdaptiveCardContentType,
+                discussionBody,
+                StringComparison.Ordinal);
+        }
+
+        await using (var discussionScope = factory.Services.CreateAsyncScope())
+        {
+            var discussionDb = discussionScope.ServiceProvider
+                .GetRequiredService<GovernedAccessDbContext>();
+            var discussedDraft = await discussionDb.RequestIntakeSessions
+                .AsNoTracking()
+                .SingleAsync(cancellationToken);
+            discussedPreparationId = discussedDraft.Id;
+            Assert.Equal(RequestIntakeStatus.Ready, discussedDraft.Status);
+            Assert.Equal(originalJustification, discussedDraft.Justification);
+            Assert.Equal(
+                ProductionRoleIds.ReadOnly,
+                discussedDraft.RequestedRoleId);
+        }
+
+        using var revisedHttpResponse = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateExpectRepliesActivity(
+                "Change the justification to verify the mitigation."),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var revisedBody = await revisedHttpResponse.Content.ReadAsStringAsync(
+            cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, revisedHttpResponse.StatusCode);
+        Assert.Contains("Review request draft", revisedBody, StringComparison.Ordinal);
+        Assert.Contains(revisedJustification, revisedBody, StringComparison.Ordinal);
+
+        Assert.Equal(3, chatClient.InvocationCount);
+        var revisionMessage = chatClient.Invocations[2].Messages.Last(
+            message => message.Role == ChatRole.User);
+        using var revisionEnvelope = JsonDocument.Parse(revisionMessage.Text!);
+        var currentCandidate = revisionEnvelope.RootElement
+            .GetProperty("currentCandidate");
+        Assert.Equal(
+            "client-alpha",
+            currentCandidate.GetProperty("clientId").GetString());
+        Assert.Equal(
+            "PROD-ALPHA-EU",
+            currentCandidate.GetProperty("environmentId").GetString());
+        Assert.Equal(
+            ProductionRoleIds.ReadOnly,
+            currentCandidate.GetProperty("requestedRoleId").GetString());
+        Assert.Equal(
+            originalJustification,
+            currentCandidate.GetProperty("justification").GetString());
+        Assert.Equal(
+            "INC-1042",
+            currentCandidate.GetProperty("incidentId").GetString());
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        var sessions = await dbContext.RequestIntakeSessions
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+        Assert.Equal(2, sessions.Count);
+        var superseded = Assert.Single(
+            sessions,
+            session => session.Status == RequestIntakeStatus.Superseded);
+        Assert.Equal(discussedPreparationId, superseded.Id);
+        Assert.Null(superseded.ClientId);
+        var ready = Assert.Single(
+            sessions,
+            session => session.Status == RequestIntakeStatus.Ready);
+        Assert.Equal("client-alpha", ready.ClientId);
+        Assert.Equal("PROD-ALPHA-EU", ready.EnvironmentId);
+        Assert.Equal(ProductionRoleIds.ReadOnly, ready.RequestedRoleId);
+        Assert.Equal(revisedJustification, ready.Justification);
+        Assert.Equal("INC-1042", ready.IncidentId);
+        await AssertNoWorkflowStateAsync(dbContext, cancellationToken);
+    }
+
+    [Fact]
     public async Task SelectedRealProfileProviderFailureIsSafeAndDoesNotFallback()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

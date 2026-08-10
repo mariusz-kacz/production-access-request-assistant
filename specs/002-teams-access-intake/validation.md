@@ -183,7 +183,7 @@ Activity Protocol, and Adaptive Card translations match those source contracts.
 |---|---|---|
 | 1. Complete request to submission | `TeamsRequestPreparationTests` and `TeamsRequestConfirmationTests.FirstConfirmationAtomicallySubmitsExactScopeWithoutGrantingAccess` | PASS - canonical card, reserved ID, exact immutable request, trusted link, and no approval/grant side effect |
 | 2. Multi-turn clarification | `TeamsClarificationTests.DirectAndOrdinalRepliesCarryCandidateUntilItIsReady` plus `MafConversationSessionStoreTests` | PASS - direct/ordinal history, candidate durability, restart-safe re-clarification, isolation, and serialized same-intake turns |
-| 3. Immutable card and start-over | `RequestIntakeServiceTests.NewPreparationSupersedesReadyScopeBeforeCreatingAnotherSnapshot` and terminal aggregate tests | PASS - old ready scope remains immutable, becomes superseded, and text creates no request |
+| 3. Discuss and revise immutable draft | `RequestIntakeServiceTests.DraftDiscussionPreservesReadyCandidateAndConfirmationIdentity`, `RequestIntakeServiceTests.NaturalLanguageEditCarriesReadyCandidateIntoReplacementPreparation`, and `TeamsRequestPreparationTests.NaturalLanguageEditRevisesReadyDraftFromValidatedCandidate` | PASS - discussion preserves the active draft; a changed assessed candidate supersedes it, displays a replacement, and creates no request. T096 tracks direct `UpdateActivityAsync` presentation verification. |
 | 4. Replay and concurrency | `RequestIntakeConfirmationConcurrencyTests` plus hosted sequential replay assertion | PASS - repeated and concurrent confirmation converge on one request ID and one request-created audit event |
 | 5. Trust-boundary negatives | `RequestIntakeConfirmationComponentTests`, `TeamsRequestConfirmationTests`, `MafRequestPreparationFailureTests`, `MafToolBoundaryTests`, MCP failure tests, and actor/route security coverage | PASS - malformed, foreign, expired, stale, cancelled, unavailable, and forbidden-tool paths fail closed without workflow side effects |
 | 6. Existing governed workflow | `TeamsOnlyRequestCreationTests.TeamsConfirmationIsTheOnlyMappedRequestCreationPath` and `TeamsGovernedWorkflowTests.TeamsSubmittedRequestCompletesAuthenticatedGovernedWorkflow` | PASS - Teams-only creation, client-isolated business approval, exact DevOps scope, protected provisioning, fixed eight-hour grant, and persisted evidence |
@@ -214,4 +214,22 @@ deterministic acceptance evidence, not a production latency benchmark.
 T090 passes. Restore, warnings-as-errors build, all 187 .NET cases, all 6 Vitest cases,
 contract checks, and Scenarios 1-6 completed without a functional failure. The
 requirements checklist is 20 of 20 complete. Real-tenant installation and the
-five-person comprehension review remain the separate T091 manual gate.
+five-person comprehension review remain a separate manual gate.
+
+## Ready Draft Discussion and Revision (T091-T097)
+
+**Validated**: 2026-08-10
+
+The sequential repository gate passed after the implementation and documentation were
+synchronized:
+
+1. warnings-as-errors solution build: PASS, 0 warnings and 0 errors;
+2. Core unit tests: PASS, 103 of 103; and
+3. integration tests: PASS, 128 of 128.
+
+The gate proves the durable behavior summarized in Scenario 3: discussion leaves the
+same ready preparation confirmable, a changed assessed candidate creates a separately
+confirmable replacement, stale preparation invocation cannot create a request, and the
+reserved request ID is not rendered before submission. Direct capture of the outbound
+Teams activity update remains the explicit pending task T096; it is presentation
+evidence and does not weaken durable stale-card rejection.

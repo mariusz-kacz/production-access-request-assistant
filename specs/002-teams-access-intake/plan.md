@@ -10,12 +10,19 @@ Add one Teams personal-chat adapter to the existing ASP.NET Core executable. The
 Microsoft 365 Agents SDK authenticates and routes Teams activities; one Microsoft
 Agent Framework `ChatClientAgent` interprets each developer turn, uses MAF's native
 in-memory session store for process-local history, and can call only the existing
-three read-only MCP tools. Application-owned services persist the compact typed
+two read-only MCP tools. Environment context includes the roles assigned to each
+environment. Application-owned services persist the compact typed
 candidate, provide it to each turn as current state, determine readiness using the
 existing validator, and create an immutable 30-minute prepared snapshot with a
 reserved request ID. Clarification wording and conversational references live only
-in the in-memory MAF session; clarification options and transcripts are not written
-to the application database.
+in the in-memory MAF session; bounded environment option identifiers are validated
+per turn but neither options nor transcripts are written to the application database.
+
+While a ready draft is active, the same interpretation path answers questions without
+changing the immutable candidate. A deterministically assessed candidate difference
+supersedes that snapshot and creates a replacement preparation. The Teams adapter
+tracks the latest card activity only as process-local presentation metadata so it can
+make an old card visibly non-actionable; durable status validation remains decisive.
 
 The server renders that snapshot as an Adaptive Card with one **Confirm and submit**
 action. Confirmation is a deterministic authenticated channel command, not a
@@ -57,12 +64,12 @@ as the sole request-creation adapter and Web as the retained register/decision s
 
 **Performance Goals**: Complete deterministic confirmation within the Teams invoke
 response window (target under 5 seconds); preserve one 100-second request-safety
-deadline on the Teams endpoint covering MCP and model work; reach a final request within
+deadline on the Teams endpoint covering MCP and model work; reach a ready request draft within
 five developer messages for at least 90%
 of representative test utterances
 
 **Constraints**: Personal Teams chat only; one fixed synthetic requester mapping;
-exactly three read-only model-visible MCP tools; no live model in tests;
+exactly two read-only model-visible MCP tools; no live model in tests;
 process-local MAF history with no application-database transcript persistence or
 logging; safe re-clarification after restart-related history loss; no model-visible
 submit, approval, workflow, retry, provisioning, or revocation action; fixed
@@ -83,7 +90,7 @@ integration
 | Gate | Pre-research result | Design evidence |
 |---|---|---|
 | **Human authority** | PASS | Conversation turns can update only intake state. Authenticated requester confirmation is handled by the unified `RequestIntakeService`; business and DevOps approvals remain explicit authenticated Web actions. |
-| **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals the three existing tools before passing only those tools to MAF. |
+| **AI and MCP boundary** | PASS | MAF and Microsoft 365 Agents SDK types remain in Web adapters. The Core port accepts provider-neutral turn input and returns a closed proposal. The adapter verifies the MCP catalog equals `get_production_environment` and `get_incident` before passing only those tools to MAF; assigned roles arrive within authoritative environment context. |
 | **Scope integrity** | PASS | Deterministic validation makes the ready scope of one `RequestIntakeSession` immutable with a reserved request ID. Confirmation reloads and revalidates it; corrections supersede it and require a new preparation. |
 | **Provisioning evidence** | PASS | No provisioning code or contract changes. MAF and Teams receive no provisioning capability; the existing protected service continues accepting only the immutable request ID and reloading persisted approvals and operations. |
 | **Proportionality** | PASS | No new project, executable, agent protocol endpoint, workflow engine, MAF workflow, multi-agent design, distributed cache, queue, or background service. The native in-memory MAF session store replaces the custom cache; one exact per-intake gate protects the mutable session without application-owned eviction machinery. |
@@ -126,7 +133,7 @@ src/
 │       ├── RequestDrafting.cs       # Evolved provider-neutral turn contract
 │       └── RequestIntake.cs
 ├── GovernedAccess.Mcp/
-│   ├── RequestContextTools.cs       # Unchanged three-tool surface
+│   ├── RequestContextTools.cs       # Exact two-tool read-only surface
 │   └── McpRegistration.cs
 └── GovernedAccess.Web/
     ├── Ai/
@@ -137,6 +144,7 @@ src/
     │   ├── TeamsAccessRequestAgent.cs
     │   ├── TeamsActorResolver.cs
     │   ├── PreparedRequestCardFactory.cs
+    │   ├── TeamsDraftCardTracker.cs
     │   └── TeamsAgentRegistration.cs
     ├── Persistence/
     │   ├── GovernedAccessDbContext.cs
@@ -202,13 +210,15 @@ only executable.
   one" must produce a repeated focused clarification unless the supplied conversation
   itself contains the preceding question and ordering.
 - The interpreter lists the loopback MCP catalog, requires exact equality with
-  `get_production_environment`, `get_incident`, and `get_available_roles`, and passes
-  only those `McpClientTool` instances to MAF. Missing or extra tools fail closed.
+  `get_production_environment` and `get_incident`, and passes only those
+  `McpClientTool` instances to MAF. Environment results include assigned roles.
+  Missing or extra tools fail closed.
 - The model response must match
   `contracts/request-intake-proposal.schema.json`: a complete nullable candidate
-  snapshot and either one typed clarification target and bounded message or no
-  clarification. Candidate identifiers and relationships are reloaded and checked by
-  `RequestValidator`; only deterministic validation can create a prepared snapshot.
+  snapshot and either one typed clarification target, bounded message, and bounded
+  environment option identifiers or no clarification. Candidate and option
+  identifiers and relationships are reloaded and checked by the application; only
+  deterministic validation can create a prepared snapshot.
 - After deterministic canonicalization accepts a collecting proposal, its complete
   candidate snapshot replaces the prior candidate. A `null` field means absent or
   cleared; it is not an instruction to preserve an older value.
@@ -220,8 +230,17 @@ only executable.
   pre-submission observability; immutable prepared/request evidence provides replay
   safety and durable audit.
 - A ready snapshot is rendered only from persisted server fields. The card contains no
-  inputs and its sole action carries only schema version and opaque preparation
-  reference.
+  inputs, hides the reserved request ID until submission, and its sole action carries
+  only schema version and opaque preparation reference.
+- A question or hypothetical received while that snapshot is ready is returned as a
+  `DraftDiscussion` only when deterministic assessment confirms the complete candidate
+  is unchanged. A different assessed candidate supersedes the old immutable snapshot,
+  creates a new intake identity, and is persisted as ready, incomplete, or rejected.
+- `TeamsDraftCardTracker` retains only the latest sent preparation/activity reference
+  for one authenticated actor and conversation. It lets the adapter change a replaced
+  card to **Draft being revised** and send a separate review card. Tracker loss or an
+  activity-update failure affects presentation only; confirmation reloads durable
+  intake status and rejects stale identifiers.
 - Adaptive Card `Action.Execute` invokes the deterministic confirmation handler
   directly. It is human-in-the-loop at the application level but deliberately is not
   a MAF approval-required function: submission is never a model capability.
@@ -246,8 +265,9 @@ only executable.
   requires SDK token validation. Local automated tests use a fake authenticated
   channel boundary; Microsoft Agents Playground is a transport/UX aid, not evidence
   that production authentication passed.
-- No Teams approval notifications, proactive messages, request editing, approval
-  cards, workflow status cards, or provisioning cards are introduced.
+- No Teams approval notifications, proactive messages, editing of a ready snapshot or
+  submitted request, approval cards, workflow status cards, or provisioning cards are
+  introduced. Pre-submission correction always creates a replacement preparation.
 
 ### Browser-creation removal inventory
 

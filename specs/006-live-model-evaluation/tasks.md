@@ -242,3 +242,9 @@ parallel.
 - Evaluation artifacts and temporary databases are local disposable evidence, not
   product workflow audit records.
 - Commit after each task or cohesive task group.
+
+---
+
+## Phase 7: Convergence
+
+- [X] T020 Add `specs/006-live-model-evaluation/validation.md` with the sanitized optional live-run status and artifact evidence, or the explicit unavailable prerequisite, per T017 / plan step 10 (missing)

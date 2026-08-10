@@ -247,6 +247,8 @@ internal sealed class EvaluationScenarioExecutor(
                 NormalizedIntakeOutcome.Ready,
             RequestPreparationResultKind.ClarificationRequired =>
                 NormalizedIntakeOutcome.Clarification,
+            RequestPreparationResultKind.DraftDiscussion =>
+                NormalizedIntakeOutcome.Clarification,
             RequestPreparationResultKind.CandidateRejected
                 when validationCodes.All(static code =>
                     code.EndsWith("_required", StringComparison.Ordinal)) =>

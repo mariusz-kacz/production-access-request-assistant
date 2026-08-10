@@ -17,6 +17,54 @@ namespace GovernedAccess.IntegrationTests.Teams;
 public sealed class TeamsRequestConfirmationTests
 {
     [Fact]
+    public async Task ClickingSupersededDraftReplacesItWithNonActionableCard()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory(
+            new DeterministicChatClient(DeterministicChatMode.Candidate));
+        using var client = factory.CreateTeamsClient();
+        var session = await SeedReadySessionAsync(factory, cancellationToken);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider
+                .GetRequiredService<GovernedAccessDbContext>();
+            var persisted = await dbContext.RequestIntakeSessions
+                .SingleAsync(
+                    intake => intake.Id == session.Id,
+                    cancellationToken);
+            persisted.MarkSuperseded(
+                factory.Clock.UtcNow,
+                "hosted-boundary-superseded");
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/messages",
+            CreateConfirmationActivity(ValidConfirmationData(session.Id)),
+            ProtocolJsonSerializer.SerializationOptions,
+            cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Draft replaced", body, StringComparison.Ordinal);
+        Assert.Contains(
+            "can no longer be submitted",
+            body,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Confirm and submit",
+            body,
+            StringComparison.Ordinal);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<GovernedAccessDbContext>();
+        Assert.Empty(
+            await verificationDb.AccessRequests.ToListAsync(cancellationToken));
+    }
+
+    [Fact]
     public async Task ConfirmationBoundaryRejectsMalformedAndConcealsForeignActions()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

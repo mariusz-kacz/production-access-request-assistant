@@ -46,6 +46,7 @@ public static class TeamsAgentRegistration
                     .Value
                     .TrustedWebBaseUri));
         builder.Services.AddRequestPreparation();
+        builder.Services.AddSingleton<TeamsDraftCardTracker>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();

@@ -52,6 +52,7 @@
           "enum": [
             "ProductionReadOnly",
             "ProductionSupport",
+            "ProductionDeployment",
             null
           ]
         },
@@ -72,7 +73,7 @@
       }
     },
     "clarification": {
-      "description": "One optional focused target/message proposal. Ordered choices remain only in process-local conversation history.",
+      "description": "One optional focused target/message proposal with bounded turn-local authoritative environment option identifiers.",
       "type": [
         "object",
         "null"
@@ -80,13 +81,13 @@
       "additionalProperties": false,
       "required": [
         "target",
-        "message"
+        "message",
+        "environmentOptionIds"
       ],
       "properties": {
         "target": {
           "type": "string",
           "enum": [
-            "clientId",
             "environmentId",
             "requestedRoleId",
             "justification",
@@ -97,6 +98,15 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 500
+        },
+        "environmentOptionIds": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

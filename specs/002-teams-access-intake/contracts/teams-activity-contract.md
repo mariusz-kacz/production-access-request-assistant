@@ -69,8 +69,9 @@ Before model invocation, the application adds server-owned turn context:
 ### Processing
 
 1. Load or create the one active preparation conversation for the binding.
-2. If a ready prepared request already exists, the new request-intent turn supersedes
-   it; the old card remains visually immutable but can no longer be confirmed.
+2. If a ready prepared request already exists, retain it while interpreting the new
+   turn. Discussion with an unchanged validated candidate leaves it confirmable; only
+   a deterministically assessed candidate difference supersedes it.
 3. Acquire the process-lifetime gate for the intake, then use `AIHostAgent` to load or
    create its session through MAF's native singleton `InMemoryAgentSessionStore`.
 4. Invoke the provider-neutral request-intake interpreter with the latest text,
@@ -92,9 +93,10 @@ Before model invocation, the application adds server-owned turn context:
 
 | Outcome | Teams response | State effect |
 |---|---|---|
+| `DraftDiscussion` | Bounded model-authored guidance, optionally with application-rendered authoritative environment choices | Preserve the ready candidate, request identity, deadline, and active confirmation card |
 | `ClarificationRequired` | One focused model message, which may include choices grounded in approved context | Replace the durable candidate snapshot and retain only process-local MAF history |
 | `CandidateRejected` | Application-owned validation correction with clear provenance | No synthetic interpreter question and no prepared request |
-| `ReadyForConfirmation` | Server-rendered final Adaptive Card | Create immutable prepared snapshot and reserved request ID |
+| `ReadyForConfirmation` | Server-rendered **Review request draft** Adaptive Card | Create immutable prepared snapshot and reserved request ID |
 | `MalformedModelOutput` | Safe retry/start-over guidance | No prepared request |
 | `Timeout` | Safe timeout guidance | No prepared request |
 | `Cancelled` | No unsafe state transition; safe response when channel permits | No prepared request |
@@ -115,13 +117,19 @@ The card is rendered from the immutable ready fields of `RequestIntakeSession` a
 [prepared-request-card.json](prepared-request-card.json).
 
 - It contains no editable input controls.
-- It displays canonical scope, optional incident, fixed eight-hour lifetime, reserved
-  request ID, and 30-minute confirmation deadline.
+- It displays canonical scope, optional incident, fixed eight-hour lifetime, and the
+  30-minute confirmation deadline. The server-reserved request ID remains hidden
+  until successful submission.
 - It states that requester confirmation is not business approval, DevOps approval, or
   an access grant.
 - It exposes exactly one state-changing action.
 - When there is no incident, the incident fact is omitted rather than displaying or
   trusting a caller value.
+- An assessed candidate change makes the process-locally tracked prior activity
+  non-actionable as a **Draft being revised** card and sends the revised candidate as
+  a separate review card. Discussion does not alter the tracked card. If that presentation update is
+  unavailable, a stale confirmation invoke is rejected and replaces the clicked card
+  with a non-actionable status card.
 
 ## Confirmation invoke
 

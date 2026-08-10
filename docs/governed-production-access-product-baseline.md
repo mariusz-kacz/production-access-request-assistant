@@ -28,7 +28,7 @@ The system:
 2. permits the model to call two approved read-only MCP tools for environment and incident data, with allowed roles included in authoritative environment context,
 3. schema-validates the model output,
 4. deterministically validates every identifier and business rule,
-5. presents an immutable final request for explicit requester confirmation,
+5. presents an immutable ready request draft for explicit requester confirmation,
 6. creates the request only after authenticated Teams confirmation,
 7. resolves the required business approver from stored configuration,
 8. records an explicit authenticated business decision in the web application,
@@ -541,6 +541,27 @@ needed to understand a relative answer rather than guessing. Every resulting
 identifier and relationship is checked deterministically before the immutable final
 request is displayed.
 
+Before confirmation, a requester may discuss or revise a ready draft by sending
+another natural-language message. Questions about alternate roles, environments, or
+hypothetical changes preserve the validated candidate and active confirmation card.
+When deterministic assessment produces a candidate snapshot different from the ready
+candidate, the prior immutable snapshot is superseded and a replacement preparation
+is persisted as ready, incomplete, or rejected. Unrelated validated fields are
+preserved, the stale card cannot be confirmed, and no access request is created until
+the latest ready draft is explicitly confirmed.
+
+The draft card does not display the server-reserved request ID. The identifier remains
+durable confirmation and idempotency evidence and is shown to the requester only after
+successful submission creates the access request.
+
+While process-local Teams presentation metadata remains available, an assessed
+candidate change makes the assistant change the prior card to a non-actionable
+**Draft being revised** status and send the revised candidate as a separate review card. Discussion alone does
+not alter that card. If an old card remains actionable after restart or a channel
+update failure, invoking it must fail deterministic supersession validation and
+replace it with a non-actionable status card. Card presentation state never replaces
+durable confirmation validation.
+
 ### 7.3 Deterministic Validation
 
 Before submission, the Governed Access Host validates:
@@ -804,7 +825,7 @@ Tests should emphasize domain rules, authorization boundaries, host integration,
    proposes `PROD-ALPHA-EU` with its derived client and assigned role, and produces a
    typed draft.
 3. Deterministic validation succeeds.
-4. The requester confirms the immutable final request in Teams.
+4. The requester confirms the immutable ready request draft in Teams.
 5. The request appears in the web request register.
 6. The Client Alpha business approver approves the immutable request scope.
 7. DevOps approves the exact role; the system applies the fixed eight-hour lifetime.

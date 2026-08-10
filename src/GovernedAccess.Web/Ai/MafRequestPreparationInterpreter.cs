@@ -35,7 +35,20 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
         candidate snapshot. Start from currentCandidate, apply only explicit requester changes, and preserve
         unrelated valid fields. Environment, role, and justification are required for readiness; clientId is
         derived from the environment; incidentId is optional. Return kind "candidate" with clarification null
-        only when no issue remains. Otherwise return kind "clarification" with exactly one focused question.
+        only when no issue remains. Otherwise return kind "clarification" with exactly one focused question
+        or, for discussion of a complete draft, one focused answer.
+
+        Draft discussion:
+        - When currentCandidate is complete and latestMessage asks about alternatives, available roles,
+          possible environments, tradeoffs, or a hypothetical change without explicitly requesting that
+          change, preserve every candidate field exactly.
+        - Use the read-only tools as needed and return kind "clarification" with a concise grounded answer.
+          Set target to the field being discussed. For environment alternatives, environmentOptionIds may
+          contain only the authoritative alternatives returned by the environment tool.
+        - A question such as "what other roles are available?", "could I use the recovery environment?",
+          or "what would change if...?" is discussion, not an instruction to revise the draft. Change the
+          candidate only for an explicit requester instruction such as "change", "replace", "remove", or
+          "use X instead".
 
         Resolve dependencies in this order and stop at the first unresolved issue: incident-to-scope
         consistency, environment identity, role availability, then justification. An absent optional incident
