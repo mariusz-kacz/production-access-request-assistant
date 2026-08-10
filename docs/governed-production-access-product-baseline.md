@@ -103,13 +103,14 @@ and one DevOps approver. The browser identity selector maps a fixed key to immut
 server-side claims; it is convenient synthetic authentication, not proof of a real
 human identity.
 
-The incident records are:
+Each incident belongs to exactly one environment. Its client is derived from that
+environment rather than stored independently:
 
-| Incident | Status | Scope |
+| Incident | Status | Environment |
 |---|---|---|
-| `INC-1042` | Active | Client Alpha, `PROD-ALPHA-EU` |
-| `INC-1041` | Inactive | Client Alpha, `PROD-ALPHA-EU` |
-| `INC-2042` | Active | Client Beta, `PROD-BETA-UK` |
+| `INC-1042` | Active | `PROD-ALPHA-EU` |
+| `INC-1041` | Inactive | `PROD-ALPHA-EU` |
+| `INC-2042` | Active | `PROD-BETA-UK` |
 
 ## Request lifecycle
 

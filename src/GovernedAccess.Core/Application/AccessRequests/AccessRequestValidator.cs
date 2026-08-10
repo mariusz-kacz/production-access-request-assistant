@@ -126,17 +126,7 @@ public sealed class AccessRequestValidator
                         "The supplied incident is inactive."));
             }
 
-            if (!string.Equals(incident.ClientId, client.Id, StringComparison.Ordinal))
-            {
-                return Invalid(
-                    new FieldValidationError(
-                        "incidentId",
-                        "incident_client_mismatch",
-                        "The supplied incident does not belong to the client."));
-            }
-
-            if (incident.EnvironmentId is not null
-                && !string.Equals(
+            if (!string.Equals(
                     incident.EnvironmentId,
                     environment.Id,
                     StringComparison.Ordinal))

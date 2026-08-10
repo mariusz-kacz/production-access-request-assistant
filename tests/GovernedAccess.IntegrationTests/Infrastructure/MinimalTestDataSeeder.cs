@@ -81,13 +81,11 @@ internal static class MinimalTestDataSeeder
         dbContext.Incidents.AddRange(
             new Incident(
                 DemoDataIds.PrimaryIncidentId,
-                DemoDataIds.ClientAlphaId,
                 DemoDataIds.ClientAlphaEnvironmentId,
                 "Client Alpha production investigation",
                 IncidentStatus.Active),
             new Incident(
                 DemoDataIds.ClientBetaIncidentId,
-                DemoDataIds.ClientBetaId,
                 DemoDataIds.ClientBetaEnvironmentId,
                 "Client Beta production investigation",
                 IncidentStatus.Active));

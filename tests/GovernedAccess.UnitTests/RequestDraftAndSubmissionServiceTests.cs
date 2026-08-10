@@ -1267,7 +1267,6 @@ public sealed class RequestDraftAndSubmissionServiceTests
                 "INC-1042",
                 new Incident(
                     "INC-1042",
-                    "client-alpha",
                     "PROD-ALPHA-EU",
                     "Active production incident",
                     IncidentStatus.Active),

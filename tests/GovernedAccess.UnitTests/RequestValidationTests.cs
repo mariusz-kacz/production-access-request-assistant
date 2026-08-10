@@ -7,6 +7,16 @@ namespace GovernedAccess.UnitTests;
 public sealed class RequestValidationTests
 {
     [Fact]
+    public void IncidentRequiresAnEnvironment()
+    {
+        Assert.Throws<ArgumentException>(() => new Incident(
+            "INC-1042",
+            " ",
+            "Active incident",
+            IncidentStatus.Active));
+    }
+
+    [Fact]
     public async Task CandidateAssessmentClearsAnUnknownPartialClientImmediately()
     {
         var validator = new RequestDraftValidator(new StubRequestContextReader());
@@ -254,7 +264,7 @@ public sealed class RequestValidationTests
     }
 
     [Fact]
-    public async Task RevalidateAsyncRejectsAnIncidentOwnedByAnotherClient()
+    public async Task RevalidateAsyncRejectsAnIncidentFromAnotherClientsEnvironment()
     {
         var validator = new AccessRequestValidator(new StubRequestContextReader());
 
@@ -262,7 +272,7 @@ public sealed class RequestValidationTests
             ValidDetails(incidentId: "INC-BETA"),
             TestContext.Current.CancellationToken);
 
-        AssertFieldError(result, "incidentId", "incident_client_mismatch");
+        AssertFieldError(result, "incidentId", "incident_environment_mismatch");
     }
 
     [Fact]
@@ -393,19 +403,16 @@ public sealed class RequestValidationTests
                 ProductionRoleIds.ReadOnly);
             AlphaIncident = new Incident(
                 "INC-1042",
-                alphaClient.Id,
                 AlphaEnvironment.Id,
                 "Active Alpha incident",
                 IncidentStatus.Active);
             var betaIncident = new Incident(
                 "INC-BETA",
-                betaClient.Id,
                 betaEnvironment.Id,
                 "Active Beta incident",
                 IncidentStatus.Active);
             var otherAlphaEnvironmentIncident = new Incident(
                 "INC-ALPHA-OTHER",
-                alphaClient.Id,
                 "PROD-ALPHA-OTHER",
                 "Incident for another Alpha environment",
                 IncidentStatus.Active);

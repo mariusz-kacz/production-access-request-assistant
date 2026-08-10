@@ -212,7 +212,7 @@ Expected:
 ### Failure and injection
 
 Exercise malformed model output, unexpected tools, MCP timeout/unavailability,
-cancellation, invented IDs, cross-client incidents, and instructions to bypass
+cancellation, invented IDs, cross-environment incidents, and instructions to bypass
 validation or provision access.
 
 Expected in every case:
@@ -277,7 +277,7 @@ Record:
   wording, authoritative choice rendering, and explicit selection or confirmation
   before substitution;
 - proof that non-`NotFound` failures never trigger discovery fallback;
-- independent rejection of unsupported environment-role and cross-client incident
+- independent rejection of unsupported environment-role and cross-environment incident
   combinations; and
 - updated README, architecture, security, orchestration, testing, Teams,
   current ADR, and canonical MCP contract references.

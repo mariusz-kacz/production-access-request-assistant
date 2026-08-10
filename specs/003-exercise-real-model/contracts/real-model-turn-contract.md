@@ -69,8 +69,10 @@ successful JSON-schema conformance.
 
 When the latest message supplies or changes an incident or environment identifier,
 the model instructions require the matching read-only lookup before returning that
-identifier. Successful environment or incident results supply canonical `clientId`;
-the requester is not expected to repeat a client display name as an identifier.
+identifier. Successful environment results supply canonical `clientId`. Incident
+results supply an authoritative `environmentId`, which is resolved through the
+environment tool; the requester is not expected to repeat a client display name as an
+identifier.
 
 ## Deadline and Cancellation
 

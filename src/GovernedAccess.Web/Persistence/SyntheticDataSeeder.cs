@@ -55,19 +55,16 @@ internal static class SyntheticDataSeeder
         [
             new(
                 PrimaryIncidentId,
-                ClientAlphaId,
                 ClientAlphaEnvironmentId,
                 "Client Alpha production investigation",
                 IncidentStatus.Active),
             new(
                 InactiveIncidentId,
-                ClientAlphaId,
                 ClientAlphaEnvironmentId,
                 "Resolved Client Alpha production incident",
                 IncidentStatus.Inactive),
             new(
                 ClientBetaIncidentId,
-                ClientBetaId,
                 ClientBetaEnvironmentId,
                 "Client Beta production investigation",
                 IncidentStatus.Active),
@@ -233,8 +230,7 @@ internal static class SyntheticDataSeeder
     private static void ValidateIncident(Incident actual, Incident expected)
     {
         EnsureMatches(
-            actual.ClientId == expected.ClientId
-            && actual.EnvironmentId == expected.EnvironmentId
+            actual.EnvironmentId == expected.EnvironmentId
             && actual.Title == expected.Title
             && actual.Status == expected.Status,
             nameof(Incident),

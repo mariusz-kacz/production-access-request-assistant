@@ -68,7 +68,7 @@ before persistence.
 |---|---|
 | Valid environment | Canonicalize `environmentId` and derive its client. |
 | Unknown environment | Clear it and report `environment_not_found`. |
-| Valid active incident | Canonicalize it and derive its client and optional environment. |
+| Valid active incident | Canonicalize it and derive its required environment and owning client. |
 | Unknown or inactive incident | Clear it and report the typed incident error. |
 | Environment and incident conflict | Clear the incident and report the relationship error. |
 | Supplied client conflicts with scope | Clear incompatible scope while preserving unrelated valid fields. |
@@ -98,13 +98,14 @@ The model instructions require these behaviors:
 - precise or identifier-like environment input uses exact lookup;
 - exact `NotFound` for identifier-like input remains an unresolved exact identifier in
   the current policy and does not trigger discovery or fuzzy correction;
-- client ID is derived from authoritative environment or incident context;
+- client ID is derived from the authoritative environment;
 - a role is proposed only when assigned to the selected environment;
 - every role clarification lists all authoritative role IDs assigned to the selected
   environment, even when only one is available;
 - incident titles, partial IDs, alerts, and descriptions are not converted into an
   incident ID;
-- a validated incident constrains compatible client and environment scope until the
+- a validated incident constrains its environment and therefore the compatible client
+  until the
   requester removes or replaces it;
 - choosing to continue without an invalid or conflicting incident resumes resolution
   of the scope already supplied in the requester message rather than asking for that

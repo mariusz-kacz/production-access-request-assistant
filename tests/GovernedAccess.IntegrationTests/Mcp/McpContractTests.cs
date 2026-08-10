@@ -123,12 +123,10 @@ public sealed class McpContractTests
             "incidentId",
             "title",
             "status",
-            "clientId",
             "environmentId");
         Assert.Equal("INC-1042", content.GetProperty("incidentId").GetString());
         Assert.Equal(JsonValueKind.String, content.GetProperty("title").ValueKind);
         Assert.Equal("Active", content.GetProperty("status").GetString());
-        Assert.Equal("client-alpha", content.GetProperty("clientId").GetString());
         Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
     }
 

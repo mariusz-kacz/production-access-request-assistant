@@ -10,24 +10,17 @@ public sealed class Incident
 {
     public Incident(
         string id,
-        string clientId,
-        string? environmentId,
+        string environmentId,
         string title,
         IncidentStatus status)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
-
-        if (environmentId is not null)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(environmentId);
-        }
 
         EnsureValidStatus(status);
 
         Id = id;
-        ClientId = clientId;
         EnvironmentId = environmentId;
         Title = title;
         Status = status;
@@ -35,9 +28,7 @@ public sealed class Incident
 
     public string Id { get; private set; }
 
-    public string ClientId { get; private set; }
-
-    public string? EnvironmentId { get; private set; }
+    public string EnvironmentId { get; private set; }
 
     public string Title { get; private set; }
 

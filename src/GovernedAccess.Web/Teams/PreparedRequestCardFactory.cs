@@ -74,11 +74,7 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
 
             incident = incidentResult.Value;
             if (!Matches(details.IncidentId, incident.Id)
-                || !Matches(details.ClientId, incident.ClientId)
-                || (incident.EnvironmentId is not null
-                    && !Matches(
-                        details.EnvironmentId,
-                        incident.EnvironmentId)))
+                || !Matches(details.EnvironmentId, incident.EnvironmentId))
             {
                 return ContextMismatch();
             }

@@ -127,8 +127,10 @@ public sealed class MafRequestPreparationInterpreter : IRequestPreparationInterp
           null and use any stated operational purpose as justification.
         - On a failed exact incident lookup, keep incidentId null and ask for correction. Never search for,
           infer, reformat, or replace an incident ID.
-        - A validated incident constrains client and environment until the requester explicitly removes or
-          replaces it. Never combine an incident with unrelated scope.
+        - A validated incident returns one authoritative environmentId. Resolve that exact environment with
+          get_production_environment to obtain its client and assigned roles. The incident constrains that
+          environment, and therefore its client, until the requester explicitly removes or replaces it. Never
+          combine an incident with unrelated scope.
 
         Scope-conflict transition:
         When an exact incident conflicts with requested client or environment scope, do not choose either

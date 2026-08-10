@@ -39,7 +39,7 @@ The following existing coverage is reused rather than duplicated:
   one authoritative clarification rendering case, one reset command, one closed
   confirmation boundary, and one golden governed workflow. Scripted candidate
   progression and Core validation are not repeated through the FullHost fixture.
-- Unknown, inactive, cross-client, cross-environment, and omitted incident validation
+- Unknown, inactive, cross-environment, and omitted incident validation
   remain covered by `RequestValidationTests.cs`; existing MCP incident assertions are
   retained while the MCP catalog test is rewritten.
 - Malformed model output, prompt injection, cancellation, dependency unavailability,
@@ -157,7 +157,7 @@ descriptions, partial IDs, or reformatted values from becoming incident identifi
 
 **Independent Test**: Existing MCP contract/failure tests retain exact incident lookup
 and typed no-match assertions. Existing request-validation tests retain unknown,
-inactive, cross-client, cross-environment, and omitted-incident coverage. Semantic
+inactive, cross-environment, and omitted-incident coverage. Semantic
 judgment for titles or partial IDs belongs to the optional live-model matrix.
 
 ### Tests for User Story 3

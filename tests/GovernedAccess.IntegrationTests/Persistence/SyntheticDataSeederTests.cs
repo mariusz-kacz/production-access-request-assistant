@@ -162,12 +162,10 @@ public sealed class SyntheticDataSeederTests
         Assert.Equal(3, incidents.Count);
         Assert.Contains(incidents, incident =>
             incident.Id == DemoDataIds.PrimaryIncidentId
-            && incident.ClientId == DemoDataIds.ClientAlphaId
             && incident.EnvironmentId == DemoDataIds.ClientAlphaEnvironmentId
             && incident.Status == IncidentStatus.Active);
         Assert.Contains(incidents, incident =>
-            incident.ClientId == DemoDataIds.ClientBetaId
-            && incident.EnvironmentId == DemoDataIds.ClientBetaEnvironmentId
+            incident.EnvironmentId == DemoDataIds.ClientBetaEnvironmentId
             && incident.Status == IncidentStatus.Active);
         Assert.Contains(incidents, incident => incident.Status == IncidentStatus.Inactive);
 

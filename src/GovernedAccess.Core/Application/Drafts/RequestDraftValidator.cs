@@ -253,17 +253,6 @@ public sealed class RequestDraftValidator
         }
 
         if (!string.Equals(
-                state.Incident.ClientId,
-                state.Environment.ClientId,
-                StringComparison.Ordinal))
-        {
-            state.Errors.Add(IncidentClientMismatchError());
-            ClearIncident(state);
-            return;
-        }
-
-        if (state.Incident.EnvironmentId is not null
-            && !string.Equals(
                 state.Incident.EnvironmentId,
                 state.Environment.Id,
                 StringComparison.Ordinal))
@@ -281,8 +270,7 @@ public sealed class RequestDraftValidator
         CandidateAssessmentState state,
         CancellationToken cancellationToken)
     {
-        var derivedClientId =
-            state.Environment?.ClientId ?? state.Incident?.ClientId;
+        var derivedClientId = state.Environment?.ClientId;
         Client? resolvedClient = null;
 
         if (state.SuppliedClientId is not null)
@@ -377,24 +365,14 @@ public sealed class RequestDraftValidator
             state.Environment = null;
             state.EnvironmentId = null;
 
-            if (state.Incident is not null
-                && !string.Equals(
-                    state.Incident.ClientId,
-                    clientId,
-                    StringComparison.Ordinal))
+            if (state.Incident is not null)
             {
-                state.Errors.Add(IncidentClientMismatchError());
                 ClearIncident(state);
             }
 
             return;
         }
 
-        if (state.Incident is not null)
-        {
-            state.Errors.Add(IncidentClientMismatchError());
-            ClearIncident(state);
-        }
     }
 
     private async Task<ApplicationResult> ResolveRoleAsync(
@@ -477,12 +455,6 @@ public sealed class RequestDraftValidator
             "clientId",
             "client_not_found",
             "The selected client does not exist.");
-
-    private static FieldValidationError IncidentClientMismatchError() =>
-        new(
-            "incidentId",
-            "incident_client_mismatch",
-            "The supplied incident does not belong to the client.");
 
     private static void ClearIncident(CandidateAssessmentState state)
     {

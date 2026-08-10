@@ -48,8 +48,7 @@ Optional authoritative incident associated with a request.
 | Field | Type | Rules |
 |------|------|-------|
 | `Id` | stable identifier | Must be supplied precisely by the requester |
-| `ClientId` | client identifier | Must match the resolved request client |
-| `EnvironmentId` | optional environment identifier | When present, must match the resolved environment |
+| `EnvironmentId` | environment identifier | Required; determines the owning client and must match the resolved request environment |
 | `Title` | readable text | Display only; not searchable in this feature |
 | `Status` | `Active` or `Inactive` | Only active incidents may enter a final request |
 
