@@ -25,7 +25,8 @@ public sealed class AccessRequestWorkflowServiceTests
         var provisioner = new PersistenceInspectingProvisioner(dbContext);
         var service = CreateService(dbContext, provisioner, fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -57,7 +58,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideBusinessAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientBetaApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -92,14 +94,16 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var first = await service.DecideBusinessAsync(
+        var first = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientAlphaApproverPrincipalId,
             ApprovalOutcome.Approved,
             "Original decision.",
             "first-correlation",
             cancellationToken);
-        var duplicate = await service.DecideBusinessAsync(
+        var duplicate = await service.DecideAsync(
+            ApprovalStage.Business,
             request.Id,
             DemoDataIds.ClientAlphaApproverPrincipalId,
             ApprovalOutcome.Rejected,
@@ -140,7 +144,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             principalId,
             ApprovalOutcome.Approved,
@@ -176,7 +181,8 @@ public sealed class AccessRequestWorkflowServiceTests
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
-        var outcome = await service.DecideDevOpsAsync(
+        var outcome = await service.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Rejected,
@@ -225,17 +231,19 @@ public sealed class AccessRequestWorkflowServiceTests
                 DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
-        var policyResult = BusinessDecisionPolicy.Apply(
+        var policyResult = ApprovalDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            ApprovalStage.Business,
+            priorApproval: null,
+            new ApprovalCommand(
                 Guid.NewGuid(),
                 ApprovalOutcome.Approved,
                 DemoDataIds.ClientAlphaApproverPrincipalId,
                 null,
                 occurredAt,
                 "business-correlation"),
-            hasExistingBusinessDecision: false);
-        var applied = Assert.IsType<BusinessDecisionApplied>(policyResult);
+            hasExistingDecision: false);
+        var applied = Assert.IsType<ApprovalDecisionApplied>(policyResult);
 
         dbContext.AccessRequests.Add(request);
         dbContext.ApprovalDecisions.Add(applied.Decision);

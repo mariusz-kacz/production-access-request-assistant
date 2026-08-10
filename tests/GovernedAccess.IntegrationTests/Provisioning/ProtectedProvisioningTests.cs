@@ -154,17 +154,19 @@ public sealed class ProtectedProvisioningTests
                 DemoDataIds.PrimaryIncidentId),
             RequestCreatedAt,
             "request-correlation");
-        var businessResult = BusinessDecisionPolicy.Apply(
+        var businessResult = ApprovalDecisionPolicy.Apply(
             request,
-            new BusinessDecisionCommand(
+            ApprovalStage.Business,
+            priorApproval: null,
+            new ApprovalCommand(
                 Guid.Parse("1e206088-6778-40cb-8900-b59465252e14"),
                 ApprovalOutcome.Approved,
                 DemoDataIds.ClientAlphaApproverPrincipalId,
                 null,
                 BusinessApprovedAt,
                 "business-correlation"),
-            hasExistingBusinessDecision: false);
-        var businessApproval = Assert.IsType<BusinessDecisionApplied>(businessResult).Decision;
+            hasExistingDecision: false);
+        var businessApproval = Assert.IsType<ApprovalDecisionApplied>(businessResult).Decision;
         var devOpsApproval = new ApprovalDecision(
             Guid.Parse("266ae120-70bc-4af2-9a62-453591247ecc"),
             request.Id,

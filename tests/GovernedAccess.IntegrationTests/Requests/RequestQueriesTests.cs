@@ -465,7 +465,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysFailProvisioner(),
             fixture.Clock);
-        var failed = await workflowService.DecideDevOpsAsync(
+        var failed = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             failedRequest.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -522,7 +523,8 @@ public sealed class RequestQueryComponentTests
             dbContext,
             new AlwaysSucceedProvisioner(fixture.Clock),
             fixture.Clock);
-        var activation = await workflowService.DecideDevOpsAsync(
+        var activation = await workflowService.DecideAsync(
+            ApprovalStage.DevOps,
             request.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
             ApprovalOutcome.Approved,
@@ -594,10 +596,12 @@ public sealed class RequestQueryComponentTests
         AccessRequest request,
         DateTimeOffset decidedAt)
     {
-        return Assert.IsType<BusinessDecisionApplied>(
-            BusinessDecisionPolicy.Apply(
+        return Assert.IsType<ApprovalDecisionApplied>(
+            ApprovalDecisionPolicy.Apply(
                 request,
-                new BusinessDecisionCommand(
+                ApprovalStage.Business,
+                priorApproval: null,
+                new ApprovalCommand(
                     Guid.NewGuid(),
                     ApprovalOutcome.Approved,
                     request.Details.ClientId == DemoDataIds.ClientAlphaId
@@ -606,7 +610,7 @@ public sealed class RequestQueryComponentTests
                     null,
                     decidedAt,
                     "business-correlation"),
-                hasExistingBusinessDecision: false)).Decision;
+                hasExistingDecision: false)).Decision;
     }
 
     private sealed class AlwaysFailProvisioner : IAccessProvisioner

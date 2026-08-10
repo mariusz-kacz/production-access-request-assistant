@@ -78,9 +78,9 @@ Representative coverage:
   one-save staging outcomes, and request creation from canonical details;
 - `RequestPreparationTests`: clarification target and bounded unique option-list
   invariants independent of provider or transport contracts;
-- `BusinessDecisionPolicyTests`: state, rejection, and duplicate business decisions;
-- `DevOpsDecisionPolicyTests`: prior approval, state, rejection, and request-keyed
-  operation creation; and
+- `ApprovalDecisionPolicyTests`: business and DevOps stage transitions, rejection,
+  duplicate decisions, exact prior-approval binding, and request-keyed operation
+  creation; and
 - `AccessGrantTests`: request binding, activation, and fixed eight-hour expiry.
 
 Use a unit test when the behavior can be proved without ASP.NET Core, EF Core, MCP, or

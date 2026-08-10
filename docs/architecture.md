@@ -511,8 +511,8 @@ immutable request aggregate consumed by that flow; it does not bypass or duplica
 1. `AccessRequestWorkflowService` loads the authenticated principal and request.
 2. It reloads the current environment/client relationship.
 3. It resolves the owning client's configured business approver.
-4. `BusinessDecisionPolicy` validates state and duplicate-stage prevention for the
-   immutable request ID.
+4. `ApprovalDecisionPolicy` validates the business stage and duplicate-stage
+   prevention for the immutable request ID.
 5. The decision, workflow transition, and audit evidence are saved together.
 
 The requester cannot nominate or replace the business approver.
@@ -521,7 +521,8 @@ The requester cannot nominate or replace the business approver.
 
 1. The workflow service loads the authenticated DevOps principal, request, and
    business approval.
-2. It validates current request context and applies `DevOpsDecisionPolicy`.
+2. It validates current request context and applies the DevOps stage of
+   `ApprovalDecisionPolicy`, including exact prior business-approval binding.
 3. Rejection records the decision and moves the request to `Rejected`.
 4. Approval records the request-bound DevOps decision and creates the request-keyed
    pending provisioning operation; neither record copies request scope.

@@ -17,8 +17,7 @@ includes every `[Fact]` and every discovered `[Theory]` row.
 | Project / class | Cases | Baseline level | Migration decision |
 |---|---:|---|---|
 | Unit / `AccessGrantTests` | 1 | Unit | Keep |
-| Unit / `BusinessDecisionPolicyTests` | 3 | Unit | Expand business transition permutations here |
-| Unit / `DevOpsDecisionPolicyTests` | 6 | Unit | Expand DevOps transition and immutable-scope permutations here |
+| Unit / `ApprovalDecisionPolicyTests` | 9 | Unit | Expand business, DevOps, and immutable-scope transition permutations here |
 | Unit / `RequestDraftAndSubmissionServiceTests` | 16 | Unit | Keep deterministic draft and submission policy coverage |
 | Unit / `RequestPreparationTests` | 7 | Unit | Keep aggregate/proposal invariants |
 | Unit / `RequestValidationTests` | 17 | Unit | Keep authoritative candidate validation permutations |

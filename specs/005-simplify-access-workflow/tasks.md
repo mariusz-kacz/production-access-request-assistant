@@ -374,8 +374,7 @@ Review:
 
 * business decision evidence;
 * DevOps decision evidence;
-* `BusinessDecisionPolicy`;
-* `DevOpsDecisionPolicy`;
+* the stage-aware `ApprovalDecisionPolicy`;
 * `WorkflowEvidencePolicy`;
 * `AccessRequestWorkflowService`.
 
