@@ -16,6 +16,9 @@ creates a request; the browser has no request-creation endpoint.
 
 ## Example Teams conversations
 
+<details>
+<summary>View example conversations</summary>
+
 The assistant can ground a request in an authoritative incident, ask only for the
 missing role, and present the completed draft for explicit confirmation.
 
@@ -30,6 +33,8 @@ A requester can refine an ambiguous environment choice and revise the proposed r
 the earlier draft is invalidated and replaced instead of being silently changed.
 
 ![Production access request refined and revised in Microsoft Teams](docs/img/Case3.png)
+
+</details>
 
 ## The AI boundary
 
