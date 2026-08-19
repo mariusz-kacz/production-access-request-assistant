@@ -14,6 +14,23 @@ interpreter, a stateless MCP endpoint, deterministic application services, SQLit
 persistence, and a synthetic provisioner. Teams confirmation is the only path that
 creates a request; the browser has no request-creation endpoint.
 
+## Example Teams conversations
+
+The assistant can ground a request in an authoritative incident, ask only for the
+missing role, and present the completed draft for explicit confirmation.
+
+![Incident-based production access request prepared in Microsoft Teams](docs/img/Case1.png)
+
+When a description matches several environments, the assistant presents bounded
+choices and gathers the role and operational justification before producing a draft.
+
+![Ambiguous production environment resolved through a Microsoft Teams conversation](docs/img/Case2.png)
+
+A requester can refine an ambiguous environment choice and revise the proposed role;
+the earlier draft is invalidated and replaced instead of being silently changed.
+
+![Production access request refined and revised in Microsoft Teams](docs/img/Case3.png)
+
 ## The AI boundary
 
 With the live model profile selected, the MAF-based interpreter:
