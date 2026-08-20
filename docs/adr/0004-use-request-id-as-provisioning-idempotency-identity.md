@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-07-22
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/adr/0003-do-not-model-provider-and-workflow-persistence-as-atomic.md`, `specs/001-governed-production-access/research.md`, `specs/001-governed-production-access/data-model.md`
+- **Related artifacts**: `docs/adr/0003-do-not-model-provider-and-workflow-persistence-as-atomic.md`, `docs/governed-production-access-product-baseline.md`, `docs/architecture.md`
 
 ## Context
 

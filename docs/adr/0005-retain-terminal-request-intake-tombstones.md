@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-08-10
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`, `specs/002-teams-access-intake/data-model.md`
+- **Related artifacts**: `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`
 
 ## Context
 

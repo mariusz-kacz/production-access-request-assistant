@@ -267,12 +267,13 @@ selection, exit codes, artifact interpretation, and cleanup.
 
 ## Design records
 
+- [Common project specification and context map](spec.md)
 - [Architecture](docs/architecture.md) and
   [architecture decisions](docs/adr/README.md)
 - [Security and trust model](docs/security-model.md) and
   [current product baseline](docs/governed-production-access-product-baseline.md)
 - [Request-intake orchestration](docs/request-intake-orchestration.md) and the
-  [current MCP contract](specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
+  [current MCP contract](docs/contracts/mcp-tools.json)
 - [Testing strategy](docs/testing-strategy.md),
   [live-model evaluation](docs/live-model-evaluation.md), and
   [latest reviewed evidence](docs/evaluation/README.md)

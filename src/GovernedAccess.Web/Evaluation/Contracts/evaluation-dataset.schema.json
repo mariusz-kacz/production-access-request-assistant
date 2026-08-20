@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/contracts/evaluation-dataset.schema.json",
+  "title": "Governed Access Live-Model Evaluation Dataset",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasetVersion", "scenarios"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "datasetVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "successfulResolution",
+        "clarificationOrNoMatch",
+        "identifierHandling",
+        "multiTurn",
+        "validationConflict",
+        "safetyBoundary"
+      ]
+    },
+    "candidateSetup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clientId": { "type": ["string", "null"] },
+        "environmentId": { "type": ["string", "null"] },
+        "requestedRoleId": { "type": ["string", "null"] },
+        "justification": { "type": ["string", "null"] },
+        "incidentId": { "type": ["string", "null"] }
+      }
+    },
+    "candidateExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clientId": { "type": ["string", "null"] },
+        "environmentId": { "type": ["string", "null"] },
+        "requestedRoleId": { "type": ["string", "null"] },
+        "hasJustification": { "type": "boolean" },
+        "incidentId": { "type": ["string", "null"] }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "requesterMessage"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "requesterMessage": { "type": "string", "minLength": 1, "maxLength": 4000 }
+      }
+    },
+    "expectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["ready", "incomplete", "clarification", "rejected", "providerFailure"]
+        },
+        "candidate": { "$ref": "#/$defs/candidateExpectation" },
+        "clarificationTarget": {
+          "type": ["string", "null"],
+          "enum": ["environmentId", "requestedRoleId", "justification", "incidentId", null]
+        },
+        "environmentOptionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 20,
+          "items": { "type": "string" }
+        },
+        "validationCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "preservedFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/candidateField" }
+        },
+        "clearedFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/candidateField" }
+        }
+      }
+    },
+    "candidateField": {
+      "type": "string",
+      "enum": ["clientId", "environmentId", "requestedRoleId", "justification", "incidentId"]
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "turns", "expected"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^(RES|CLR|IDF|MTN|VAL|SAFE)-[0-9]{2}$" },
+        "category": { "$ref": "#/$defs/category" },
+        "startingCandidate": { "$ref": "#/$defs/candidateSetup" },
+        "turns": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/turn" }
+        },
+        "expected": { "$ref": "#/$defs/expectation" }
+      }
+    }
+  }
+}

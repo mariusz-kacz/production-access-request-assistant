@@ -1,126 +1,72 @@
-# Project Context
+# Project Agent Context
 
-## Product
+## Start Here
 
-This application governs temporary access to client-specific production
-environments.
+Read [`spec.md`](spec.md) for the repository map, authority order, and task-specific
+context routes. The active product definition is
+[`docs/governed-production-access-product-baseline.md`](docs/governed-production-access-product-baseline.md).
 
-Core rule:
+If artifacts conflict, follow the project constitution and current product baseline,
+verify the as-built behavior in source and tests, and surface unresolved mismatches.
 
-AI interprets and gathers context. Humans approve. Deterministic services
-authorize and execute.
+## Non-Negotiable Boundaries
 
-Product baseline:
+> AI interprets and gathers context. Humans approve. Deterministic services authorize
+> and execute.
 
-`docs/governed-production-access-product-baseline.md`
+- The application is one modular ASP.NET Core host with a thin co-hosted React UI,
+  local synthetic identity and data, and no real production access.
+- The LLM is never an authorization boundary. Model output is untrusted,
+  schema-validated, and checked against authoritative data.
+- Acting identity and authorization come from authenticated server context. Browser
+  payloads cannot choose identity, claims, scope, role, duration, or approver.
+- Human decisions are authenticated structured actions bound to one immutable request
+  ID and exact scope. Corrections require a new request and approvals.
+- The requester cannot select the business approver. DevOps cannot change the
+  business-approved role or the fixed eight-hour duration.
+- Provisioning is unavailable to the model. The protected handler accepts a request
+  ID, reloads persisted request, approval, operation, and grant evidence, and uses the
+  request ID as the idempotency identity.
+- MCP exposes exactly two typed read-only tools: `get_production_environment` and
+  `get_incident`. There is no separate role-listing or state-changing tool.
+- Do not add real identity or provisioning, a generic workflow engine, multi-agent
+  design, large RAG system, separate deployable service, or distributed infrastructure
+  without an approved baseline and architecture change.
 
+## Engineering Rules
 
-## Scope
+- Keep domain and application logic in `GovernedAccess.Core`, independent of React,
+  persistence, AI-provider, Teams, and MCP SDK contracts. Translate external contracts
+  at `GovernedAccess.Web` or `GovernedAccess.Mcp` boundaries.
+- Preserve nullable reference types, warnings-as-errors, analyzer enforcement, and
+  `CancellationToken` propagation through async boundaries.
+- Keep explicit timeouts on model, MCP, Teams, and provisioning work. Represent
+  expected failures with typed outcomes.
+- Add no abstraction, project, or module without a current concrete need.
+- Do not log secrets, raw prompts, transcripts, or complete MCP payloads by default.
+  Retain correlation, authenticated actor, decision, transition, operation, duration,
+  and safe outcome metadata.
 
-- Portfolio-grade reference implementation.
-- One developer.
-- One executable modular ASP.NET Core host.
-- Local synthetic data and identity.
-- Thin React user interface built and served by the ASP.NET Core host.
-- No real production access.
-- No real identity provider.
-- No generic workflow engine.
-- No multi-agent design.
-- No large RAG subsystem.
-- No unnecessary distributed-system infrastructure.
+## Testing and Validation
 
-## Architecture Rules
-
-- Domain logic must not depend on AI-provider or MCP SDK contracts.
-- AI-provider and MCP contracts must be translated at infrastructure boundaries.
-- The LLM is never an authorization boundary.
-- Model output is untrusted and must be schema-validated.
-- All model-proposed identifiers must be checked against authoritative data.
-- Business and DevOps approvals are authenticated structured actions.
-- Acting identity comes from authenticated server context.
-- Browser-submitted identities, roles, and authorization claims are not trusted.
-- The requester cannot choose the business approver.
-- State-changing actions require deterministic validation and authorization.
-- Approval applies to a specific immutable request ID and approved scope.
-- A submitted request is read-only; corrections require a new request and new approvals.
-- Access to one client environment never authorizes another.
-- DevOps must not change the business-approved role.
-- DevOps may reduce duration only when the active product baseline defines an
-  adjustable duration and must never increase it. The current baseline fixes every
-  grant at eight hours, so DevOps cannot alter duration.
-- Authoritative client, environment, role, incident, and approver context is validated
-  when requests and human decisions are recorded against the fixed synthetic dataset.
-- Provisioning must be idempotent.
-- The provisioning handler must reload and validate persisted request, approval, and
-  operation evidence.
-- The provisioning handler must not trust caller-supplied approval assertions.
-- Project and module boundaries must remain proportionate to the single-host scope.
-
-## MCP Rules
-
-The application exposes one real read-only MCP endpoint with exactly these tools:
-
-- `get_production_environment`
-- `get_incident`
-
-`get_production_environment` provides bounded environment discovery, exact
-environment lookup, authoritative client relationships, and the roles assigned to
-each returned environment. `get_incident` remains an exact-identifier lookup.
-
-Additional MCP tools are outside the current baseline.
-
-- MCP inputs and outputs use explicit typed schemas.
-- Authoritative results use stable identifiers.
-- The model receives tools through an explicit allowlist.
-- The MCP server must not expose a separate role-listing tool; allowed roles are
-  returned as part of authoritative environment context and are independently
-  validated by deterministic application services.
-- The MCP server must not expose approval, provisioning, revocation, workflow
-  transition, arbitrary database, or generic query tools.
-- MCP tool visibility and annotations never replace authorization.
-- Provisioning must remain unavailable to the model.
-
-## .NET Rules
-
-- Nullable reference types enabled.
-- Warnings treated as errors.
-- `CancellationToken` propagated through asynchronous boundaries.
-- LLM and MCP calls use explicit timeouts.
-- Expected failures represented with explicit typed outcomes.
-- No abstraction without a concrete need.
-- Project structure must remain proportionate to scope.
-
-## Testing Rules
-
-- Tests run without a live LLM.
-- Use a deterministic fake chat client.
-- Domain rules require unit tests.
-- MCP contracts and interactions require integration tests.
-- Authorization, immutable-scope, invalid-transition, and idempotency rules require tests.
-- Malformed model output and MCP failure or timeout require tests.
-- Negative scenarios are first-class tests.
-- Exhaustive UI and enterprise-scale load testing are not required.
-- Final validation after a code change must run in this order and must not run these
-  commands in parallel:
+- Automated tests must not require a live LLM. Use deterministic chat clients.
+- Put deterministic domain policy in unit tests. Put MCP, persistence, authentication,
+  authorization, concurrency, timeout, malformed-output, transition, and idempotency
+  boundaries in integration tests. Negative scenarios are first-class evidence.
+- After a code change, run these commands sequentially and in this order, never in
+  parallel:
 
   1. `dotnet build ProductionAccessRequestAssistant.sln --no-restore --warnaserror`
   2. `dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --no-build --no-restore`
   3. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m`
 
-- Give the integration-test command an outer shell or tool timeout of at least four
-  minutes. A shorter outer timeout can abandon the command while its child test runner
-  remains alive.
-- If a test command times out, do not immediately start another test run. First identify
-  and stop only the test-runner process tree created by that command; never terminate
-  unrelated or pre-existing `dotnet` processes.
+- Give the integration command an outer timeout of at least four minutes. After a
+  timeout, identify and stop only the runner process tree created by that command
+  before another run; never terminate unrelated or pre-existing `dotnet` processes.
+- Run the frontend suite separately when frontend behavior or its contracts change:
+  `npm test --prefix src/GovernedAccess.Web/ClientApp -- --run`.
+- For documentation-only changes, validate links and run `git diff --check`; run code
+  suites only when an example changed or the review exposes a suspected mismatch.
 
-## Security and Logging
-
-- Do not log secrets.
-- Do not log raw prompts or complete MCP payloads by default.
-- Do not expose provisioning operations or credentials to the model.
-- Record correlation IDs, authenticated actors, decisions, statuses, workflow
-  transitions, and operation metadata.
-- Record model and MCP duration and outcome without requiring complete payload
-  capture.
-- OpenTelemetry is optional polish and must not block MVP completion.
+The detailed placement and acceptance matrix is authoritative in
+[`docs/testing-strategy.md`](docs/testing-strategy.md).

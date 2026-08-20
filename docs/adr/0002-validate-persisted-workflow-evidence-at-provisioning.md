@@ -4,7 +4,7 @@
 - **Date**: 2026-07-22
 - **Last updated**: 2026-08-07
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/spec.md`, `specs/001-governed-production-access/plan.md`, `docs/adr/0001-use-one-deployable-service-including-mcp.md`
+- **Related artifacts**: `docs/governed-production-access-product-baseline.md`, `docs/architecture.md`, `docs/adr/0001-use-one-deployable-service-including-mcp.md`
 
 ## Context
 

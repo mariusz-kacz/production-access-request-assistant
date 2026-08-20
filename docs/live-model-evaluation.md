@@ -95,5 +95,8 @@ from 2026-08-10 is retained as committed project evidence in the
 [evaluation evidence directory](evaluation/README.md), with both a human-readable
 report and machine-readable result.
 
-For the full credential-free validation sequence and cleanup commands, see the
-[evaluation quickstart](../specs/006-live-model-evaluation/quickstart.md).
+For the full credential-free validation sequence and cleanup commands, use
+[local development](local-development.md). The stable evaluation interfaces are the
+[command contract](contracts/live-model-evaluation/command.md),
+[result schema](contracts/live-model-evaluation/result.schema.json), and
+[report contract](contracts/live-model-evaluation/report.md).

@@ -12,9 +12,8 @@ the active baseline. A roadmap item becomes authoritative only after its busines
 requirement is approved and the product baseline, constitution, specification,
 contracts, and tests are updated together.
 
-The delivered
-[feature 004](../specs/004-resolve-context-identifiers/spec.md) is incorporated into
-the active product baseline. It narrows model-assisted discovery to production
+The delivered environment-resolution increment is incorporated into the active
+product baseline. It narrows model-assisted discovery to production
 environments and establishes the exact two-tool MCP surface:
 
 - `get_production_environment`

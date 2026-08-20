@@ -5,8 +5,7 @@
 - **Last reviewed**: 2026-08-05
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `docs/governed-production-access-product-baseline.md`,
-  `specs/001-governed-production-access/plan.md`,
-  `specs/004-resolve-context-identifiers/plan.md`
+  `docs/architecture.md`, `docs/contracts/mcp-tools.json`
 
 ## Context
 

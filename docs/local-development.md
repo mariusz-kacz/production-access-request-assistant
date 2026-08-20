@@ -116,7 +116,7 @@ The endpoint advertises exactly:
 - `get_incident`, with one exact `incidentId`.
 
 Environment results include authoritative client and assigned-role context. The exact
-wire schemas are in the [MCP contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
+wire schemas are in the [MCP contract](contracts/mcp-tools.json).
 
 ## React hot reload
 

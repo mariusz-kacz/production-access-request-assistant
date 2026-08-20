@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://governed-access.local/contracts/evaluation-result.schema.json",
+  "title": "Governed Access Live-Model Evaluation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId",
+    "datasetVersion",
+    "startedAt",
+    "completedAt",
+    "status",
+    "modelDeployment",
+    "summary",
+    "sideEffects",
+    "scenarios"
+  ],
+  "properties": {
+    "runId": { "type": "string", "format": "uuid" },
+    "datasetVersion": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["passed", "failed"] },
+    "modelDeployment": { "type": "string" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "sideEffects": { "$ref": "#/$defs/sideEffects" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "sideEffects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requests", "approvalDecisions", "provisioningOperations", "accessGrants"],
+      "properties": {
+        "requests": { "type": "integer", "minimum": 0 },
+        "approvalDecisions": { "type": "integer", "minimum": 0 },
+        "provisioningOperations": { "type": "integer", "minimum": 0 },
+        "accessGrants": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "categoryScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "passed", "total"],
+      "properties": {
+        "category": { "type": "string" },
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "requiredPasses", "safetyPassed", "categories"],
+      "properties": {
+        "total": { "type": "integer", "enum": [1, 20] },
+        "passed": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "requiredPasses": { "type": "integer", "enum": [1, 20] },
+        "safetyPassed": { "type": "boolean" },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/categoryScore" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "total": { "const": 1 } } },
+          "then": { "properties": { "requiredPasses": { "const": 1 } } }
+        },
+        {
+          "if": { "properties": { "total": { "const": 20 } } },
+          "then": { "properties": { "requiredPasses": { "const": 20 } } }
+        }
+      ]
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "expected", "observed"],
+      "properties": {
+        "field": { "type": "string" },
+        "expected": { "type": ["string", "null"] },
+        "observed": { "type": ["string", "null"] }
+      }
+    },
+    "candidateFacts": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "environmentId",
+        "requestedRoleId",
+        "hasJustification",
+        "incidentId"
+      ],
+      "properties": {
+        "clientId": { "type": ["string", "null"] },
+        "environmentId": { "type": ["string", "null"] },
+        "requestedRoleId": { "type": ["string", "null"] },
+        "hasJustification": { "type": "boolean" },
+        "incidentId": { "type": ["string", "null"] }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "candidate",
+        "clarificationTarget",
+        "environmentOptionIds",
+        "validationCodes",
+        "modelResponse"
+      ],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "candidate": { "$ref": "#/$defs/candidateFacts" },
+        "clarificationTarget": {
+          "type": ["string", "null"],
+          "enum": ["environmentId", "requestedRoleId", "justification", "incidentId", null]
+        },
+        "environmentOptionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "validationCodes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "modelResponse": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 500
+        }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "status",
+        "outcome",
+        "elapsedMilliseconds",
+        "sideEffects",
+        "failures"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "status": { "type": "string", "enum": ["passed", "failed", "cancelled", "notRun"] },
+        "outcome": {
+          "type": ["string", "null"],
+          "enum": ["ready", "incomplete", "clarification", "rejected", "providerFailure", "cancelled", null]
+        },
+        "elapsedMilliseconds": { "type": ["integer", "null"], "minimum": 0 },
+        "sideEffects": { "$ref": "#/$defs/sideEffects" },
+        "failures": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/failure" }
+        },
+        "diagnostics": { "$ref": "#/$defs/diagnostics" }
+      }
+    }
+  }
+}
