@@ -36,6 +36,11 @@ Use the narrowest authoritative artifact that covers the decision:
 The [roadmap](docs/roadmap.md) is explicitly proposed and non-authoritative. Retired
 SDLC artifacts remain available in Git history but are not current project context.
 
+The approved business direction for conversational requester submission is being
+specified in [SPEC-conversational-request-submission.md](SPEC-conversational-request-submission.md).
+That feature specification is under review and does not describe the current as-built
+card-confirmation path.
+
 If guidance conflicts, do not silently choose the most convenient version. Follow the
 constitution and current product baseline, confirm the as-built state in source and
 tests, and surface any remaining mismatch before changing behavior.
