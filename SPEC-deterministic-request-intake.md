@@ -12,11 +12,14 @@ It is intentionally self-contained and does not depend on any existing feature
 specification or implementation task list.
 
 The project constitution remains authoritative. The current product baseline remains
-authoritative outside the request-intake preparation behavior explicitly changed by
-this specification. In particular, this specification preserves:
+authoritative outside the request-intake preparation behavior and model-visible
+context-tool contract explicitly changed by this specification. In particular, this
+specification preserves:
 
 - authenticated personal Microsoft Teams as the only requester channel;
-- exactly two model-visible, read-only MCP tools;
+- exactly four model-visible, read-only MCP tools, separating deterministic
+  environment search, exact environment lookup, environment-scoped role discovery,
+  and exact incident lookup;
 - deterministic validation and authorization;
 - Adaptive Card confirmation as the only request-creation action;
 - immutable submitted request scope;
@@ -63,6 +66,15 @@ submission.
   snapshot until the revision completes or the requester cancels it.
 - Adaptive Card confirmation remains mandatory even when a requester types a clear
   submission instruction.
+- Model-side role discovery occurs only after one exact production environment has
+  been resolved. `get_environment_roles` accepts that exact environment identifier,
+  returns an empty role collection successfully for a known environment with no
+  assignments, and does not extend the existing model/MCP timeout.
+- `search_production_environments` accepts one trimmed 1-200 character
+  requester-backed query and returns a complete, stable, bounded match set. Search
+  results always become application-owned clarification choices; even one match does
+  not select canonical scope without a later exact identifier or persisted ordinal
+  selection.
 - The design requires no new dependency, project, requester channel, or deployable
   service.
 
@@ -92,6 +104,32 @@ Requester: ProductionSupport.
 
 Assistant: [application-rendered Adaptive Card containing the exact ready snapshot]
 ```
+
+For an incident-driven request, the observable model-side context sequence is:
+
+```text
+get_incident(exact incident ID)
+  -> get_production_environment(exact incident environment ID)
+  -> get_environment_roles(the same exact environment ID)
+  -> schema-constrained turn proposal
+  -> independent authoritative Core validation
+```
+
+For a requester description that is not an exact environment identifier, search is a
+separate clarification turn:
+
+```text
+search_production_environments(requester-backed query)
+  -> independent authoritative application search
+  -> application-rendered complete ordered matches
+  -> requester exact-ID or persisted-ordinal selection
+  -> get_production_environment(selected exact environment ID)
+  -> get_environment_roles(the same exact environment ID)
+  -> independent authoritative Core validation
+```
+
+The search turn cannot continue directly to exact lookup, even when there is one
+match. The requester must make the exact selection visible in a later message.
 
 Selecting **Confirm and submit** on the card creates an immutable request in
 `AwaitingBusinessApproval`. It does not approve or grant access.
@@ -127,6 +165,10 @@ are inputs to validation. None is authorization or approval evidence.
   and immutable request creation.
 - Deterministic automated tests and optional credentialed live-model evaluation of
   interpretation quality.
+- One additional typed read-only MCP tool for exact environment-scoped role discovery
+  and observable, bounded environment-to-role tool chaining.
+- A separate typed read-only MCP search tool whose result is independently reproduced
+  by application code before it becomes clarification context.
 
 ### Excluded
 
@@ -135,10 +177,13 @@ are inputs to validation. None is authorization or approval evidence.
 - Browser, Slack, CLI, email, or other requester channels.
 - Model-selected requester identity, client ownership, approver, duration, request
   identifier, approval, provisioning, retry, or grant state.
-- A separate role-listing MCP tool.
+- A generic or cross-environment role-listing MCP tool.
+- Role-first discovery, model-selected role search across environments, or stateful
+  server enforcement of MCP call order.
 - Durable raw conversation transcripts, prompts, provider traces, or model reasoning.
 - Model-generated conversational response prose.
-- Model-proposed environment filtering, narrowing, ranking, or choice subsets.
+- Model-controlled semantic or fuzzy environment search, ranking, truncation, choice
+  subsets, or automatic selection from query results.
 - Heuristic classification or rewriting of authoritative display text.
 - Card-delivery receipts or acknowledgement state.
 - Collecting-intake idle expiry.
@@ -154,7 +199,7 @@ are inputs to validation. None is authorization or approval evidence.
 | Actor or component | Permitted responsibility | Prohibited responsibility |
 |---|---|---|
 | Authenticated requester | Describe, discuss, revise, reset, and confirm a request | Choose identity, approver, duration, approval, or provisioning |
-| Model interpreter | Interpret the latest message, propose explicit field changes, use the two read-only context tools | Own canonical state, submit, approve, provision, or assert validation success |
+| Model interpreter | Interpret the latest message, propose explicit field changes, and use the four read-only context tools in the bounded sequences defined below | Own canonical state, select scope from search results, submit, approve, provision, or assert validation success |
 | Core application | Merge patches, validate authoritative state, decide lifecycle and next clarification | Depend on Teams, MAF, MCP SDK, React, or EF contracts |
 | Response renderer | Render canonical progress, choices, questions, cards, and safe failures | Infer scope or workflow state from model prose |
 | Teams adapter | Authenticate transport, invoke the shared application turn, deliver text/cards, receive card actions | Treat activity payloads as identity or authority |
@@ -212,7 +257,7 @@ Every normal text turn must produce exactly one of these untrusted dialogue acts
 
 | Dialogue act | Meaning | Mutation allowed |
 |---|---|---|
-| `updateDraft` | The requester explicitly supplied, replaced, or removed request data | Only through the declared patch |
+| `updateDraft` | The requester explicitly supplied, replaced, removed, or searched for request data | Only through the declared patch; a validated search may create clarification context but cannot mutate scope |
 | `discussDraft` | The requester asked a question or discussed a hypothetical without requesting a change | No |
 | `submissionGuidance` | The requester asked to submit, approve, grant, or provision through text | No; explain that the ready card is required |
 | `unclear` | Intent cannot be determined conservatively | No |
@@ -277,11 +322,19 @@ public sealed record RequestCandidatePatch(
 public sealed record RequestTurnProposal(
     RequestTurnDialogueAct DialogueAct,
     RequestCandidatePatch Patch);
+
+public sealed record EnvironmentSearchObservation(string Query);
+
+public sealed record RequestTurnInterpretation(
+    RequestTurnProposal Proposal,
+    EnvironmentSearchObservation? EnvironmentSearch);
 ```
 
 Exact names may follow existing conventions, but the closed semantics must remain.
 MAF/provider JSON types belong in `GovernedAccess.Web` and must be translated into
-provider-neutral Core port types.
+provider-neutral Core port types. `EnvironmentSearchObservation` is created by the
+Web boundary from the observed MCP call rather than emitted in model JSON. MCP result
+payloads do not cross this boundary into Core.
 
 The initial model response contract identifier is `request-intake-turn-v1`. A valid
 serialized proposal equivalent to setting only justification is:
@@ -325,8 +378,8 @@ guide probabilistic interpretation:
 
 | Invariant | Enforced by |
 |---|---|
-| Non-update dialogue acts require an all-`keep` patch | Schema and reducer |
-| `updateDraft` requires at least one `set` or `clear` before normalization | Schema and boundary parser |
+| Non-update dialogue acts require an all-`keep` patch and no environment-search observation | Boundary parser and reducer |
+| `updateDraft` requires at least one `set` or `clear` before normalization or one valid requester-backed environment-search observation | Boundary parser and reducer |
 | `set` requires a value; `keep` and `clear` reject one | Schema and boundary parser |
 | Client is not a mutable patch field | Schema |
 | Every applied `set` or `clear` reflects the current requester message or persisted ordered-choice context | Reducer evidence policy |
@@ -358,7 +411,7 @@ Every `set`, including one that fills a currently null field, must satisfy:
 
 | Field | Required evidence |
 |---|---|
-| `environmentId` | Exact canonical identifier or complete authoritative display name in the message, or an application-validated ordinal selection from persisted environment choices |
+| `environmentId` | Exact canonical identifier in the message, or an application-validated ordinal selection from persisted environment choices; search text and search results are never mutation evidence |
 | `incidentId` | Exact canonical incident identifier in the current message |
 | `requestedRoleId` | Exact canonical identifier or complete authoritative display name in the message, or an application-validated ordinal selection from persisted role choices |
 | `justification` | Initial/replacement value is a contiguous substring of the message, or the value is an append whose stored prefix is unchanged and whose nonblank suffix is a contiguous substring of the message |
@@ -424,12 +477,93 @@ The model receives:
   when present;
 - bounded process-local conversational context when available;
 - the response schema; and
-- exactly `get_production_environment` and `get_incident`.
+- exactly `search_production_environments`, `get_production_environment`,
+  `get_environment_roles`, and `get_incident`.
 
-The model may use MCP to resolve an exact identifier or complete display name and to
-recognize that clarification is required. Partial readable scope cannot become a
-field mutation. The application must independently reload every identifier and
-relationship before accepting or displaying it.
+The model may use MCP to search from requester wording, resolve an exact identifier,
+and recognize that clarification is required. Search results and partial readable
+scope cannot become a field mutation. The application must independently reproduce
+every search and reload every identifier and relationship before accepting or
+displaying it.
+
+The model-visible tools have these distinct contracts:
+
+| Tool | Input | Successful result | Constraints |
+|---|---|---|---|
+| `search_production_environments` | One trimmed `query` of 1-200 characters | A complete stable `environments` collection of matching environment and client identities, without roles | No empty discovery, semantic/fuzzy search, ranking, pagination, truncation, or automatic selection |
+| `get_production_environment` | One exact `environmentId` | Environment identity, display name, and authoritative client identity; no role collection | No empty input, display-name input, partial search, or role collection |
+| `get_environment_roles` | One exact `environmentId` | The same `environmentId` and its ordered `{ roleId, displayName }` collection | No empty input, display-name input, partial search, client-wide search, or cross-environment result |
+| `get_incident` | One exact `incidentId` | Incident identity, state, and environment identity | Existing exact-lookup behavior remains unchanged |
+
+Both environment tools use the same closed environment projection with exactly
+`environmentId`, `displayName`, `clientId`, and `clientDisplayName` string fields.
+Search wraps zero or more projections in `{ environments: [...] }`; exact lookup
+returns one projection directly. Neither shape exposes roles, scores, match reasons,
+pagination metadata, or arbitrary reference-data fields.
+
+`search_production_environments` uses one deterministic policy shared with the
+authoritative application search:
+
+1. Unicode NFC-normalize, trim, and collapse whitespace.
+2. Reject an empty normalized query or one longer than 200 characters.
+3. Split on Unicode whitespace and punctuation, discard empty tokens, and require
+   every remaining token to match case-insensitively.
+4. Match only environment ID, environment display name, client ID, client display
+   name, region, and the canonical `primary` or `recovery` classification.
+5. Return every match ordered by stable environment ID when the complete result set
+   contains at most 20 environments.
+6. Return `environments: []` successfully when there are no matches; return a typed
+   `environment_query_too_broad` failure rather than truncate if more than 20 match.
+
+The fixed synthetic catalog contains at most 20 environments, so pagination would add
+no current value and is deliberately excluded. Increasing that bound requires a new
+search and selection design rather than silent truncation.
+
+The Web interpretation boundary permits a search call only when its normalized query
+is a contiguous substring of the normalized current requester message. It captures
+the provider-neutral query observation and asks the authoritative application
+context port to rerun the same deterministic search. MCP output is not used to form
+choices. A mismatch between the MCP result and the independently reproduced result
+fails the turn closed.
+
+Every successful nonempty authoritative search result becomes an application-rendered
+ordered environment clarification, including when exactly one environment matches.
+The complete ordered identifiers are persisted against the working candidate version.
+The search turn must end in clarification and cannot continue directly to
+`get_production_environment`. Only a later exact identifier from the requester or an
+ordinal resolved against that persisted context may select canonical environment
+scope. A zero-result search produces application-owned no-match guidance, no
+environment mutation, and an environment clarification context with an empty ordered
+identifier collection so an explicit ready-draft revision remains durably suspended
+and recoverable.
+
+For a known environment with no assigned roles, `get_environment_roles` succeeds
+with `roles: []`. An unknown environment supplied to either exact environment or role
+lookup produces the standard typed MCP failure envelope. Neither result is
+authorization evidence.
+
+The interpreter may call `get_environment_roles` only after
+`get_production_environment` has resolved the same exact environment in the current
+turn. An incident result may supply the environment identifier to the subsequent
+exact environment lookup, but it does not replace that lookup. A selected environment
+change invalidates any earlier model-side role result and requires a new exact
+environment lookup followed by a new role lookup before proposing or preserving a
+role. The MCP server remains stateless and validates each call independently; it does
+not trust or track whether the interpreter followed this sequence. The Web
+interpretation boundary observes the tool calls within one model run and rejects an
+out-of-order or mismatched sequence.
+
+The required chain applies when the current turn introduces or changes an
+environment, incident, or requested role, or asks for role alternatives. A turn that
+changes only an unrelated field may keep an already canonical role without repeating
+MCP lookups. This avoids tool traffic that cannot affect interpretation while still
+making every newly interpreted environment-role relationship evidence-backed and
+observable.
+
+The MCP split is model-facing only. Core and its authoritative context ports may load
+an environment and its assigned roles together. The application must independently
+validate the environment-role relationship even when the model followed the required
+tool sequence and proposed a role returned by MCP.
 
 Within deterministic application processing, one authoritative load of an identifier
 or bounded catalog per turn may be reused by validation, choice construction, and
@@ -438,9 +572,11 @@ MCP lookup does not replace the independent application load.
 
 One normal turn permits at most:
 
+- one `search_production_environments` invocation;
 - one `get_incident` invocation;
-- two `get_production_environment` invocations;
-- three total MCP invocations; and
+- one `get_production_environment` invocation;
+- one `get_environment_roles` invocation;
+- four total MCP invocations; and
 - six total provider iterations, including tool-result continuation.
 
 An unknown function name, non-read-only function, repeated call beyond these bounds,
@@ -449,12 +585,21 @@ partial candidate is committed.
 
 The application must fail closed if:
 
-- the tool catalog is missing either required tool;
+- the tool catalog is missing any required tool;
 - an additional tool is exposed;
-- either tool is not annotated read-only;
+- any tool is not annotated read-only;
+- a search query is not requester-backed, violates its schema, produces an incomplete
+  or reordered result, or is followed by exact environment lookup in the same turn;
+- `get_production_environment` exposes assigned roles;
+- `get_environment_roles` is called without a preceding exact lookup of the same
+  environment in the current turn, or after that environment has changed;
 - the model output is malformed;
 - a model, MCP, network, timeout, or cancellation boundary fails; or
 - the model proposes an unsupported field or operation.
+
+The existing model/MCP timeout remains unchanged. Search, exact lookup, and role
+lookup share that budget; the application must not extend a deadline merely because
+the valid interaction contains additional calls or turns.
 
 Normal text processing uses at most one interpretation phase. The application must
 not make a second model call merely to phrase a clarification, progress message,
@@ -468,11 +613,21 @@ Core owns a deterministic reducer that accepts:
 - latest raw requester message;
 - current persisted working candidate and immutable ready snapshot, when present;
 - persisted structured clarification context, when present;
-- untrusted `RequestTurnProposal`;
+- untrusted provider-neutral `RequestTurnInterpretation`, including the observed
+  environment query when present;
 - authoritative request context; and
 - server correlation and clock state.
 
 It produces a closed typed turn outcome.
+
+Before field merge, the reducer validates any environment-search observation against
+the current requester message and the independently loaded authoritative search
+result. A valid search-only `updateDraft` with an all-`keep` patch produces environment
+clarification without candidate mutation. An observation on a non-update dialogue
+act, an unbacked query, a result mismatch, or a simultaneous environment mutation is
+an invalid interpretation. Other evidence-backed field changes from the same update
+may be sanitized and persisted only when doing so cannot select environment scope or
+contradict the search clarification.
 
 ### Merge algorithm
 
@@ -533,21 +688,26 @@ incomplete state requiring clarification.
 ### Environment handling
 
 - Exact environment identifiers require exact authoritative lookup.
-- A complete authoritative environment display name may resolve to its exact
-  identifier only when it matches exactly after the evidence normalization rules.
 - A failed exact lookup must not silently fall back to discovery or identifier
   correction.
-- Readable partial scope such as a client, region, or primary/recovery description is
-  never converted directly into a field mutation and is not represented in the model
-  contract.
-- When environment is missing and the requester did not provide an exact identifier
-  or complete display name, the application loads and renders the complete bounded
-  authoritative production-environment catalog in stable application-owned order.
-- The model cannot filter, rank, truncate, or supply environment options.
+- A complete display name or readable scope such as a client, region, or
+  primary/recovery description may become a requester-backed search query but is
+  never converted directly into a field mutation.
+- When an evidence-backed search returns matches, the application independently
+  reproduces and renders the complete matching set in stable environment-ID order.
+  Even one match requires explicit selection in a later turn.
+- When an evidence-backed search returns no matches, the application renders
+  deterministic no-match guidance, persists an empty environment clarification
+  context, and asks for a refined description or exact environment identifier.
+- When environment is missing and no valid search was attempted, the application asks
+  for an exact identifier or a searchable client, region, and primary/recovery
+  description; it does not invoke a hidden full-catalog fallback.
+- The model cannot select from, filter after, rank, truncate, reorder, or supply
+  environment options.
 - Every displayed identifier and its exact order are stored as structured
   clarification context bound to the working candidate version.
 - An ordinal reply resolves only against that persisted order. Otherwise the
-  requester must supply an exact identifier or complete display name.
+  requester must supply an exact identifier or another searchable description.
 - Client is always derived from the selected environment.
 
 ### Role handling
@@ -556,6 +716,9 @@ incomplete state requiring clarification.
 - The application never substitutes a different role automatically.
 - When the role is missing or invalid, the response renderer receives all and only
   the roles assigned to the selected authoritative environment.
+- A valid environment with no assigned roles produces a typed `CandidateRejected`
+  outcome explaining that no role is available. It creates no empty ordinal-choice
+  context and cannot become ready.
 - Role identifiers, ordering, and display names are application-owned. The exact
   rendered role order is persisted as clarification context bound to the working
   candidate version so an ordinal reply remains deterministic after restart.
@@ -633,9 +796,10 @@ Application code must render:
 
 The model returns no requester-facing prose. For `discussDraft`, the application
 states that the current draft is unchanged, renders canonical progress, and explains
-that a revision must name an exact environment identifier or complete display name,
-an authoritative role, an exact incident identifier, or requester-authored
-justification. The initial feature does not attempt open-ended conversational answers.
+that a revision must name an exact environment identifier or searchable environment
+description, an authoritative role, an exact incident identifier, or
+requester-authored justification. The initial feature does not attempt open-ended
+conversational answers.
 
 ### Deterministic clarification mapping
 
@@ -715,6 +879,11 @@ snapshot and the pending candidate, and confirmation remains suspended.
   confirmation eligibility for the old ready snapshot. The application makes a
   best-effort visual replacement of the old card, but submission eligibility is
   determined only from durable intake state.
+- A validated environment search issued for an explicit revision is evidence-backed
+  pending intent even though it cannot mutate the candidate. Its nonempty or empty
+  environment clarification context suspends the old snapshot until the requester
+  selects an environment, supplies another searchable description, uses
+  `/cancel-revision`, or the snapshot expires.
 - The next turn receives the pending revision candidate as its working candidate. A
   role selected on that turn therefore applies to the pending environment rather than
   the immutable old environment.
@@ -722,9 +891,10 @@ snapshot and the pending candidate, and confirmation remains suspended.
   Stale pending state cannot be applied to another ready snapshot.
 - If a pending revision becomes complete and valid, replacement atomically supersedes
   the old ready intake, creates the new ready intake/card, and clears pending state.
-- If a pending revision returns exactly to the immutable ready details, pending state
-  is cleared, confirmation eligibility is restored, and the exact existing ready card
-  is re-presented without changing its identity or deadline.
+- If a pending revision returns exactly to the immutable ready details and no active
+  environment-search clarification remains, pending state is cleared, confirmation
+  eligibility is restored, and the exact existing ready card is re-presented without
+  changing its identity or deadline.
 - Exact `/cancel-revision` on an owned, unexpired ready snapshot clears pending
   revision and clarification context, restores confirmation eligibility for the
   unchanged ready snapshot, and re-presents its exact card without invoking the model
@@ -921,7 +1091,8 @@ Efficiency invariants:
 - No authoritative lookup solely to repeat a value already loaded in the same
   application turn when a canonical typed result can be reused safely.
 - MCP catalog validation and client lifetime may be optimized only if the exact
-  two-tool fail-closed contract and cancellation behavior remain testable.
+  four-tool fail-closed contract, clarification-bound search, required
+  environment-to-role sequence, and cancellation behavior remain testable.
 - Process-local gate, presentation, and conversation state must have bounded cleanup.
 
 No fixed latency service-level objective is imposed for the synthetic MVP. Runtime
@@ -939,12 +1110,21 @@ optimizations.
   to canonical progress and deterministic guidance in the initial feature.
 - Revalidating model-proposed identifiers duplicates some model-side MCP lookup work.
   This is intentional because MCP output and model interpretation are not authority.
-- Rendering the complete environment catalog is less tailored than model-driven
-  narrowing. It is acceptable for the bounded synthetic catalog; expanding catalog
-  size requires a separate deterministic search/selection feature.
-- Exact field-clear commands and exact identifiers/display names accept less natural
-  phrasing. This is deliberate: unsupported wording produces guidance instead of
-  growing a language heuristic inside Core.
+- Separating role discovery from environment discovery adds one model-side MCP call
+  and another failure point. This is intentional: the narrow dependency makes tool
+  sequencing, environment-change invalidation, and deterministic revalidation
+  observable in evaluation without adding a state-changing capability. The existing
+  timeout is not enlarged to hide the added cost.
+- Separating environment search from exact lookup adds a clarification turn for every
+  non-identifier description, including a unique match. This friction is intentional:
+  the model may choose requester-backed search text but cannot silently select scope.
+- Deterministic token search is less forgiving than semantic search. Unsupported
+  phrasing produces no-match guidance rather than allowing model similarity or
+  ranking to become authoritative. Expanding beyond the 20-result bound requires a
+  separate pagination and selection design.
+- Exact field-clear commands, exact environment identifiers, and authoritative role
+  display names accept less natural phrasing. This is deliberate: unsupported wording
+  produces guidance instead of growing a language heuristic inside Core.
 - Persisted ordered-choice context resolves the active clarification after restart,
   but unrelated relative references still require a self-contained clarification.
 - The whole-turn gate provides ordering only inside the single host. Durable database
@@ -976,8 +1156,12 @@ Place deterministic Core behavior in `GovernedAccess.UnitTests`, including:
 - invalid operation/value combinations;
 - client derivation;
 - environment ambiguity;
-- full authoritative environment-choice ordering;
+- search normalization, token-AND matching over the closed field set, stable complete
+  ordering, zero matches, and too-broad rejection;
+- clarification-bound search preserving all and only authoritative matches, including
+  a single match, without environment mutation;
 - role assignment;
+- known environment with no assigned roles producing a typed non-ready outcome;
 - justification authorship, append behavior, and the three-token syntactic floor;
 - incident activity and scope compatibility;
 - the complete dependency-cascade table;
@@ -993,12 +1177,21 @@ Place deterministic Core behavior in `GovernedAccess.UnitTests`, including:
 Place boundary behavior in `GovernedAccess.IntegrationTests`, including:
 
 - strict provider JSON parsing and unknown-property rejection;
-- exact two-tool read-only MCP catalog enforcement;
+- exact four-tool read-only MCP catalog enforcement;
+- the closed `search_production_environments` schema, requester-backed 1-200 character
+  query enforcement, deterministic complete results, empty success, and typed
+  too-broad failure;
+- `get_production_environment` results excluding roles;
+- the closed `get_environment_roles` input and output schemas, exact-environment-only
+  behavior, empty successful role collections, and typed unknown-environment failure;
 - model/MCP timeout, cancellation, malformed output, and unavailability;
 - deterministic scripted multi-turn interpretation;
 - deterministic requester prompt-injection attempts proving unsupported field
   changes and workflow instructions have no persisted effect;
-- unknown tool, per-tool call limit, total call limit, and provider-iteration rejection;
+- search-result/application-result mismatch, same-turn search-to-exact rejection,
+  required exact-environment-before-role ordering, environment-change invalidation,
+  unknown tool, per-tool call limit, total call limit, and provider-iteration
+  rejection;
 - application-rendered environment and role choices;
 - persisted ordered-choice ordinal resolution after simulated restart;
 - persisted multi-turn pending revision behavior;
@@ -1020,7 +1213,7 @@ Place boundary behavior in `GovernedAccess.IntegrationTests`, including:
 
 ### Full-host acceptance test
 
-Use one representative hosted journey:
+Use two representative hosted journeys:
 
 ```text
 authenticated Teams message with incident
@@ -1031,6 +1224,15 @@ authenticated Teams message with incident
   -> ready Adaptive Card
   -> authenticated card confirmation
   -> one AwaitingBusinessApproval request
+
+authenticated Teams message with readable non-identifier environment scope
+  -> requester-backed environment search
+  -> application-rendered persisted ordered matches
+  -> requester ordinal selection
+  -> exact environment lookup
+  -> environment-role lookup
+  -> remaining deterministic clarifications
+  -> ready Adaptive Card
 ```
 
 Assert the exact persisted requester and scope, no approval decisions, no provisioning
@@ -1045,6 +1247,21 @@ The evaluation dataset should include at least:
 
 - all details in one message;
 - incremental incident, purpose, and role collection;
+- non-identifier environment wording causing search and a separate application-owned
+  clarification turn, including unique, multiple, and zero-match cases;
+- search-query wording not backed by the requester, search-to-exact continuation in
+  one turn, reordered or incomplete search output, and too-broad search failure in
+  deterministic evaluation;
+- an exact environment causing an exact environment lookup followed by its role
+  lookup;
+- an ambiguous environment causing no role lookup;
+- an environment revision causing a fresh exact environment lookup and fresh role
+  lookup rather than reuse of the earlier role result;
+- an explicit role unavailable in the resolved environment;
+- an incident-driven request producing the bounded incident, exact-environment, and
+  environment-role chain;
+- a model that skips role lookup, invents a role, or reuses another environment's
+  roles, with Core still rejecting unsupported scope;
 - readable ambiguous environment scope;
 - exact unknown identifiers;
 - inactive and conflicting incidents;
@@ -1054,10 +1271,14 @@ The evaluation dataset should include at least:
 - revision plus textual submission request;
 - prompt injection, in addition to required deterministic scripted coverage;
 - relative reply with and without conversation history; and
-- malformed or unavailable provider outcomes in deterministic tests.
+- malformed or unavailable provider outcomes in deterministic tests, including role
+  timeout, malformed role data, unknown role-tool environment, and a successful empty
+  role collection.
 
-Every evaluated final candidate is graded against canonical application output, not
-raw tool order, prompt wording, or provider reasoning. Evaluation must create zero
+Every evaluated final candidate is graded against canonical application output.
+Scenarios concerned with MCP orchestration additionally grade the observable tool
+names, arguments, ordering, invalidation, and bounded failure outcome, but never
+provider reasoning or incidental prompt wording. Evaluation must create zero
 requests, decisions, operations, and grants.
 
 ## Acceptance scenarios
@@ -1077,9 +1298,10 @@ application shows accepted progress plus one next question.
 ### AC-03: All details can complete in one turn
 
 Given an empty intake, when one message unambiguously supplies a valid environment,
-role, justification, and optional compatible incident using exact identifiers or
-complete authoritative display names where required, then authoritative validation
-creates one ready snapshot and the application sends its review card.
+role, justification, and optional compatible incident using an exact environment
+identifier and exact identifiers or authoritative display names for the other fields,
+then authoritative validation creates one ready snapshot and the application sends
+its review card.
 
 ### AC-04: Incident derives scope but not justification
 
@@ -1089,11 +1311,12 @@ application-owned justification question.
 
 ### AC-05: Ambiguity is not guessed
 
-Given a missing environment or readable partial scope without an exact identifier or
-complete authoritative display name, then the application renders the complete
-bounded authoritative environment catalog in stable application-owned order,
-persists that exact order as clarification context, and persists no guessed
-environment.
+Given readable environment scope without an exact identifier, when the model submits
+a requester-backed search query, then the application independently reproduces the
+search, renders every authoritative match in stable environment-ID order, persists
+that exact order as clarification context, and persists no guessed environment. One
+match still requires a later exact-ID or ordinal selection; zero matches persist an
+empty environment clarification context and return deterministic refinement guidance.
 
 ### AC-06: Role choices are authoritative
 
@@ -1212,12 +1435,14 @@ the supported exact command.
 ### AC-24: Multi-turn ready revision preserves its working candidate
 
 Given ready `PROD-ALPHA-EU` with `ProductionSupport`, when the requester changes to a
-recovery environment that requires another role, then the application persists the
-pending recovery-environment candidate and ordered role choices without changing the
-ready snapshot, suspends confirmation of its old card, and rejects that card if used.
-After restart, selecting `ProductionReadOnly` applies to that pending recovery
-environment and produces the exact intended replacement ready snapshot with a new
-card.
+readable recovery-environment description, then the application independently
+reproduces the model's requester-backed search, persists the complete ordered
+environment choices as pending-revision clarification without changing the ready
+snapshot, suspends confirmation of its old card, and rejects that card if used. After
+restart, selecting the recovery environment resolves its exact identifier, clears the
+unavailable role, and persists ordered role choices. After another restart, selecting
+`ProductionReadOnly` produces the exact intended replacement ready snapshot with a
+new card.
 
 ### AC-25: Dependency cascades are exact
 
@@ -1226,6 +1451,61 @@ stored incident, then client is re-derived, role is cleared, both explicit envir
 and incident are preserved in incident-conflict state, and neither side is silently
 selected or discarded.
 
+### AC-26: The MCP catalog and lookup contracts are exact
+
+Given the MCP server is initialized, when its catalog and schemas are inspected, then
+it exposes exactly `search_production_environments`, `get_production_environment`,
+`get_environment_roles`, and `get_incident`, all four are read-only, search requires
+one bounded query, and exact environment lookup requires one exact `environmentId`.
+Neither environment tool returns roles. `get_environment_roles` requires one exact
+`environmentId`; a known environment with no assigned roles returns a successful
+result with `roles: []`, and an unknown environment returns the standard typed
+failure envelope.
+
+### AC-27: Role discovery follows exact environment resolution
+
+Given a requester supplies an exact environment and a role, when the model gathers
+context, then it calls `get_production_environment` with that exact environment before
+calling `get_environment_roles` with the same identifier. Core independently reloads
+the environment and role assignments before accepting the proposed role.
+
+### AC-28: Ambiguity and environment changes cannot reuse role context
+
+Given readable non-identifier environment scope, then the model may search but does
+not call either exact environment or role lookup in that turn. Given an environment
+changes after roles were retrieved, then the earlier role result is invalidated and
+the model must repeat the exact environment lookup followed by role lookup after the
+requester selects the new environment before a role can be accepted or preserved.
+
+### AC-29: Role-tool failures preserve canonical state
+
+Given a turn that requires role context and any last committed candidate, when
+`get_environment_roles` is skipped, called out of order, exceeds its call bound,
+times out, is unavailable, or returns malformed data, then the turn fails closed, the
+last committed candidate and any ready-card authority remain unchanged, and no
+request is created. A model-invented or cross-environment role is independently
+rejected by Core even when model execution otherwise completes. A turn changing only
+an unrelated field may retain an already canonical role without MCP calls.
+
+### AC-30: Search is clarification-bound and requester-backed
+
+Given readable non-identifier environment wording, when the model calls
+`search_production_environments`, then its normalized 1-200 character query must be a
+contiguous substring of the normalized current requester message. The application
+reruns the deterministic token-AND search and persists every match in stable order as
+clarification context. One match still requires later requester selection, no match
+creates an empty ordered environment clarification context, and more than 20 matches
+fail with `environment_query_too_broad` rather than truncation.
+
+### AC-31: Search cannot silently select scope
+
+Given any successful search result, when the model attempts exact environment lookup
+in the same turn, emits a result-derived environment patch without exact requester or
+persisted-ordinal evidence, changes the query beyond requester wording, or returns an
+incomplete or reordered result, then the turn fails closed or rejects the unsupported
+mutation as defined by the boundary and reducer. No canonical environment, request,
+decision, operation, or grant is created.
+
 ## Tech stack
 
 - .NET 10 and C# 14.
@@ -1233,7 +1513,7 @@ selected or discarded.
 - `GovernedAccess.Core` for provider-neutral domain and application behavior.
 - `GovernedAccess.Web` for Teams, MAF, MCP client, rendering, persistence, and
   composition.
-- `GovernedAccess.Mcp` for exactly two typed read-only tools.
+- `GovernedAccess.Mcp` for exactly four typed read-only tools.
 - EF Core SQLite persistence.
 - Microsoft Agent Framework and `Microsoft.Extensions.AI` through existing project
   dependencies.
@@ -1312,6 +1592,9 @@ git diff --check
 - Require deterministic current-message or persisted ordered-choice evidence before
   applying every changed `set` or `clear` operation.
 - Normalize value-equal `set` operations to `keep` and observe model drift.
+- Require requester evidence for every environment query, independently reproduce the
+  deterministic search, and persist its complete stable result only as clarification
+  context.
 - Reload identifiers and relationships from authoritative data.
 - Let Core decide readiness and lifecycle transitions.
 - Render canonical fields, choices, questions, cards, and workflow outcomes in
@@ -1326,7 +1609,8 @@ git diff --check
 - Add persistence beyond the narrowly authorized pending revision candidate,
   structured clarification context, and existing intake/workflow state.
 - Add a dependency, project, requester channel, or deployable component.
-- Change the MCP tool catalog or schemas.
+- Change the four MCP tool contracts defined by this specification or add another
+  tool.
 - Change the 30-minute confirmation lifetime.
 - Change requester confirmation away from an Adaptive Card structured action.
 - Change fixed duration, approver resolution, approval order, immutable scope,
@@ -1344,6 +1628,8 @@ git diff --check
 - Expose submission, approval, provisioning, retry, or revocation to the model or MCP.
 - Treat a card payload as identity or authorization evidence.
 - Guess an ambiguous environment, role, incident, or relative reply.
+- Select an environment automatically from search results, even when exactly one
+  environment matches.
 - Mutate a ready snapshot partially.
 - Supersede a ready snapshot before its required replacement state can commit.
 - Persist raw prompts, transcripts, model reasoning, provider traces, or full MCP
@@ -1361,9 +1647,9 @@ The feature is complete when:
 2. Core deterministically merges `keep`, evidence-backed `set`, and evidence-backed
    `clear` operations, normalizes value-equal sets, and preserves unrelated canonical
    state.
-3. The model cannot filter or rank environment choices; when exact environment
-   evidence is absent, the application renders the complete authoritative bounded
-   catalog in stable order.
+3. The model cannot select, filter after search, rank, reorder, or truncate environment
+   choices; when an evidence-backed search succeeds, the application renders the
+   complete authoritative matched set in stable order.
 4. Persisted justification is demonstrably requester-authored and satisfies the fixed
    syntactic floor without claiming semantic quality judgment.
 5. Application-owned rendering produces all field values, choices, missing-field
@@ -1381,17 +1667,31 @@ The feature is complete when:
    `AwaitingBusinessApproval` request and audit event.
 11. Stale, foreign, invalid, expired, malformed, duplicate, and concurrent card actions
    fail safely or replay the same request identity.
-12. MCP still exposes exactly the two existing read-only tools, and per-turn tool and
-    provider-iteration bounds fail closed.
-13. No downstream approval, provisioning, retry, grant, React request-creation, or
+12. MCP exposes exactly the four defined read-only tools; deterministic environment
+    search and exact lookup have separate closed inputs; environment responses omit
+    roles; exact environment-scoped role lookup supports an empty successful role
+    collection; and unknown identifiers use the typed failure envelope.
+13. Every accepted search query is requester-backed, independently reproduced, never
+    truncated, and rendered as complete stable clarification choices without
+    selecting scope, including for one result.
+14. Observable orchestration separates search clarification from later exact lookup,
+    resolves one exact environment before retrieving roles, invalidates role results
+    after an environment change, stays within the unchanged timeout, and fails closed
+    on sequence, per-tool, total-call, or provider-iteration violations.
+15. No downstream approval, provisioning, retry, grant, React request-creation, or
     fixed-duration behavior changes.
-14. The required backend build, unit, and integration commands pass sequentially, and
+16. The required backend build, unit, and integration commands pass sequentially, and
     any affected frontend tests pass separately.
-15. Current product, architecture, security, testing, and operator documentation is
+17. Current product, architecture, security, testing, and operator documentation is
     reconciled only after implementation evidence establishes the new as-built truth.
 
 ## Open questions
 
-None for the initial synthetic-MVP specification. Any request to add natural-language
-submission, durable conversational continuation, real production effects, another
-channel, or additional model tools is a separate governed feature.
+None for the initial synthetic-MVP specification. The environment-role tool is named
+`get_environment_roles`; a known environment without assignments returns `roles: []`;
+environment discovery uses clarification-bound
+`search_production_environments({ query })`; exact lookup uses
+`get_production_environment({ environmentId })`; and the existing model/MCP timeout
+is unchanged. Any request to add natural-language submission, durable conversational
+continuation, real production effects, another channel, or a fifth model tool is a
+separate governed feature.
