@@ -27,12 +27,113 @@ matching, and semantic inference are outside the baseline.
 
 The checked-in runtime, current MCP contract, model allowlist and instructions,
 tests, security analysis, and operator guidance now describe that delivered design.
-The business direction for conversational request submission is documented in a
-[draft feature specification](../SPEC-conversational-request-submission.md) and a
-[proposed implementation plan](../tasks/plan.md). It remains subject to the authority
-and architecture gates in those artifacts. Until implementation, validation, and
-documentation reconciliation are complete, the current as-built confirmation flow
-remains authoritative.
+The next proposed product increment is documented in the
+[deterministic conversational request-intake specification](../SPEC-deterministic-request-intake.md).
+It changes preparation, revision, response ownership, and turn ordering while keeping
+Adaptive Card confirmation as the only request-creation action. Until implementation,
+validation, and documentation reconciliation are complete, the current product
+baseline and as-built preparation flow remain authoritative.
+
+## Proposed Near-Term Increment: Deterministic Conversational Request Intake
+
+### Business problem
+
+The current interpreter returns a complete nullable candidate on every turn and is
+prompted to preserve previously accepted fields. This makes correct multi-turn state
+preservation depend too heavily on probabilistic model behavior. Model-authored
+clarification prose also mixes language interpretation with authoritative response
+presentation, and current turn coordination does not serialize the complete
+load-through-commit boundary.
+
+### Target behavior
+
+The model interprets only the latest requester turn and returns a closed dialogue act
+plus explicit `keep`, `set`, or `clear` operations for environment, role,
+justification, and optional incident. Core owns the canonical candidate and applies a
+changed operation only when deterministic current-message or persisted ordered-choice
+evidence supports it. Client remains derived from authoritative environment data.
+
+Application code owns field values, complete environment and role choices, progress,
+clarification questions, validation guidance, review cards, and workflow outcomes.
+The model returns no requester-facing prose and cannot filter, rank, or truncate
+environment choices. When exact environment evidence is absent, the application shows
+the complete bounded authoritative environment catalog in stable order. Field removal
+uses exact application-owned commands rather than a language heuristic.
+
+Adaptive Card confirmation remains the only request-creation path. An evidence-backed
+unfinished revision persists a sanitized pending candidate and suspends confirmation
+of the old ready snapshot. The old card creates no request while that revision is
+pending. Exact `/cancel-revision` discards the pending change and restores the same
+unexpired snapshot without refreshing its deadline. A completed revision atomically
+supersedes the old snapshot and creates a new card.
+
+### Delivery sequence
+
+#### Increment 1: Interpretation and reducer boundary
+
+- Replace complete-candidate model output with the closed dialogue-act and patch
+  contract.
+- Normalize value-equal `set` operations and reject changed operations without exact
+  evidence.
+- Implement the fixed dependency cascades, authoritative identifier reload, client
+  derivation, justification authorship check, and syntactic justification floor.
+- Route exact field-clear commands without a model call.
+
+**Exit gate:** deterministic unit tests prove that context loss, snapshot-shaped model
+output, unsupported clearing, and unrequested field changes cannot corrupt canonical
+state.
+
+#### Increment 2: Application-owned conversation
+
+- Replace model-authored clarification and progress responses with deterministic
+  application rendering.
+- Render the complete authoritative environment catalog and environment-specific role
+  choices in stable application-owned order.
+- Persist only the ordered structured clarification context required for exact and
+  ordinal replies; do not persist raw conversation or model response prose.
+
+**Exit gate:** scripted multi-turn integration tests prove that ambiguous input is not
+guessed, choices survive restart, and every displayed authoritative value comes from
+reloaded application data.
+
+#### Increment 3: Ready revision and concurrency safety
+
+- Serialize one authenticated actor/conversation turn across load, interpretation,
+  reduction, persistence, and presentation selection.
+- Persist sanitized pending ready-draft revisions and suspend confirmation while they
+  exist.
+- Add deterministic `/cancel-revision`, typed `RevisionPending` confirmation failure,
+  best-effort old-card visual replacement, and atomic ready-snapshot replacement.
+- Enforce durable uniqueness and optimistic-concurrency behavior for active intakes.
+
+**Exit gate:** restart, rollback, stale-card, revision-versus-confirmation, duplicate,
+and concurrent-turn tests converge without partial replacement or request creation
+from a suspended card.
+
+#### Increment 4: End-to-end evidence and documentation reconciliation
+
+- Preserve the current closed card payload and authoritative submission revalidation.
+- Verify the complete Teams preparation-to-confirmation journey with deterministic
+  model clients and no live-model dependency.
+- Reconcile the product baseline, architecture, security model, intake orchestration,
+  testing strategy, operator guidance, and roadmap only after the implementation is
+  proven as-built.
+
+**Exit gate:** required build and test suites pass sequentially, all specification
+acceptance scenarios have evidence, and the current documentation authority set
+describes one consistent runtime behavior.
+
+### Explicitly excluded from this increment
+
+- Natural-language submission or any model-visible state-changing tool.
+- Model-generated requester response prose.
+- Model-proposed environment filtering, ranking, narrowing, or choice subsets.
+- Heuristic rewriting or instruction-phrase classification of authoritative display
+  values beyond ordinary output encoding and labeled rendering.
+- Card-delivery receipt or acknowledgement persistence.
+- Collecting-intake idle expiry.
+- Additional requester channels, MCP tools, services, dependencies, workflow engines,
+  or distributed infrastructure.
 
 ## Delivered Increment: Environment Identifier Resolution
 
@@ -141,9 +242,10 @@ Before production engineering begins:
 - define the business scope, supported access types, data classification, risk
   tolerance, compliance obligations, service objectives, recovery objectives, and
   accountable owners;
-- decide whether natural-language conversational submission is acceptable for the
-  target risk class, including false-positive tolerance, deterministic fallback,
-  operator disablement, and rollback behavior;
+- decide whether model-interpreted request preparation followed by deterministic
+  structured confirmation is acceptable for the target risk class, including
+  interpretation-error tolerance, deterministic fallback, operator disablement, and
+  rollback behavior;
 - reconcile the constitution, product baseline, security model, feature
   specifications, and architecture decisions before implementing any conflicting
   capability; and
@@ -206,13 +308,14 @@ without the exact required approvals.
 
 - Version and approve models, prompts, schemas, tool contracts, datasets, graders,
   and thresholds as one releasable AI configuration.
-- Run deterministic tests without a live model, then run separate live-model
-  preparation and consequential-action evaluations before promotion.
+- Run deterministic tests without a live model, then run a separate live-model
+  preparation evaluation and deterministic consequential-action security tests before
+  promotion.
 - Measure both correct action and correct restraint across adversarial, ambiguous,
   multilingual, stale-context, duplicate-delivery, and provider-failure scenarios.
 - Add change control, drift detection, privacy review, safe telemetry, cost budgets,
-  provider timeouts, and a tested ability to disable model-mediated submission while
-  retaining a deterministic support path.
+  provider timeouts, and a tested ability to disable model-mediated preparation
+  without weakening structured confirmation or downstream controls.
 
 **Exit gate:** approved evaluation report with version evidence, security and privacy
 sign-off, threshold compliance, rollback rehearsal, and no unresolved high-severity
@@ -247,9 +350,8 @@ authority change explicitly introduces them:
 
 - incident discovery, listing, title matching, or semantic search;
 - a separate role-listing tool;
-- any additional model-visible state-changing capability beyond the conversational
-  submission signal if that capability passes its authority review, and any
-  model-visible approval, provisioning, retry, revocation, or credential capability;
+- any model-visible submission, approval, provisioning, retry, revocation,
+  credential, or other state-changing capability;
 - agent-directed approval or provisioning;
 - a generic enterprise search or arbitrary database-query tool;
 - retention of raw transcripts or provider traces as workflow or authorization
