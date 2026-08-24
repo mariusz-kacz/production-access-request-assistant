@@ -1,126 +1,216 @@
-# ADR 0007: Use Sparse Model Patches and a Deterministic Reducer
+# ADR 0007: Use Sparse Model Proposals and a Deterministic Reducer
 
 - **Status**: Accepted
 - **Date**: 2026-08-22
+- **Clarified**: 2026-08-24
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/deterministic-request-intake-design.md`, `docs/evaluation/deterministic-request-intake-test-matrix.md`
+- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Context
 
-The current request interpreter returns a complete nullable candidate on every turn
-and is instructed to preserve previously accepted values. That design makes canonical
-state preservation depend on probabilistic behavior. A model that loses context,
-reconstructs a stale snapshot, or emits an unrequested value can accidentally propose
-replacement of fields the requester did not discuss.
+The delivered interpreter returns a complete nullable candidate on every turn and asks
+the model to preserve previously accepted values. Durable draft preservation therefore
+depends on probabilistic reconstruction. A schema-valid response can omit accepted
+state, reproduce a stale snapshot, or replace a field that the requester did not intend
+to change.
 
-Schema-constrained output reduces malformed responses but does not solve ownership. A
-schema-valid full snapshot can still be stale or unsupported. The application needs a
-boundary that uses the model for language interpretation without asking it to own or
-restate durable request state.
+An earlier target design tried to reduce that risk by having deterministic code parse
+selected phrases or prove that a proposal was textually supported by the latest
+requester message. That creates a second natural-language interpreter beside the agent,
+leaks language assumptions into Core, and fails for equivalent multilingual or
+paraphrased requests.
+
+The target design also needs an explicit answer for mixed patches. A proposal may
+contain several structurally valid operations where one enterprise lookup fails or one
+relationship is incompatible. Leaving whole-turn versus field-level behavior implicit
+would produce incompatible implementations.
 
 ## Decision
 
-The model will return:
+Every authenticated requester free-text turn except exact `/new` is interpreted by one
+model-backed agent. No other deterministic component assigns business meaning to
+requester free-text.
 
-- one closed dialogue act;
-- a sparse patch containing only explicit `set` or `clear` operations for fields the
-  model believes the current message changes; and
-- a transient observation of any requester-backed environment search performed through
-  MCP.
+The agent returns one closed, provider-neutral `TurnProposal` with exactly one dialogue
+act and its permitted payload:
 
-Omitted fields mean no proposed operation. There is no required serialized `keep`
+- a sparse patch containing explicit `set` or `clear` operations;
+- one clarification selection containing target and 1-based option index;
+- one bounded discussion topic; or
+- no mutation payload for submission intent, unrelated, or unclear turns.
+
+A sparse patch may propose changes only to environment, role, justification, and
+optional incident. Omitted fields mean no proposed change. There is no required `keep`
 operation.
 
-A provider-neutral deterministic reducer in Core will own:
+Core receives no requester free-text as proposal-validation or reducer input. It owns:
 
-- current canonical candidate state;
-- operation-evidence checks against the latest requester message or persisted ordered
-  choice context;
-- value-equal normalization;
-- dependency cascades;
-- authoritative search and exact reload;
-- canonicalization and field-level rejection;
-- readiness and lifecycle transitions; and
-- the typed application outcome.
+- closed schema and act/payload compatibility validation;
+- canonical state and field-specific equality;
+- deterministic effects of structured `set` and `clear` operations;
+- authoritative environment, client, role, and incident search/reloads;
+- fixed cross-field evaluation order and dependency cascades;
+- clarification target/index/version validation;
+- readiness, lifecycle, persistence, and typed outcomes.
 
-The model cannot set client, requester, duration, preparation/request identity,
-workflow status, approver, decision, provisioning, or grant data. It cannot decide
-that a candidate is valid, ready, submitted, approved, or provisioned.
+Core validates whether a structured proposal is legal, coherent, and supported by
+current authoritative enterprise data. It deliberately does not prove that requester
+wording linguistically entails the proposal.
 
-Application code renders all authoritative requester-facing content. The model emits
-no consequential response prose.
+### Structural and data-level rejection
+
+The reducer uses a two-tier model:
+
+1. **Structural violation** — unknown act, field, operation, payload combination,
+   malformed value, or provider-contract translation failure rejects the entire turn
+   with zero mutation after at most one repair attempt.
+2. **Data-level operation result** — unknown/ineligible environment, unavailable role,
+   incompatible incident, source failure, or dependency failure rejects only the
+   affected and dependent operations. Independent accepted operations commit atomically
+   with any resulting clarification context.
+
+The normative evaluation order is:
+
+1. environment;
+2. incident;
+3. coherent final environment/client scope;
+4. role against final environment;
+5. justification;
+6. at most one clarification, with environment before role;
+7. dependency cascades and readiness.
+
+There is no unspecified partial-success escape hatch.
+
+### Justification provenance
+
+Justification remains requester-authored content in the requester’s language. The agent
+may extract it from conversational framing, trim outer whitespace, normalize line
+endings, and combine explicitly requested edits with the existing canonical value. It
+must not translate, summarize, polish, invent rationale, or add facts.
+
+Core enforces storage constraints but does not compare the proposed justification with
+raw requester text. Provenance quality is governed by the agent contract, targeted live
+evaluation, mandatory ready-card review, and human approval.
+
+### Consequential boundaries
+
+Natural-language reset and submission intent are proposals only:
+
+- exact `/new` is the sole deterministic requester-text reset protocol; and
+- authenticated Adaptive Card confirmation is the sole request-creation path.
+
+The model cannot set requester identity, client, duration, preparation/request identity,
+workflow status, approver, approval, provisioning, retry, audit, or grant data. It
+receives no state-changing business tool.
+
+Application code renders every requester-visible response. No model-generated prose or
+raw MCP text reaches the requester.
 
 ## Rationale
 
-A sparse patch makes model omission safe: absence cannot erase a canonical value. The
-reducer can reject unsupported mutations while preserving unrelated accepted state.
-This makes state-loss and snapshot-shaped model errors observable rather than
-consequential.
+Sparse proposals make omission safe. A model that loses context or emits only the
+current change cannot erase unrelated canonical fields merely by failing to restate
+them.
 
-Separating interpretation from reduction also keeps Core independent of MAF, MCP, and
-provider JSON contracts. The same deterministic rules can be proven with ordinary unit
-tests and reused across transport or model adapters.
+Keeping all free-text interpretation at one boundary prevents phrase dictionaries,
+identifier extractors, numeric/ordinal resolvers, or evidence matchers from becoming a
+second NLP system. English, Polish, Spanish, and other language variants produce the
+same Core contract.
+
+Deterministic security remains strong without deterministic language reproduction:
+enterprise identities and relationships are exact-reloaded, state/lifecycle rules are
+deterministic, free-text cannot create a request, and the requester must review and
+confirm exact canonical scope.
+
+The explicit two-tier rejection model keeps multi-operation turns useful while avoiding
+arbitrary implementation choices. Structural corruption cannot partially apply;
+independent valid business changes need not be discarded because another source or
+field failed.
+
+Separating interpretation from reduction keeps Core independent of MAF, MCP, Teams,
+and provider SDK types. Core can be tested with directly constructed proposals, while
+linguistic and provenance quality is evaluated at the agent boundary.
 
 ## Consequences
 
 ### Positive
 
-- Canonical state no longer depends on the model reproducing a complete prior draft.
-- Context loss, stale snapshots, and unrequested field changes cannot silently replace
-  accepted values.
-- Deterministic rules have a narrow provider-neutral test surface.
-- Model behavior can evolve without moving readiness or authorization into the model.
-- Application-owned responses cannot accidentally report a workflow transition that
-  did not commit.
-- The project demonstrates a clear enterprise GenAI boundary: probabilistic
-  interpretation, deterministic state and policy.
+- Model omission and context loss cannot erase canonical fields through an incomplete
+  snapshot.
+- All requester-language interpretation has one owner.
+- Core remains deterministic, provider-neutral, and testable without language corpora.
+- Enterprise identifiers and relationships are independently revalidated.
+- Mixed patches have one normative ordering and partial-success policy.
+- Justification provenance is explicit rather than silently model-authored.
+- Model prose cannot claim a transition that did not commit.
+- The project demonstrates a credible enterprise GenAI boundary: probabilistic
+  interpretation, deterministic state/authority, and explicit confirmation.
 
 ### Negative and risks
 
-- The application must define exact evidence rules for each mutable field.
-- Some natural requester phrasing, especially clearing or paraphrased justification,
-  may require deterministic guidance instead of being accepted automatically.
-- The reducer and typed outcomes add code compared with directly trusting one complete
-  model object.
-- A model can still misunderstand intent; the design limits the state effect but cannot
-  guarantee perfect classification.
-- Application rendering is less conversational than free model prose unless bounded
-  help is designed deliberately.
+- Every non-`/new` free-text turn, including short numeric or apparently obvious input,
+  incurs agent latency and provider-failure risk.
+- A model can propose a structurally valid but semantically unintended change. Core
+  rejects illegal/non-authoritative values but does not reinterpret the sentence.
+- Partial success requires typed per-operation outcomes and clear requester rendering.
+- Justification provenance cannot be proven by Core without recreating language
+  interpretation; it requires targeted evaluation and human review.
+- The closed proposal/reducer/outcome model adds code compared with trusting one model
+  snapshot.
+- Application-owned conversation is intentionally bounded rather than open-ended.
 
 ## Alternatives considered
 
 ### Continue returning a complete candidate
 
-Rejected because it preserves the core failure mode: every turn asks the model to
-restate durable state correctly.
+Rejected because every turn would still ask the model to reproduce durable state and
+would preserve the snapshot-loss failure mode.
+
+### Add deterministic natural-language shortcuts
+
+Rejected. Parsing `clear environment`, `first`, exact IDs, or similar input outside the
+agent creates a language-specific parallel interpreter. Exact `/new` remains the sole
+protocol exception.
+
+### Make Core verify linguistic evidence
+
+Rejected. Matching proposed values, clears, or paraphrases to requester wording would
+require Core to reproduce natural-language interpretation and would not generalize
+across languages.
+
+### Reject every mixed patch when one data-level operation fails
+
+Rejected because it discards independent safe updates and makes source availability
+needlessly destructive. Structural violations still reject the entire turn.
+
+### Apply every valid-looking operation independently without ordering
+
+Rejected because environment, incident, and role are dependent. A fixed scope-first
+order and explicit conflict rules are required.
 
 ### Let the model call a state-changing draft tool
 
-Rejected because it would place canonical mutation behind probabilistic tool selection
-and would blur the boundary between interpretation and application state.
+Rejected because canonical mutation would depend on probabilistic tool selection and
+would blur interpretation, state ownership, and business authority.
 
 ### Require `keep`, `set`, or `clear` for every field
 
-Rejected because required `keep` operations add tokens, invite snapshot-shaped output,
-and make omission a schema failure even though omission is the safest no-op semantic.
-
-### Use deterministic natural-language parsing for all fields
-
-Rejected because it would duplicate the model's useful role and create a growing
-second language parser in Core. Core validates evidence and policy rather than trying
-to understand unrestricted language.
+Rejected because required `keep` operations add tokens, encourage snapshot-shaped
+output, and make omission a schema failure even though omission is the safest no-op.
 
 ## Revisit criteria
 
 Revisit this decision if:
 
-- measured live evaluation shows the sparse contract materially reduces correct
-  interpretation despite prompt and schema improvements;
-- a non-LLM structured requester channel becomes the primary intake path;
-- domain policy requires semantic justification classification rather than syntactic
-  authorship checks; or
-- a formally governed state-changing agent capability is proposed with a separate
-  threat model and authorization design.
+- measured evaluation shows the closed sparse proposal materially harms correct
+  interpretation despite prompt/schema improvements;
+- a non-LLM structured requester UI becomes the primary intake path;
+- product requirements add another formally specified protocol command with a separate
+  threat review and contract;
+- a governed state-changing agent capability is proposed with a separate authorization
+  design; or
+- the mandatory confirmation boundary is removed or materially changed.
 
-Any replacement must preserve deterministic canonical state ownership and must not
-make model memory, model prose, or model-reported validation authoritative.
+Any replacement must preserve deterministic canonical state ownership, independent
+enterprise revalidation, and the rule that requester free-text cannot directly create,
+approve, provision, retry, revoke, or grant access.

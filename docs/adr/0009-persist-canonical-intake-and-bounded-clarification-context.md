@@ -1,131 +1,259 @@
 # ADR 0009: Persist Canonical Intake and Bounded Clarification Context
 
 - **Status**: Accepted
-- **Supersedes**: ADR 0006
 - **Date**: 2026-08-22
+- **Clarified**: 2026-08-24
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/adr/0006-persist-canonical-intake-state-not-conversation-history.md`, `SPEC-deterministic-request-intake.md`, `docs/deterministic-request-intake-design.md`
+- **Supersedes**: ADR 0006 for request-intake preparation state
+- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0005-retain-terminal-request-intake-tombstones.md`, `docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md`
 
 ## Context
 
-ADR 0006 correctly separates durable canonical intake state from process-local model
-conversation history. It deliberately excludes clarification option lists from
-persistence, so a restart loses the context needed to interpret replies such as "the
-second one."
+The current preparation flow relies on process-local model conversation state and a
+full candidate returned on every turn. Restart loses conversational context, and the
+model is asked to reconstruct accepted draft state.
 
-The deterministic reducer design makes application-rendered environment and role
-choices part of the safe interaction contract. Exact ordinal replies can be resolved
-without model history only when the active choice target and ordered canonical IDs are
-available after restart.
+The target flow needs only a small amount of durable context:
 
-The earlier feature draft also introduced a second persisted pending-revision
-candidate behind an active ready snapshot. That would preserve an old confirmable
-draft while a new incomplete revision is developed, requiring suspended confirmation,
-rollback, cancellation, dual candidate state, and additional races. This is too much
-state for the user value provided.
+- the canonical candidate;
+- one ordered environment or role choice set;
+- lifecycle state and timestamps;
+- versions sufficient for clarification freshness and optimistic concurrency; and
+- immutable ready preparation identity for stale-card safety.
+
+Persisting raw conversations, prompts, model reasoning, complete tool payloads, or
+provider sessions would increase privacy, retention, migration, and coupling costs
+without making business state more authoritative.
+
+A previous target design also proposed a second pending-revision candidate beside a
+ready snapshot. That adds dual-state persistence and cancellation semantics. It is not
+required when a ready preparation is immutable and a material revision receives a new
+preparation identity.
 
 ## Decision
 
-Persist:
+Persist one canonical preparation aggregate per `PreparationId`. At most one active
+`Collecting` or `Ready` preparation exists for one authenticated actor and exact Teams
+conversation.
 
-- one active sanitized canonical candidate;
-- one lifecycle state and optimistic-concurrency version;
-- one optional bounded clarification context containing the preparation ID, candidate
-  version, target, ordered canonical environment or role IDs, and creation time; and
-- immutable ready details, reserved request ID, and deadline only when the active intake
-  is ready.
+Persist only:
 
-Do not persist raw messages, prompts, transcripts, model responses, model reasoning,
-complete MCP payloads, or serialized MAF sessions.
+- immutable `PreparationId`;
+- authenticated actor/conversation binding;
+- lifecycle state;
+- sanitized canonical candidate;
+- `CandidateVersion`;
+- storage-managed `ConcurrencyVersion` or equivalent optimistic token;
+- at most one bounded clarification context;
+- `CreatedAt`, `UpdatedAt`, ready and terminal timestamps;
+- predecessor preparation ID when created by revision, when useful for audit; and
+- bounded interpreter version/audit metadata without raw text.
 
-Applying a choice consumes the matching context. A committed candidate change clears
-stale context and stores only the next active context. Context whose preparation ID or
-candidate version no longer matches is ignored and removed.
+Do not persist raw requester transcripts, raw prompts, provider conversation state,
+model reasoning, agent-authored search queries, raw proposals, or complete MCP payloads.
 
-Do not persist a pending revision alongside an active ready snapshot. The first
-accepted material revision atomically:
+Canonical justification is persisted because it is an intentional request domain field,
+not retained conversation history.
 
-- supersedes the old ready intake; and
-- creates a new collecting or ready intake with a new preparation identity.
+### Preparation identity and ready immutability
 
-Discussion, value-equal proposals, unsupported proposals, and model/source failures
-preserve the old ready snapshot. There is no `/cancel-revision` command and no path to
-revive a superseded ready identity.
+A preparation is mutable only while `Collecting`. When it becomes `Ready`, its candidate
+and `CandidateVersion` are immutable. `PreparationId` then identifies one exact card
+scope.
 
-This decision preserves ADR 0006's central principle—canonical application state is
-durable and conversation history is not—but supersedes its explicit exclusion of all
-clarification option lists.
+A committed material revision never mutates `Ready A` back to collecting. In one atomic
+commit it:
+
+1. marks `A` `Superseded`; and
+2. creates a new `Collecting` or `Ready` preparation `B` with a new `PreparationId`.
+
+The ready card therefore needs only closed schema version plus `PreparationId`. A stale
+card reloads a terminal old preparation and cannot submit the replacement scope.
+
+There is no pending-revision candidate and no revision-cancellation command.
+
+### Version definitions
+
+`CandidateVersion` starts at zero when a preparation row is created. If the same
+creation transaction persists a material initial or revised candidate, it increments
+once to one. A clean `/new` preparation therefore remains at zero. It is monotonic
+inside one preparation and increments once for each later committed material canonical
+candidate change. It does not increment for:
+
+- discussion, unrelated, unclear, or submission-intent turns;
+- rejected operations;
+- value-equal no-ops; or
+- clarification-only persistence.
+
+`ConcurrencyVersion` changes on every persisted aggregate update, including
+clarification-only changes, lifecycle transitions, lazy expiry, and candidate commits.
+It is used for optimistic concurrency and is not card/request authority.
+
+Clarification context is bound to:
+
+```text
+PreparationId + CandidateVersion + Target
+```
+
+### Clarification context
+
+Persist only:
+
+- `PreparationId`;
+- `CandidateVersion`;
+- target (`environment` or `role`);
+- complete ordered canonical IDs;
+- `CreatedAt`.
+
+The renderer derives 1-based numbering strictly from persisted order. No more than five
+choices are persisted/rendered.
+
+The agent interprets every free-text reply—including numeric, ordinal, exact-ID, and
+multilingual wording—into a structured target and 1-based option index. Core then:
+
+1. reloads the active preparation and context;
+2. validates lifecycle, preparation identity, candidate version, target, and bounds;
+3. maps the index to the persisted canonical ID;
+4. exact-reloads the enterprise entity;
+5. applies normal deterministic reduction; and
+6. consumes the context on success.
+
+Core does not parse the requester’s wording. Persisted context enables deterministic
+application of a structured selection, not deterministic language interpretation.
+
+Any material candidate commit invalidates old context before optional new context is
+stored. Clarification-only persistence retains the current `CandidateVersion` but
+changes `ConcurrencyVersion`.
+
+There is no independent clarification TTL. Context is valid only while its preparation
+is active and its candidate version matches.
+
+### Lifecycle and expiry
+
+The persisted states are:
+
+- `Collecting`;
+- `Ready`;
+- `Submitted`;
+- `Superseded`; and
+- `Expired`.
+
+`ReadyDeadline` is exactly 30 minutes after `ReadyAt`. Expiry is evaluated lazily on
+load or confirmation; no background sweeper is required. Non-mutating turns do not
+refresh the deadline. `Collecting` has no feature-specific inactivity TTL in this
+increment. Terminal row retention follows ADR 0005.
+
+### Idempotency and concurrency
+
+The request table has a durable unique constraint on `Request.PreparationId`. A
+matching-owned replay against an already `Submitted` preparation returns the existing
+request identity/status. A concurrent unique-key loser reloads and returns the same
+request.
+
+Agent/MCP execution occurs without a database transaction or SQLite write lock. The
+application commits under a short boundary after checking `ConcurrencyVersion` and
+active-preparation uniqueness. A stale snapshot is rejected rather than silently
+applying the old proposal to newer state.
+
+A process-local conversation gate may reduce contention, but the durable correctness
+boundary is optimistic concurrency plus uniqueness.
 
 ## Rationale
 
-A small structured choice record is application-owned, provider-neutral, bounded, and
-sufficient to make exact ordinal replies deterministic after restart. It is not a
-conversation transcript and cannot establish authorization or submission.
+Canonical candidate persistence lets every turn begin from application-owned state.
+Model omission and provider-memory loss cannot erase accepted values.
 
-Maintaining only one active candidate avoids dual-state revision logic. Immediate
-ready invalidation makes the security behavior simple: once an accepted material
-change commits, the old card is stale. The requester sees the new collecting or ready
-state rather than a hidden suspended revision.
+One bounded ordered choice set is the minimum durable context needed for restart-safe
+clarification. It exposes no raw conversation and keeps Core independent of language.
+
+Immutable ready preparation identity solves stale-card safety without adding a second
+card version field. A card references one exact immutable preparation; any revision gets
+a different identity.
+
+Separating candidate and concurrency versions prevents one overloaded version counter
+from serving incompatible purposes. Candidate version protects choice meaning;
+concurrency version protects commits.
+
+One active candidate and immediate ready supersession avoid dual-state revision
+machinery while preserving the critical rule that an old card cannot confirm a revised
+scope.
 
 ## Consequences
 
 ### Positive
 
-- Exact and ordinal environment/role selections survive restart without model history.
-- Durable data remains compact and contains no free-form assistant or provider content.
-- Only one active candidate exists for one actor/conversation.
-- Ready revision and confirmation races have a simple commit-wins rule.
-- Stale cards are rejected by terminal durable status rather than pending-revision
-  flags.
-- No cancellation command, rollback transition, or dual-candidate merge is needed.
+- Candidate and choice progress survive restart without raw conversation persistence.
+- Clarification selection remains multilingual at the agent boundary and deterministic
+  at the Core application boundary.
+- Stale card rejection uses one immutable preparation identity.
+- Candidate freshness and OCC have distinct, explicit version semantics.
+- Ready revisions have one atomic transition and no pending-revision state.
+- Duplicate confirmation converges through a named durable idempotency key.
+- No database lock is held across model/tool latency.
+- Terminal tombstones preserve stale-action determinism.
 
 ### Negative and risks
 
-- The first accepted incomplete revision invalidates a previously confirmable ready
-  card; the requester must complete the new draft or re-enter the old values.
-- Structured choices add persistence schema and cleanup/migration work.
-- A stale visual Teams card may remain visible when best-effort replacement fails, even
-  though durable confirmation rejects it.
-- Ordered IDs reveal some reference identifiers in SQLite, though less content than a
-  transcript or complete tool payload.
-- The exact active choice context must be version-bound to avoid applying an ordinal to
-  a newer candidate.
+- Persistence schema grows to include lifecycle timestamps, two version concepts,
+  clarification context, predecessor linkage, and bounded interpreter metadata.
+- Ready revision requires atomic old-terminal/new-active creation.
+- A process crash after agent interpretation but before commit loses that interpreted
+  turn; the requester must retry.
+- No raw history means general coreference outside canonical state or active choices is
+  intentionally unsupported.
+- Collecting preparations do not expire automatically in this increment and rely on
+  `/new` or later retention policy for replacement.
+- Optimistic conflict handling must give safe retry guidance without replaying stale
+  model output.
 
 ## Alternatives considered
 
-### Keep all clarification context process-local
+### Persist complete conversation history
 
-Rejected because restart would turn a previously valid ordinal reply into an
-unnecessary model clarification and would make deterministic choice resolution depend
-on session continuity.
+Rejected because it increases privacy, retention, token, migration, and provider-coupling
+cost while remaining less authoritative than canonical state.
 
-### Persist complete model or Teams conversation history
+### Persist provider/MAF session objects
 
-Rejected because it adds privacy, retention, provider coupling, migration, and access
-control obligations without becoming authoritative state.
+Rejected because provider session shape is infrastructure-specific and unnecessary for
+business correctness.
 
-### Persist a pending revision while preserving the old ready snapshot
+### Use a mutable ready preparation plus candidate version in the card
 
-Rejected because it requires confirmation suspension, `/cancel-revision`, two working
-candidates, rollback semantics, and more concurrency cases for limited user benefit.
+Rejected for this bounded feature. A separate version field can be safe, but immutable
+ready identity is simpler and aligns with retained terminal tombstones.
 
-### Mutate one ready intake back to collecting
+### Keep a ready snapshot active while a pending revision is collected
 
-Rejected because a ready preparation ID should remain an immutable representation of
-one card scope. Superseding it and creating a new intake keeps stale-card behavior and
-audit evidence explicit.
+Rejected because it introduces two draft states, restoration/cancellation semantics,
+additional races, and a risk that the old card remains confirmable while the requester
+is revising scope.
+
+### Parse ordinal or numeric replies deterministically
+
+Rejected because it creates a language/format fast path and inconsistent multilingual
+behavior. The agent returns a structured index; Core validates it against persisted
+context.
+
+### Use one version counter for clarification and OCC
+
+Rejected because candidate meaning and aggregate-write concurrency change at different
+times. Clarification-only persistence is the clearest counterexample.
+
+### Hold a database lock across the full model turn
+
+Rejected as a durable requirement because model/tool latency would amplify contention.
+A process-local gate may still be used, while the database commit remains short.
 
 ## Revisit criteria
 
 Revisit this decision if:
 
-- measured users frequently abandon revisions and need one-click restoration of the
-  previous ready snapshot;
-- privacy or retention policy prohibits persisting even bounded choice IDs;
-- multi-host deployment requires a broader durable conversation coordination design;
-- Teams presentation requires durable card activity references; or
-- choice sets grow beyond the current bounded catalog and require pagination or search
-  sessions.
-
-Any replacement must preserve exact version binding, stale-card rejection, and the
-rule that conversational context is not authorization evidence.
+- a real multi-instance deployment requires distributed coordination beyond SQLite/OCC;
+- clarification choices must exceed the bounded single-context model;
+- product requirements demand resumable natural-language context beyond canonical
+  state;
+- ready preparations must be editable in place for an external protocol reason;
+- collecting inactivity retention becomes an operational requirement; or
+- a formal privacy/retention program changes what preparation/audit metadata may be
+  stored.

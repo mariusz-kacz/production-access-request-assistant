@@ -1,6 +1,6 @@
 # Constitution Amendment 3.0.0: Govern the MCP Catalog Without Hard-Coding One Product Increment
 
-- **Status:** Accepted with `deterministic-request-intake`
+- **Status:** Accepted for the `deterministic-request-intake` target; current two-tool runtime remains the product baseline until implementation promotion
 - **Date:** 2026-08-22
 - **Target constitution version:** `3.0.0`
 - **Affected principle:** II. Untrusted AI, Bounded MCP
@@ -42,7 +42,7 @@ Constraints with governance rules that require:
 6. cancellation, timeouts, and typed failures across model, MCP, and authoritative
    source boundaries.
 
-The accepted constitution text is supplied as `docs/constitution.md` in this bundle.
+The ratified constitution text is recorded in `docs/constitution.md`.
 
 ## Compatibility impact
 
@@ -62,7 +62,7 @@ catalog exact and reviewable.
 ## Security impact
 
 The amendment does not widen the class of permitted tool behavior. All model-visible
-tools remain read-only and untrusted. The target four-tool design adds independent
+tools remain read-only and untrusted. The accepted four-tool target adds independent
 failure and freshness boundaries, but Core remains responsible for canonical search,
 exact reload, relationship validation, readiness, confirmation, and every side effect.
 
@@ -79,8 +79,7 @@ source failures.
 
 ## Migration work
 
-1. Approve this amendment and the related ADRs before implementing the conflicting
-   four-tool catalog.
+1. Treat this accepted amendment and ADR 0008 as the governance authority for the target four-tool catalog.
 2. Keep the current product baseline and machine-readable MCP contract unchanged until
    the new implementation passes its deterministic gates.
 3. Implement the four-tool contract and Core revalidation boundaries.
@@ -110,9 +109,6 @@ freshness and failure semantics.
 
 ## Approval record
 
-Approved by the project owner on 2026-08-24 as Task 0 of the deterministic request-
-intake implementation plan.
-
-Approval of this amendment authorizes only the governance change and the specified
+Acceptance of this amendment authorizes only the governance change and the specified
 synthetic four-tool target. It does not authorize real enterprise data, credentials,
 production access, additional tools, or any model-visible state-changing capability.

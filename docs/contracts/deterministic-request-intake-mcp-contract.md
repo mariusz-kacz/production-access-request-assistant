@@ -1,9 +1,11 @@
 # Target MCP Contract: Deterministic Request Intake
 
-- **Status:** Approved target; does not replace the current as-built `mcp-tools.json` until implementation
-- **Date:** 2026-08-22
+- **Status:** Approved target; does not replace current as-built `mcp-tools.json` until implementation
+- **Date:** 2026-08-24
 - **Machine-readable companion:** `deterministic-request-intake-mcp-tools.json`
+- **Environment-search policy version:** `1.0.0`
 - **Endpoint/transport:** Existing `/mcp` Streamable HTTP boundary
+- **Normative source:** `SPEC-deterministic-request-intake.md`
 
 ## 1. Catalog invariant
 
@@ -36,25 +38,31 @@ or turn execution to fail closed.
 
 | Tool | Capability authority | Facts returned | Facts deliberately omitted |
 |---|---|---|---|
-| `search_production_environments` | Service-catalog/CMDB search projection | Complete bounded matching environment/client identities | Roles, scores, match reasons, workflow data |
-| `get_production_environment` | Environment registry/CMDB | Exact environment identity and owning client | Assigned roles, incidents, approvals |
-| `get_environment_roles` | IAM/entitlement catalog | Roles currently assignable in one exact environment | Client-wide/cross-environment roles, approval policy |
+| `search_production_environments` | Service-catalog/CMDB search projection | Complete bounded matching eligible production environment/client identities | Roles, scores, match reasons, workflow data |
+| `get_production_environment` | Environment registry/CMDB | Exact eligible production environment identity and owning client | Assigned roles, incidents, approvals |
+| `get_environment_roles` | IAM/entitlement catalog | Roles currently assignable in one exact environment | Requester eligibility, client-wide/cross-environment roles, approval policy |
 | `get_incident` | ITSM/incident system | Exact incident state and affected environment | Incident search/listing, environment roles |
 
-The synthetic adapters may share SQLite. The separate contracts are retained because
-the production-shaped authorities have different ownership, permissions, freshness,
+The synthetic adapters may share SQLite. Separate contracts remain because the
+production-shaped authorities have different ownership, permissions, freshness,
 latency, and failure semantics.
 
-## 3. Shared contract rules
+Tool output is interpretation context only. Core independently searches/reloads all
+facts and relationships before canonical mutation and again before request creation.
+
+## 3. Shared contract and security rules
 
 - All input and output objects reject unknown properties.
 - Stable identifiers are nonblank strings.
-- Display text is untrusted data and never model instruction or application authority.
+- Display text and incident text are untrusted data, never instructions or authority.
 - Success responses contain only the declared success shape.
 - Expected failures use the shared failure envelope.
-- Model-visible output never replaces independent Core search/reload.
+- The model receives no hidden authorization facts or state-changing capability.
 - One normal turn allows at most one call to each tool and four calls total.
-- The existing shared model/MCP timeout remains the outer budget.
+- Six provider iterations and one structured-output repair are the outer turn bounds.
+- Model, tool, and repair work share one 30-second timeout/cancellation budget per turn.
+- Raw arguments/results and agent-authored search queries are not persisted or logged.
+- Tool-call order is diagnostic. Core revalidation is the correctness boundary.
 
 ### 3.1 Failure envelope
 
@@ -68,9 +76,36 @@ latency, and failure semantics.
 ```
 
 The message must not contain stack traces, secrets, connection strings, complete source
-payloads, or internal implementation details.
+payloads, internal implementation details, or requester text.
 
-## 4. `search_production_environments`
+## 4. Shared deterministic environment-search policy
+
+The MCP search tool and Core application port call the same protocol-neutral search
+policy implementation. They must not maintain separate matching algorithms.
+
+The policy:
+
+1. Unicode NFC-normalizes, trims, and collapses whitespace;
+2. rejects empty or over-200-character queries;
+3. tokenizes on Unicode whitespace and punctuation;
+4. requires every token to match case-insensitively against at least one approved field;
+5. searches only environment ID, environment display name, client ID, client display
+   name, region, and canonical `primary`/`recovery` classification;
+6. includes only active production environments eligible for request intake;
+7. orders by stable environment ID;
+8. returns all matches when count is at most 20;
+9. returns `environments: []` for zero matches; and
+10. returns `Unavailable` with code `environment_query_too_broad` above 20, without
+    ranking or truncation.
+
+Core's current result controls zero/unique/multiple/too-broad behavior and every
+rendered choice.
+
+The application creates selectable clarification context only when the complete result
+contains two to five environments. Six to twenty results produce “narrow the query”
+guidance and no truncated choice list.
+
+## 5. `search_production_environments`
 
 ### Input
 
@@ -80,8 +115,8 @@ payloads, or internal implementation details.
 }
 ```
 
-`query` is required, trimmed, 1-200 characters, and must be requester-backed by the
-current message before the Web boundary accepts the observation.
+`query` is a structured agent proposal. It is required, trimmed, and 1–200 characters.
+The adapter does not compare it with raw requester text and does not log it.
 
 ### Success
 
@@ -98,29 +133,11 @@ current message before the Web boundary accepts the observation.
 }
 ```
 
-The result contains every deterministic match ordered by stable environment ID. It may
-be empty. It contains no roles, score, match explanation, pagination token, or model
-ranking.
+The result contains every deterministic match up to the hard bound in stable
+environment-ID order. It contains no roles, score, match explanation, pagination token,
+or model ranking.
 
-### Deterministic search policy
-
-1. Unicode NFC-normalize, trim, and collapse whitespace.
-2. Reject empty or over-200-character queries.
-3. Split on Unicode whitespace and punctuation and discard empty tokens.
-4. Require every query token to match case-insensitively against at least one allowed
-   field.
-5. Allowed fields are environment ID, environment display name, client ID, client
-   display name, region, and canonical `primary`/`recovery` classification.
-6. Return all matches in ordinal ascending environment-ID order when count is at most
-   20.
-7. Return `environments: []` for no matches.
-8. Return `Unavailable` with code `environment_query_too_broad` when more than 20
-   matches exist. Never truncate or rank.
-
-Core independently runs the same policy. Core's result controls zero/unique/multiple
-behavior and every rendered choice.
-
-## 5. `get_production_environment`
+## 6. `get_production_environment`
 
 ### Input
 
@@ -144,9 +161,11 @@ input are invalid.
 }
 ```
 
-The response contains no `roles` property. Unknown identifiers return `NotFound`.
+The response contains no `roles` property. Unknown, inactive, non-production, or
+intake-ineligible environments return `NotFound` without disclosing the excluded
+classification.
 
-## 6. `get_environment_roles`
+## 7. `get_environment_roles`
 
 ### Input
 
@@ -157,7 +176,7 @@ The response contains no `roles` property. Unknown identifiers return `NotFound`
 ```
 
 Only one exact stable environment ID is accepted. The tool does not accept client,
-role query, display name, or empty input.
+requester, role query, display name, or cross-environment criteria.
 
 ### Success
 
@@ -177,15 +196,17 @@ role query, display name, or empty input.
 }
 ```
 
-Roles are ordered by stable role ID. A known environment with no assignments succeeds
-with `roles: []`. An unknown environment returns `NotFound`.
+Roles are ordered by stable role ID. A known eligible environment with no assignments
+succeeds with `roles: []`. Unknown/ineligible environments return `NotFound`.
 
-The tool exposes no cross-environment search. The model may call it for an exact
-environment from the current message, canonical state, incident context, exact lookup,
-or unique search result. A same-turn preceding environment lookup is not a universal
-runtime requirement. Core independently loads and validates current assignments.
+The result means roles currently assignable in the environment. It does not assert that
+the requester is personally eligible or approved.
 
-## 7. `get_incident`
+A same-turn preceding exact environment lookup is not a universal runtime requirement.
+Core independently loads the environment and current assignments before applying a role
+and before confirmation.
+
+## 8. `get_incident`
 
 ### Input
 
@@ -195,8 +216,9 @@ runtime requirement. Core independently loads and validates current assignments.
 }
 ```
 
-Only the exact requester-supplied stable incident ID is accepted. Titles,
-descriptions, alerts, and partial IDs are invalid and must not trigger search.
+Only one exact stable incident identifier is accepted. The value is a structured agent
+proposal. Titles, descriptions, alerts, partial IDs, and empty values are invalid and do
+not trigger search.
 
 ### Success
 
@@ -211,41 +233,48 @@ descriptions, alerts, and partial IDs are invalid and must not trigger search.
 
 `status` is `Active` or `Inactive`. Unknown identifiers return `NotFound`.
 
-## 8. Tool-use diagnostics versus correctness
+Incident title is untrusted model context. Core uses only an independently loaded
+record and application-safe rendering.
 
-The interpreter records tool name, safe argument classification, duration, outcome,
-and sequence for diagnostics and live evaluation. It rejects:
+## 9. Tool-use diagnostics versus correctness
+
+The interpreter may record tool name, safe argument classification, duration, outcome,
+and sequence. It must not record raw arguments or result text.
+
+It rejects:
 
 - unknown tools;
 - non-read-only annotations;
 - malformed input/output;
 - repeated calls beyond one per tool;
 - more than four calls;
-- more than six provider iterations; and
+- more than six provider iterations;
+- more than one structured-output repair; and
 - timeout or cancellation.
 
 It does not reject an otherwise safe proposal solely because the model omitted a
-redundant lookup or used a different valid read-only order. Core revalidation is the
-correctness and trust boundary.
+redundant lookup or used a different valid read-only order. Core revalidation remains
+the trust boundary.
 
-## 9. Source failure behavior
+## 10. Source failure behavior
 
 | Failure | Application consequence |
 |---|---|
-| Search source unavailable | No search-driven mutation; preserve committed state; invite retry |
-| Exact environment unavailable/not found | Do not accept changed environment; preserve unrelated state |
-| Entitlement source unavailable | Do not accept changed role or become ready; preserve committed state |
-| Known environment with no roles | Typed candidate rejection; no role choice context |
-| Incident source unavailable/not found/inactive | Do not accept incident; preserve unrelated state |
+| Search source unavailable | Reject affected environment operation; independent accepted operations may commit |
+| Exact environment unavailable/not found/ineligible | Reject environment and dependent role operation |
+| Entitlement source unavailable | Reject affected role operation; final candidate cannot become ready without a valid role |
+| Known environment with no roles | Typed no-roles outcome; no role choice context |
+| Incident source unavailable/not found/inactive | Reject incident; independent accepted operations may commit |
 | Source results change between model and Core reads | Core result wins; record bounded drift; never trust stale MCP payload |
+| MCP result contains instruction-like text | Treat as data; no policy/authorization effect |
 
-## 10. Promotion to the current contract
+## 11. Promotion to the current contract
 
-After implementation and deterministic evidence pass:
+After implementation and required deterministic/live evidence pass:
 
-1. replace the current `docs/contracts/mcp-tools.json` with the verified four-tool
-   machine-readable shape;
-2. update the product baseline, architecture, security model, request-intake
-   orchestration, testing strategy, operator guidance, and README; and
-3. remove the `Target` qualifier from this contract or retire it in favor of the
-   canonical machine-readable file.
+1. replace the current canonical `docs/contracts/mcp-tools.json` with the verified
+   four-tool machine-readable shape;
+2. update product baseline, architecture, security model, request-intake orchestration,
+   testing strategy, operator guidance, and README; and
+3. retire the target qualifier or archive this document in favor of the canonical
+   machine-readable contract.
