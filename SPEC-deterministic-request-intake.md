@@ -562,7 +562,7 @@ Core does not independently reproduce natural-language understanding.
 
 A preparation persists only sanitized application-owned data:
 
-- `PreparationId`, generated as an unguessable UUIDv4/UUIDv7-class identifier;
+- `PreparationId`, generated as an unguessable random UUIDv4 identifier;
 - authenticated actor/conversation binding;
 - lifecycle state;
 - canonical candidate;
@@ -992,7 +992,7 @@ The action payload is:
 }
 ```
 
-`PreparationId` must be an unguessable UUIDv4/UUIDv7-class identifier. The payload
+`PreparationId` must be an unguessable random UUIDv4 identifier. The payload
 contains no trusted requester, scope, role, duration, approval, provisioning, or grant
 fields.
 

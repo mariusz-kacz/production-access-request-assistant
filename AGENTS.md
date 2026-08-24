@@ -27,8 +27,15 @@ verify the as-built behavior in source and tests, and surface unresolved mismatc
 - Provisioning is unavailable to the model. The protected handler accepts a request
   ID, reloads persisted request, approval, operation, and grant evidence, and uses the
   request ID as the idempotency identity.
-- MCP exposes exactly two typed read-only tools: `get_production_environment` and
-  `get_incident`. There is no separate role-listing or state-changing tool.
+- MCP tool count is phase-bound. The delivered production composition exposes exactly
+  two typed read-only tools: `get_production_environment` and `get_incident`. The
+  approved deterministic-intake replacement in
+  [`SPEC-deterministic-request-intake.md`](SPEC-deterministic-request-intake.md) exposes
+  exactly four typed read-only tools: `search_production_environments`,
+  `get_production_environment`, `get_environment_roles`, and `get_incident`. Before
+  its atomic production cutover, the four-tool catalog may run only in an isolated
+  target test composition. The cutover replaces the two-tool catalog; production must
+  never register both catalogs or expose a state-changing tool.
 - Do not add real identity or provisioning, a generic workflow engine, multi-agent
   design, large RAG system, separate deployable service, or distributed infrastructure
   without an approved baseline and architecture change.
