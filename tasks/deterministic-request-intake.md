@@ -1,6 +1,6 @@
 # Implementation Tasks: Deterministic Conversational Request Intake
 
-- **Status:** Proposed
+- **Status:** Approved; Task 0 complete; implementation not started
 - **Feature specification:** `SPEC-deterministic-request-intake.md`
 - **Supporting design:** `docs/deterministic-request-intake-design.md`
 - **Test ownership:** `docs/evaluation/deterministic-request-intake-test-matrix.md`
@@ -21,28 +21,30 @@
 
 ## Task 0: Approve and reconcile the target decisions
 
+**Status:** Complete (approved 2026-08-24)
+
 ### Goal
 
 Establish one non-contradictory authority set before application code changes.
 
 ### Work
 
-- [ ] Review and approve `SPEC-deterministic-request-intake.md`.
-- [ ] Approve constitution amendment `3.0.0`, which keeps the model-visible catalog
+- [x] Review and approve `SPEC-deterministic-request-intake.md`.
+- [x] Approve constitution amendment `3.0.0`, which keeps the model-visible catalog
       exact but moves exact names into the active baseline/contract.
-- [ ] Review proposed ADRs 0007, 0008, and 0009.
-- [ ] Confirm the four-tool target:
+- [x] Review and accept ADRs 0007, 0008, and 0009.
+- [x] Confirm the four-tool target:
       `search_production_environments`, `get_production_environment`,
       `get_environment_roles`, and `get_incident`.
-- [ ] Confirm unique Core-reproduced search results are accepted without another
+- [x] Confirm unique Core-reproduced search results are accepted without another
       requester selection turn.
-- [ ] Confirm sparse `set`/`clear` patches with omitted-field no-op semantics.
-- [ ] Confirm there is no pending-revision state and no `/cancel-revision` command.
-- [ ] Confirm a first accepted material ready revision immediately supersedes the old
+- [x] Confirm sparse `set`/`clear` patches with omitted-field no-op semantics.
+- [x] Confirm there is no pending-revision state and no `/cancel-revision` command.
+- [x] Confirm a first accepted material ready revision immediately supersedes the old
       card/preparation.
-- [ ] Confirm tool sequence is diagnostic except for catalog, argument, call-count,
+- [x] Confirm tool sequence is diagnostic except for catalog, argument, call-count,
       schema, timeout, and unknown-call violations.
-- [ ] Remove or quarantine any remaining proposed document that asserts the conflicting
+- [x] Remove or quarantine any remaining proposed document that asserts the conflicting
       keep-all-fields, single-match-selection, strict same-turn choreography, or dual
       pending-revision design.
 
@@ -109,7 +111,7 @@ entitlements, and exact incident context as distinct bounded capabilities.
       - `get_production_environment(environmentId)`; and
       - `get_environment_roles(environmentId)`.
 - [ ] Retain exact `get_incident(incidentId)` behavior.
-- [ ] Implement closed input/output DTOs matching the proposed machine-readable
+- [ ] Implement closed input/output DTOs matching the approved target machine-readable
       contract.
 - [ ] Ensure exact environment output contains no roles.
 - [ ] Ensure role lookup is scoped to one exact environment and supports successful
@@ -138,7 +140,7 @@ entitlements, and exact incident context as distinct bounded capabilities.
 
 ### Exit gate
 
-- The real endpoint advertises exactly the four proposed tools with no generic or
+- The real endpoint advertises exactly the four target tools with no generic or
   consequential capability.
 - Environment and entitlement sources can fail independently without state mutation or
   invented fallback.

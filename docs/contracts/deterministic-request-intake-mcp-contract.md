@@ -1,6 +1,6 @@
-# Proposed MCP Contract: Deterministic Request Intake
+# Target MCP Contract: Deterministic Request Intake
 
-- **Status:** Proposed; does not replace the current as-built `mcp-tools.json` until implementation
+- **Status:** Approved target; does not replace the current as-built `mcp-tools.json` until implementation
 - **Date:** 2026-08-22
 - **Machine-readable companion:** `deterministic-request-intake-mcp-tools.json`
 - **Endpoint/transport:** Existing `/mcp` Streamable HTTP boundary
@@ -247,5 +247,5 @@ After implementation and deterministic evidence pass:
    machine-readable shape;
 2. update the product baseline, architecture, security model, request-intake
    orchestration, testing strategy, operator guidance, and README; and
-3. remove the `Proposed` qualifier from this contract or retire it in favor of the
+3. remove the `Target` qualifier from this contract or retire it in favor of the
    canonical machine-readable file.

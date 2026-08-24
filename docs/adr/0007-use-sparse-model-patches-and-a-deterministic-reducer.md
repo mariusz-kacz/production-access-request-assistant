@@ -1,6 +1,6 @@
 # ADR 0007: Use Sparse Model Patches and a Deterministic Reducer
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-08-22
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/deterministic-request-intake-design.md`, `docs/evaluation/deterministic-request-intake-test-matrix.md`

@@ -1,6 +1,7 @@
 # ADR 0006: Persist Canonical Intake State, Not Conversation History
 
-- **Status**: Accepted
+- **Status**: Superseded
+- **Superseded by**: ADR 0009
 - **Date**: 2026-08-10
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `docs/adr/0005-retain-terminal-request-intake-tombstones.md`, `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`

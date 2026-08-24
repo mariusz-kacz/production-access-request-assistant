@@ -1,6 +1,7 @@
 # ADR 0009: Persist Canonical Intake and Bounded Clarification Context
 
-- **Status**: Proposed; supersedes ADR 0006 when accepted
+- **Status**: Accepted
+- **Supersedes**: ADR 0006
 - **Date**: 2026-08-22
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `docs/adr/0006-persist-canonical-intake-state-not-conversation-history.md`, `SPEC-deterministic-request-intake.md`, `docs/deterministic-request-intake-design.md`

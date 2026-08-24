@@ -1,6 +1,6 @@
 # ADR 0008: Separate Read-Only Context Capabilities by Authoritative Source
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-08-22
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/constitution-amendment-3.0.0.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
@@ -93,7 +93,7 @@ model omits a call, or tool output differs from current authoritative data.
 
 ### Keep the two-tool catalog and embed roles in environment results
 
-Rejected for the proposed feature because it makes environment metadata authoritative
+Rejected for the target feature because it makes environment metadata authoritative
 for entitlement assignment and cannot express independent role-source failure or
 freshness.
 

@@ -1,6 +1,6 @@
 # Deterministic Request Intake: Test and Evaluation Matrix
 
-- **Status:** Proposed
+- **Status:** Approved target matrix; implementation evidence pending
 - **Date:** 2026-08-22
 - **Normative source:** `SPEC-deterministic-request-intake.md`
 - **Purpose:** Assign each risk to the narrowest credible deterministic test layer and keep live-model evaluation focused
@@ -337,7 +337,7 @@ A reviewed retained run should record:
 - commit SHA;
 - dataset version and hash;
 - prompt/schema hash;
-- proposed MCP contract version/hash;
+- target MCP contract version/hash;
 - deployment label and provider model/version when available;
 - per-scenario normalized outcomes and latency;
 - tool-call diagnostics without raw payloads; and

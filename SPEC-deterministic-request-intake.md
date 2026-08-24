@@ -1,10 +1,10 @@
 # Specification: Deterministic Conversational Request Intake
 
-- **Status:** Draft for approval
+- **Status:** Approved for implementation; not yet as-built
 - **Capability id:** `deterministic-request-intake`
 - **Scope:** Authenticated Microsoft Teams request preparation through deterministic Adaptive Card confirmation
 - **Related decisions:** [ADR 0007](docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md), [ADR 0008](docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md), [ADR 0009](docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md)
-- **Supporting detail:** [design notes](docs/deterministic-request-intake-design.md), [proposed MCP contract](docs/contracts/deterministic-request-intake-mcp-contract.md), [test matrix](docs/evaluation/deterministic-request-intake-test-matrix.md), [implementation tasks](tasks/deterministic-request-intake.md)
+- **Supporting detail:** [design notes](docs/deterministic-request-intake-design.md), [target MCP contract](docs/contracts/deterministic-request-intake-mcp-contract.md), [test matrix](docs/evaluation/deterministic-request-intake-test-matrix.md), [implementation tasks](tasks/deterministic-request-intake.md)
 
 ## 1. Authority and relationship to current behavior
 
@@ -368,7 +368,7 @@ snapshot.
 
 ## 12. MCP capability boundary
 
-The exact proposed contract is defined in
+The exact target contract is defined in
 [`docs/contracts/deterministic-request-intake-mcp-contract.md`](docs/contracts/deterministic-request-intake-mcp-contract.md).
 The four capabilities are:
 

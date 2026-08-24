@@ -1,6 +1,6 @@
-# Constitution Amendment Proposal: Govern the MCP Catalog Without Hard-Coding One Product Increment
+# Constitution Amendment 3.0.0: Govern the MCP Catalog Without Hard-Coding One Product Increment
 
-- **Status:** Proposed with `deterministic-request-intake`
+- **Status:** Accepted with `deterministic-request-intake`
 - **Date:** 2026-08-22
 - **Target constitution version:** `3.0.0`
 - **Affected principle:** II. Untrusted AI, Bounded MCP
@@ -42,7 +42,7 @@ Constraints with governance rules that require:
 6. cancellation, timeouts, and typed failures across model, MCP, and authoritative
    source boundaries.
 
-The proposed constitution text is supplied as `docs/constitution.md` in this bundle.
+The accepted constitution text is supplied as `docs/constitution.md` in this bundle.
 
 ## Compatibility impact
 
@@ -62,7 +62,7 @@ catalog exact and reviewable.
 ## Security impact
 
 The amendment does not widen the class of permitted tool behavior. All model-visible
-tools remain read-only and untrusted. The proposed four-tool design adds independent
+tools remain read-only and untrusted. The target four-tool design adds independent
 failure and freshness boundaries, but Core remains responsible for canonical search,
 exact reload, relationship validation, readiness, confirmation, and every side effect.
 
@@ -104,12 +104,15 @@ latency, or prompt-injection risk. The catalog must remain exact and pre-approve
 
 ### Keep the two-tool catalog and embed roles in environment lookup
 
-Rejected for the proposed feature because environment identity and entitlement
+Rejected for the target feature because environment identity and entitlement
 assignment represent different authoritative responsibilities with different
 freshness and failure semantics.
 
 ## Approval record
 
-Approval of this proposal authorizes only the governance change and the specified
+Approved by the project owner on 2026-08-24 as Task 0 of the deterministic request-
+intake implementation plan.
+
+Approval of this amendment authorizes only the governance change and the specified
 synthetic four-tool target. It does not authorize real enterprise data, credentials,
 production access, additional tools, or any model-visible state-changing capability.

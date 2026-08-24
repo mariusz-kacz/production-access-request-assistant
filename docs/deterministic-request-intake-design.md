@@ -1,6 +1,6 @@
 # Deterministic Request Intake: Design Notes
 
-- **Status:** Proposed supporting design
+- **Status:** Approved supporting design; implementation pending
 - **Date:** 2026-08-22
 - **Normative source:** `SPEC-deterministic-request-intake.md`
 - **Purpose:** Record detailed reducer, state, authority, and rendering mechanics that would make the feature specification too large

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Proposed Governed Access MCP Tool Contract for Deterministic Request Intake",
-  "status": "proposed",
+  "title": "Target Governed Access MCP Tool Contract for Deterministic Request Intake",
+  "status": "approved-target",
   "endpoint": "/mcp",
   "transport": "streamable-http",
   "maximumEnvironmentCandidates": 20,
