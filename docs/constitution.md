@@ -12,23 +12,39 @@ model-reported validation results MUST NOT constitute authorization or approval
 evidence. This separation keeps probabilistic interpretation outside the security
 boundary.
 
-### II. Untrusted AI, Bounded MCP
+### II. Untrusted AI, Bounded and Governed MCP
 
 All model output MUST be schema-validated, and every model-proposed identifier and
-business value MUST be checked against authoritative data before use. Domain logic
-MUST NOT depend on AI-provider or MCP SDK contracts; infrastructure adapters MUST
-translate those contracts at the boundary. The model MUST receive an explicit
-allowlist containing exactly `get_production_environment` and `get_incident`.
-`get_production_environment` MUST provide bounded production-environment discovery,
-exact environment lookup, authoritative client relationships, and the roles assigned
-to each returned environment. `get_incident` MUST remain an exact-identifier lookup;
-incident listing, search, and inference are outside the model-visible surface. MCP
-MUST remain read-only and MUST NOT expose a separate role tool, approval,
-provisioning, revocation, workflow-transition, arbitrary-database, or generic-query
-tools. The application MUST independently validate every proposed environment-role
-pair. LLM and MCP calls MUST support cancellation, explicit timeouts, and typed
-failures. These controls bound unreliable or compromised AI behavior while keeping
-the tool surface proportionate.
+business value MUST be checked against authoritative application data before use.
+Domain logic MUST NOT depend on AI-provider or MCP SDK contracts; infrastructure
+adapters MUST translate those contracts at the boundary.
+
+The model MUST receive only the exact MCP allowlist defined by the active product
+baseline and its machine-readable contract. The allowlist MUST contain narrow, typed,
+read-only context capabilities associated with named authoritative responsibilities.
+It MUST NOT contain submission, approval, provisioning, revocation, retry,
+workflow-transition, credential, arbitrary-database, generic-query, or other
+state-changing capabilities.
+
+Discovery and exact lookup MAY be separate capabilities when they have materially
+different input, result, authority, freshness, or failure semantics. Independently
+governed facts, such as environment metadata and environment-scoped entitlement
+assignments, MAY remain separate capabilities even when the synthetic implementation
+shares storage. Generic or cross-scope search MUST NOT be introduced merely to reduce
+application validation.
+
+Search or discovery output MUST NOT become canonical scope solely because the model
+observed it. Deterministic application code MUST independently reproduce applicable
+search policy or exact-reload the selected entity and MUST validate every proposed
+environment, client, role, and incident relationship. Model-visible tool results aid
+interpretation only and are never authorization evidence.
+
+Any model-visible catalog change MUST have an approved specification, architecture
+decision, threat-boundary review, closed contract, negative tests, and synchronized
+product documentation. LLM, MCP, and authoritative-source calls MUST support
+cancellation, explicit timeouts, and typed failures. These controls bound unreliable
+or compromised AI behavior while permitting proportionate evolution of the read-only
+context surface.
 
 ### III. Authenticated, Immutable, Client-Isolated Scope
 
@@ -70,14 +86,16 @@ understandable and proportionate to its single-host scope.
 ## Product and Technical Constraints
 
 - `docs/governed-production-access-product-baseline.md` defines the active product
-  behavior, synthetic reference data, supported workflow, and explicit non-goals.
-- The application MUST expose one real read-only MCP endpoint with exactly the two
-  tools listed in Principle II. Inputs and outputs MUST use explicit typed schemas,
-  and authoritative results MUST use stable identifiers.
+  behavior, synthetic reference data, supported workflow, explicit MCP allowlist, and
+  non-goals.
+- The application MUST expose one real read-only MCP endpoint containing exactly the
+  tools in the active machine-readable contract and no additional model-visible
+  capability. Inputs and outputs MUST use explicit closed schemas, and authoritative
+  results MUST use stable identifiers.
 - Nullable reference types MUST be enabled, warnings MUST be treated as errors, and
   `CancellationToken` MUST cross asynchronous boundaries.
-- Expected failures MUST use explicit typed outcomes. LLM and MCP integrations MUST
-  have explicit timeouts.
+- Expected failures MUST use explicit typed outcomes. LLM, MCP, and external context
+  integrations MUST have explicit timeouts.
 - Logs MUST NOT contain secrets, raw prompts, or complete MCP payloads by default.
   They MUST record correlation IDs, authenticated actors, decisions, statuses,
   workflow transitions, operation metadata, and model/MCP duration and outcome.
@@ -95,8 +113,8 @@ understandable and proportionate to its single-host scope.
   Domain rules require unit tests. MCP contracts and interactions require integration
   tests.
 - Authorization, client isolation, immutable scope, invalid transitions, persisted
-  provisioning evidence, idempotency, malformed model output, and MCP failure or
-  timeout MUST have negative-path coverage where affected.
+  provisioning evidence, idempotency, malformed model output, and MCP/source failure
+  or timeout MUST have negative-path coverage where affected.
 - A change is complete only when its applicable tests pass, warnings-as-errors builds
   pass, model/MCP cancellation and timeout behavior is preserved, and documentation
   reflects any changed contract, trust boundary, or operational behavior.
@@ -112,13 +130,13 @@ constraints.
 Amendments require a documented proposal describing the motivation, affected
 principles, compatibility impact, migration work, and dependent artifacts. The
 project owner MUST approve the amendment and update affected authoritative artifacts
-in the same change. Versioning follows semantic versioning: MAJOR for incompatible principle
-removal or redefinition, MINOR for a new principle or materially expanded obligation,
-and PATCH for non-semantic clarification.
+in the same change. Versioning follows semantic versioning: MAJOR for incompatible
+principle removal or redefinition, MINOR for a new principle or materially expanded
+obligation, and PATCH for non-semantic clarification.
 
 Every material change MUST be reviewed for compliance. Code review and completion
 checks MUST verify the applicable principles, required negative tests, and
 synchronization of contracts and runtime guidance. Complexity that violates a
 principle MUST be rejected unless an approved amendment precedes it.
 
-**Version**: 2.0.1 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-08-20
+**Version**: 3.0.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-08-22

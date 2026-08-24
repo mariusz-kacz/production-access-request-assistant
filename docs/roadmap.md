@@ -1,362 +1,261 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-08-21
-- **Current baseline**:
-  [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
+- **Last reviewed**: 2026-08-22
+- **Current baseline**: [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
+- **Next feature**: [Deterministic Conversational Request Intake](../SPEC-deterministic-request-intake.md)
 
 ## Purpose
 
-This document records credible follow-on product work without independently changing
-the active baseline. A roadmap item becomes authoritative only after its business
-requirement is approved and the product baseline, constitution, specification,
-contracts, and tests are updated together.
+This roadmap records credible follow-on work without independently changing the
+running product. A roadmap item becomes current only after its specification,
+architecture decisions, implementation, contracts, tests, and as-built documentation
+are reconciled.
 
-The delivered environment-resolution increment is incorporated into the active
-product baseline. It narrows model-assisted discovery to production
-environments and establishes the exact two-tool MCP surface:
+## Current delivered baseline
 
-- `get_production_environment`
-- `get_incident`
+The running baseline currently exposes two read-only model-visible tools:
 
-`get_production_environment` supports bounded environment discovery and exact
-lookup. Each returned environment includes its authoritative client relationship
-and assigned roles, so a separate role-listing capability is unnecessary.
-`get_incident` remains an exact-identifier lookup. Incident listing, search, title
-matching, and semantic inference are outside the baseline.
+- `get_production_environment`, combining bounded discovery, exact environment lookup,
+  owning client, and assigned roles; and
+- `get_incident`, providing exact incident lookup.
 
-The checked-in runtime, current MCP contract, model allowlist and instructions,
-tests, security analysis, and operator guidance now describe that delivered design.
-The next proposed product increment is documented in the
-[deterministic conversational request-intake specification](../SPEC-deterministic-request-intake.md).
-It changes preparation, revision, response ownership, and turn ordering while keeping
-Adaptive Card confirmation as the only request-creation action. Until implementation,
-validation, and documentation reconciliation are complete, the current product
-baseline and as-built preparation flow remain authoritative.
+The current interpreter returns one complete nullable candidate plus candidate or
+clarification outcome. Those statements remain authoritative until the next feature is
+implemented and verified.
 
-## Proposed Near-Term Increment: Deterministic Conversational Request Intake
+## Proposed near-term increment: deterministic conversational request intake
 
 ### Business problem
 
-The current interpreter returns a complete nullable candidate on every turn and is
-prompted to preserve previously accepted fields. This makes correct multi-turn state
-preservation depend too heavily on probabilistic model behavior. Model-authored
-clarification prose also mixes language interpretation with authoritative response
-presentation, and current turn coordination does not serialize the complete
-load-through-commit boundary.
+The current full-candidate response asks the model to reproduce previously accepted
+state on every turn. A schema-valid model response can therefore be stale, omit a
+value, or reconstruct an unsupported snapshot. Model-authored clarification prose also
+mixes language interpretation with authoritative application presentation.
 
-### Target behavior
+### Target value
 
-The model interprets only the latest requester turn and returns a closed dialogue act
-plus explicit `keep`, `set`, or `clear` operations for environment, role,
-justification, and optional incident. Core owns the canonical candidate and applies a
-changed operation only when deterministic current-message or persisted ordered-choice
-evidence supports it. Client remains derived from authoritative environment data.
+Use the model where probabilistic language interpretation is useful while making every
+state, authority, and consequence deterministic:
 
-Application code owns field values, complete environment and role choices, progress,
-clarification questions, validation guidance, review cards, and workflow outcomes.
-The model returns no requester-facing prose and cannot filter, rank, or truncate
-environment choices. When exact environment evidence is absent, the application shows
-the complete bounded authoritative environment catalog in stable order. Field removal
-uses exact application-owned commands rather than a language heuristic.
+- the model returns one dialogue act and a sparse `set`/`clear` patch;
+- omitted fields are safe no-ops;
+- Core owns canonical state, merge, search, exact reload, validation, readiness, and
+  lifecycle;
+- application code owns all authoritative responses and cards;
+- four read-only MCP capabilities model distinct enterprise authorities; and
+- authenticated card confirmation remains the only request-creation action.
 
-Adaptive Card confirmation remains the only request-creation path. An evidence-backed
-unfinished revision persists a sanitized pending candidate and suspends confirmation
-of the old ready snapshot. The old card creates no request while that revision is
-pending. Exact `/cancel-revision` discards the pending change and restores the same
-unexpired snapshot without refreshing its deadline. A completed revision atomically
-supersedes the old snapshot and creates a new card.
+### Target MCP capability model
 
-### Delivery sequence
+| Capability | Enterprise-shaped authority |
+|---|---|
+| `search_production_environments` | Service-catalog/CMDB discovery projection |
+| `get_production_environment` | Exact environment registry and owning client |
+| `get_environment_roles` | IAM/entitlement assignments for one environment |
+| `get_incident` | Exact ITSM incident state and affected environment |
 
-#### Increment 1: Interpretation and reducer boundary
+The synthetic implementation may share SQLite, but the contracts preserve independent
+ownership, permissions, freshness, latency, and failure behavior. The additional tools
+exist because the facts are independently governed, not to create more calls for the
+evaluator.
 
-- Replace complete-candidate model output with the closed dialogue-act and patch
-  contract.
-- Normalize value-equal `set` operations and reject changed operations without exact
-  evidence.
-- Implement the fixed dependency cascades, authoritative identifier reload, client
-  derivation, justification authorship check, and syntactic justification floor.
-- Route exact field-clear commands without a model call.
+### Search and selection policy
 
-**Exit gate:** deterministic unit tests prove that context loss, snapshot-shaped model
-output, unsupported clearing, and unrequested field changes cannot corrupt canonical
-state.
+Core independently reruns every requester-backed deterministic environment search:
 
-#### Increment 2: Application-owned conversation
+- zero matches -> no-match clarification;
+- one match -> exact reload and canonical acceptance;
+- multiple matches -> complete application-owned choices;
+- more than 20 -> too-broad guidance, never truncation.
 
-- Replace model-authored clarification and progress responses with deterministic
-  application rendering.
-- Render the complete authoritative environment catalog and environment-specific role
-  choices in stable application-owned order.
-- Persist only the ordered structured clarification context required for exact and
-  ordinal replies; do not persist raw conversation or model response prose.
+A unique result does not require a ceremonial second requester turn because Core, not
+the model, proves uniqueness and exact identity. Final scope is still exposed on the
+mandatory review card.
 
-**Exit gate:** scripted multi-turn integration tests prove that ambiguous input is not
-guessed, choices survive restart, and every displayed authoritative value comes from
-reloaded application data.
+### Ready revision policy
 
-#### Increment 3: Ready revision and concurrency safety
+The feature keeps only one active candidate. There is no pending revision or
+`/cancel-revision` flow.
 
-- Serialize one authenticated actor/conversation turn across load, interpretation,
-  reduction, persistence, and presentation selection.
-- Persist sanitized pending ready-draft revisions and suspend confirmation while they
-  exist.
-- Add deterministic `/cancel-revision`, typed `RevisionPending` confirmation failure,
-  best-effort old-card visual replacement, and atomic ready-snapshot replacement.
-- Enforce durable uniqueness and optimistic-concurrency behavior for active intakes.
+- discussion, submission guidance, value-equal proposals, unsupported proposals, and
+  model/source failures preserve the exact ready snapshot;
+- the first accepted material revision atomically supersedes the old ready preparation
+  and creates a new collecting or ready intake;
+- the old card becomes durably stale immediately; and
+- a replacement ready intake receives a new identity and 30-minute deadline.
 
-**Exit gate:** restart, rollback, stale-card, revision-versus-confirmation, duplicate,
-and concurrent-turn tests converge without partial replacement or request creation
-from a suspended card.
+This is intentionally less convenient than rollback but substantially simpler and
+safer to implement and explain.
 
-#### Increment 4: End-to-end evidence and documentation reconciliation
+## Delivery sequence
 
-- Preserve the current closed card payload and authoritative submission revalidation.
-- Verify the complete Teams preparation-to-confirmation journey with deterministic
-  model clients and no live-model dependency.
-- Reconcile the product baseline, architecture, security model, intake orchestration,
-  testing strategy, operator guidance, and roadmap only after the implementation is
-  proven as-built.
+### Increment 0: governance and decisions
 
-**Exit gate:** required build and test suites pass sequentially, all specification
-acceptance scenarios have evidence, and the current documentation authority set
-describes one consistent runtime behavior.
+- Approve constitution amendment `3.0.0`.
+- Approve ADRs for sparse patches/reducer, four source-oriented context capabilities,
+  and bounded structured clarification persistence.
+- Remove conflicting proposed claims about required `keep` operations, single-result
+  selection, strict same-turn choreography, or pending revisions.
 
-### Explicitly excluded from this increment
+**Exit gate:** one consistent target authority set.
 
-- Natural-language submission or any model-visible state-changing tool.
-- Model-generated requester response prose.
-- Model-proposed environment filtering, ranking, narrowing, or choice subsets.
-- Heuristic rewriting or instruction-phrase classification of authoritative display
-  values beyond ordinary output encoding and labeled rendering.
-- Card-delivery receipt or acknowledgement persistence.
-- Collecting-intake idle expiry.
-- Additional requester channels, MCP tools, services, dependencies, workflow engines,
-  or distributed infrastructure.
+### Increment 1: sparse interpretation and reducer
 
-## Delivered Increment: Environment Identifier Resolution
+- Introduce provider-neutral dialogue acts, sparse field operations, operation
+  verdicts, and closed outcomes.
+- Implement evidence checks, dependency cascades, canonical validation, client
+  derivation, and justification floor.
+- Route exact clear commands and `/new` deterministically.
 
-### Business problem
+**Exit gate:** unit tests prove model omission/context loss cannot corrupt state.
 
-Requesters know a client or environment by its familiar name but may not know the
-stable production-environment identifier. Requiring them to leave the conversation
-and find that identifier adds avoidable friction.
+### Increment 2: four MCP capabilities and authoritative ports
 
-### Delivered behavior
+- Split search, exact environment, and environment-role contracts.
+- Keep exact incident lookup.
+- Add independent environment, entitlement, and incident Core ports/adapters.
+- Preserve exact allowlist, read-only annotations, call bounds, timeout, and
+  cancellation.
 
-The assistant may read a bounded authoritative set of production environments and
-interpret the requester's readable description. One unambiguous environment may be
-proposed; multiple matches require a focused clarification; no match must not produce
-an invented identifier. The selected environment supplies the authoritative client
-and currently assigned role choices.
+**Exit gate:** real MCP transport tests prove exact catalog and independent source
+failures.
 
-An optional incident must be supplied using its precise stable identifier. The
-assistant may validate that identifier but must not discover or infer it from a title
-or problem description.
+### Increment 3: application-owned search and responses
 
-### Trust and authorization boundaries
+- Core independently handles zero, unique, multiple, and too-broad searches.
+- Persist complete stable choices only when selection is actually required.
+- Render all progress, choices, questions, corrections, cards, and failures in
+  application code.
+- Keep discussion bounded rather than model-authored.
 
-- Both MCP tools remain read-only and use explicit typed schemas.
-- Environment candidates and model selection remain untrusted until deterministic
-  application services validate the stable environment, client relationship, and
-  requested role.
-- Incident validation uses only the precise stable identifier supplied by the
-  requester.
-- MAF and MCP receive no submit, approval, provisioning, retry, revocation, workflow,
-  credential, arbitrary-database, generic-query, or separate role-listing capability.
-- Authenticated server context remains the only source of acting identity.
-- Confirmation and all subsequent workflow transitions bypass the model.
+**Exit gate:** every displayed authoritative value comes from Core; the model cannot
+silently choose or narrow scope.
 
-### Delivered acceptance boundaries
+### Increment 4: persistence, restart, and ready revision
 
-- A developer can identify one unambiguous environment without knowing its stable ID.
-- Zero, one, and multiple environment matches produce distinct safe outcomes.
-- Environment choices contain stable identifiers, readable context, authoritative
-  client relationships, and assigned roles.
-- Identifier-like environment values use exact lookup only. Exact `NotFound` keeps
-  scope unresolved and asks for correction with no discovery alternatives; readable
-  environment descriptions continue to use bounded discovery.
-- A model-authored clarification message is shown only after its separate structured
-  option IDs are reloaded and validated; selectable labels and identifiers come from
-  authoritative records, never prose.
-- Role choices shown to the requester are limited to those assigned to the selected
-  environment and are independently validated before submission.
-- Incident descriptions and partial identifiers are never mapped to an incident.
-- Unknown tools, excessive results, malformed results, prompt injection, timeout,
-  cancellation, and dependency failure create no request, approval, operation, or
-  grant.
-- Logs record correlation, tool name, duration, and outcome without recording raw
-  prompts, transcripts, or complete MCP payloads.
+- Persist one provider-neutral structured clarification context bound to preparation
+  and candidate version.
+- Support exact/ordinal selection after restart without raw conversation history.
+- Implement atomic ready supersession plus replacement intake.
+- Prove active-intake uniqueness and revision/confirmation race convergence.
 
-## Proposed Future Direction: Enterprise Production Adoption
+**Exit gate:** one active candidate, no pending-revision state, stale old card rejected.
 
-Enterprise production readiness is a proposed sequence of separately approved
-extensions, not a single implementation increment. The current synthetic solution is
-the starting point for that sequence; it is not evidence that real production access
-is safe. No stage below is authorized by this roadmap, and approval of one stage does
-not authorize the next.
+### Increment 5: confirmation regression, evaluation, and documentation
 
-The default target remains one modular ASP.NET Core host with a thin co-hosted React
-UI. A second deployable, distributed coordination, or a generic workflow platform is
-introduced only when an approved requirement and measured operating need justify the
-additional boundary.
+- Re-prove exact card confirmation and replay.
+- Rebalance live evaluation to approximately 12 high-value scenarios.
+- Grade canonical outcomes and restraint; report tool sequence diagnostically.
+- After evidence, reconcile the product baseline, architecture, security, contracts,
+  orchestration, testing, operator guidance, README, ADR statuses, and roadmap.
 
-### Invariants that carry into every stage
+**Exit gate:** deterministic gates and reviewed live evaluation pass with zero
+consequential side effects, and all current docs describe one runtime truth.
 
-- AI may interpret user language and gather bounded context, but its output remains
-  untrusted. Authenticated humans approve, and deterministic services authorize and
-  execute every state change.
-- Authenticated server context supplies the acting identity. Client or model payloads
-  cannot choose identity, claims, approver, environment scope, role, duration, or
-  idempotency identity.
-- Human decisions remain authenticated structured actions bound to one immutable
-  request ID and exact scope. Corrections create a new request and new approvals.
-- Provisioning remains unavailable to the model. The protected provisioning boundary
-  reloads persisted request, approval, operation, and grant evidence before acting.
-- MCP remains bounded, typed, and read-only and must be authenticated before any
-  production use. The exact two-tool surface remains the default unless a separately
-  approved baseline change demonstrates a concrete need.
-- Domain and application policy remains provider-independent in
-  `GovernedAccess.Core`; enterprise identity, data, AI, Teams, MCP, and provisioning
-  contracts are translated at system boundaries.
+## Explicitly excluded from the increment
+
+- Natural-language submission.
+- Any model-visible state-changing or credential-bearing capability.
+- Generic enterprise search, arbitrary database query, cross-environment role search,
+  or incident discovery.
+- Model-authored consequential response prose.
+- Durable raw prompts, transcripts, provider traces, or complete tool payloads.
+- Pending ready-draft revisions, rollback, or `/cancel-revision`.
+- Another requester channel, second agent, multi-agent workflow, generic workflow
+  engine, RAG subsystem, new deployable service, message broker, or distributed lock.
+- Changes to downstream approvals, provisioning, retries, audit, fixed duration, or
+  grant expiry.
+
+## Delivered increment: environment identifier resolution
+
+The delivered baseline remains evidence that the assistant can:
+
+- resolve readable production-environment descriptions over a bounded catalog;
+- distinguish zero, one, and multiple matches;
+- use exact incident identifiers only;
+- keep model-visible context read-only;
+- independently validate environment, client, role, and incident facts; and
+- create no request until authenticated card confirmation.
+
+The proposed feature replaces the combined environment tool and full-candidate
+interpreter only after its new evidence passes. Historical retained evaluation remains
+evidence for the delivered design, not proof of the replacement.
+
+## Future direction: enterprise production adoption
+
+The portfolio implementation is synthetic. Moving toward production would require a
+new governed target rather than treating the local architecture as production-ready.
+
+### Invariants that carry forward
+
+- AI interprets and gathers bounded context; deterministic services own authority and
+  state changes.
+- Authenticated server context supplies acting identity and claims.
+- Human decisions bind to one immutable request ID and exact scope.
+- Provisioning remains unavailable to the model and reloads persisted evidence.
+- The model-visible catalog remains exact, typed, read-only, and contract-controlled.
+- Environment, entitlement, incident, and policy facts are revalidated at
+  consequential boundaries.
 - Raw prompts, transcripts, provider traces, secrets, and complete tool payloads are
-  not retained by default and are never authorization evidence.
+  not workflow or authorization evidence.
+- One host remains appropriate until a measured ownership, security, scale, or
+  availability requirement justifies another boundary.
 
-### Extension map from the current increment
+### Stage 0: governed adoption decision
 
-| Current synthetic boundary | Proposed enterprise-ready extension |
-| --- | --- |
-| Synthetic authenticated actors and local claims | Enterprise workforce and workload identity, authoritative group/claim mapping, lifecycle governance, and explicit separation of requester, approver, operator, and service identities |
-| Local SQLite persistence and single-host assumptions | Managed transactional persistence with encryption, least-privilege access, tenant or row isolation where required, tested backup/restore, recovery objectives, and multi-instance concurrency evidence before horizontal scale |
-| Process-local conversational presentation state | Durable, privacy-bounded evidence that the exact immutable snapshot was presented, with expiry and recovery rules; conversation text remains neither durable authority nor submission evidence |
-| Local unauthenticated MCP transport | Authenticated and authorized MCP transport with network boundaries, rate and result limits, explicit timeouts, safe telemetry, and the same narrow typed read-only tools |
-| Seeded environment, incident, requester, and policy data | Authoritative enterprise adapters with freshness guarantees, ownership, typed failure outcomes, and deterministic revalidation immediately before consequential transitions |
-| Synthetic provisioning provider | Protected real-provider adapter with least-privilege workload identity, request-ID idempotency, bounded retries, expiry and revocation, reconciliation, and fail-closed recovery from ambiguous outcomes |
-| Local logs and manual evaluation runs | Protected centralized audit and observability, versioned prompts/models/datasets, automated regression gates, drift monitoring, alerting, and evidence retention aligned with privacy policy |
+Define supported access types, risk tolerance, data classification, compliance,
+service/recovery objectives, accountable owners, model disablement, deterministic
+fallback, and release evidence.
 
-### Stage 0: Adoption decision and governed target
+**Exit gate:** approved product baseline, threat model, named risk owners, and measurable
+acceptance criteria.
 
-Before production engineering begins:
+### Stage 1: enterprise identity and trust perimeter
 
-- define the business scope, supported access types, data classification, risk
-  tolerance, compliance obligations, service objectives, recovery objectives, and
-  accountable owners;
-- decide whether model-interpreted request preparation followed by deterministic
-  structured confirmation is acceptable for the target risk class, including
-  interpretation-error tolerance, deterministic fallback, operator disablement, and
-  rollback behavior;
-- reconcile the constitution, product baseline, security model, feature
-  specifications, and architecture decisions before implementing any conflicting
-  capability; and
-- create a production threat model and abuse-case inventory covering identity,
-  authorization, prompt injection, confused-deputy paths, replay, concurrency,
-  privacy, provider compromise, and operational recovery.
+Replace synthetic identities with workforce/workload identity, least-privilege
+credentials, network controls, abuse protection, and negative authorization evidence.
 
-**Exit gate:** approved product baseline and architecture decisions, named risk
-owners, measurable acceptance criteria, and an agreed release evidence package.
+**Exit gate:** identity/security review and no client- or model-controlled authority
+path.
 
-### Stage 1: Enterprise identity and trust perimeter
+### Stage 2: durable state, audit, and recovery
 
-- Replace synthetic actors with enterprise authentication while keeping all
-  authorization claims server-derived and revalidated.
-- Establish application, MCP, Teams, operator, and provisioning workload identities
-  with least privilege, secret or certificate rotation, and auditable ownership.
-- Add network controls, request limits, security headers, dependency and artifact
-  scanning, and explicit trust-boundary tests.
-- Prove requester, business approver, DevOps approver, and operator separation with
-  negative integration tests.
+Move to managed transactional persistence, encryption, migrations, backup/restore,
+retention, multi-instance concurrency, protected audit, and reconciliation of
+ambiguous operations.
 
-**Exit gate:** identity and authorization threat-model review, credential lifecycle
-runbooks, penetration-test findings addressed to the accepted threshold, and no
-browser or model-controlled authority path.
+**Exit gate:** load/failure evidence, recovery exercise, and convergence under duplicate
+or concurrent delivery.
 
-### Stage 2: Durable state, audit, and recovery
+### Stage 3: authoritative data and real provisioning
 
-- Move authoritative workflow state to managed transactional persistence with
-  encryption, constrained access, integrity protections, schema migration, and
-  tested restore procedures.
-- Preserve immutable request scope, optimistic concurrency, transition legality, and
-  request-ID idempotency under duplicate delivery, restart, failover, and multiple
-  application instances.
-- Protect security audit records from application-level alteration and define
-  retention, access, export, and deletion policy for personal and operational data.
-- Add reconciliation for incomplete operations and document how operators recover
-  without bypassing approval evidence.
+Integrate environment registry, IAM/entitlements, ITSM, policy, and provisioner through
+narrow adapters with explicit freshness, failure, revalidation, idempotency,
+revocation, and reconciliation.
 
-**Exit gate:** load and failure-injection evidence, backup/restore and disaster
-recovery exercise, retention approval, and demonstrated convergence after ambiguous
-or concurrent outcomes.
+**Exit gate:** sandbox/fault-injection evidence and proof that no access is granted
+without exact approvals.
 
-### Stage 3: Authoritative enterprise data and real provisioning
+### Stage 4: AI assurance and operational rollout
 
-- Integrate environment, incident, requester, role, and policy sources through narrow
-  adapters with bounded reads, freshness rules, ownership, and typed degradation.
-- Revalidate mutable authoritative facts at submission, approval, and provisioning
-  boundaries rather than trusting earlier model or conversation context.
-- Introduce the real provisioning adapter behind the existing protected handler;
-  keep provider credentials, approval APIs, and provisioning methods unavailable to
-  the model and MCP.
-- Implement deterministic grant expiry, revocation, reconciliation, safe retry, and
-  evidence for partial or externally successful operations.
+Version models, prompts, schemas, tool contracts, datasets, and thresholds. Add drift,
+privacy, cost, rollback, observability, on-call, incident handling, and staged rollout
+criteria.
 
-**Exit gate:** provider sandbox and fault-injection evidence, least-privilege review,
-reconciliation and revocation drills, and end-to-end proof that no access is granted
-without the exact required approvals.
+**Exit gate:** approved evaluation/security/privacy evidence and stable limited pilot.
 
-### Stage 4: AI assurance, privacy, and release governance
+## Not authorized by this roadmap
 
-- Version and approve models, prompts, schemas, tool contracts, datasets, graders,
-  and thresholds as one releasable AI configuration.
-- Run deterministic tests without a live model, then run a separate live-model
-  preparation evaluation and deterministic consequential-action security tests before
-  promotion.
-- Measure both correct action and correct restraint across adversarial, ambiguous,
-  multilingual, stale-context, duplicate-delivery, and provider-failure scenarios.
-- Add change control, drift detection, privacy review, safe telemetry, cost budgets,
-  provider timeouts, and a tested ability to disable model-mediated preparation
-  without weakening structured confirmation or downstream controls.
+This roadmap does not authorize real identity, production data, credentials, access,
+deployment, or topology change. It also does not authorize:
 
-**Exit gate:** approved evaluation report with version evidence, security and privacy
-sign-off, threshold compliance, rollback rehearsal, and no unresolved high-severity
-failure mode.
-
-### Stage 5: Operational readiness and staged rollout
-
-- Establish service ownership, on-call response, security incident handling, user
-  support, access reviews, audit export, capacity planning, and dependency failure
-  procedures.
-- Define service-level indicators for request progression, denied transitions,
-  dependency health, model restraint, provisioning latency, reconciliation backlog,
-  expiry, revocation, and suspicious use without logging sensitive content.
-- Roll out through internal test, non-production pilot, limited production cohort,
-  and broader adoption with explicit entry, observation, rollback, and stop criteria.
-- Review the risk assessment and release evidence after each cohort before expanding
-  scope, identity population, access role, environment, or provider.
-
-**Exit gate:** production readiness review, exercised rollback and incident runbooks,
-stable pilot evidence, accountable approval to expand, and continuing periodic access
-and AI-governance reviews.
-
-## Not Authorized by This Roadmap
-
-This roadmap proposes an adoption shape; it does not authorize real identity, real
-production access, provider credentials, production data, deployment, or a topology
-change. Those require their own approved baseline, specifications, architecture and
-security decisions, implementation plans, and release evidence.
-
-The following remain outside the roadmap unless a separate approved requirement and
-authority change explicitly introduces them:
-
-- incident discovery, listing, title matching, or semantic search;
-- a separate role-listing tool;
-- any model-visible submission, approval, provisioning, retry, revocation,
-  credential, or other state-changing capability;
-- agent-directed approval or provisioning;
-- a generic enterprise search or arbitrary database-query tool;
-- retention of raw transcripts or provider traces as workflow or authorization
-  evidence;
-- multi-agent orchestration;
-- a generic workflow engine; or
-- a second deployable service or distributed infrastructure without demonstrated
-  need and an approved architecture change.
+- incident discovery or semantic incident search;
+- a fifth model-visible tool;
+- generic or cross-scope role discovery;
+- model-visible submission, approval, provisioning, retry, or revocation;
+- agent-directed human decisions;
+- raw transcript retention as authority;
+- multi-agent orchestration; or
+- additional deployable/distributed infrastructure without demonstrated need and a
+  separately approved architecture change.
