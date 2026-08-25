@@ -260,16 +260,16 @@ inside one module boundary.
 
 ### Task 5 - Implement the sparse authoritative reducer
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Build the pure target reducer against `RequestPreparation`, target
 contracts, and authority ports. It receives no requester text.
 
 **Acceptance criteria:**
 
-- [ ] Structural violations reject the whole turn; environment resolution uses exact reload without search for `exactEnvironmentId` and shared-policy search plus unique-result exact reload for `searchQuery`.
-- [ ] Omission is non-destructive, dependency cascades are exact, ambiguity preserves current canonical scope, and at most one environment-before-role clarification is produced.
-- [ ] Clarification selection validates preparation/version/target/index, maps only through stored choices, exact-reloads the selected entity, and executes the normal full reduction pipeline.
+- [x] Structural violations reject the whole turn; environment resolution uses exact reload without search for `exactEnvironmentId` and shared-policy search plus unique-result exact reload for `searchQuery`.
+- [x] Omission is non-destructive, dependency cascades are exact, ambiguity preserves current canonical scope, and at most one environment-before-role clarification is produced.
+- [x] Clarification selection validates preparation/version/target/index, maps only through stored choices, exact-reloads the selected entity, and executes the normal full reduction pipeline.
 
 **Verification:** Table-driven reducer tests cover exact-ID search bypass, every search
 cardinality, mixed operations, source failures, incident cardinality, stale selection,
@@ -288,9 +288,9 @@ provenance, and zero-mutation structural failures; then standing backend verific
 
 ### Checkpoint B - Pure target engine
 
-- [ ] Target reducer passes the complete deterministic matrix without language fixtures.
-- [ ] Core target APIs accept no requester message, provider type, MCP payload, or delivered draft type.
-- [ ] Delivered host remains the only production authority.
+- [x] Target reducer passes the complete deterministic matrix without language fixtures.
+- [x] Core target APIs accept no requester message, provider type, MCP payload, or delivered draft type.
+- [x] Delivered host remains the only production authority.
 
 ## Phase C - Inactive target infrastructure
 
