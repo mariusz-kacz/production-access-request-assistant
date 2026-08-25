@@ -24,6 +24,7 @@ public sealed class PreparationAuthorityContractTests
             " Client Alpha EU Production ",
             " client-alpha ",
             " Client Alpha ",
+            " client-alpha-business-approver ",
             isActive: true,
             isProduction: true,
             isEligibleForIntake: true);
@@ -38,6 +39,9 @@ public sealed class PreparationAuthorityContractTests
 
         Assert.Equal("PROD-ALPHA-EU", exactEnvironment.EnvironmentId);
         Assert.Equal("client-alpha", exactEnvironment.ClientId);
+        Assert.Equal(
+            "client-alpha-business-approver",
+            exactEnvironment.BusinessApproverPrincipalId);
         Assert.True(exactEnvironment.CanBecomeCanonical);
         Assert.NotEqual(searchDocument.GetType(), exactEnvironment.GetType());
     }
@@ -60,6 +64,7 @@ public sealed class PreparationAuthorityContractTests
             "Client Alpha EU Production",
             "client-alpha",
             "Client Alpha",
+            "client-alpha-business-approver",
             isActive,
             isProduction,
             isEligibleForIntake);

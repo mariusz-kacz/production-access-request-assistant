@@ -66,6 +66,7 @@ public sealed record EnvironmentAuthorityProjection
         string displayName,
         string clientId,
         string clientDisplayName,
+        string businessApproverPrincipalId,
         bool isActive,
         bool isProduction,
         bool isEligibleForIntake)
@@ -76,6 +77,9 @@ public sealed record EnvironmentAuthorityProjection
         ClientDisplayName = AuthorityValue.Normalize(
             clientDisplayName,
             nameof(clientDisplayName));
+        BusinessApproverPrincipalId = AuthorityValue.Normalize(
+            businessApproverPrincipalId,
+            nameof(businessApproverPrincipalId));
         IsActive = isActive;
         IsProduction = isProduction;
         IsEligibleForIntake = isEligibleForIntake;
@@ -88,6 +92,8 @@ public sealed record EnvironmentAuthorityProjection
     public string ClientId { get; }
 
     public string ClientDisplayName { get; }
+
+    public string BusinessApproverPrincipalId { get; }
 
     public bool IsActive { get; }
 

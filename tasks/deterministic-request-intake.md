@@ -227,7 +227,7 @@ authority.
 
 ### Task 4 - Build the isolated reference-authority module and database
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Add the final `GovernedAccess.ReferenceAuthority` project as a parallel
 target implementation. It owns a separate SQLite reference database and implements the
@@ -236,9 +236,9 @@ context, delivered seeding, or delivered intake tests.
 
 **Acceptance criteria:**
 
-- [ ] The module alone owns `ReferenceAuthorityDbContext`, its independent connection string, migrations, seeder, clients/business-approver mappings, searchable environment eligibility facts, environment-role assignments, incidents, and zero/one/many incident links.
-- [ ] Focused adapters implement search, exact environment/client, entitlement, and incident ports with independent typed failures; the provider-neutral exact environment authority projection is additively completed with the owning client's business-approver principal ID required by confirmation, while MCP omits that hidden fact.
-- [ ] Architecture tests enforce `ReferenceAuthority -> Core`, forbid reference EF types outside the module, and prove the ordinary production host still resolves only the delivered unified context while a focused target fixture uses only the new reference database.
+- [x] The module alone owns `ReferenceAuthorityDbContext`, its independent connection string, migrations, seeder, clients/business-approver mappings, searchable environment eligibility facts, environment-role assignments, incidents, and zero/one/many incident links.
+- [x] Focused adapters implement search, exact environment/client, entitlement, and incident ports with independent typed failures; the provider-neutral exact environment authority projection is additively completed with the owning client's business-approver principal ID required by confirmation, while MCP omits that hidden fact.
+- [x] Architecture tests enforce `ReferenceAuthority -> Core`, forbid reference EF types outside the module, and prove the ordinary production host still resolves only the delivered unified context while a focused target fixture uses only the new reference database.
 
 **Verification:** Reference policy/adapter unit tests; fresh migration, seed, restart,
 eligibility, source-failure, and database-isolation integration tests; delivered
