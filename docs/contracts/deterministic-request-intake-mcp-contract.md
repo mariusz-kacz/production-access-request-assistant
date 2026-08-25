@@ -38,14 +38,23 @@ or turn execution to fail closed.
 
 | Tool | Capability authority | Facts returned | Facts deliberately omitted |
 |---|---|---|---|
-| `search_production_environments` | Service-catalog/CMDB search projection | Complete bounded matching eligible production environment/client identities | Roles, scores, match reasons, workflow data |
-| `get_production_environment` | Environment registry/CMDB | Exact eligible production environment identity and owning client | Assigned roles, incidents, approvals |
+| `search_production_environments` | Service-catalog/CMDB search projection | Complete bounded matching eligible production environment/client identities | Roles, scores, match reasons, business approver, workflow data |
+| `get_production_environment` | Environment registry/CMDB | Exact eligible production environment identity and owning client | Assigned roles, incidents, business approver, workflow data |
 | `get_environment_roles` | IAM/entitlement catalog | Roles currently assignable in one exact environment | Requester eligibility, client-wide/cross-environment roles, approval policy |
 | `get_incident` | ITSM/incident system | Exact incident state and affected environment | Incident search/listing, environment roles |
 
-The synthetic adapters may share SQLite. Separate contracts remain because the
+The synthetic authority adapters may share the reference-authority SQLite database.
+They never share the workflow database. Separate contracts remain because the
 production-shaped authorities have different ownership, permissions, freshness,
 latency, and failure semantics.
+
+In the target modular monolith, the authorities share only the reference-authority
+database, not the workflow database. `GovernedAccess.ReferenceAuthority` owns direct
+reference persistence and implements Core authority ports. `GovernedAccess.Mcp` owns
+only these wire contracts and maps through those ports; it has no EF Core, reference
+database, workflow persistence, or request-lifecycle dependency. The Web host composes
+both modules without exposing either `DbContext` to MCP handlers, AI/Teams adapters, or
+controllers.
 
 Tool output is interpretation context only. Core independently searches/reloads all
 facts and relationships before canonical mutation and again before request creation.
@@ -80,8 +89,10 @@ payloads, internal implementation details, or requester text.
 
 ## 4. Shared deterministic environment-search policy
 
-The MCP search tool and Core application port call the same protocol-neutral search
-policy implementation. They must not maintain separate matching algorithms.
+The MCP search tool and Core's `searchQuery` path call the same protocol-neutral search
+policy implementation. They must not maintain separate matching algorithms. Core does
+not replay search when the agent returns `exactEnvironmentId`; it exact-reloads that ID
+through the independent environment authority instead.
 
 The policy:
 
@@ -98,8 +109,11 @@ The policy:
 10. returns `Unavailable` with code `environment_query_too_broad` above 20, without
     ranking or truncation.
 
-Core's current result controls zero/unique/multiple/too-broad behavior and every
-rendered choice.
+For a `searchQuery` proposal, Core's current result controls
+zero/unique/multiple/too-broad behavior and every rendered choice. When an MCP search
+returns exactly one environment that is uniquely justified by requester intent, the
+agent may instead propose its `exactEnvironmentId`; Core then exact-reloads the ID
+without re-executing the query.
 
 The application creates selectable clarification context only when the complete result
 contains two to five environments. Six to twenty results produce “narrow the query”
@@ -136,6 +150,10 @@ The adapter does not compare it with raw requester text and does not log it.
 The result contains every deterministic match up to the hard bound in stable
 environment-ID order. It contains no roles, score, match explanation, pagination token,
 or model ranking.
+
+The result may help the agent produce an exact environment proposal and then gather
+environment-scoped roles in the same turn. A two-or-more-result search must not be
+collapsed into an unprompted exact environment ID.
 
 ## 6. `get_production_environment`
 
@@ -254,7 +272,8 @@ It rejects:
 
 It does not reject an otherwise safe proposal solely because the model omitted a
 redundant lookup or used a different valid read-only order. Core revalidation remains
-the trust boundary.
+the trust boundary: exact proposals receive exact reload only, while search-query
+proposals execute authoritative search and exact-reload a unique result.
 
 ## 10. Source failure behavior
 
@@ -265,7 +284,8 @@ the trust boundary.
 | Entitlement source unavailable | Reject affected role operation; final candidate cannot become ready without a valid role |
 | Known environment with no roles | Typed no-roles outcome; no role choice context |
 | Incident source unavailable/not found/inactive | Reject incident; independent accepted operations may commit |
-| Source results change between model and Core reads | Core result wins; record bounded drift; never trust stale MCP payload |
+| Exact source result changes after model-side discovery | Core exact reload wins; reject missing/ineligible ID; never trust stale MCP payload |
+| Core `searchQuery` result differs from model-side discovery | Core search result wins; record bounded drift; never trust stale MCP payload |
 | MCP result contains instruction-like text | Treat as data; no policy/authorization effect |
 
 ## 11. Promotion to the current contract

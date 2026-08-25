@@ -1,11 +1,13 @@
 # Implementation Plan: Deterministic Request Intake
 
-- **Status:** Fresh replacement plan; implementation has not started
+- **Status:** Replacement implementation in progress; production cutover has not started
 - **Replanned:** 2026-08-24 after Tasks 1 and 2 were reverted
+- **Refined:** 2026-08-25 so exact environment proposals use exact reload without Core search replay
+- **Replanned:** 2026-08-25 for an extractable reference-authority module and two independent target databases
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Primary authority:** `SPEC-deterministic-request-intake.md`
 - **Task-list target:** This file is both the plan and the ordered task checklist
-- **Planned slices:** 15, followed in order unless a task explicitly says otherwise
+- **Planned slices:** 17, followed in dependency order unless a task explicitly says otherwise
 
 ## Outcome
 
@@ -13,6 +15,12 @@ Build the deterministic request-intake replacement as an independent, complete p
 while the delivered path remains unchanged and authoritative. After the replacement
 passes its isolated full-host checkpoint, switch production composition once, then
 delete the delivered implementation and its schema in the immediately following task.
+
+The isolated target is a modular monolith: `GovernedAccess.ReferenceAuthority` owns a
+reference database, `GovernedAccess.Workflow.Persistence` owns a workflow database,
+Core consumes ports, MCP owns only wire DTOs, and Web remains the single executable
+composition root. The two new modules are the extraction seam for a possible future
+security/deployment boundary; no second service or loopback HTTP is introduced now.
 
 The target flow remains:
 
@@ -54,11 +62,11 @@ type. There is no `TaskNineCompatibilityAttribute` or equivalent task-number mar
 
 | Area | Authority before cutover | Target construction rule |
 |---|---|---|
-| Production Teams intake | Delivered `TeamsAccessRequestAgent` graph | Target agent is registered only by the isolated test host until Task 12. |
+| Production Teams intake | Delivered `TeamsAccessRequestAgent` graph | Target agent is registered only by the isolated test host until Task 14. |
 | Canonical preparation | Delivered `RequestIntakeSession` | New `RequestPreparation` owns only target state; it never reads or writes a delivered session. |
 | Proposal interpretation | Delivered full-candidate interpreter | New interpreter emits only `TurnProposal`; no translation exists between proposal models. |
-| Persistence | Delivered session tables | Target tables use distinct names and keys in the same local database model; no row is shared or copied. |
-| MCP | Delivered two-tool production registration | New four-tool catalog is invoked only by the target test composition until Task 12. |
+| Persistence | Delivered unified `GovernedAccessDbContext` and database | New target `ReferenceAuthority` and `Workflow.Persistence` projects own separate databases used only by the isolated target composition until Task 14; no entity, row, file, or migration is shared or copied. |
+| MCP | Delivered two-tool production registration | New four-tool catalog is invoked only by the target test composition until Task 14. |
 | Confirmation | Delivered submission service | New confirmation service accepts only `PreparationId` and target evidence. |
 | Downstream approvals/provisioning | Existing deterministic workflow | Reused unchanged after a target confirmation creates the same final `AccessRequest` domain type. |
 
@@ -68,38 +76,42 @@ Only these coexistence points are allowed. They are not aggregate compatibility 
 
 | Seam | Introduced | Removed/finalized | Constraint |
 |---|---:|---:|---|
-| `GovernedAccessDbContext` maps separate delivered and target preparation tables | Task 5 | Task 13 | No shared row, key, concurrency token, or navigation. Existing local data is disposable. |
-| `AccessRequest` supports target creation with required `PreparationId` while delivered creation still compiles | Task 10 | Task 13 | The target factory/constructor requires a nonempty ID. Only the delivered path may temporarily create a request without it. |
-| Target service registrations exist in a test-only composition | Task 11 | Task 12 | Production `Program` resolves only the delivered graph before cutover and only the target graph after cutover. |
+| Delivered unified persistence remains beside the isolated target's two databases | Tasks 4, 6, and 7 | Task 15 | No shared entity, file, migration, transaction, row copy, synchronization, or dual write. Existing local data is disposable. |
+| `AccessRequest` supports target creation with required `PreparationId` while delivered creation still compiles | Task 12 | Task 15 | The target factory/constructor requires a nonempty ID. Only the delivered path may temporarily create a request without it. |
+| Target service and module registrations exist in a test-only composition | Task 13 | Task 14 | Production `Program` resolves only the delivered graph before cutover and only the target graph after cutover. |
 
 Any additional bridge, alias, dual write, fallback, or synchronization mechanism is a
 material plan change and requires human review.
 
 ### Database transition
 
-Existing local SQLite data is disposable. Schema work supports fresh databases only:
+Existing local SQLite data is disposable. Target schema work supports fresh databases
+only:
 
 - no adoption, backfill, row copy, or upgrade from the delivered schema;
 - no startup-time automatic deletion;
 - explicit operator deletion before the cutover build;
-- isolated persistence tests always create fresh databases;
-- Task 13 removes delivered tables/mappings and creates the final fresh-only migration
-  model.
+- isolated target tests always create separate fresh reference and workflow databases;
+- target reference and workflow migrations have independent histories and fixtures;
+- Task 15 removes the delivered unified context/migrations and leaves only the final
+  two-database fresh schema.
 
 ## Authority and resolved conflicts
 
 Apply the constitution and repository rules first, then the approved feature
-specification, ADRs 0005 and 0007-0009, target MCP contract and test matrix, and current
+specification, ADRs 0005 and 0007-0011, target MCP contract and test matrix, and current
 as-built documents outside the changed boundary.
 
 | Conflict | Resolution |
 |---|---|
 | ADR 0009 says predecessor is stored "when useful"; the specification requires it for every revision successor. | Every revision-created preparation has a mandatory predecessor. Only roots have none. |
 | Target matrix and roadmap contain destructive ambiguity examples. | The specification governs: clarification is non-destructive and preserves canonical state. Correct those artifacts only after verified implementation. |
-| Current as-built documents describe the delivered two-tool catalog while the approved target requires four. | `AGENTS.md` now records both phase-bound rules: production remains on two tools during Tasks 1-11, the target four-tool catalog is isolated, and Task 12 atomically replaces two with four. Full current-state documentation follows verified final evidence in Task 15. |
-| Current behavior uses complete candidates, process-local choices, `Invalidated`, and reserved request IDs. | Those remain facts about the delivered path only. Target code cannot depend on them, and Task 13 deletes them after cutover. |
+| Current as-built documents describe the delivered two-tool catalog while the approved target requires four. | `AGENTS.md` records both phase-bound rules: production remains on two tools during Tasks 1-13, the target four-tool catalog is isolated, and Task 14 atomically replaces two with four. Full current-state documentation follows verified final evidence in Task 17. |
+| Current behavior uses complete candidates, process-local choices, `Invalidated`, and reserved request IDs. | Those remain facts about the delivered path only. Target code cannot depend on them, and Task 15 deletes them after cutover. |
 | ADR 0005 describes reserved-request tombstone evidence. | Preserve the tombstone principle, but final target evidence uses immutable preparation identity and unique `Request.PreparationId`; clarify the ADR after implementation. |
 | The target incident MCP projection is singular while Core authority must handle zero/one/many eligible links. | Keep the closed model projection; define a richer Core authority projection and never treat MCP output as authority. |
+| Replaying model-side search after a uniquely resolved exact environment adds latency but cannot validate requester semantics. | `exactEnvironmentId` uses exact authoritative reload only; `searchQuery` uses authoritative search and exact-reloads a unique result. ADR 0010 records the tradeoff. |
+| The delivered host stores reference and workflow data in one Web-owned EF context, while the target must be easy to extract behind a future security boundary. | Build independent `ReferenceAuthority` and `Workflow.Persistence` projects/databases in an isolated target composition, keep one executable host, switch once after proof, then delete the delivered unified persistence. ADR 0011 records the boundary. |
 
 No lifecycle, version, reducer-order, clarification, confirmation, or budget decision is
 otherwise open. A new conflict with the approved specification stops the owning task.
@@ -187,7 +199,7 @@ unchanged.
 
 ### Task 3 - Add target authority projections and shared environment search
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Define Core authority ports and the one deterministic search policy.
 Add explicit searchable and eligibility facts without using MCP projections as Core
@@ -195,9 +207,9 @@ authority.
 
 **Acceptance criteria:**
 
-- [ ] Exact environment, environment-role, and incident authority projections preserve source boundaries; incident authority supports zero/one/many eligible environment links.
-- [ ] One ordinal, locale-invariant search implementation enforces exact normalization, searchable fields, eligibility, zero/unique/2-5/6-20/>20 outcomes, and no ranking or truncation.
-- [ ] Client is derived only from exact eligible environment data; role and incident relationships are independently exact-revalidated.
+- [x] Exact environment, environment-role, and incident authority projections preserve source boundaries; incident authority supports zero/one/many eligible environment links.
+- [x] One ordinal, locale-invariant search implementation enforces exact normalization, searchable fields, eligibility, zero/unique/2-5/6-20/>20 outcomes, and no ranking or truncation.
+- [x] Client is derived only from exact eligible environment data; role and incident relationships are independently exact-revalidated.
 
 **Verification:** Search matrix and authority-contract unit tests cover every cardinality, Unicode/ordinal edge, eligibility gate, and failure outcome; then standing backend verification.
 
@@ -213,7 +225,40 @@ authority.
 
 **Acceptance coverage:** AC-15-AC-22.
 
-### Task 4 - Implement the sparse authoritative reducer
+### Task 4 - Build the isolated reference-authority module and database
+
+- [ ] Planned
+
+**Description:** Add the final `GovernedAccess.ReferenceAuthority` project as a parallel
+target implementation. It owns a separate SQLite reference database and implements the
+Task 3 authority ports. Do not edit production registration, the delivered unified
+context, delivered seeding, or delivered intake tests.
+
+**Acceptance criteria:**
+
+- [ ] The module alone owns `ReferenceAuthorityDbContext`, its independent connection string, migrations, seeder, clients/business-approver mappings, searchable environment eligibility facts, environment-role assignments, incidents, and zero/one/many incident links.
+- [ ] Focused adapters implement search, exact environment/client, entitlement, and incident ports with independent typed failures; the provider-neutral exact environment authority projection is additively completed with the owning client's business-approver principal ID required by confirmation, while MCP omits that hidden fact.
+- [ ] Architecture tests enforce `ReferenceAuthority -> Core`, forbid reference EF types outside the module, and prove the ordinary production host still resolves only the delivered unified context while a focused target fixture uses only the new reference database.
+
+**Verification:** Reference policy/adapter unit tests; fresh migration, seed, restart,
+eligibility, source-failure, and database-isolation integration tests; delivered
+persistence/MCP regressions; then standing backend verification.
+
+**Dependencies:** Task 3.
+
+**Files likely touched:**
+
+- new `src/GovernedAccess.ReferenceAuthority/` project
+- additive provider-neutral authority-contract changes in `GovernedAccess.Core` required by the module
+- solution/project references and target-only registration extension
+- new focused unit/integration architecture and persistence tests
+
+**Estimated scope:** Large, implemented as schema/seed then port-adapter TDD increments
+inside one module boundary.
+
+**Acceptance coverage:** AC-16-AC-22, AC-48-AC-51.
+
+### Task 5 - Implement the sparse authoritative reducer
 
 - [ ] Planned
 
@@ -222,11 +267,13 @@ contracts, and authority ports. It receives no requester text.
 
 **Acceptance criteria:**
 
-- [ ] Structural violations reject the whole turn; data failures use the exact environment -> incident -> coherent scope -> role -> justification -> clarification order and partial-success rules.
+- [ ] Structural violations reject the whole turn; environment resolution uses exact reload without search for `exactEnvironmentId` and shared-policy search plus unique-result exact reload for `searchQuery`.
 - [ ] Omission is non-destructive, dependency cascades are exact, ambiguity preserves current canonical scope, and at most one environment-before-role clarification is produced.
 - [ ] Clarification selection validates preparation/version/target/index, maps only through stored choices, exact-reloads the selected entity, and executes the normal full reduction pipeline.
 
-**Verification:** Table-driven reducer tests cover every normative row and worked example, including mixed operations, source failures, incident cardinality, stale selection, provenance, and zero-mutation structural failures; then standing backend verification.
+**Verification:** Table-driven reducer tests cover exact-ID search bypass, every search
+cardinality, mixed operations, source failures, incident cardinality, stale selection,
+provenance, and zero-mutation structural failures; then standing backend verification.
 
 **Dependencies:** Tasks 1-3.
 
@@ -247,36 +294,70 @@ contracts, and authority ports. It receives no requester text.
 
 ## Phase C - Inactive target infrastructure
 
-### Task 5 - Persist target preparations in separate tables
+### Task 6 - Build target preparation persistence in the workflow module
 
 - [ ] Planned
 
-**Description:** Add final target EF mappings and a target store while retaining the
-delivered mappings untouched. Both table sets may exist temporarily, but no entity or
-row is shared.
+**Description:** Add `GovernedAccess.Workflow.Persistence` and its separate workflow
+SQLite database. Implement only the target preparation store and synthetic principal
+snapshot persistence in this task. Keep the delivered Web-owned unified context and all
+production registration untouched.
 
 **Acceptance criteria:**
 
 - [ ] Target persistence round-trips canonical state, one clarification context, predecessor, both versions, lifecycle timestamps, turn/rate metadata, and bounded attribution without raw conversational content.
 - [ ] OCC uses `ConcurrencyVersion`; the durable active unique index binds channel, tenant, actor, conversation, and requester for exactly Collecting/Ready.
-- [ ] Store outcomes distinguish conflicts, active-creation races, unavailable persistence, and malformed state; winner reload is explicit and no model call occurs inside a transaction.
+- [ ] The workflow context has its own connection string, migrations, seeder, and fixtures; it contains no client, environment, environment-role, or incident entity/table/FK, and store outcomes distinguish conflict, race, unavailable, and malformed-state failures.
 
-**Verification:** Fresh-SQLite mapping, restart, unique-index, OCC, and privacy tests; legacy persistence regressions; then standing backend verification. Explicitly reset any local database used for manual validation.
+**Verification:** Fresh workflow-SQLite mapping/migration, restart, unique-index, OCC,
+privacy, missing-reference-table, and database-file isolation tests; delivered persistence
+regressions; then standing backend verification.
 
-**Dependencies:** Tasks 2 and 4.
+**Dependencies:** Tasks 2 and 5.
 
 **Files likely touched:**
 
-- new `EfRequestPreparationStore` and mapping files
-- `GovernedAccessDbContext.cs`
-- fresh migration/model files
+- new `src/GovernedAccess.Workflow.Persistence/` project
+- target `WorkflowDbContext`, `EfRequestPreparationStore`, migrations, and seeder
 - focused persistence integration tests
 
 **Estimated scope:** Large because persistence invariants are reviewed together.
 
-**Acceptance coverage:** AC-12, AC-29, AC-34-AC-36, AC-43.
+**Acceptance coverage:** AC-12, AC-29, AC-34-AC-36, AC-43, AC-48-AC-51.
 
-### Task 6 - Build the inactive four-tool MCP catalog
+### Task 7 - Complete target downstream workflow persistence
+
+- [ ] Planned
+
+**Description:** Extend the isolated workflow module with the final request, approval,
+operation, grant, and audit mappings/store behavior needed after target confirmation.
+This is a parallel implementation of delivered Web persistence, not an in-place move;
+production still resolves the delivered unified context.
+
+**Acceptance criteria:**
+
+- [ ] The target workflow database persists authenticated principals, immutable requests, decisions, operations, grants, and audit evidence with existing concurrency/idempotency invariants and no EF relationship to reference facts.
+- [ ] Existing downstream Core behavior runs against the target workflow ports while every environment/client/role/incident read crosses the new authority ports; reference outage and workflow outage remain distinguishable and no cross-database transaction exists.
+- [ ] Focused architecture/composition tests prove the delivered host still uses only delivered persistence and the target fixture uses only `Workflow.Persistence` plus `ReferenceAuthority`, with no shared database file, row, seeder, or dual write.
+
+**Verification:** Target workflow-store mapping, migration, query, approval, provisioning,
+idempotency, restart, and independent-failure integration tests; ordinary downstream
+regressions; then standing backend verification.
+
+**Dependencies:** Tasks 4 and 6.
+
+**Files likely touched:**
+
+- additive request/workflow mappings and adapters in `GovernedAccess.Workflow.Persistence`
+- target-only composition and database fixtures
+- focused downstream persistence/integration tests
+
+**Estimated scope:** Large, implemented as request/audit then approval/provisioning TDD
+increments without production registration.
+
+**Acceptance coverage:** AC-35-AC-40, AC-48-AC-51.
+
+### Task 8 - Build the inactive four-tool MCP catalog
 
 - [ ] Planned
 
@@ -287,12 +368,12 @@ composition.
 **Acceptance criteria:**
 
 - [ ] Exactly the four approved typed read-only tools and closed schemas match the target contract; no mutation or role embedding in exact environment lookup exists.
-- [ ] MCP search and Core use the same search-policy implementation; tool results remain interpretive context and are encoded/bounded.
+- [ ] MCP search and Core's `searchQuery` path use the same search-policy implementation; exact-ID proposals do not replay search, and tool results remain bounded interpretive context.
 - [ ] The delivered production endpoint still exposes exactly its current two tools before cutover.
 
 **Verification:** Target contract/transport/failure tests use an explicit target MCP test host; production-registration regression proves two tools remain active; then standing backend verification.
 
-**Dependencies:** Task 3.
+**Dependencies:** Tasks 3 and 4.
 
 **Files likely touched:**
 
@@ -301,9 +382,9 @@ composition.
 
 **Estimated scope:** Medium.
 
-**Acceptance coverage:** AC-15-AC-18, AC-22, AC-41, AC-43.
+**Acceptance coverage:** AC-15-AC-18, AC-22, AC-41, AC-43, AC-50-AC-51.
 
-### Task 7 - Build the inactive bounded agent interpreter
+### Task 9 - Build the inactive bounded agent interpreter
 
 - [ ] Planned
 
@@ -313,13 +394,16 @@ registration.
 
 **Acceptance criteria:**
 
-- [ ] Every non-`/new` target free-text turn reaches the agent and yields only the closed target proposal; malformed/unknown output gets at most one repair and then a typed failure.
+- [ ] Every non-`/new` target free-text turn reaches the agent and yields only the closed target proposal; a uniquely justified one-result MCP search may produce `exactEnvironmentId`, while ambiguous results must produce `searchQuery`, clarification-compatible behavior, or `unclear`.
 - [ ] Stored justification and MCP display fields are explicitly delimited as untrusted; no raw prompt, response, reasoning, query, transcript, or full MCP payload is logged or persisted.
 - [ ] Startup and execution enforce 4,000 characters, 50 turns, rolling 20/10-minute rate, one call/tool and four total, provider iteration bounds, and one cumulative 30-second budget.
 
-**Verification:** Deterministic chat-client tests cover schemas, repair, cancellation, budgets, prompt-injection boundaries, and safe telemetry; production AI registration remains unchanged; then standing backend verification.
+**Verification:** Deterministic chat-client tests cover unique-search-to-exact-ID behavior,
+ambiguous-search restraint, optional tool use, schemas, repair, cancellation, budgets,
+prompt-injection boundaries, and safe telemetry; production AI registration remains
+unchanged; then standing backend verification.
 
-**Dependencies:** Tasks 1 and 6.
+**Dependencies:** Tasks 1 and 8.
 
 **Files likely touched:**
 
@@ -330,7 +414,7 @@ registration.
 
 **Acceptance coverage:** AC-01-AC-07, AC-41, AC-43, AC-44.
 
-### Task 8 - Build target turn orchestration, lifecycle, restart, and races
+### Task 10 - Build target turn orchestration, lifecycle, restart, and races
 
 - [ ] Planned
 
@@ -345,7 +429,7 @@ a new application service. It remains reachable only from direct/component tests
 
 **Verification:** Unit/component tests cover normative lifecycle examples, restart, active-creation races, OCC collisions, deadline behavior, and no side effects on failures; then standing backend verification.
 
-**Dependencies:** Tasks 4, 5, and 7.
+**Dependencies:** Tasks 5, 6, and 9.
 
 **Files likely touched:**
 
@@ -357,7 +441,7 @@ a new application service. It remains reachable only from direct/component tests
 
 **Acceptance coverage:** AC-01-AC-14, AC-23-AC-36, AC-44.
 
-### Task 9 - Build target Teams rendering and card behavior
+### Task 11 - Build target Teams rendering and card behavior
 
 - [ ] Planned
 
@@ -372,7 +456,7 @@ factory. Do not register them in production.
 
 **Verification:** Target Teams component/card tests cover locale fallback, ambiguity, stale context, failures, injection-shaped text, exact `/new`, and absence of free-text request creation; run frontend tests if shared contracts change; then standing backend verification.
 
-**Dependencies:** Task 8.
+**Dependencies:** Task 10.
 
 **Files likely touched:**
 
@@ -383,7 +467,7 @@ factory. Do not register them in production.
 
 **Acceptance coverage:** AC-01-AC-06, AC-23-AC-25, AC-30-AC-33, AC-41-AC-43.
 
-### Task 10 - Build target confirmation and request idempotency
+### Task 12 - Build target confirmation and request idempotency
 
 - [ ] Planned
 
@@ -394,39 +478,41 @@ unique `PreparationId` while the delivered creation path temporarily still compi
 **Acceptance criteria:**
 
 - [ ] Confirmation trusts authenticated actor and persisted target state only, revalidates every fact, distinguishes source outage from fact drift, and applies exact correction cascades through a predecessor-linked successor.
-- [ ] Successful confirmation creates one immutable request and marks the preparation Submitted in one local commit; unique `Request.PreparationId` provides stable sequential/concurrent replay.
+- [ ] Successful confirmation creates one immutable request and marks the preparation Submitted in one workflow-database commit; unique `Request.PreparationId` provides stable sequential/concurrent replay, with no reference-database write or cross-database transaction.
 - [ ] Confirmation/revision races converge to either one submitted immutable request or one superseded stale card; every failure creates zero requests and preserves/supersedes state exactly as specified.
 
 **Verification:** Unit and SQLite race tests cover ownership concealment, expiry, all drift/source outcomes, replay, unique-key loser, and confirmation-vs-revision in both orders; downstream workflow regressions stay green; then standing backend and affected frontend verification.
 
-**Dependencies:** Tasks 3, 5, 8, and 9.
+**Dependencies:** Tasks 3, 4, 6, 7, 10, and 11.
 
 **Files likely touched:**
 
 - new target confirmation service and outcomes
-- `AccessRequest.cs` and its EF mapping
+- `AccessRequest.cs` and its target mapping in `GovernedAccess.Workflow.Persistence`
 - new confirmation/race tests
 
 **Estimated scope:** Large because request creation must be one atomic security boundary.
 
-**Acceptance coverage:** AC-19-AC-22, AC-30-AC-43.
+**Acceptance coverage:** AC-19-AC-22, AC-30-AC-43, AC-48-AC-51.
 
-### Task 11 - Prove the complete replacement in an isolated host
+### Task 13 - Prove the complete replacement in an isolated host
 
 - [ ] Planned
 
-**Description:** Add a test-only composition that replaces the delivered preparation
-registrations with every target component. Production `Program` remains unchanged.
+**Description:** Add a test-only composition containing the complete target modular
+monolith: reference authority/database, workflow persistence/database, preparation,
+MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
+`Program` and delivered tests remain unchanged.
 
 **Acceptance criteria:**
 
-- [ ] Full target journeys cover complete/incremental preparation, clarification across restart, revision, confirmation, replay, drift correction, source failure, abuse limits, and zero consequential side effects from free text.
-- [ ] Architecture tests prove target production code has no dependency on delivered draft/session/interpreter/store/Teams types and that no runtime composition registers both graphs.
-- [ ] The ordinary production-host regression still exercises only the delivered path, while the isolated target host exercises only the replacement path.
+- [ ] Full target journeys cover complete/incremental preparation, unique MCP search to exact-ID proposal without Core search replay, direct `searchQuery`, clarification across restart, revision, confirmation, business/DevOps approval, provisioning, replay, drift correction, independent database/source failures, abuse limits, and zero consequential side effects from free text.
+- [ ] Architecture tests prove the target project/`DbContext` ownership graph, no target dependency on delivered intake/persistence types, no cross-database EF relationship/query/transaction, and no runtime composition registering both graphs.
+- [ ] The ordinary production-host regression exercises only the delivered graph/unified database, while the isolated target host exercises only the replacement graph with distinct reference/workflow database files and independent migration histories.
 
 **Verification:** Run focused target full-host journeys, the full standing backend sequence, frontend suite, target contract checks, and `git diff --check`. No live provider is required at this checkpoint.
 
-**Dependencies:** Tasks 1-10.
+**Dependencies:** Tasks 1-12.
 
 **Files likely touched:**
 
@@ -436,22 +522,23 @@ registrations with every target component. Production `Program` remains unchange
 
 **Estimated scope:** Medium.
 
-**Acceptance coverage:** Deterministic pre-cutover evidence for AC-01-AC-47.
+**Acceptance coverage:** Deterministic pre-cutover evidence for AC-01-AC-52.
 
 ### Checkpoint C - Human cutover approval
 
 - [ ] Delivered production host passes all regressions.
 - [ ] Isolated target host passes all deterministic journeys and security gates.
+- [ ] Isolated target reference/workflow database ownership, migration, restart, outage, and downstream workflow journeys pass.
 - [ ] Target source has no dependency on the delivered preparation implementation.
 - [ ] The transition seam inventory still contains exactly the three declared seams.
 - [ ] Maintainer approves the production cutover after reviewing the isolated target evidence.
 
-Do not start Task 12 without this approval. Failure here is fixed in the owning target
+Do not start Task 14 without this approval. Failure here is fixed in the owning target
 task; it is not hidden behind a fallback or compatibility adapter.
 
 ## Phase D - Replace once, then delete
 
-### Task 12 - Atomically switch production composition to the target
+### Task 14 - Atomically switch production composition to the target
 
 - [ ] Planned; blocked on Checkpoint C
 
@@ -461,61 +548,61 @@ inside this task; that makes the wiring change independently reviewable.
 
 **Acceptance criteria:**
 
-- [ ] `Program`, Teams, AI, MCP, persistence, and confirmation registrations resolve only the target graph; there is no runtime flag, fallback, dual registration, dual write, or request-level routing.
+- [ ] `Program`, Teams, AI, MCP, reference-authority, workflow-persistence, and confirmation registrations resolve only the target graph and its two databases; there is no runtime flag, fallback, dual registration, dual write, or request-level routing.
 - [ ] Production MCP exposes exactly the target four tools, satisfying the already-documented phase transition in `AGENTS.md`.
-- [ ] After an explicit local database reset, production full-host journeys match the isolated target host and downstream approval/provisioning behavior remains unchanged.
+- [ ] After explicit reset and fresh independent migration of both target databases, production full-host journeys match the isolated target host and downstream approval/provisioning behavior remains unchanged.
 
 **Verification:** Source/DI checks prove one active graph; run focused production full-host journeys, standing backend verification, frontend suite, configuration validation, and `git diff --check`.
 
-**Dependencies:** Task 11 and explicit human approval at Checkpoint C.
+**Dependencies:** Task 13 and explicit human approval at Checkpoint C.
 
 **Files likely touched:**
 
 - `src/GovernedAccess.Web/Program.cs`
-- Teams/AI/MCP production registration files
+- Teams/AI/MCP/module production registration and configuration files
 - production composition tests
 
 **Estimated scope:** Large and intentionally atomic; splitting it would create a hybrid runtime.
 
-**Acceptance coverage:** Runtime cutover evidence for AC-01-AC-44 and AC-47.
+**Acceptance coverage:** Runtime cutover evidence for AC-01-AC-44 and AC-48-AC-52.
 
-### Task 13 - Delete the delivered intake and finalize the fresh schema
+### Task 15 - Delete the delivered intake and finalize the fresh schema
 
 - [ ] Planned
 
 **Description:** Immediately remove the now-unreachable delivered preparation graph,
-the two remaining coexistence seams, and all delivered-only schema/tests.
+Web-owned unified persistence graph, all coexistence seams, and delivered-only tests.
 
 **Acceptance criteria:**
 
-- [ ] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP/Teams/card/confirmation code, and tests whose only purpose is delivered behavior.
-- [ ] Remove the legacy `AccessRequest` creation path and delivered preparation mappings/tables; make `AccessRequest.PreparationId` required and uniquely indexed in the final fresh-only migration model.
-- [ ] Source checks find no delivered proposal/lifecycle/version/choice/reserved-ID concepts, no compatibility aliases/attributes/adapters, and no transitional registration or schema.
+- [ ] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP/Teams/card/confirmation code, Web persistence duplicates, unified context/migrations/seeder, and tests whose only purpose is delivered behavior.
+- [ ] Remove the legacy `AccessRequest` creation path; make `AccessRequest.PreparationId` required and uniquely indexed in the final workflow migration, and prove the final reference/workflow schemas contain only their owned tables.
+- [ ] Source checks find no delivered proposal/lifecycle/version/choice/reserved-ID concepts, no compatibility aliases/adapters, no unified context/schema, no Web-owned EF adapter, and no transitional registration.
 
 **Verification:** Compile/source checks first; fresh migration/startup/seeding tests; standing backend verification and frontend suite. An old or transitional database must fail with bounded reset guidance and must never be deleted automatically.
 
-**Dependencies:** Task 12.
+**Dependencies:** Task 14.
 
 **Files likely touched:**
 
 - delivered Core, Web, and MCP files listed by source inventory
-- `GovernedAccessDbContext.cs` and migrations
+- delivered `GovernedAccessDbContext`, Web persistence files, migrations, and seeder
 - obsolete unit/integration tests
 
 **Estimated scope:** Large but primarily deletion and final schema contraction.
 
-**Acceptance coverage:** Structural closure for AC-03, AC-07, AC-09, AC-15, AC-23, AC-24, AC-29-AC-31, AC-34, AC-36, AC-38, AC-43.
+**Acceptance coverage:** Structural closure for AC-03, AC-07, AC-09, AC-15, AC-23, AC-24, AC-29-AC-31, AC-34, AC-36, AC-38, AC-43, AC-48-AC-52.
 
 ### Checkpoint D - One implementation remains
 
 - [ ] Only the target preparation graph exists in production source and tests.
-- [ ] A new empty database creates only the final schema.
+- [ ] Fresh empty reference and workflow databases create only their independently owned final schemas and migration histories.
 - [ ] All backend and frontend regressions pass without legacy fixtures.
 - [ ] No compatibility or rollback path exists inside the application; rollback is source/version redeployment plus disposable database reset.
 
 ## Phase E - Final evidence and documentation
 
-### Task 14 - Promote deterministic and live evaluation evidence
+### Task 16 - Promote deterministic and live evaluation evidence
 
 - [ ] Planned
 
@@ -525,12 +612,12 @@ and retain evidence only from the final post-deletion implementation.
 **Acceptance criteria:**
 
 - [ ] Deterministic tests construct structured proposals rather than language corpora and prove all negative paths create zero requests, decisions, operations, or grants.
-- [ ] The fixed 12-group promoted live suite enforces every absolute safety/provenance/ambiguity/budget gate and at least 11/12 outcome classes without selective reruns or waivers.
+- [ ] The fixed 12-group promoted live suite enforces every absolute safety/provenance/ambiguity/budget gate, uniquely resolved exact-ID behavior without Core search replay, and at least 11/12 outcome classes without selective reruns or waivers.
 - [ ] Evaluation artifacts retain commit, dataset/hash, provider/model and contract versions, normalized outcomes, latency, and side-effect counts but no raw messages, prompts, proposals, reasoning, or MCP payloads.
 
 **Verification:** Architecture/source checks; standing backend sequence; frontend suite; one complete credentialed promoted live run; artifact/schema/link validation; `git diff --check`.
 
-**Dependencies:** Task 13.
+**Dependencies:** Task 15.
 
 **Files likely touched:**
 
@@ -540,24 +627,24 @@ and retain evidence only from the final post-deletion implementation.
 
 **Estimated scope:** Large because evidence promotion is an indivisible gate.
 
-**Acceptance coverage:** AC-01-AC-47, primarily AC-45-AC-47.
+**Acceptance coverage:** AC-01-AC-52, primarily AC-45-AC-52.
 
-### Task 15 - Reconcile current documentation with verified runtime
+### Task 17 - Reconcile current documentation with verified runtime
 
 - [ ] Planned
 
-**Description:** Promote only Task 14-observed behavior into current-state documents
+**Description:** Promote only Task 16-observed behavior into current-state documents
 and remove obsolete contradictions. This task changes no implementation behavior.
 
 **Acceptance criteria:**
 
-- [ ] Product, architecture, security, orchestration, testing, MCP, local-development, operator, roadmap, and ADR-index documentation consistently describe the final sparse-proposal/four-tool runtime.
+- [ ] Product, architecture, security, orchestration, testing, MCP, local-development, operator, roadmap, and ADR-index documentation consistently describe the final sparse-proposal/four-tool, one-host, two-database modular runtime.
 - [ ] Destructive ambiguity, optional predecessor, complete-candidate, process-local choice, `Invalidated`, reserved-request-ID, and two-tool current-state claims are removed or historically clarified without rewriting decision history.
-- [ ] Documentation states the explicit fresh-database/reset policy and contains no parallel-build, transitional-schema, compatibility, or upgrade-path claims as supported runtime behavior.
+- [ ] Documentation states the separate reference/workflow ownership and extraction seam, explicit fresh-two-database/reset policy, and contains no parallel-build, unified-schema, compatibility, or upgrade-path claims as supported runtime behavior.
 
 **Verification:** Validate links, JSON contracts, commands, terminology, and evaluation references; run `git diff --check`; run code suites only if executable examples/contracts change or validation exposes a mismatch.
 
-**Dependencies:** Task 14.
+**Dependencies:** Task 16.
 
 **Files likely touched:**
 
@@ -567,7 +654,7 @@ and remove obsolete contradictions. This task changes no implementation behavior
 
 **Estimated scope:** Large documentation-only reconciliation.
 
-**Acceptance coverage:** Final traceability closure for AC-01-AC-47.
+**Acceptance coverage:** Final traceability closure for AC-01-AC-52.
 
 ## Mandatory self-check for every implementation task
 
@@ -575,12 +662,14 @@ Reject an increment if it introduces or implies any of the following:
 
 - target code reading, mutating, inheriting from, or adapting the delivered preparation aggregate or proposal model;
 - a compatibility attribute, legacy alias on a target type, shared mutable backing state, dual write, runtime fallback, or synchronization between delivered and target preparations;
-- production registration of the target before Task 12 or retention of delivered registration after Task 12;
-- deletion of delivered code before target full-host proof and human cutover approval, or retention after Task 13;
-- database adoption, backfill, automatic deletion, or row copying between delivered and target tables;
+- production registration of the target before Task 14 or retention of delivered registration after Task 14;
+- deletion of delivered code before target full-host proof and human cutover approval, or retention after Task 15;
+- database adoption, backfill, automatic deletion, row copying, synchronization, shared files, or dual writes between delivered and target storage;
+- reference entities/tables in the target workflow database, workflow entities/tables in the target reference database, cross-database EF relationships/queries/transactions, direct reference-database access outside `ReferenceAuthority`, or either `DbContext` injected into Core/MCP/Web adapters/controllers;
+- loopback HTTP, a second deployable host, or speculative remote-service contracts in place of the required in-process authority ports;
 - deterministic requester-language interpretation outside exact `/new`;
 - requester text entering Core reduction, model-owned canonical snapshots, client/duration/identity mutation, model prose rendering, state-changing tools, or text-created requests;
-- duplicated environment search, MCP output treated as authority, roles embedded in exact environment lookup, or ambiguous results ranked/truncated into a choice;
+- duplicated environment-search implementations, Core search replay for `exactEnvironmentId`, MCP output treated as authority, roles embedded in exact environment lookup, or ambiguous results ranked/truncated into a choice;
 - destructive ambiguity, selection outside matching persisted context/version, optional revision predecessor, Ready with active context, or mutable Ready scope;
 - a database transaction held across model/MCP work, stale proposal replay, read-before-write uniqueness without the durable partial index, or one overloaded version counter;
 - confirmation without unique `Request.PreparationId`, undefined fact-drift/source-outage behavior, or browser/card payload authority beyond authenticated context plus exact preparation identity;
@@ -589,28 +678,31 @@ Reject an increment if it introduces or implies any of the following:
 ## Dependency summary
 
 ```text
-Task 1 contracts -> Task 2 aggregate -> Task 3 authority/search -> Task 4 reducer
-Tasks 2,4 -> Task 5 persistence
-Task 3 -> Task 6 MCP -> Task 7 agent
-Tasks 4,5,7 -> Task 8 orchestration -> Task 9 Teams
-Tasks 3,5,8,9 -> Task 10 confirmation -> Task 11 isolated full host
-Task 11 + human approval -> Task 12 atomic cutover -> Task 13 legacy deletion
-Task 13 -> Task 14 final evidence -> Task 15 documentation
+Task 1 contracts -> Task 2 aggregate -> Task 3 authority/search
+Task 3 -> Task 4 isolated reference authority/database
+Tasks 1-3 -> Task 5 reducer -> Task 6 preparation/workflow persistence
+Tasks 4,6 -> Task 7 downstream workflow persistence
+Tasks 3,4 -> Task 8 MCP -> Task 9 agent
+Tasks 5,6,9 -> Task 10 orchestration -> Task 11 Teams
+Tasks 3,4,6,7,10,11 -> Task 12 confirmation -> Task 13 isolated full host
+Task 13 + human approval -> Task 14 atomic cutover -> Task 15 legacy deletion
+Task 15 -> Task 16 final evidence -> Task 17 documentation
 ```
 
 ## Acceptance traceability summary
 
 | Acceptance area | Primary implementation tasks | Final evidence |
 |---|---|---|
-| AC-01-AC-06 language/response boundary | Tasks 7-9 | Tasks 11, 12, and 14 |
-| AC-07-AC-14 proposal/reduction | Tasks 1 and 4 | Tasks 8, 11, and 14 |
-| AC-15-AC-22 enterprise authority/MCP | Tasks 3 and 6 | Tasks 10-12 and 14 |
-| AC-23-AC-28 clarification | Tasks 2, 4, and 9 | Tasks 8, 11, and 14 |
-| AC-29-AC-40 lifecycle/persistence/confirmation | Tasks 2, 5, 8, and 10 | Tasks 11-14 |
-| AC-41-AC-44 security/budgets | Tasks 6-10 | Tasks 11, 12, and 14 |
-| AC-45-AC-47 evaluation | Task 14 | Task 14 retained evidence |
+| AC-01-AC-06 language/response boundary | Tasks 9-11 | Tasks 13, 14, and 16 |
+| AC-07-AC-14 proposal/reduction | Tasks 1 and 5 | Tasks 10, 13, and 16 |
+| AC-15-AC-22 enterprise authority/MCP | Tasks 3, 4, and 8 | Tasks 12-14 and 16 |
+| AC-23-AC-28 clarification | Tasks 2, 5, and 11 | Tasks 10, 13, and 16 |
+| AC-29-AC-40 lifecycle/persistence/confirmation | Tasks 2, 6, 7, 10, and 12 | Tasks 13-16 |
+| AC-41-AC-44 security/budgets | Tasks 8-12 | Tasks 13, 14, and 16 |
+| AC-45-AC-47 evaluation | Task 16 | Task 16 retained evidence |
+| AC-48-AC-52 modular persistence/extraction | Tasks 4, 6, and 7 | Tasks 13-17 |
 
-The critical human checkpoint is between Tasks 11 and 12. Before it, the delivered
+The critical human checkpoint is between Tasks 13 and 14. Before it, the delivered
 implementation is the sole production authority. After it, the target implementation
-is the sole production authority. Task 13 then removes the dead delivered code rather
+is the sole production authority. Task 15 then removes the dead delivered code rather
 than maintaining it as compatibility.

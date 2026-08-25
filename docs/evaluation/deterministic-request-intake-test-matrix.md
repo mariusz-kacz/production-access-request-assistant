@@ -34,10 +34,10 @@ Only deterministic full-host tests that explicitly invoke authenticated card con
 
 | Layer | Primary ownership |
 |---|---|
-| Architecture/static | Exact `/new` boundary, no requester-text dependency in Core, no parser/phrase dictionary/identifier extractor, provider-neutral type dependency |
+| Architecture/static | Exact `/new` boundary, no requester-text dependency in Core, no parser/phrase dictionary/identifier extractor, provider-neutral type dependency, project-reference graph, module/`DbContext` ownership |
 | Core unit | Closed proposal validation, canonicalization, reducer order, operation outcomes, dependencies, authoritative validity, lifecycle decisions |
-| Component | SQLite persistence, version semantics, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, confirmation service |
-| Full host | Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, restart journeys, confirmation and replay |
+| Component | Independent reference/workflow SQLite persistence, migrations, version semantics, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, confirmation service |
+| Full host | Delivered-versus-target composition isolation, Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, two-database restart journeys, confirmation and replay |
 | Frontend | Ready-card content/prominence, distinct duration/deadline labels, stale/expired outcomes, downstream regression |
 | Live model | Semantic interpretation, multilingual behavior, clarification selection, justification provenance, restraint, prompt injection, read-only tool use |
 
@@ -53,8 +53,13 @@ Required focused source or architecture tests:
 6. The `TurnProposal` schema contains no model-authored requester-visible prose field.
 7. Model-visible capabilities contain no state-changing business action.
 8. The MCP search adapter and Core environment-search port reference the same versioned search-policy component.
+9. The project-reference graph is exactly `ReferenceAuthority -> Core`, `Workflow.Persistence -> Core`, `Mcp -> Core`, and `Web -> all`; Core references no outer project.
+10. Only `GovernedAccess.ReferenceAuthority` references the reference `DbContext`; only `GovernedAccess.Workflow.Persistence` references the workflow `DbContext`.
+11. Core and MCP have no EF Core reference, and MCP owns distinct wire DTOs rather than serializing Core authority or EF types.
+12. Web controllers, Teams/AI adapters, and renderers do not inject either `DbContext` or query module tables.
+13. Before cutover, production composition resolves only the delivered graph and unified database while the isolated target composition resolves only the target graph and two target databases.
 
-These checks verify AC-01 through AC-06, AC-16, AC-22, and the implementation boundary.
+These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and the implementation boundary.
 
 ## 5. Core unit matrix
 
@@ -92,13 +97,15 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, and the implementation bo
 |---|---|
 | Unknown exact environment | Reject environment and dependent role |
 | Exact inactive/non-production/ineligible environment | Reject environment and dependent role |
-| Exact eligible environment | Accept canonical source record; derive client |
+| Exact eligible environment | Exact-reload only; accept canonical source record and derive client without search replay |
+| Exact ID proposed after unique MCP search | Exact-reload only; do not re-execute the model-side query |
 | Search zero | Reject operation; no choices; preserve unrelated state |
 | Search unique | Exact reload; accept only if eligible |
 | Search two to five | Clear existing scope, persist all ordered IDs, create environment clarification |
 | Search six to twenty | Reject without mutation or persisted choices; request more specificity |
 | Search over twenty | Typed `environment_query_too_broad`; no mutation |
-| MCP result differs from current Core result | Core result wins; safe drift diagnostic |
+| Exact MCP result differs from Core exact reload | Core exact result wins; safe drift diagnostic |
+| MCP search differs from current Core `searchQuery` result | Core search result wins; safe drift diagnostic |
 | MCP/Core policy version mismatch | Fail affected operation closed |
 | Search result contains instruction-like display text | Treat as data; no instruction execution or justification mutation |
 
@@ -243,11 +250,12 @@ For every tool, test:
 ### 6.3 Shared environment-search policy
 
 - MCP and Core expose identical policy version.
-- Both surfaces share one matcher implementation/service.
+- MCP and the Core `searchQuery` path share one matcher implementation/service.
 - NFC, trim, whitespace collapse, approved token fields, eligible-only population, and stable ID ordering are identical.
 - Zero, unique, 2–5, 6–20, and overflow outcomes are covered.
 - Search never truncates, ranks, scores, or returns match reasons.
 - Policy mismatch fails closed.
+- `exactEnvironmentId` bypasses search and performs only exact authoritative reload.
 
 ### 6.4 Exact environment and entitlement separation
 
@@ -299,6 +307,23 @@ A safe proposal that omits a redundant exact lookup must not be rejected solely 
 - Same requester in separate conversations may have separate active preparations.
 - Submitted, superseded, and expired preparations do not block a new active preparation.
 
+### 7.4 Two-database ownership and independence
+
+- Reference and workflow databases use separate files, connection strings, contexts,
+  migration histories, seeders, and fixtures.
+- The workflow schema contains no client, environment, environment-role, or incident
+  table; the reference schema contains no preparation, request, approval, operation,
+  grant, principal snapshot, or audit table.
+- No EF relationship, cross-database query, or transaction spans the databases; only
+  stable IDs cross the boundary and are revalidated through authority ports.
+- Reference database unavailable/malformed rejects affected authoritative operations
+  without a workflow write; workflow database unavailable rejects persistence without
+  mutating reference state.
+- Restart independently recreates both clients and preserves workflow state without
+  relying on one shared database file.
+- Delivered production and isolated target fixtures use distinct database files and do
+  not copy or synchronize rows.
+
 ## 8. Full-host acceptance journeys
 
 ### Journey A: exact `/new`
@@ -321,11 +346,17 @@ A safe proposal that omits a redundant exact lookup must not be rejected solely 
 
 ### Journey C: readable unique environment
 
-1. Agent proposes environment search query.
-2. MCP and Core use same policy version.
-3. Core observes one eligible result and exact-reloads it.
-4. Candidate uses authoritative environment/client.
-5. No ceremonial requester selection is required.
+1. Agent uses MCP search for readable requester wording and observes one eligible result.
+2. Agent proposes that result's `exactEnvironmentId` and may gather its roles in the
+   same turn.
+3. Core exact-reloads the environment without replaying the search query.
+4. Candidate uses authoritative environment/client and only independently validated
+   role facts.
+5. No ceremonial requester selection or duplicate search is required.
+
+The alternate direct-query path remains covered: when the proposal contains
+`searchQuery`, Core executes the shared policy, exact-reloads a unique result, and does
+not require requester selection.
 
 ### Journey D: ambiguous environment and restart
 
@@ -366,6 +397,19 @@ A safe proposal that omits a redundant exact lookup must not be rejected solely 
 2. Re-render/discuss without refreshing deadline.
 3. Advance clock past deadline.
 4. Confirmation lazily expires preparation and creates no request.
+
+### Journey I: isolated modular persistence
+
+1. Start the ordinary production host with only its delivered unified database and
+   assert all delivered regressions remain unchanged.
+2. Start the isolated target host with separate fresh reference and workflow databases.
+3. Prepare, confirm, business-approve, DevOps-approve, and provision one synthetic
+   request through the target graph.
+4. Assert reference facts were read only from the reference database and every lifecycle
+   row was written only to the workflow database.
+5. Stop/restart the target host and assert both independent migration histories and the
+   workflow result remain valid.
+6. Assert neither composition shares a database file, registration, entity, or row.
 
 ## 9. Frontend regression scope
 
@@ -452,9 +496,10 @@ Any change to the first five requires a new run and explicit re-baseline decisio
 | AC-01–AC-06 | Architecture/static checks, exact `/new` host journey, renderer/locale tests |
 | AC-07–AC-14 | Proposal-schema, Core reducer/partial-success matrices, targeted justification eval |
 | AC-15–AC-22 | Shared-policy, MCP contract/transport, eligibility and authoritative-port tests |
-| AC-23–AC-27 | Clarification unit, persistence/restart, and live target/index scenarios |
-| AC-28–AC-38 | Version, lifecycle, OCC, card, idempotency, and controlled-race tests |
-| AC-39–AC-45 | Prompt-injection, logging/privacy, diagnostics/versioning, abuse bounds, and retained live-evaluation report |
+| AC-23–AC-28 | Clarification unit, persistence/restart, and live target/index scenarios |
+| AC-29–AC-40 | Version, lifecycle, OCC, card, idempotency, and controlled-race tests |
+| AC-41–AC-47 | Prompt-injection, logging/privacy, diagnostics/versioning, abuse bounds, and retained live-evaluation report |
+| AC-48–AC-52 | Project/module ownership checks, independent database migration/failure tests, isolated target Journey I, atomic composition and cleanup source checks |
 
 ## 12. Required command/evidence sequence
 

@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 - **Status**: Current decision index
-- **Last reviewed**: 2026-08-24
+- **Last reviewed**: 2026-08-25
 
 The [architecture](../architecture.md) describes the system now. An ADR records why a
 durable architectural choice was made, its trade-offs, and when it should be
@@ -22,6 +22,8 @@ accepted.
 | [0007: Sparse model proposals and deterministic reducer](0007-use-sparse-model-patches-and-a-deterministic-reducer.md) | Accepted | Every non-`/new` free-text turn is agent-interpreted into a closed sparse proposal; Core owns structural/data-level validation, fixed dependency ordering, authority, lifecycle, and outcomes. | Omission cannot erase state, Core does not become a second NLP parser, and mixed patches have explicit partial-success rules. |
 | [0008: Context capabilities follow authoritative sources](0008-separate-read-only-context-capabilities-by-authoritative-source.md) | Accepted | Expose four narrow read-only tools and reuse one deterministic environment-search policy behind MCP and Core. | Enterprise authority/failure boundaries remain visible; tool text stays untrusted and search results cannot drift by implementation. |
 | [0009: Persist canonical intake and bounded clarification context](0009-persist-canonical-intake-and-bounded-clarification-context.md) | Accepted | Persist one candidate, explicit candidate/OCC versions, one agent-selectable ordered choice set, and immutable ready preparation identities. | Restart-safe selection, stale-card safety, lifecycle expiry, and request idempotency require no raw transcripts or dual revision state. |
+| [0010: Exact-reload agent-resolved environments](0010-exact-reload-agent-resolved-environments.md) | Accepted | Treat exact environment IDs and search queries as mutually exclusive resolution paths; exact IDs receive exact reload without search replay. | Unique model-side discovery can support one-turn preparation while Core still verifies current enterprise facts. |
+| [0011: Isolate reference authority inside the modular monolith](0011-isolate-reference-authority-in-the-modular-monolith.md) | Accepted target architecture | Use separate reference-authority and workflow-persistence projects and databases behind Core ports while retaining one executable host. | Module ownership is explicit and later service extraction is localized without adding distributed infrastructure now. |
 
 Each ADR contains its authoritative alternatives, consequences, and revisit criteria.
 

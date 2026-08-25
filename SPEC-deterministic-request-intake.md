@@ -4,15 +4,17 @@
 - **Capability ID:** `deterministic-request-intake`
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Scope:** Authenticated Microsoft Teams request preparation with model-based language interpretation and deterministic confirmation
-- **Related decisions:** [ADR 0005](docs/adr/0005-retain-terminal-request-intake-tombstones.md), [ADR 0007](docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md), [ADR 0008](docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md), [ADR 0009](docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md)
+- **Related decisions:** [ADR 0005](docs/adr/0005-retain-terminal-request-intake-tombstones.md), [ADR 0007](docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md), [ADR 0008](docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md), [ADR 0009](docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md), [ADR 0010](docs/adr/0010-exact-reload-agent-resolved-environments.md), [ADR 0011](docs/adr/0011-isolate-reference-authority-in-the-modular-monolith.md)
 - **Target MCP contract:** [deterministic-request-intake-mcp-contract.md](docs/contracts/deterministic-request-intake-mcp-contract.md)
 - **Target test matrix:** [deterministic-request-intake-test-matrix.md](docs/evaluation/deterministic-request-intake-test-matrix.md)
 
 ## 1. Authority and relationship to the running system
 
-This specification defines the target replacement for request-intake preparation. It
-changes only the preparation boundary before human confirmation and the model-visible
-read-only context-tool catalog.
+This specification defines the target replacement for request-intake preparation and
+the modular persistence boundary required to support it. It changes the preparation
+boundary before human confirmation, the model-visible read-only context-tool catalog,
+and the ownership of reference facts versus request-lifecycle data. It remains one
+executable ASP.NET Core host and one deployment artifact.
 
 Until implementation and the required evidence are complete, current as-built product,
 architecture, security, orchestration, MCP, testing, and operator documents continue to
@@ -43,8 +45,10 @@ which:
    outcomes;
 4. Core independently searches or reloads environment, client, role, and incident facts
    through application ports;
-5. application code renders every requester-visible response and card; and
-6. an authenticated Adaptive Card action is the only path that can create a production
+5. reference facts and request-lifecycle state are owned by separate modules and
+   separate local databases behind Core ports;
+6. application code renders every requester-visible response and card; and
+7. an authenticated Adaptive Card action is the only path that can create a production
    access request.
 
 The feature must not create a second natural-language interpretation layer beside the
@@ -101,6 +105,9 @@ Supporting another human input language must require no Core rule change.
     grant access.
 15. No second agent, generic workflow engine, requester channel, message broker,
     distributed lock, or deployable service is added.
+16. The final target remains one executable modular monolith, while keeping the
+    reference-authority boundary replaceable by a remote client without changing Core
+    request-intake or workflow rules.
 
 ## 5. Glossary
 
@@ -117,6 +124,8 @@ Supporting another human input language must require no Core rule change.
 | **Request** | The immutable `AwaitingBusinessApproval` domain entity created only by successful card confirmation. |
 | **Material change** | A committed canonical candidate-field change. Persisting or replacing clarification context without changing candidate fields is not itself a material candidate change, although a clarification revision against `Ready` still requires a successor preparation because ready rows are immutable. |
 | **Structured proposal** | The provider-neutral closed `TurnProposal` returned by the agent. It is an interpretation proposal, not authority. |
+| **Reference authority** | The module that owns direct access to clients, environments, environment-role assignments, and incidents and implements the authoritative Core ports. |
+| **Workflow persistence** | The module that owns direct access to preparations, authenticated-principal snapshots, requests, approvals, operations, grants, and audit evidence. |
 
 `PreparationId` is not a mutable draft version and is not an optimistic-concurrency
 token. A card containing only `PreparationId` is safe because a ready preparation is
@@ -130,8 +139,36 @@ immutable and any material revision creates a new preparation identity.
 | Agent interpreter | Semantic interpretation of current free-text; sparse structured proposal; bounded read-only context gathering | Canonical state, authorization, enterprise truth, request creation, approval, provisioning, requester-visible prose |
 | Core | Proposal legality; canonical merge; authoritative reloads; dependencies; readiness; persistence; lifecycle; typed outcomes | Requester-language interpretation |
 | Authoritative ports | Environment, client, entitlement, and incident facts | Requester-language interpretation or model-visible tool trust |
+| Reference-authority module | Reference database, deterministic search execution, exact reference reads, synthetic catalog seeding, and authority-port implementations | Request lifecycle, MCP wire contracts, requester interpretation, approval, or provisioning |
+| Workflow-persistence module | Workflow database, preparation/request stores, migrations, OCC, uniqueness, and synthetic principal snapshots | Reference catalog tables, search, MCP, or requester interpretation |
+| MCP adapter | Four model-facing wire contracts and translation through authority ports | Direct database access, Core canonical state, or workflow mutation |
+| Web host | Composition, HTTP/Teams/AI adapters, authentication, and React hosting | EF entity ownership or direct reference/workflow database queries from controllers and AI adapters |
 | Renderer | Canonical progress, choices, bounded guidance, ready cards, safe failures, localized fixed text | Inferring state from model prose |
 | Teams adapter | Authentication, transport validation, exact `/new`, agent invocation, structured card actions, delivery | General free-text interpretation or business authority |
+
+### 6.1 Modular-monolith and extraction boundary
+
+The final source layout has one executable host and these one-directional project
+dependencies:
+
+```text
+GovernedAccess.ReferenceAuthority -> GovernedAccess.Core
+GovernedAccess.Workflow.Persistence -> GovernedAccess.Core
+GovernedAccess.Mcp -> GovernedAccess.Core
+GovernedAccess.Web -> Core + ReferenceAuthority + Workflow.Persistence + Mcp
+GovernedAccess.Core -> no outer project
+```
+
+`GovernedAccess.Web` references infrastructure modules only to compose them. Core
+application services consume ports. MCP handlers consume the same authority ports and
+translate results into MCP-owned DTOs. Controllers, Teams adapters, AI adapters, and
+renderers do not receive either `DbContext`.
+
+The in-process authority-port implementation is the local client boundary. The target
+must not add loopback HTTP merely to imitate a distributed system. If a security or
+deployment boundary is approved later, Web replaces the in-process port implementation
+with an authenticated remote client; Core, workflow persistence, and MCP wire contracts
+do not require redesign.
 
 ## 7. End-to-end free-text turn flow
 
@@ -319,6 +356,22 @@ searchQuery(query)
 The query is agent-interpreted input to a deterministic search capability. Application
 code does not check whether it appears verbatim in requester text.
 
+The two reference forms are deliberately exclusive execution paths:
+
+- `exactEnvironmentId` is used when one exact environment is uniquely justified,
+  including when the requester supplied its stable ID or the agent observed exactly one
+  result from `search_production_environments`. Core exact-reloads the proposed ID and
+  does not replay the preceding model-side search query.
+- `searchQuery` is used when the agent has not resolved one exact environment. Core
+  executes the shared deterministic policy because it still needs the authoritative
+  zero/unique/ambiguous/too-broad result.
+
+The agent must not convert a two-or-more-result MCP search into an unprompted exact ID.
+An exact proposal remains interpretation, not authority: only Core's independent exact
+reload can establish current environment eligibility and derive the client. Search
+replay cannot prove that the agent translated requester wording correctly, so the
+prominent ready-card review remains the semantic-intent control.
+
 ### 10.4 Role proposal
 
 Role `set` contains one exact role identifier. The agent may use
@@ -454,7 +507,14 @@ get_incident(incidentId)
 | Exact incident lookup | ITSM authority |
 
 Environment identity and entitlement assignment remain separate even when synthetic
-adapters share local storage.
+adapters share the reference-authority database. They are independently implemented and
+may fail independently at the authority-port boundary.
+
+The co-hosted MCP adapter has no EF Core or database dependency. Both its model-facing
+tools and Core's deterministic validation call authority ports implemented by the
+reference-authority module. Only that module has direct access to the reference
+database. MCP DTOs are transport projections and must not be reused as Core authority
+models or EF entities.
 
 Tool rules:
 
@@ -471,8 +531,10 @@ Tool rules:
 
 ### 11.1 Shared deterministic environment-search policy
 
-The MCP search surface and Core search port must use one shared deterministic search
-policy implementation, not duplicated algorithms.
+The MCP search surface and the Core `searchQuery` path must use one shared deterministic
+search-policy implementation, not duplicated algorithms. This rule governs every
+place that executes a search; it does not require Core to replay a model-side search
+after receiving `exactEnvironmentId`.
 
 The policy:
 
@@ -491,9 +553,10 @@ The policy:
 9. returns all results when the count is at most 20; and
 10. returns typed `environment_query_too_broad` above 20 without truncation or ranking.
 
-Core executes the same policy through its own port and uses its current result as
-application authority. Search-policy conformance tests must run independently of the
-storage provider so SQLite collation cannot silently change behavior.
+When a proposal contains `searchQuery`, Core executes the same policy through its own
+port and uses its current result as application authority. Search-policy conformance
+tests must run independently of the storage provider so SQLite collation cannot
+silently change behavior.
 
 The MCP tool may return up to 20 matches to the agent while Core renders only two to five
 as an indexed clarification. This asymmetry is intentional: the agent may use richer
@@ -501,10 +564,12 @@ read-only context to interpret the requester, but ambiguous requester scope must
 collapsed into an unprompted exact environment guess. The live-model gate in Section
 23.3 tests that behavior.
 
-When Core gets exactly one environment search result it may accept it after exact reload
-because the deterministic search uniquely identified the environment. Core does not
-apply the same auto-selection rule to a single available role: role is part of requested
-authorization scope and therefore remains requester intent.
+When Core's `searchQuery` path gets exactly one result it may accept it after exact
+reload because the deterministic search uniquely identified the environment. When the
+agent instead observed one MCP result and proposed its exact ID, Core performs only the
+exact reload. Core does not apply the same auto-selection rule to a single available
+role: role is part of requested authorization scope and therefore remains requester
+intent.
 
 ## 12. Core trust boundary
 
@@ -555,6 +620,11 @@ Core independently verifies:
 - role currently assignable in that environment;
 - incident existence, active state, and environment relationship; and
 - all relevant facts again before request creation.
+
+These reads cross only the authority ports. Core and Web do not query reference tables,
+and MCP tool output is never substituted for an authority-port result. Client authority
+includes the owning client facts required to resolve the configured business approver;
+the MCP environment response continues to omit that hidden workflow fact.
 
 Core does not independently reproduce natural-language understanding.
 
@@ -660,8 +730,8 @@ ordinary agent proposal.
 ### 14.1 Environment operation
 
 For `exactEnvironmentId`, Core exact-loads an active, eligible production environment.
-An invalid/ineligible ID rejects only the environment operation and dependent role
-operation.
+It does not reconstruct or replay any model-side search. An invalid/ineligible ID
+rejects only the environment operation and dependent role operation.
 
 For `searchQuery`, Core uses the shared policy:
 
@@ -1048,11 +1118,25 @@ No agent output can bypass confirmation.
 
 ## 19. Persistence, restart, and concurrency
 
-SQLite persists canonical candidate, lifecycle, versions, timestamps, ready metadata,
-bounded clarification context, predecessor linkage, and bounded interpretation/audit
-metadata.
+The target modular monolith uses two independent local SQLite databases with separate
+EF Core contexts, connection strings, migration histories, seeders, and integration-test
+fixtures.
 
-It does not persist raw conversation transcripts, raw prompts, model reasoning,
+The **workflow database** persists authenticated-principal snapshots, canonical
+candidate, lifecycle, versions, timestamps, ready metadata, bounded clarification
+context, predecessor linkage, requests, approvals, provisioning operations, grants,
+and bounded interpretation/audit metadata.
+
+The **reference database** persists synthetic clients and business-approver mappings,
+production environments and searchable eligibility facts, environment-role
+assignments, incidents, and incident-to-environment relationships.
+
+No EF entity, navigation, foreign key, migration, or transaction spans the two
+databases. Relationships crossing the boundary are stable identifiers in workflow
+state and are validated through current authority-port reads. A request-lifecycle write
+never writes reference data, and reference reads never join against workflow tables.
+
+Neither database persists raw conversation transcripts, raw prompts, model reasoning,
 agent-authored search queries, or complete provider/MCP payloads.
 
 After restart, a new agent invocation receives the durable candidate and active
@@ -1237,6 +1321,7 @@ Core tests construct structured proposals directly. They cover:
 - fixed partial-success ordering;
 - environment/incident scope coherence and incident-link cardinality;
 - role dependency and cascades;
+- exact environment proposals using only exact reload, with no search-port call;
 - unique/multiple/too-broad search behavior through the shared policy;
 - search normalization/case-insensitive substring semantics independent of SQLite
   collation;
@@ -1250,6 +1335,8 @@ Core tests construct structured proposals directly. They cover:
   collecting warning, and stale cards;
 - partial unique active-preparation index races, OCC races, and confirmation idempotency;
 - confirmation fact-drift successor behavior versus transient-source preservation;
+- independent workflow/reference database creation, migration history, restart, and
+  failure behavior with no cross-database relationship or transaction;
 - justification storage constraints including over-2,000-character append rejection;
 - per-preparation versus rolling-rate budget behavior; and
 - zero consequential side effects from free-text processing.
@@ -1270,7 +1357,14 @@ Verify that:
 - clarification selection contains target/index, not authoritative ID;
 - no model-generated prose channel reaches renderer output;
 - unknown tools and schema drift fail closed;
-- MCP and Core use one shared search-policy implementation.
+- MCP and the Core `searchQuery` path use one shared search-policy implementation; and
+- an exact environment proposal invokes exact authoritative reload without search
+  replay;
+- only `GovernedAccess.ReferenceAuthority` references the reference `DbContext`, only
+  `GovernedAccess.Workflow.Persistence` references the workflow `DbContext`, and neither
+  Core nor MCP references EF Core; and
+- the project-reference graph matches Section 6.1 and Web endpoints/adapters do not
+  receive a `DbContext`.
 
 ### 23.3 Live-model evaluation
 
@@ -1304,14 +1398,17 @@ Absolute blocking gates are:
    exact environment is uniquely justified: the agent must use `searchQuery`,
    clarification-compatible behavior, or `unclear`; it must not invent/select an
    unprompted exact environment ID; and
-9. startup/turn-budget contract checks pass for the configured model/tool envelope.
+9. at least one promoted uniquely resolved environment scenario uses the MCP result to
+   produce `exactEnvironmentId`, reaches the correct canonical scope after Core exact
+   reload, and performs no Core search replay; and
+10. startup/turn-budget contract checks pass for the configured model/tool envelope.
 
 Overall outcome-quality gate:
 
-10. at least 11 of 12 promoted scenarios reach their single predeclared expected safe
+11. at least 11 of 12 promoted scenarios reach their single predeclared expected safe
     normalized canonical outcome class.
 
-A failure of gates 1-9 blocks promotion regardless of the 11/12 outcome-quality score;
+A failure of gates 1-10 blocks promotion regardless of the 11/12 outcome-quality score;
 the one permitted outcome-quality miss cannot excuse an absolute safety/contract gate
 failure.
 
@@ -1371,6 +1468,8 @@ environment-search policy, or evaluation dataset changes.
 - **AC-17:** MCP and Core environment search use one shared deterministic policy with
   NFC normalization, application-owned case-insensitive substring matching, cross-field
   token matching, ordinal environment-ID ordering, and no reliance on SQLite `NOCASE`.
+  Core invokes that policy only for `searchQuery`; `exactEnvironmentId` uses exact
+  authoritative reload without search replay.
 - **AC-18:** Only active production environments eligible for intake can become
   canonical.
 - **AC-19:** Client is derived only from exact authoritative environment data.
@@ -1379,6 +1478,8 @@ environment-search policy, or evaluation dataset changes.
 - **AC-21:** Incident relationships are independently exact-revalidated; zero/multiple
   linked eligible environments follow Section 14.2 and are never guessed.
 - **AC-22:** Model-visible tool results and call order are never authorization authority.
+  A uniquely resolved MCP result may inform an exact-ID proposal, but only Core's
+  independent exact reload can make that environment canonical.
 
 ### Clarification
 
@@ -1443,6 +1544,25 @@ environment-search policy, or evaluation dataset changes.
 - **AC-47:** Live-model preparation evaluation produces zero requests, approvals,
   provisioning operations, and grants.
 
+### Modular persistence and extraction seam
+
+- **AC-48:** The final application publishes one executable host while reference
+  authority and workflow persistence are separate projects with the one-directional
+  dependency graph in Section 6.1.
+- **AC-49:** Reference and workflow data use separate SQLite databases, `DbContext`
+  types, connection strings, migrations, seeders, and test fixtures, with no shared EF
+  entity, navigation, foreign key, transaction, or cross-database query.
+- **AC-50:** Only the reference-authority module directly accesses reference storage;
+  Core and MCP use authority ports, MCP owns its wire DTOs, and Web adapters/controllers
+  do not query reference tables or inject either `DbContext`.
+- **AC-51:** The replacement reference authority, workflow persistence, intake, MCP, and
+  downstream path are built and proven in an isolated target composition while the
+  delivered production graph, unified database, and regression tests remain unchanged.
+  There is no dual write, synchronization, data copy, or per-request routing.
+- **AC-52:** Production composition switches once after isolated evidence and human
+  approval; the immediately following cleanup removes the delivered graph, unified
+  context/schema, and delivered-only tests so only the two-database target remains.
+
 ## 25. Acceptance-to-evidence traceability
 
 | Acceptance area | Primary evidence |
@@ -1453,6 +1573,7 @@ environment-search policy, or evaluation dataset changes.
 | AC-23–AC-28 | Clarification persistence/restart tests, selection-pipeline tests, live multilingual/ambiguity evals |
 | AC-29–AC-40 | Persistence migrations, partial-unique-index tests, OCC/race tests, lifecycle/expiry tests, card integration tests |
 | AC-41–AC-47 | Threat tests, budget/startup tests, logging checks, retained live-model evaluation evidence |
+| AC-48–AC-52 | Project-reference/static tests, independent migration/fixture tests, isolated-target versus delivered-host regressions, cutover and deletion source checks |
 
 ## 26. Implementation and planning boundary
 
@@ -1480,6 +1601,32 @@ Before further implementation:
 Planning must produce coherent dependency-aware tasks with explicit code touchpoints,
 deletions, tests, and exit gates. It must not start implementation during the planning
 run.
+
+### 26.1 Parallel construction and atomic replacement
+
+The delivered production graph and its unified `GovernedAccessDbContext` remain
+authoritative and unchanged during target construction. In parallel, the target path
+uses:
+
+- a new `GovernedAccess.ReferenceAuthority` project and reference database;
+- a new `GovernedAccess.Workflow.Persistence` project and workflow database;
+- the new preparation aggregate, reducer, interpreter, MCP catalog, Teams adapter, and
+  confirmation path; and
+- an isolated full-host composition that includes the complete downstream approval and
+  provisioning workflow.
+
+The two paths share no preparation rows, reference rows, workflow rows, EF entities,
+database files, writes, or runtime routing. Synthetic fixtures may describe the same
+logical IDs, but each path seeds its own storage; no synchronization or row copy is
+allowed.
+
+After the isolated target passes deterministic full-host evidence and receives explicit
+human approval, production dependency injection and endpoints switch once to the target
+graph. There is no fallback or dual registration. Existing local data is disposable,
+so cutover uses explicitly reset, freshly migrated target databases rather than a
+backfill. The next cleanup task deletes the delivered intake, delivered persistence,
+unified schema, and delivered-only tests. Current as-built documentation is reconciled
+only after that deletion and final evidence.
 
 ## 27. Success statement
 
