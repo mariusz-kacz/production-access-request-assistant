@@ -6,7 +6,6 @@ public enum EnvironmentSearchResultKind
     NoMatches,
     UniqueMatch,
     ClarificationRequired,
-    NarrowQuery,
     TooBroad,
 }
 
@@ -86,9 +85,8 @@ public sealed class EnvironmentSearchResult
         {
             0 => EnvironmentSearchResultKind.NoMatches,
             1 => EnvironmentSearchResultKind.UniqueMatch,
-            <= 5 => EnvironmentSearchResultKind.ClarificationRequired,
             <= EnvironmentSearchPolicy.MaximumResultCount =>
-                EnvironmentSearchResultKind.NarrowQuery,
+                EnvironmentSearchResultKind.ClarificationRequired,
             _ => EnvironmentSearchResultKind.TooBroad,
         };
 

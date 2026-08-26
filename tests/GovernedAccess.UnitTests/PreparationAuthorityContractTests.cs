@@ -95,39 +95,37 @@ public sealed class PreparationAuthorityContractTests
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(3)]
-    public void IncidentAuthorityPreservesEveryEligibleEnvironmentLink(int linkCount)
+    [InlineData(null)]
+    [InlineData(" PROD-ALPHA-EU ")]
+    public void IncidentAuthorityCarriesOneNullableEnvironment(string? environmentId)
     {
-        var environmentIds = Enumerable.Range(1, linkCount)
-            .Reverse()
-            .Select(index => $"PROD-ALPHA-{index}")
-            .ToArray();
-
         var incident = new IncidentAuthorityProjection(
             " INC-1042 ",
             " Elevated customer errors ",
             isActive: true,
-            environmentIds);
+            environmentId: environmentId);
 
         Assert.Equal("INC-1042", incident.IncidentId);
         Assert.Equal("Elevated customer errors", incident.Title);
         Assert.True(incident.IsActive);
+        Assert.Equal(environmentId?.Trim(), incident.EnvironmentId);
         Assert.Equal(
-            environmentIds.Order(StringComparer.Ordinal),
-            incident.EligibleEnvironmentIds);
+            ["EnvironmentId", "IncidentId", "IsActive", "Title"],
+            incident.GetType()
+                .GetProperties()
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public void IncidentAuthorityRejectsDuplicateRelationshipEvidence()
+    public void IncidentAuthorityRejectsBlankEnvironmentEvidence()
     {
         Assert.Throws<ArgumentException>(
             () => new IncidentAuthorityProjection(
                 "INC-1042",
                 "Elevated customer errors",
                 isActive: true,
-                ["PROD-ALPHA-EU", "PROD-ALPHA-EU"]));
+                environmentId: " "));
     }
 
     [Fact]
@@ -161,12 +159,6 @@ public sealed class PreparationAuthorityContractTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => CreateSearchDocument(
                 classification: (EnvironmentClassification)int.MaxValue));
-        Assert.Throws<ArgumentException>(
-            () => new IncidentAuthorityProjection(
-                "INC-1042",
-                "Elevated customer errors",
-                isActive: true,
-                [" "]));
     }
 
     private static EnvironmentSearchDocument CreateSearchDocument(

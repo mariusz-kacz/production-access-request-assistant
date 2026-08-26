@@ -132,11 +132,18 @@ internal sealed class ReferenceEnvironmentRole
 
 internal sealed class ReferenceIncident
 {
-    internal ReferenceIncident(string id, string title, bool isActive)
+    internal ReferenceIncident(
+        string id,
+        string title,
+        bool isActive,
+        string? environmentId)
     {
         Id = Required(id, nameof(id));
         Title = Required(title, nameof(title));
         IsActive = isActive;
+        EnvironmentId = environmentId is null
+            ? null
+            : Required(environmentId, nameof(environmentId));
     }
 
     private ReferenceIncident()
@@ -151,30 +158,7 @@ internal sealed class ReferenceIncident
 
     internal bool IsActive { get; private set; }
 
-    private static string Required(string value, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        return value.Trim();
-    }
-}
-
-internal sealed class ReferenceIncidentEnvironmentLink
-{
-    internal ReferenceIncidentEnvironmentLink(string incidentId, string environmentId)
-    {
-        IncidentId = Required(incidentId, nameof(incidentId));
-        EnvironmentId = Required(environmentId, nameof(environmentId));
-    }
-
-    private ReferenceIncidentEnvironmentLink()
-    {
-        IncidentId = null!;
-        EnvironmentId = null!;
-    }
-
-    internal string IncidentId { get; private set; }
-
-    internal string EnvironmentId { get; private set; }
+    internal string? EnvironmentId { get; private set; }
 
     private static string Required(string value, string parameterName)
     {

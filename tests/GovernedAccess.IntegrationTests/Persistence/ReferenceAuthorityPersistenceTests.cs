@@ -26,7 +26,6 @@ public sealed class ReferenceAuthorityPersistenceTests
             [
                 "Clients",
                 "EnvironmentRoles",
-                "IncidentEnvironmentLinks",
                 "Incidents",
                 "ProductionEnvironments",
                 "__EFMigrationsHistory",
@@ -40,10 +39,25 @@ public sealed class ReferenceAuthorityPersistenceTests
             await context.ProductionEnvironments.CountAsync(
                 TestContext.Current.CancellationToken));
         Assert.Equal(3, await context.Incidents.CountAsync(TestContext.Current.CancellationToken));
+        var incidentEntity = context.Model.FindEntityType(typeof(ReferenceIncident));
+        Assert.NotNull(incidentEntity);
         Assert.Equal(
-            3,
-            await context.IncidentEnvironmentLinks.CountAsync(
-                TestContext.Current.CancellationToken));
+            ["EnvironmentId", "Id", "IsActive", "Title"],
+            incidentEntity.GetProperties().Select(property => property.Name).Order());
+        var incidentEnvironmentForeignKey = Assert.Single(
+            incidentEntity.GetForeignKeys());
+        Assert.Equal(
+            nameof(ReferenceIncident.EnvironmentId),
+            Assert.Single(incidentEnvironmentForeignKey.Properties).Name);
+        Assert.False(incidentEnvironmentForeignKey.IsRequired);
+        Assert.Equal(
+            nameof(ReferenceIncident.EnvironmentId),
+            Assert.Single(Assert.Single(incidentEntity.GetIndexes()).Properties).Name);
+        Assert.Equal(
+            "PROD-ALPHA-EU",
+            (await context.Incidents.SingleAsync(
+                incident => incident.Id == "INC-1042",
+                TestContext.Current.CancellationToken)).EnvironmentId);
         Assert.DoesNotContain(tables, table => table.Contains("Request", StringComparison.Ordinal));
         Assert.DoesNotContain(tables, table => table.Contains("Approval", StringComparison.Ordinal));
         Assert.DoesNotContain(tables, table => table.Contains("Grant", StringComparison.Ordinal));

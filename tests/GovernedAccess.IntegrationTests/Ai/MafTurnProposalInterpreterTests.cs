@@ -378,8 +378,8 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Equal("test-provider-version", metadata.ProviderModelVersion);
         Assert.Equal("3.0.0", metadata.PromptContractVersion);
         Assert.Equal("3.0.0", metadata.StructuredOutputSchemaVersion);
-        Assert.Equal("2.0.0", metadata.McpContractVersion);
-        Assert.Equal("1.0.0", metadata.EnvironmentSearchPolicyVersion);
+        Assert.Equal("3.0.0", metadata.McpContractVersion);
+        Assert.Equal("2.0.0", metadata.EnvironmentSearchPolicyVersion);
         Assert.Equal(turn.CorrelationId, metadata.CorrelationId);
         Assert.True(metadata.StartedAt <= metadata.CompletedAt);
     }

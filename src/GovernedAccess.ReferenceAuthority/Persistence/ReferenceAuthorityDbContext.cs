@@ -20,9 +20,6 @@ public sealed class ReferenceAuthorityDbContext(
 
     internal DbSet<ReferenceIncident> Incidents => Set<ReferenceIncident>();
 
-    internal DbSet<ReferenceIncidentEnvironmentLink> IncidentEnvironmentLinks =>
-        Set<ReferenceIncidentEnvironmentLink>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -71,17 +68,9 @@ public sealed class ReferenceAuthorityDbContext(
         incident.Property(entity => entity.Id).HasMaxLength(IdentifierLength);
         incident.Property(entity => entity.Title).HasMaxLength(DisplayNameLength);
         incident.Property(entity => entity.IsActive);
-
-        var incidentLink = modelBuilder.Entity<ReferenceIncidentEnvironmentLink>();
-        incidentLink.ToTable("IncidentEnvironmentLinks");
-        incidentLink.HasKey(entity => new { entity.IncidentId, entity.EnvironmentId });
-        incidentLink.Property(entity => entity.IncidentId).HasMaxLength(IdentifierLength);
-        incidentLink.Property(entity => entity.EnvironmentId).HasMaxLength(IdentifierLength);
-        incidentLink.HasOne<ReferenceIncident>()
-            .WithMany()
-            .HasForeignKey(entity => entity.IncidentId)
-            .OnDelete(DeleteBehavior.Restrict);
-        incidentLink.HasOne<ReferenceProductionEnvironment>()
+        incident.Property(entity => entity.EnvironmentId).HasMaxLength(IdentifierLength);
+        incident.HasIndex(entity => entity.EnvironmentId);
+        incident.HasOne<ReferenceProductionEnvironment>()
             .WithMany()
             .HasForeignKey(entity => entity.EnvironmentId)
             .OnDelete(DeleteBehavior.Restrict);

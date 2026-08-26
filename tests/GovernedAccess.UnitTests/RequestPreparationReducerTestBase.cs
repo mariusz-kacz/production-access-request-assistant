@@ -81,12 +81,12 @@ public abstract class RequestPreparationReducerTestBase
 
     protected static IncidentAuthorityProjection Incident(
         string incidentId,
-        params string[] environmentIds) =>
+        string? environmentId = null) =>
         new(
             incidentId,
             $"{incidentId} title",
             isActive: true,
-            environmentIds);
+            environmentId);
 
     protected static EnvironmentRoleAuthorityProjection Role(
         string environmentId,

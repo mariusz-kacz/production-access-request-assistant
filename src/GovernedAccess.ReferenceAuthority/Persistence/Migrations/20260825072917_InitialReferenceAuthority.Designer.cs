@@ -72,6 +72,10 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("EnvironmentId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -79,24 +83,9 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Incidents", (string)null);
-                });
-
-            modelBuilder.Entity("GovernedAccess.ReferenceAuthority.Persistence.ReferenceIncidentEnvironmentLink", b =>
-                {
-                    b.Property<string>("IncidentId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("EnvironmentId")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("IncidentId", "EnvironmentId");
-
                     b.HasIndex("EnvironmentId");
 
-                    b.ToTable("IncidentEnvironmentLinks", (string)null);
+                    b.ToTable("Incidents", (string)null);
                 });
 
             modelBuilder.Entity("GovernedAccess.ReferenceAuthority.Persistence.ReferenceProductionEnvironment", b =>
@@ -150,19 +139,12 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("GovernedAccess.ReferenceAuthority.Persistence.ReferenceIncidentEnvironmentLink", b =>
+            modelBuilder.Entity("GovernedAccess.ReferenceAuthority.Persistence.ReferenceIncident", b =>
                 {
                     b.HasOne("GovernedAccess.ReferenceAuthority.Persistence.ReferenceProductionEnvironment", null)
                         .WithMany()
                         .HasForeignKey("EnvironmentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("GovernedAccess.ReferenceAuthority.Persistence.ReferenceIncident", null)
-                        .WithMany()
-                        .HasForeignKey("IncidentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("GovernedAccess.ReferenceAuthority.Persistence.ReferenceProductionEnvironment", b =>

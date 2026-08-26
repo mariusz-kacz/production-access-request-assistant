@@ -1,19 +1,11 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
-using GovernedAccess.Core.Preparations.Contracts;
 using Microsoft.Extensions.AI;
-using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.Web.Ai;
 
 internal sealed class AgentExecutionBudget(AgentExecutionLimits limits)
 {
-    private const string EnvironmentSearchToolName =
-        "search_production_environments";
-
     private readonly Dictionary<string, int> toolCallCounts =
-        new(StringComparer.Ordinal);
-    private readonly HashSet<string> searchResultEnvironmentIds =
         new(StringComparer.Ordinal);
     private readonly object sync = new();
     private int providerIterationCount;
@@ -73,79 +65,6 @@ internal sealed class AgentExecutionBudget(AgentExecutionLimits limits)
             toolCallCounts[toolName] = perToolCount + 1;
         }
     }
-
-    internal void ObserveToolResult(string toolName, object? result)
-    {
-        if (!string.Equals(
-                toolName,
-                EnvironmentSearchToolName,
-                StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var structuredContent = result switch
-        {
-            CallToolResult callToolResult => callToolResult.StructuredContent,
-            _ => result,
-        };
-        if (structuredContent is null)
-        {
-            return;
-        }
-
-        var root = JsonSerializer.SerializeToElement(structuredContent);
-        if (root.ValueKind == JsonValueKind.Object
-            && root.TryGetProperty("structuredContent", out var wrappedContent))
-        {
-            root = wrappedContent;
-        }
-
-        if (root.ValueKind != JsonValueKind.Object
-            || !root.TryGetProperty("environments", out var environments)
-            || environments.ValueKind != JsonValueKind.Array)
-        {
-            return;
-        }
-
-        lock (sync)
-        {
-            foreach (var environment in environments.EnumerateArray())
-            {
-                if (environment.ValueKind == JsonValueKind.Object
-                    && environment.TryGetProperty(
-                        "environmentId",
-                        out var environmentId)
-                    && environmentId.ValueKind == JsonValueKind.String
-                    && environmentId.GetString() is { Length: > 0 } id)
-                {
-                    searchResultEnvironmentIds.Add(id);
-                }
-            }
-        }
-    }
-
-    internal bool IsEnvironmentSelectionAllowed(TurnProposal proposal)
-    {
-        if (proposal.Patch?.Environment is not SetEnvironmentOperation
-            {
-                Reference: ExactEnvironmentId exactEnvironment,
-            })
-        {
-            return true;
-        }
-
-        lock (sync)
-        {
-            if (!toolCallCounts.ContainsKey(EnvironmentSearchToolName))
-            {
-                return true;
-            }
-
-            return searchResultEnvironmentIds.Count == 1
-                && searchResultEnvironmentIds.Contains(exactEnvironment.Id);
-        }
-    }
 }
 
 internal sealed class BudgetedAgentTool(
@@ -158,9 +77,7 @@ internal sealed class BudgetedAgentTool(
         CancellationToken cancellationToken)
     {
         budget.BeginToolCall(Name);
-        var result = await InnerFunction.InvokeAsync(arguments, cancellationToken);
-        budget.ObserveToolResult(Name, result);
-        return result;
+        return await InnerFunction.InvokeAsync(arguments, cancellationToken);
     }
 }
 

@@ -24,19 +24,6 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Incidents",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Incidents", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "ProductionEnvironments",
                 columns: table => new
                 {
@@ -81,23 +68,19 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "IncidentEnvironmentLinks",
+                name: "Incidents",
                 columns: table => new
                 {
-                    IncidentId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
-                    EnvironmentId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false)
+                    Id = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    EnvironmentId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_IncidentEnvironmentLinks", x => new { x.IncidentId, x.EnvironmentId });
+                    table.PrimaryKey("PK_Incidents", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_IncidentEnvironmentLinks_Incidents_IncidentId",
-                        column: x => x.IncidentId,
-                        principalTable: "Incidents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_IncidentEnvironmentLinks_ProductionEnvironments_EnvironmentId",
+                        name: "FK_Incidents_ProductionEnvironments_EnvironmentId",
                         column: x => x.EnvironmentId,
                         principalTable: "ProductionEnvironments",
                         principalColumn: "Id",
@@ -105,8 +88,8 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_IncidentEnvironmentLinks_EnvironmentId",
-                table: "IncidentEnvironmentLinks",
+                name: "IX_Incidents_EnvironmentId",
+                table: "Incidents",
                 column: "EnvironmentId");
 
             migrationBuilder.CreateIndex(
@@ -120,9 +103,6 @@ namespace GovernedAccess.ReferenceAuthority.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "EnvironmentRoles");
-
-            migrationBuilder.DropTable(
-                name: "IncidentEnvironmentLinks");
 
             migrationBuilder.DropTable(
                 name: "Incidents");

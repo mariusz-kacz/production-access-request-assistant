@@ -134,29 +134,14 @@ public sealed record IncidentAuthorityProjection
         string incidentId,
         string title,
         bool isActive,
-        IEnumerable<string> eligibleEnvironmentIds)
+        string? environmentId)
     {
-        ArgumentNullException.ThrowIfNull(eligibleEnvironmentIds);
-
-        var environmentIds = eligibleEnvironmentIds
-            .Select(identifier => AuthorityValue.Normalize(
-                identifier,
-                nameof(eligibleEnvironmentIds)))
-            .ToArray();
-        if (environmentIds.Distinct(StringComparer.Ordinal).Count()
-            != environmentIds.Length)
-        {
-            throw new ArgumentException(
-                "Eligible incident environment identifiers must be unique.",
-                nameof(eligibleEnvironmentIds));
-        }
-
-        Array.Sort(environmentIds, StringComparer.Ordinal);
-
         IncidentId = AuthorityValue.Normalize(incidentId, nameof(incidentId));
         Title = AuthorityValue.Normalize(title, nameof(title));
         IsActive = isActive;
-        EligibleEnvironmentIds = Array.AsReadOnly(environmentIds);
+        EnvironmentId = environmentId is null
+            ? null
+            : AuthorityValue.Normalize(environmentId, nameof(environmentId));
     }
 
     public string IncidentId { get; }
@@ -165,7 +150,7 @@ public sealed record IncidentAuthorityProjection
 
     public bool IsActive { get; }
 
-    public IReadOnlyList<string> EligibleEnvironmentIds { get; }
+    public string? EnvironmentId { get; }
 }
 
 internal static class AuthorityValue

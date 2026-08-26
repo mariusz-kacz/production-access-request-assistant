@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GovernedAccess.Core.Ports;
 using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
@@ -78,7 +79,7 @@ public sealed class TargetMcpFailureTests
             var context = scope.ServiceProvider
                 .GetRequiredService<ReferenceAuthorityDbContext>();
             context.ProductionEnvironments.AddRange(
-                Enumerable.Range(1, 21).Select(index =>
+                Enumerable.Range(1, 6).Select(index =>
                     new ReferenceProductionEnvironment(
                         $"OVERFLOW-{index:D2}",
                         "client-alpha",
@@ -94,12 +95,21 @@ public sealed class TargetMcpFailureTests
         await using var client = await host.CreateClientAsync(
             "governed-access-target-overflow-tests",
             TestContext.Current.CancellationToken);
+        await using var authorityScope = host.Services.CreateAsyncScope();
+        var authority = authorityScope.ServiceProvider
+            .GetRequiredService<IProductionEnvironmentSearchAuthority>();
+        var coreResult = await authority.SearchAsync(
+            "overflow target",
+            TestContext.Current.CancellationToken);
         var result = await CallAsync(
             client,
             "search_production_environments",
             "query",
             "overflow target");
 
+        Assert.Equal(EnvironmentSearchResultKind.TooBroad, coreResult.Value.Kind);
+        Assert.Equal(6, coreResult.Value.MatchCount);
+        Assert.Empty(coreResult.Value.Matches);
         AssertTypedFailure(
             result,
             "Unavailable",
@@ -168,7 +178,7 @@ public sealed class TargetMcpFailureTests
     }
 
     [Fact]
-    public async Task IncidentWithoutOneEligibleEnvironmentFailsClosed()
+    public async Task IncidentWithoutAnEnvironmentReturnsNullableReadOnlyContext()
     {
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
@@ -180,7 +190,8 @@ public sealed class TargetMcpFailureTests
                 new ReferenceIncident(
                     "INC-NO-ELIGIBLE-ENVIRONMENT",
                     "No eligible environment",
-                    isActive: true));
+                    isActive: true,
+                    environmentId: null));
             await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
@@ -193,10 +204,9 @@ public sealed class TargetMcpFailureTests
             "incidentId",
             "INC-NO-ELIGIBLE-ENVIRONMENT");
 
-        AssertTypedFailure(
-            result,
-            "Unavailable",
-            "incident-environment-link-invalid");
+        Assert.NotEqual(true, result.IsError);
+        var content = JsonSerializer.SerializeToElement(result.StructuredContent);
+        Assert.Equal(JsonValueKind.Null, content.GetProperty("environmentId").ValueKind);
     }
 
     private static async Task<CallToolResult> CallAsync(

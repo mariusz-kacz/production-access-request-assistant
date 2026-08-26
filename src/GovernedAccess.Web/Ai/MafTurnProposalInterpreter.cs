@@ -14,7 +14,7 @@ namespace GovernedAccess.Web.Ai;
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
     internal const string PromptContractVersion = "3.0.0";
-    internal const string McpContractVersion = "2.0.0";
+    internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.TargetMafMcpLoopback";
 
     private const string AgentInstructions =
@@ -159,8 +159,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
             if (TurnProposalJsonTranslator.TryTranslate(
                     response.Text,
                     out var proposal)
-                && proposal is not null
-                && executionBudget.IsEnvironmentSelectionAllowed(proposal))
+                && proposal is not null)
             {
                 if (executionBudget.LimitExceeded)
                 {

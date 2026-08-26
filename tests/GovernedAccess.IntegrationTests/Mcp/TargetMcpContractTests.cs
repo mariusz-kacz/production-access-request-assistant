@@ -200,7 +200,7 @@ public sealed class TargetMcpContractTests
             "environments");
         var environments = ResolveSchema(root, properties.GetProperty("environments"));
         Assert.Equal("array", environments.GetProperty("type").GetString());
-        Assert.Equal(20, environments.GetProperty("maxItems").GetInt32());
+        Assert.Equal(5, environments.GetProperty("maxItems").GetInt32());
         var environmentProperties = AssertClosedObjectSchema(
             root,
             ResolveSchema(root, environments.GetProperty("items")),
@@ -279,8 +279,17 @@ public sealed class TargetMcpContractTests
             root,
             properties,
             "incidentId",
-            "title",
-            "environmentId");
+            "title");
+        var environmentId = ResolveSchema(
+            root,
+            properties.GetProperty("environmentId"));
+        Assert.Equal(
+            ["string", "null"],
+            environmentId
+                .GetProperty("type")
+                .EnumerateArray()
+                .Select(type => type.GetString()));
+        Assert.Equal(1, environmentId.GetProperty("minLength").GetInt32());
         Assert.Equal(
             ["Active", "Inactive"],
             ResolveSchema(root, properties.GetProperty("status"))

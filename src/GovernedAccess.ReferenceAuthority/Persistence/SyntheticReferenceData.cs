@@ -28,15 +28,21 @@ internal static class SyntheticReferenceData
         var roles = CreateEnvironmentRoles(environments);
         ReferenceIncident[] incidents =
         [
-            new("INC-1041", "Resolved Client Alpha production incident", isActive: false),
-            new("INC-1042", "Client Alpha production investigation", isActive: true),
-            new("INC-2042", "Client Beta production investigation", isActive: true),
-        ];
-        ReferenceIncidentEnvironmentLink[] incidentLinks =
-        [
-            new("INC-1041", "PROD-ALPHA-EU"),
-            new("INC-1042", "PROD-ALPHA-EU"),
-            new("INC-2042", "PROD-BETA-UK"),
+            new(
+                "INC-1041",
+                "Resolved Client Alpha production incident",
+                isActive: false,
+                environmentId: "PROD-ALPHA-EU"),
+            new(
+                "INC-1042",
+                "Client Alpha production investigation",
+                isActive: true,
+                environmentId: "PROD-ALPHA-EU"),
+            new(
+                "INC-2042",
+                "Client Beta production investigation",
+                isActive: true,
+                environmentId: "PROD-BETA-UK"),
         ];
 
         await SeedExactAsync(
@@ -75,13 +81,8 @@ internal static class SyntheticReferenceData
             entity => entity.Id,
             static (actual, expected) =>
                 actual.Title == expected.Title
-                && actual.IsActive == expected.IsActive,
-            cancellationToken);
-        await SeedExactAsync(
-            dbContext.IncidentEnvironmentLinks,
-            incidentLinks,
-            entity => (entity.IncidentId, entity.EnvironmentId),
-            static (_, _) => true,
+                && actual.IsActive == expected.IsActive
+                && actual.EnvironmentId == expected.EnvironmentId,
             cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);

@@ -39,23 +39,12 @@ internal sealed class EfIncidentAuthority(ReferenceAuthorityDbContext dbContext)
                     "The incident was not found.");
             }
 
-            var eligibleEnvironmentIds = await (
-                from link in dbContext.IncidentEnvironmentLinks.AsNoTracking()
-                join environment in dbContext.ProductionEnvironments.AsNoTracking()
-                    on link.EnvironmentId equals environment.Id
-                where link.IncidentId == normalizedIncidentId
-                    && environment.IsActive
-                    && environment.IsProduction
-                    && environment.IsEligibleForIntake
-                select environment.Id)
-                .ToArrayAsync(cancellationToken);
-
             return ApplicationResult.Succeeded(
                 new IncidentAuthorityProjection(
                     incident.Id,
                     incident.Title,
                     incident.IsActive,
-                    eligibleEnvironmentIds));
+                    incident.EnvironmentId));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

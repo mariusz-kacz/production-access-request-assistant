@@ -5,11 +5,11 @@ namespace GovernedAccess.Core.Preparations.Authority;
 
 public static class EnvironmentSearchPolicy
 {
-    public const string Version = "1.0.0";
+    public const string Version = "2.0.0";
 
     public const int MaximumQueryLength = 200;
 
-    public const int MaximumResultCount = 20;
+    public const int MaximumResultCount = 5;
 
     public static EnvironmentSearchResult Search(
         string query,

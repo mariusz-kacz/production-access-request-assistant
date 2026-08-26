@@ -1,6 +1,6 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Implementation in progress; Task 1 complete
+- **Status:** Implementation in progress; Tasks 1–2 complete
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -291,6 +291,8 @@ OCC token; zero-repair fail-closed tests pass; ordinary clarification patches st
 survive restart.
 
 ### Task 2 — Contract the authority model and shared environment search
+
+- [x] Complete
 
 **Objective and complexity reduction**
 

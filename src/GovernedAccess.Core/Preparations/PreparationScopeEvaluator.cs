@@ -144,9 +144,10 @@ internal sealed class PreparationScopeEvaluator(
             return RoleEvaluationDisposition.Blocked;
         }
 
-        if (!incident.Incident.EligibleEnvironmentIds.Contains(
+        if (!string.Equals(
+                incident.Incident.EnvironmentId,
                 environment.Environment.EnvironmentId,
-                StringComparer.Ordinal))
+                StringComparison.Ordinal))
         {
             evaluation.Record(
                 ProposalField.Environment,
@@ -230,9 +231,10 @@ internal sealed class PreparationScopeEvaluator(
                 cancellationToken);
             if (incidentResult.IsFailure
                 || !incidentResult.Value.IsActive
-                || !incidentResult.Value.EligibleEnvironmentIds.Contains(
+                || !string.Equals(
+                    incidentResult.Value.EnvironmentId,
                     environment.EnvironmentId,
-                    StringComparer.Ordinal))
+                    StringComparison.Ordinal))
             {
                 evaluation.IncidentId = null;
                 evaluation.Record(
@@ -298,9 +300,10 @@ internal sealed class PreparationScopeEvaluator(
 
         if (evaluation.EnvironmentId is not null)
         {
-            if (resolution.Incident.EligibleEnvironmentIds.Contains(
+            if (string.Equals(
+                    resolution.Incident.EnvironmentId,
                     evaluation.EnvironmentId,
-                    StringComparer.Ordinal))
+                    StringComparison.Ordinal))
             {
                 ApplyIncident(evaluation, resolution.Incident);
             }
@@ -314,7 +317,7 @@ internal sealed class PreparationScopeEvaluator(
             return;
         }
 
-        if (resolution.Incident.EligibleEnvironmentIds.Count == 0)
+        if (resolution.Incident.EnvironmentId is null)
         {
             evaluation.Record(
                 ProposalField.Incident,
@@ -322,16 +325,8 @@ internal sealed class PreparationScopeEvaluator(
             return;
         }
 
-        if (resolution.Incident.EligibleEnvironmentIds.Count > 1)
-        {
-            evaluation.Record(
-                ProposalField.Incident,
-                OperationResultKind.RejectedConflict);
-            return;
-        }
-
         var environmentResolution = await ExactEnvironmentAsync(
-            resolution.Incident.EligibleEnvironmentIds[0],
+            resolution.Incident.EnvironmentId,
             cancellationToken);
         if (environmentResolution.Environment is null)
         {
@@ -408,7 +403,6 @@ internal sealed class PreparationScopeEvaluator(
             EnvironmentSearchResultKind.NoMatches =>
                 EnvironmentResolution.Rejected(OperationResultKind.RejectedUnavailable),
             EnvironmentSearchResultKind.InvalidQuery
-                or EnvironmentSearchResultKind.NarrowQuery
                 or EnvironmentSearchResultKind.TooBroad =>
                 EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid),
             _ => EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid),

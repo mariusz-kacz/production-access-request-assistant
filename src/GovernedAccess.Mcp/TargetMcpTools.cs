@@ -61,7 +61,7 @@ public sealed class TargetEnvironmentSearchTools(
                 new ApplicationFailure(
                     ApplicationFailureKind.DependencyUnavailable,
                     result.Value.FailureCode ?? "environment_query_too_broad",
-                    "The environment search query returned more than 20 matches."));
+                    "The environment search query returned more than 5 matches."));
         }
 
         return ApplicationResult.Succeeded(
@@ -241,15 +241,6 @@ public sealed class TargetIncidentTools(
             return ApplicationResult.Failed<TargetIncidentToolResult>(result.Failure!);
         }
 
-        if (result.Value.EligibleEnvironmentIds.Count != 1)
-        {
-            return ApplicationResult.Failed<TargetIncidentToolResult>(
-                new ApplicationFailure(
-                    ApplicationFailureKind.DependencyFailure,
-                    "incident-environment-link-invalid",
-                    "The incident does not identify one eligible production environment."));
-        }
-
         return ApplicationResult.Succeeded(
             new TargetIncidentToolResult(
                 result.Value.IncidentId,
@@ -257,7 +248,7 @@ public sealed class TargetIncidentTools(
                 result.Value.IsActive
                     ? TargetIncidentStatus.Active
                     : TargetIncidentStatus.Inactive,
-                result.Value.EligibleEnvironmentIds[0]));
+                result.Value.EnvironmentId));
     }
 }
 
@@ -338,7 +329,7 @@ public sealed record TargetIncidentToolResult(
     [property: MinLength(1)] string IncidentId,
     [property: MinLength(1)] string Title,
     TargetIncidentStatus Status,
-    [property: MinLength(1)] string EnvironmentId);
+    [property: MinLength(1)] string? EnvironmentId);
 
 public enum TargetIncidentStatus
 {

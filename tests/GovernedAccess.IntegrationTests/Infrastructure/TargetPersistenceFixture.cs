@@ -226,7 +226,7 @@ internal sealed class TargetAuthorityRequestContextReader(
             return ApplicationResult.Failed<Incident>(result.Failure!);
         }
 
-        if (result.Value.EligibleEnvironmentIds.Count != 1)
+        if (result.Value.EnvironmentId is null)
         {
             return ApplicationResult.Failed<Incident>(
                 new ApplicationFailure(
@@ -238,7 +238,7 @@ internal sealed class TargetAuthorityRequestContextReader(
         return ApplicationResult.Succeeded(
             new Incident(
                 result.Value.IncidentId,
-                result.Value.EligibleEnvironmentIds[0],
+                result.Value.EnvironmentId,
                 result.Value.Title,
                 result.Value.IsActive
                     ? IncidentStatus.Active

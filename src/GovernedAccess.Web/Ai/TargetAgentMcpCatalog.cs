@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GovernedAccess.Core.Preparations.Authority;
 using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.Web.Ai;
@@ -108,7 +109,8 @@ internal static class TargetAgentMcpCatalog
             "environments");
         var environments = ResolveSchema(root, properties.GetProperty("environments"));
         return environments.GetProperty("type").GetString() == "array"
-            && environments.GetProperty("maxItems").GetInt32() == 20
+            && environments.GetProperty("maxItems").GetInt32()
+                == EnvironmentSearchPolicy.MaximumResultCount
             && HasEnvironmentProjection(
                 root,
                 ResolveSchema(root, environments.GetProperty("items")));
@@ -186,8 +188,9 @@ internal static class TargetAgentMcpCatalog
                 root,
                 properties,
                 "incidentId",
-                "title",
-                "environmentId")
+                "title")
+            && HasNullableStringTypeWithMinimumLength(
+                ResolveSchema(root, properties.GetProperty("environmentId")))
             && status.GetProperty("type").GetString() == "string"
             && status.GetProperty("enum")
                 .EnumerateArray()
@@ -206,6 +209,13 @@ internal static class TargetAgentMcpCatalog
 
     private static bool HasStringTypeWithMinimumLength(JsonElement schema) =>
         schema.GetProperty("type").GetString() == "string"
+        && schema.GetProperty("minLength").GetInt32() == 1;
+
+    private static bool HasNullableStringTypeWithMinimumLength(JsonElement schema) =>
+        schema.GetProperty("type")
+            .EnumerateArray()
+            .Select(type => type.GetString())
+            .SequenceEqual(["string", "null"], StringComparer.Ordinal)
         && schema.GetProperty("minLength").GetInt32() == 1;
 
     private static JsonElement GetClosedObjectProperties(

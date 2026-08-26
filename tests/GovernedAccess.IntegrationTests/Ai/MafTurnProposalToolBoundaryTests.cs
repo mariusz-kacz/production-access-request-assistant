@@ -99,40 +99,9 @@ public sealed class MafTurnProposalToolBoundaryTests
     }
 
     [Fact]
-    public async Task UniqueSearchResultIsObservedByTheExecutionBudget()
+    public async Task SearchResultsDoNotBecomeAnInterpreterAuthorizationBoundary()
     {
-        await using var host = await TargetMcpTestHost.CreateSeededAsync(
-            TestContext.Current.CancellationToken);
-        await using var client = await host.CreateClientAsync(
-            "target-agent-budget-observation",
-            TestContext.Current.CancellationToken);
-        var tools = await client.ListToolsAsync(
-            cancellationToken: TestContext.Current.CancellationToken);
-        var search = Assert.Single(
-            tools,
-            tool => tool.Name == "search_production_environments");
-        var budget = new AgentExecutionBudget(AgentExecutionLimits.Default);
-        var boundedSearch = new BudgetedAgentTool(search, budget);
-
-        var result = await boundedSearch.InvokeAsync(
-            new AIFunctionArguments { ["query"] = "alpha EU primary" },
-            TestContext.Current.CancellationToken);
-        Assert.True(
-            TurnProposalJsonTranslator.TryTranslate(
-                """
-                {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}}}}
-                """,
-                out var proposal));
-
-        Assert.True(
-            budget.IsEnvironmentSelectionAllowed(Assert.IsType<TurnProposal>(proposal)),
-            JsonSerializer.Serialize(result));
-    }
-
-    [Fact]
-    public async Task AmbiguousSearchExactSelectionFailsClosedWithoutRepair()
-    {
-        const string unsafeExact =
+        const string exactProposal =
             """
             {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}}}}
             """;
@@ -140,19 +109,21 @@ public sealed class MafTurnProposalToolBoundaryTests
             TestContext.Current.CancellationToken);
         var chatClient = new SearchToolChatClient(
             "alpha EU",
-            unsafeExact);
+            exactProposal);
         var interpreter = CreateInterpreter(chatClient, host);
 
         var result = await interpreter.InterpretAsync(
             Turn("Use Client Alpha production in EU."),
             TestContext.Current.CancellationToken);
 
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
+        var succeeded = Assert.IsType<AgentInterpretationSucceeded>(result);
+        var environment = Assert.IsType<SetEnvironmentOperation>(
+            succeeded.Proposal.Patch?.Environment);
         Assert.Equal(
-            AgentInterpretationFailure.MalformedModelOutput,
-            failed.Failure);
-        Assert.Equal(1, failed.ExecutionMetadata.ToolCallCount);
-        Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
+            "PROD-ALPHA-EU",
+            Assert.IsType<ExactEnvironmentId>(environment.Reference).Id);
+        Assert.Equal(1, succeeded.ExecutionMetadata.ToolCallCount);
+        Assert.Equal(1, succeeded.ExecutionMetadata.ProviderIterationCount);
     }
 
     [Fact]

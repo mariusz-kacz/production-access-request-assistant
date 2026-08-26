@@ -60,8 +60,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
     [Theory]
     [InlineData(0, EnvironmentSearchResultKind.NoMatches, OperationResultKind.RejectedUnavailable)]
-    [InlineData(6, EnvironmentSearchResultKind.NarrowQuery, OperationResultKind.RejectedInvalid)]
-    [InlineData(21, EnvironmentSearchResultKind.TooBroad, OperationResultKind.RejectedInvalid)]
+    [InlineData(6, EnvironmentSearchResultKind.TooBroad, OperationResultKind.RejectedInvalid)]
     public async Task NonUniqueUnrenderableSearchResultsRejectWithoutMutation(
         int matchCount,
         EnvironmentSearchResultKind expectedKind,
@@ -288,21 +287,16 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
     }
 
     [Theory]
-    [InlineData(0, OperationResultKind.RejectedUnavailable, null)]
-    [InlineData(1, OperationResultKind.Applied, "PROD-ALPHA-EU")]
-    [InlineData(2, OperationResultKind.RejectedConflict, null)]
-    public async Task IncidentWithoutRetainedEnvironmentUsesExactLinkCardinality(
-        int linkedEnvironmentCount,
-        OperationResultKind expectedResult,
-        string? expectedEnvironmentId)
+    [InlineData(null, OperationResultKind.RejectedUnavailable)]
+    [InlineData("PROD-ALPHA-EU", OperationResultKind.Applied)]
+    public async Task IncidentWithoutRetainedEnvironmentUsesNullableRelationship(
+        string? relatedEnvironmentId,
+        OperationResultKind expectedResult)
     {
         var authority = new FakePreparationAuthority();
-        var linkedEnvironmentIds = Enumerable.Range(1, linkedEnvironmentCount)
-            .Select(index => index == 1 ? "PROD-ALPHA-EU" : $"PROD-{index}")
-            .ToArray();
         authority.Incidents["INC-1042"] = Incident(
             "INC-1042",
-            linkedEnvironmentIds);
+            relatedEnvironmentId);
         authority.Environments["PROD-ALPHA-EU"] = Environment(
             "PROD-ALPHA-EU",
             "client-alpha");
@@ -312,10 +306,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             Update(incident: new SetIncidentOperation("INC-1042")),
             CancellationToken.None);
 
-        Assert.Equal(expectedEnvironmentId, result.Candidate.EnvironmentId);
-        Assert.Equal(expectedEnvironmentId is null ? null : "INC-1042", result.Candidate.IncidentId);
+        Assert.Equal(relatedEnvironmentId, result.Candidate.EnvironmentId);
+        Assert.Equal(relatedEnvironmentId is null ? null : "INC-1042", result.Candidate.IncidentId);
         AssertResult(result, ProposalField.Incident, expectedResult);
-        Assert.Equal(expectedEnvironmentId is null ? 0 : 1, authority.EnvironmentGetCalls.Count);
+        Assert.Equal(relatedEnvironmentId is null ? 0 : 1, authority.EnvironmentGetCalls.Count);
     }
 
     [Fact]
@@ -708,41 +702,6 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Same(existing, result.Candidate);
         Assert.Empty(result.ChangedFields);
         AssertResult(result, ProposalField.Justification, OperationResultKind.NoOpValueEqual);
-    }
-
-    [Fact]
-    public async Task EnvironmentChangeRetainsDependentsOnlyAfterExactRevalidation()
-    {
-        var authority = new FakePreparationAuthority();
-        authority.Environments["PROD-BETA-UK"] = Environment(
-            "PROD-BETA-UK",
-            "client-beta");
-        authority.Roles[("PROD-BETA-UK", "ProductionReadOnly")] = Role(
-            "PROD-BETA-UK",
-            "ProductionReadOnly");
-        authority.Incidents["INC-SHARED"] = Incident(
-            "INC-SHARED",
-            "PROD-ALPHA-EU",
-            "PROD-BETA-UK");
-        var existing = Candidate(
-            environmentId: "PROD-ALPHA-EU",
-            clientId: "client-alpha",
-            roleId: "ProductionReadOnly",
-            justification: "Investigate.",
-            incidentId: "INC-SHARED");
-
-        var result = await Reducer(authority).ReduceAsync(
-            Preparation(existing),
-            Update(environment: new SetEnvironmentOperation(
-                new ExactEnvironmentId("PROD-BETA-UK"))),
-            CancellationToken.None);
-
-        Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
-        Assert.Equal("ProductionReadOnly", result.Candidate.RoleId);
-        Assert.Equal("INC-SHARED", result.Candidate.IncidentId);
-        Assert.Equal([ProposalField.Environment], result.ChangedFields);
-        Assert.Equal(1, authority.RoleGetCallCount);
-        Assert.Equal(1, authority.IncidentGetCallCount);
     }
 
     [Theory]

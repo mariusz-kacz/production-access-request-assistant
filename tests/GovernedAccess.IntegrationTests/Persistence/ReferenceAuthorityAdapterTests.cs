@@ -90,36 +90,36 @@ public sealed class ReferenceAuthorityAdapterTests
     }
 
     [Fact]
-    public async Task IncidentAuthorityPreservesZeroOneAndManyCurrentEligibleLinks()
+    public async Task IncidentAuthorityReturnsOneNullableEnvironmentAndIncidentState()
     {
         await using var fixture = await ReferenceAuthorityFixture.CreateAsync();
         await using var scope = fixture.Services.CreateAsyncScope();
         var context = scope.ServiceProvider
             .GetRequiredService<ReferenceAuthorityDbContext>();
-        context.Incidents.AddRange(
-            new ReferenceIncident("INC-ZERO", "No eligible environment", isActive: true),
-            new ReferenceIncident("INC-MANY", "Multiple environments", isActive: true));
-        context.IncidentEnvironmentLinks.AddRange(
-            new ReferenceIncidentEnvironmentLink("INC-MANY", "PROD-BETA-UK"),
-            new ReferenceIncidentEnvironmentLink("INC-MANY", "PROD-ALPHA-EU"));
+        context.Incidents.Add(
+            new ReferenceIncident(
+                "INC-NONE",
+                "No related environment",
+                isActive: true,
+                environmentId: null));
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         var authority = scope.ServiceProvider.GetRequiredService<IIncidentAuthority>();
 
-        var zero = await authority.GetAsync(
-            "INC-ZERO",
+        var none = await authority.GetAsync(
+            "INC-NONE",
             TestContext.Current.CancellationToken);
         var one = await authority.GetAsync(
             "INC-1042",
             TestContext.Current.CancellationToken);
-        var many = await authority.GetAsync(
-            "INC-MANY",
+        var inactive = await authority.GetAsync(
+            "INC-1041",
             TestContext.Current.CancellationToken);
 
-        Assert.Empty(zero.Value.EligibleEnvironmentIds);
-        Assert.Equal(["PROD-ALPHA-EU"], one.Value.EligibleEnvironmentIds);
-        Assert.Equal(
-            ["PROD-ALPHA-EU", "PROD-BETA-UK"],
-            many.Value.EligibleEnvironmentIds);
+        Assert.Null(none.Value.EnvironmentId);
+        Assert.Equal("PROD-ALPHA-EU", one.Value.EnvironmentId);
+        Assert.True(one.Value.IsActive);
+        Assert.Equal("PROD-ALPHA-EU", inactive.Value.EnvironmentId);
+        Assert.False(inactive.Value.IsActive);
     }
 
     [Fact]

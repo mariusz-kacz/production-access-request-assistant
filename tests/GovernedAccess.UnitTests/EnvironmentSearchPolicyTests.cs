@@ -8,7 +8,8 @@ public sealed class EnvironmentSearchPolicyTests
     [Fact]
     public void PolicyPublishesTheApprovedVersion()
     {
-        Assert.Equal("1.0.0", EnvironmentSearchPolicy.Version);
+        Assert.Equal("2.0.0", EnvironmentSearchPolicy.Version);
+        Assert.Equal(5, EnvironmentSearchPolicy.MaximumResultCount);
     }
 
     [Theory]
@@ -121,9 +122,7 @@ public sealed class EnvironmentSearchPolicyTests
     [InlineData(1, EnvironmentSearchResultKind.UniqueMatch, true)]
     [InlineData(2, EnvironmentSearchResultKind.ClarificationRequired, true)]
     [InlineData(5, EnvironmentSearchResultKind.ClarificationRequired, true)]
-    [InlineData(6, EnvironmentSearchResultKind.NarrowQuery, true)]
-    [InlineData(20, EnvironmentSearchResultKind.NarrowQuery, true)]
-    [InlineData(21, EnvironmentSearchResultKind.TooBroad, false)]
+    [InlineData(6, EnvironmentSearchResultKind.TooBroad, false)]
     public void SearchClassifiesEveryNormativeCardinality(
         int count,
         EnvironmentSearchResultKind expectedKind,
