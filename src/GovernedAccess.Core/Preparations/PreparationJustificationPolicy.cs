@@ -6,42 +6,46 @@ namespace GovernedAccess.Core.Preparations;
 
 internal static class PreparationJustificationPolicy
 {
-    internal static void ApplyRequested(
-        PatchEvaluation evaluation,
+    internal static JustificationApplicationResult Evaluate(
+        string? currentJustification,
         JustificationOperation? operation)
     {
         if (operation is null)
         {
-            return;
+            return new JustificationApplicationResult(
+                currentJustification,
+                Result: null);
         }
 
         if (operation is ClearJustificationOperation)
         {
-            var kind = evaluation.Justification is null
-                ? OperationResultKind.NoOpValueEqual
-                : OperationResultKind.Applied;
-            evaluation.Justification = null;
-            evaluation.Record(ProposalField.Justification, kind);
-            return;
+            var kind = currentJustification is null
+                ? ApplicationGroupResultKind.NoOp
+                : ApplicationGroupResultKind.Applied;
+            return new JustificationApplicationResult(
+                Justification: null,
+                new ApplicationGroupResult(kind));
         }
 
         if (operation is not SetJustificationOperation set
             || !TryNormalize(set.Value.Text, out var normalized))
         {
-            evaluation.Record(
-                ProposalField.Justification,
-                OperationResultKind.RejectedInvalid);
-            return;
+            return new JustificationApplicationResult(
+                currentJustification,
+                new ApplicationGroupResult(
+                    ApplicationGroupResultKind.Rejected,
+                    ApplicationGroupRejectionReason.Invalid));
         }
 
         var resultKind = string.Equals(
-            evaluation.Justification,
+            currentJustification,
             normalized,
             StringComparison.Ordinal)
-            ? OperationResultKind.NoOpValueEqual
-            : OperationResultKind.Applied;
-        evaluation.Justification = normalized;
-        evaluation.Record(ProposalField.Justification, resultKind);
+            ? ApplicationGroupResultKind.NoOp
+            : ApplicationGroupResultKind.Applied;
+        return new JustificationApplicationResult(
+            normalized,
+            new ApplicationGroupResult(resultKind));
     }
 
     private static bool TryNormalize(
@@ -65,3 +69,7 @@ internal static class PreparationJustificationPolicy
         return normalized.Length is > 0 and <= PreparationCandidate.MaximumJustificationLength;
     }
 }
+
+internal sealed record JustificationApplicationResult(
+    string? Justification,
+    ApplicationGroupResult? Result);

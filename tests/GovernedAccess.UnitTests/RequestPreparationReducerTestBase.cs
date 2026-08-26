@@ -126,13 +126,27 @@ public abstract class RequestPreparationReducerTestBase
             CreatedAt,
             "reducer-test");
 
-    protected static void AssertResult(
+    protected static void AssertScopeResult(
         RequestPreparationReduction result,
-        ProposalField field,
-        OperationResultKind kind) =>
-        Assert.Contains(
-            result.OperationResults,
-            operation => operation.Field == field && operation.Kind == kind);
+        ApplicationGroupResultKind kind,
+        ApplicationGroupRejectionReason? rejectionReason = null) =>
+        AssertGroupResult(result.ScopeResult, kind, rejectionReason);
+
+    protected static void AssertJustificationResult(
+        RequestPreparationReduction result,
+        ApplicationGroupResultKind kind,
+        ApplicationGroupRejectionReason? rejectionReason = null) =>
+        AssertGroupResult(result.JustificationResult, kind, rejectionReason);
+
+    private static void AssertGroupResult(
+        ApplicationGroupResult? result,
+        ApplicationGroupResultKind kind,
+        ApplicationGroupRejectionReason? rejectionReason)
+    {
+        Assert.NotNull(result);
+        Assert.Equal(kind, result.Kind);
+        Assert.Equal(rejectionReason, result.RejectionReason);
+    }
 
     protected static void AssertSnapshotUnchanged(
         RequestPreparation preparation,

@@ -16,12 +16,12 @@ public sealed class RequestPreparationReduction
         PreparationCandidate candidate,
         ClarificationContextDisposition clarificationDisposition,
         ClarificationSeed? clarification,
-        IEnumerable<OperationResult> operationResults,
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult,
         IEnumerable<ProposalField> changedFields,
         ApplicationOutcome outcome)
     {
         ArgumentNullException.ThrowIfNull(candidate);
-        ArgumentNullException.ThrowIfNull(operationResults);
         ArgumentNullException.ThrowIfNull(changedFields);
         ArgumentNullException.ThrowIfNull(outcome);
         if (!Enum.IsDefined(clarificationDisposition))
@@ -37,15 +37,7 @@ public sealed class RequestPreparationReduction
                 nameof(clarification));
         }
 
-        var resultArray = operationResults.ToArray();
         var changedFieldArray = changedFields.ToArray();
-        if (resultArray.Any(result => result is null))
-        {
-            throw new ArgumentException(
-                "Operation results cannot contain null values.",
-                nameof(operationResults));
-        }
-
         if (changedFieldArray.Any(field => !Enum.IsDefined(field))
             || changedFieldArray.Distinct().Count() != changedFieldArray.Length)
         {
@@ -57,7 +49,8 @@ public sealed class RequestPreparationReduction
         Candidate = candidate;
         ClarificationDisposition = clarificationDisposition;
         Clarification = clarification;
-        OperationResults = Array.AsReadOnly(resultArray);
+        ScopeResult = scopeResult;
+        JustificationResult = justificationResult;
         ChangedFields = Array.AsReadOnly(changedFieldArray);
         Outcome = outcome;
     }
@@ -68,7 +61,9 @@ public sealed class RequestPreparationReduction
 
     public ClarificationSeed? Clarification { get; }
 
-    public IReadOnlyList<OperationResult> OperationResults { get; }
+    public ApplicationGroupResult? ScopeResult { get; }
+
+    public ApplicationGroupResult? JustificationResult { get; }
 
     public IReadOnlyList<ProposalField> ChangedFields { get; }
 

@@ -7,60 +7,105 @@ namespace GovernedAccess.Core.Preparations;
 
 internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAuthority)
 {
-    internal async Task RevalidateRetainedAsync(
-        PatchEvaluation evaluation,
+    internal async Task<RetainedRoleEvaluation> EvaluateRetainedAsync(
         string environmentId,
+        string? roleId,
         CancellationToken cancellationToken)
     {
-        if (evaluation.RoleId is null)
+        if (roleId is null)
         {
-            return;
+            return RetainedRoleEvaluation.Keep;
         }
 
         var roleResult = await roleAuthority.GetAsync(
             environmentId,
-            evaluation.RoleId,
+            roleId,
             cancellationToken);
-        if (roleResult.IsFailure
-            || !roleResult.Value.IsCurrentlyAssignable
-            || !string.Equals(
+        if (roleResult.IsFailure)
+        {
+            return roleResult.Failure!.Kind == ApplicationFailureKind.NotFound
+                ? RetainedRoleEvaluation.Clear
+                : RetainedRoleEvaluation.Rejected;
+        }
+
+        if (!string.Equals(
                 roleResult.Value.EnvironmentId,
                 environmentId,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                roleResult.Value.RoleId,
+                roleId,
                 StringComparison.Ordinal))
         {
-            evaluation.RoleId = null;
-            evaluation.Record(
-                ProposalField.Role,
-                OperationResultKind.Applied);
+            return RetainedRoleEvaluation.Rejected;
         }
+
+        return roleResult.Value.IsCurrentlyAssignable
+            ? RetainedRoleEvaluation.Keep
+            : RetainedRoleEvaluation.Clear;
     }
 
-    internal async Task ApplyRequestedAsync(
-        PatchEvaluation evaluation,
+    internal async Task<ExplicitRoleResolution> ResolveExplicitAsync(
+        string? environmentId,
         RoleOperation? operation,
-        RoleEvaluationDisposition roleEvaluation,
         CancellationToken cancellationToken)
     {
         if (operation is null)
         {
-            return;
+            return ExplicitRoleResolution.NotProposed();
         }
 
-        if (roleEvaluation == RoleEvaluationDisposition.Blocked
-            || evaluation.EnvironmentId is null)
+        if (operation is ClearRoleOperation)
         {
-            evaluation.Record(
-                ProposalField.Role,
-                OperationResultKind.RejectedDependency);
-            return;
+            return ExplicitRoleResolution.Clear();
         }
 
-        await ApplyAsync(evaluation, operation, cancellationToken);
+        if (operation is not SetRoleOperation set)
+        {
+            return ExplicitRoleResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid);
+        }
+
+        if (environmentId is null)
+        {
+            return ExplicitRoleResolution.Rejected(
+                ApplicationGroupRejectionReason.MissingDependency);
+        }
+
+        var roleResult = await roleAuthority.GetAsync(
+            environmentId,
+            set.RoleId,
+            cancellationToken);
+        if (roleResult.IsSuccess)
+        {
+            if (!string.Equals(
+                    roleResult.Value.EnvironmentId,
+                    environmentId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    roleResult.Value.RoleId,
+                    set.RoleId,
+                    StringComparison.Ordinal))
+            {
+                return ExplicitRoleResolution.Rejected(
+                    ApplicationGroupRejectionReason.Unavailable);
+            }
+
+            return roleResult.Value.IsCurrentlyAssignable
+                ? ExplicitRoleResolution.Set(roleResult.Value.RoleId)
+                : ExplicitRoleResolution.Rejected(
+                    ApplicationGroupRejectionReason.Unavailable,
+                    isAuthoritativelyInvalid: true);
+        }
+
+        return ExplicitRoleResolution.Rejected(
+            ApplicationGroupRejectionReason.Unavailable,
+            isAuthoritativelyInvalid:
+                roleResult.Failure!.Kind == ApplicationFailureKind.NotFound);
     }
 
-    internal async Task<ClarificationSeed?> ResolveClarificationAsync(
+    internal async Task<RoleClarificationEvaluation> ResolveClarificationAsync(
         string environmentId,
-        PatchEvaluation evaluation,
         CancellationToken cancellationToken)
     {
         var rolesResult = await roleAuthority.ListAsync(
@@ -73,10 +118,8 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
                     environmentId,
                     StringComparison.Ordinal)))
         {
-            SetClarificationFailure(
-                evaluation,
-                OperationResultKind.RejectedUnavailable);
-            return null;
+            return RoleClarificationEvaluation.Rejected(
+                ApplicationGroupRejectionReason.Unavailable);
         }
 
         var roles = rolesResult.Value
@@ -88,107 +131,86 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
             .Distinct(StringComparer.Ordinal)
             .Count() != roles.Length)
         {
-            SetClarificationFailure(
-                evaluation,
-                OperationResultKind.RejectedUnavailable);
-            return null;
+            return RoleClarificationEvaluation.Rejected(
+                ApplicationGroupRejectionReason.Unavailable);
         }
 
         if (roles.Length == 0)
         {
-            SetClarificationFailure(
-                evaluation,
-                OperationResultKind.RejectedUnavailable);
-            return null;
+            return RoleClarificationEvaluation.Rejected(
+                ApplicationGroupRejectionReason.NoAssignableRoles);
         }
 
         if (roles.Length > RequestPreparation.MaximumClarificationChoices)
         {
-            SetClarificationFailure(
-                evaluation,
-                OperationResultKind.RejectedInvalid);
-            return null;
+            return RoleClarificationEvaluation.Rejected(
+                ApplicationGroupRejectionReason.RoleChoiceLimitExceeded);
         }
 
-        evaluation.Record(
-            ProposalField.Role,
-            OperationResultKind.NeedsClarification);
-        return new ClarificationSeed(
-            ClarificationTarget.Role,
-            roles.Select(role => new RoleClarificationChoice(
-                role.RoleId,
-                role.DisplayName)));
+        return RoleClarificationEvaluation.NeedsClarification(
+            new ClarificationSeed(
+                ClarificationTarget.Role,
+                roles.Select(role => new RoleClarificationChoice(
+                    role.RoleId,
+                    role.DisplayName))));
     }
+}
 
-    private async Task ApplyAsync(
-        PatchEvaluation evaluation,
-        RoleOperation operation,
-        CancellationToken cancellationToken)
-    {
-        if (operation is ClearRoleOperation)
-        {
-            var kind = evaluation.RoleId is null
-                ? OperationResultKind.NoOpValueEqual
-                : OperationResultKind.Applied;
-            evaluation.RoleId = null;
-            evaluation.Record(ProposalField.Role, kind);
-            return;
-        }
+internal enum RetainedRoleEvaluation
+{
+    Keep,
+    Clear,
+    Rejected,
+}
 
-        if (operation is not SetRoleOperation set)
-        {
-            evaluation.Record(
-                ProposalField.Role,
-                OperationResultKind.RejectedInvalid);
-            return;
-        }
+internal sealed record ExplicitRoleResolution(
+    bool IsClear,
+    string? RoleId,
+    ApplicationGroupRejectionReason? RejectionReason,
+    bool IsAuthoritativelyInvalid)
+{
+    internal bool IsRejected => RejectionReason.HasValue;
 
-        var roleResult = await roleAuthority.GetAsync(
-            evaluation.EnvironmentId!,
-            set.RoleId,
-            cancellationToken);
-        if (roleResult.IsSuccess
-            && roleResult.Value.IsCurrentlyAssignable
-            && string.Equals(
-                roleResult.Value.EnvironmentId,
-                evaluation.EnvironmentId,
-                StringComparison.Ordinal)
-            && string.Equals(
-                roleResult.Value.RoleId,
-                set.RoleId,
-                StringComparison.Ordinal))
-        {
-            var kind = string.Equals(
-                evaluation.RoleId,
-                roleResult.Value.RoleId,
-                StringComparison.Ordinal)
-                ? OperationResultKind.NoOpValueEqual
-                : OperationResultKind.Applied;
-            evaluation.RoleId = roleResult.Value.RoleId;
-            evaluation.Record(ProposalField.Role, kind);
-            return;
-        }
+    internal static ExplicitRoleResolution NotProposed() =>
+        new(
+            IsClear: false,
+            RoleId: null,
+            RejectionReason: null,
+            IsAuthoritativelyInvalid: false);
 
-        if (roleResult.IsSuccess
-            || roleResult.Failure!.Kind == ApplicationFailureKind.NotFound)
-        {
-            evaluation.RecordAuthoritativelyInvalid(ProposalField.Role);
-        }
+    internal static ExplicitRoleResolution Set(string roleId) =>
+        new(
+            IsClear: false,
+            roleId,
+            RejectionReason: null,
+            IsAuthoritativelyInvalid: false);
 
-        evaluation.Record(
-            ProposalField.Role,
-            OperationResultKind.RejectedUnavailable);
-    }
+    internal static ExplicitRoleResolution Clear() =>
+        new(
+            IsClear: true,
+            RoleId: null,
+            RejectionReason: null,
+            IsAuthoritativelyInvalid: false);
 
-    private static void SetClarificationFailure(
-        PatchEvaluation evaluation,
-        OperationResultKind failure)
-    {
-        if (!evaluation.HasResult(
-                ProposalField.Role,
-                OperationResultKind.Applied))
-        {
-            evaluation.Record(ProposalField.Role, failure);
-        }
-    }
+    internal static ExplicitRoleResolution Rejected(
+        ApplicationGroupRejectionReason reason,
+        bool isAuthoritativelyInvalid = false) =>
+        new(
+            IsClear: false,
+            RoleId: null,
+            reason,
+            isAuthoritativelyInvalid);
+}
+
+internal sealed record RoleClarificationEvaluation(
+    ClarificationSeed? Clarification,
+    ApplicationGroupRejectionReason? RejectionReason)
+{
+    internal static RoleClarificationEvaluation NeedsClarification(
+        ClarificationSeed clarification) =>
+        new(clarification, RejectionReason: null);
+
+    internal static RoleClarificationEvaluation Rejected(
+        ApplicationGroupRejectionReason reason) =>
+        new(Clarification: null, reason);
 }

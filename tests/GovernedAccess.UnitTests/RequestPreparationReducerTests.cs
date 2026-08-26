@@ -29,7 +29,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal("client-beta", result.Candidate.ClientId);
         Assert.Equal(0, authority.SearchCallCount);
         Assert.Equal(["PROD-BETA-UK"], authority.EnvironmentGetCalls);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
         AssertSnapshotUnchanged(preparation, PreparationCandidate.Empty);
     }
 
@@ -51,20 +51,28 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Null(result.Candidate.EnvironmentId);
         Assert.Null(result.Candidate.RoleId);
         Assert.Equal("Restore customer service.", result.Candidate.Justification);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedUnavailable);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedDependency);
-        AssertResult(result, ProposalField.Justification, OperationResultKind.Applied);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
+        AssertJustificationResult(result, ApplicationGroupResultKind.Applied);
         Assert.Equal([ProposalField.Justification], result.ChangedFields);
         AssertSnapshotUnchanged(preparation, PreparationCandidate.Empty);
     }
 
     [Theory]
-    [InlineData(0, EnvironmentSearchResultKind.NoMatches, OperationResultKind.RejectedUnavailable)]
-    [InlineData(6, EnvironmentSearchResultKind.TooBroad, OperationResultKind.RejectedInvalid)]
+    [InlineData(
+        0,
+        EnvironmentSearchResultKind.NoMatches,
+        ApplicationGroupRejectionReason.Unavailable)]
+    [InlineData(
+        6,
+        EnvironmentSearchResultKind.TooBroad,
+        ApplicationGroupRejectionReason.EnvironmentQueryTooBroad)]
     public async Task NonUniqueUnrenderableSearchResultsRejectWithoutMutation(
         int matchCount,
         EnvironmentSearchResultKind expectedKind,
-        OperationResultKind expectedOperationResult)
+        ApplicationGroupRejectionReason expectedRejectionReason)
     {
         var authority = new FakePreparationAuthority
         {
@@ -86,7 +94,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(expectedKind, authority.SearchResult.Kind);
         Assert.Same(existing, result.Candidate);
         Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Environment, expectedOperationResult);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            expectedRejectionReason);
         Assert.Empty(result.ChangedFields);
         AssertSnapshotUnchanged(preparation, existing);
     }
@@ -121,7 +132,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             Enumerable.Range(1, matchCount).Select(index => $"PROD-{index:D2}"),
             result.Clarification?.Choices.Select(choice => choice.CanonicalId));
         Assert.IsType<ClarificationRequired>(result.Outcome);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.NeedsClarification);
+        AssertScopeResult(result, ApplicationGroupResultKind.NeedsClarification);
         AssertSnapshotUnchanged(preparation, existing);
     }
 
@@ -146,7 +157,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(["PROD-01"], authority.EnvironmentGetCalls);
         Assert.Equal("PROD-01", result.Candidate.EnvironmentId);
         Assert.Equal("client-authoritative", result.Candidate.ClientId);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
     }
 
     [Fact]
@@ -166,8 +177,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             CancellationToken.None);
 
         Assert.Equal(ClarificationTarget.Environment, result.Clarification?.Target);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.NeedsClarification);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedDependency);
+        AssertScopeResult(result, ApplicationGroupResultKind.NeedsClarification);
         Assert.Equal(0, authority.RoleGetCallCount);
         Assert.Equal(0, authority.RoleListCallCount);
     }
@@ -190,8 +200,11 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
                 justification: Justification("Restore service.")),
             CancellationToken.None);
 
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedUnavailable);
-        AssertResult(result, ProposalField.Justification, OperationResultKind.Applied);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
+        AssertJustificationResult(result, ApplicationGroupResultKind.Applied);
         Assert.Equal("Restore service.", result.Candidate.Justification);
         Assert.Equal([ProposalField.Justification], result.ChangedFields);
     }
@@ -218,8 +231,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
         Assert.Equal("client-beta", result.Candidate.ClientId);
         Assert.Equal("INC-2000", result.Candidate.IncidentId);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Incident, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
     }
 
     [Fact]
@@ -253,9 +265,11 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal("INC-OLD", result.Candidate.IncidentId);
         Assert.Equal("ProductionReadOnly", result.Candidate.RoleId);
         Assert.Equal("New requester reason.", result.Candidate.Justification);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedConflict);
-        AssertResult(result, ProposalField.Incident, OperationResultKind.RejectedConflict);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedDependency);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Conflict);
+        AssertJustificationResult(result, ApplicationGroupResultKind.Applied);
         Assert.Equal([ProposalField.Justification], result.ChangedFields);
     }
 
@@ -281,17 +295,26 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             CancellationToken.None);
 
         Assert.Same(existing, result.Candidate);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedConflict);
-        AssertResult(result, ProposalField.Incident, OperationResultKind.RejectedConflict);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Conflict);
         Assert.Empty(result.ChangedFields);
     }
 
     [Theory]
-    [InlineData(null, OperationResultKind.RejectedUnavailable)]
-    [InlineData("PROD-ALPHA-EU", OperationResultKind.Applied)]
+    [InlineData(
+        null,
+        ApplicationGroupResultKind.Rejected,
+        ApplicationGroupRejectionReason.Unavailable)]
+    [InlineData(
+        "PROD-ALPHA-EU",
+        ApplicationGroupResultKind.Applied,
+        null)]
     public async Task IncidentWithoutRetainedEnvironmentUsesNullableRelationship(
         string? relatedEnvironmentId,
-        OperationResultKind expectedResult)
+        ApplicationGroupResultKind expectedResult,
+        ApplicationGroupRejectionReason? expectedRejectionReason)
     {
         var authority = new FakePreparationAuthority();
         authority.Incidents["INC-1042"] = Incident(
@@ -308,7 +331,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         Assert.Equal(relatedEnvironmentId, result.Candidate.EnvironmentId);
         Assert.Equal(relatedEnvironmentId is null ? null : "INC-1042", result.Candidate.IncidentId);
-        AssertResult(result, ProposalField.Incident, expectedResult);
+        AssertScopeResult(result, expectedResult, expectedRejectionReason);
         Assert.Equal(relatedEnvironmentId is null ? 0 : 1, authority.EnvironmentGetCalls.Count);
     }
 
@@ -338,9 +361,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
         Assert.Null(result.Candidate.RoleId);
         Assert.Null(result.Candidate.IncidentId);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Role, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Incident, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
         Assert.Equal(
             [ProposalField.Environment, ProposalField.Incident, ProposalField.Role],
             result.ChangedFields);
@@ -376,12 +397,14 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             expectsClarification ? ClarificationTarget.Role : null,
             result.Clarification?.Target);
         Assert.Equal(1, authority.RoleListCallCount);
-        AssertResult(
+        AssertScopeResult(
             result,
-            ProposalField.Role,
             expectsClarification
-                ? OperationResultKind.NeedsClarification
-                : OperationResultKind.RejectedInvalid);
+                ? ApplicationGroupResultKind.NeedsClarification
+                : ApplicationGroupResultKind.Rejected,
+            expectsClarification
+                ? null
+                : ApplicationGroupRejectionReason.RoleChoiceLimitExceeded);
     }
 
     [Fact]
@@ -402,7 +425,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         Assert.Equal("ProductionReadOnly", result.Candidate.RoleId);
         Assert.Equal(ClarificationTarget.Role, result.Clarification?.Target);
-        AssertResult(result, ProposalField.Role, OperationResultKind.NeedsClarification);
+        AssertScopeResult(result, ApplicationGroupResultKind.NeedsClarification);
         Assert.Empty(result.ChangedFields);
     }
 
@@ -431,9 +454,12 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             CancellationToken.None);
 
         Assert.Same(preparation.Candidate, equal.Candidate);
-        AssertResult(equal, ProposalField.Justification, OperationResultKind.NoOpValueEqual);
+        AssertJustificationResult(equal, ApplicationGroupResultKind.NoOp);
         Assert.Same(preparation.Candidate, oversized.Candidate);
-        AssertResult(oversized, ProposalField.Justification, OperationResultKind.RejectedInvalid);
+        AssertJustificationResult(
+            oversized,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Invalid);
     }
 
     [Fact]
@@ -460,7 +486,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(ClarificationContextDisposition.Clear, result.ClarificationDisposition);
         Assert.Null(result.Clarification);
         Assert.Equal(1, authority.RoleGetCallCount);
-        AssertResult(result, ProposalField.Role, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
         Assert.IsType<ReadyForConfirmation>(result.Outcome);
         AssertSnapshotWithContextUnchanged(preparation);
     }
@@ -520,7 +546,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         Assert.Same(preparation.Candidate, result.Candidate);
         Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
         AssertSnapshotWithContextUnchanged(preparation);
     }
 
@@ -545,7 +574,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(
             ClarificationContextDisposition.Clear,
             result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.NoAssignableRoles);
     }
 
     [Fact]
@@ -569,10 +601,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(
             ClarificationContextDisposition.Clear,
             result.ClarificationDisposition);
-        AssertResult(
+        AssertScopeResult(
             result,
-            ProposalField.Environment,
-            OperationResultKind.RejectedUnavailable);
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
     }
 
     [Fact]
@@ -601,7 +633,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(
             ClarificationContextDisposition.Preserve,
             result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
     }
 
     [Fact]
@@ -631,10 +666,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(
             ClarificationContextDisposition.Preserve,
             result.ClarificationDisposition);
-        AssertResult(
+        AssertScopeResult(
             result,
-            ProposalField.Environment,
-            OperationResultKind.RejectedUnavailable);
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
     }
 
     [Fact]
@@ -701,7 +736,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         Assert.Same(existing, result.Candidate);
         Assert.Empty(result.ChangedFields);
-        AssertResult(result, ProposalField.Justification, OperationResultKind.NoOpValueEqual);
+        AssertJustificationResult(result, ApplicationGroupResultKind.NoOp);
     }
 
     [Theory]
@@ -717,29 +752,24 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             ApplicationFailureKind.DependencyUnavailable,
             "authority-unavailable");
         TurnProposal proposal;
-        ProposalField expectedField;
         switch (failurePoint)
         {
             case AuthorityFailurePoint.Search:
                 authority.SearchFailure = failure;
                 proposal = Update(environment: new SetEnvironmentOperation(
                     new EnvironmentSearchQuery("alpha")));
-                expectedField = ProposalField.Environment;
                 break;
             case AuthorityFailurePoint.Incident:
                 authority.IncidentFailure = failure;
                 proposal = Update(incident: new SetIncidentOperation("INC-1042"));
-                expectedField = ProposalField.Incident;
                 break;
             case AuthorityFailurePoint.RoleGet:
                 authority.RoleFailure = failure;
                 proposal = Update(role: new SetRoleOperation("ProductionSupport"));
-                expectedField = ProposalField.Role;
                 break;
             case AuthorityFailurePoint.RoleList:
                 authority.RoleFailure = failure;
                 proposal = Update(justification: Justification("Investigate."));
-                expectedField = ProposalField.Role;
                 break;
             default:
                 throw new InvalidOperationException();
@@ -764,7 +794,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             proposal,
             CancellationToken.None);
 
-        AssertResult(result, expectedField, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
         Assert.Same(preparation.Candidate, result.Candidate);
     }
 
@@ -809,8 +842,72 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
         Assert.Equal("ProductionSupport", result.Candidate.RoleId);
         Assert.Equal([("PROD-BETA-UK", "ProductionSupport")], authority.RoleGetCalls);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Role, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
+    }
+
+    [Fact]
+    public async Task InvalidRoleRejectsSameTurnEnvironmentChangeButAppliesJustification()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.Environments["PROD-BETA-UK"] = Environment(
+            "PROD-BETA-UK",
+            "client-beta");
+        var existing = Candidate(
+            environmentId: "PROD-ALPHA-EU",
+            clientId: "client-alpha",
+            roleId: "ProductionReadOnly",
+            justification: "Investigate.");
+
+        var result = await Reducer(authority).ReduceAsync(
+            Preparation(existing),
+            Update(
+                environment: new SetEnvironmentOperation(
+                    new ExactEnvironmentId("PROD-BETA-UK")),
+                role: new SetRoleOperation("UnavailableRole"),
+                justification: Justification("Restore customer service.")),
+            CancellationToken.None);
+
+        Assert.Equal("PROD-ALPHA-EU", result.Candidate.EnvironmentId);
+        Assert.Equal("client-alpha", result.Candidate.ClientId);
+        Assert.Equal("ProductionReadOnly", result.Candidate.RoleId);
+        Assert.Equal("Restore customer service.", result.Candidate.Justification);
+        Assert.Equal([ProposalField.Justification], result.ChangedFields);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
+        AssertJustificationResult(result, ApplicationGroupResultKind.Applied);
+    }
+
+    [Fact]
+    public async Task ValidScopeAppliesWhenIndependentJustificationIsRejected()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.Environments["PROD-BETA-UK"] = Environment(
+            "PROD-BETA-UK",
+            "client-beta");
+        authority.Roles[("PROD-BETA-UK", "ProductionSupport")] = Role(
+            "PROD-BETA-UK",
+            "ProductionSupport");
+
+        var result = await Reducer(authority).ReduceAsync(
+            EmptyPreparation(),
+            Update(
+                environment: new SetEnvironmentOperation(
+                    new ExactEnvironmentId("PROD-BETA-UK")),
+                role: new SetRoleOperation("ProductionSupport"),
+                justification: Justification(new string('x', 2001))),
+            CancellationToken.None);
+
+        Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
+        Assert.Equal("client-beta", result.Candidate.ClientId);
+        Assert.Equal("ProductionSupport", result.Candidate.RoleId);
+        Assert.Null(result.Candidate.Justification);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
+        AssertJustificationResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Invalid);
     }
 
     [Fact]
@@ -835,9 +932,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Null(result.Candidate.RoleId);
         Assert.Null(result.Candidate.IncidentId);
         Assert.Equal("Investigate.", result.Candidate.Justification);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Incident, OperationResultKind.Applied);
-        AssertResult(result, ProposalField.Role, OperationResultKind.Applied);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
     }
 
     [Fact]
@@ -855,7 +950,10 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
                 new EnvironmentSearchQuery("valid proposal query"))),
             CancellationToken.None);
 
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedInvalid);
+        AssertScopeResult(
+            result,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Invalid);
         Assert.Same(preparation.Candidate, result.Candidate);
     }
 
@@ -895,11 +993,20 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             Update(incident: new SetIncidentOperation("INC-REQUESTED")),
             CancellationToken.None);
 
-        AssertResult(environment, ProposalField.Environment, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            environment,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
         Assert.Null(environment.Candidate.EnvironmentId);
-        AssertResult(role, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            role,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
         Assert.Null(role.Candidate.RoleId);
-        AssertResult(incident, ProposalField.Incident, OperationResultKind.RejectedUnavailable);
+        AssertScopeResult(
+            incident,
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.Unavailable);
         Assert.Null(incident.Candidate.IncidentId);
     }
 
@@ -925,7 +1032,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
         Assert.Null(result.Clarification);
         Assert.Equal(0, authority.RoleListCallCount);
-        AssertResult(result, ProposalField.Justification, OperationResultKind.NoOpValueEqual);
+        AssertJustificationResult(result, ApplicationGroupResultKind.NoOp);
         Assert.Same(preparation.Candidate, result.Candidate);
     }
 
@@ -952,7 +1059,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             ClarificationContextDisposition.Preserve,
             result.ClarificationDisposition);
         Assert.Null(result.Clarification);
-        AssertResult(result, ProposalField.Justification, OperationResultKind.Applied);
+        AssertJustificationResult(result, ApplicationGroupResultKind.Applied);
         AssertSnapshotWithContextUnchanged(preparation);
     }
 
@@ -982,7 +1089,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(
             ClarificationContextDisposition.Preserve,
             result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.NoOpValueEqual);
+        AssertScopeResult(result, ApplicationGroupResultKind.NoOp);
     }
 
     [Fact]

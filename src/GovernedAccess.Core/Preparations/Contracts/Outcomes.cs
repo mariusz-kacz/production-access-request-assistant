@@ -26,40 +26,56 @@ public enum ProposalField
     Justification,
 }
 
-public enum OperationResultKind
+public enum ApplicationGroupResultKind
 {
     Applied,
-    NoOpValueEqual,
-    RejectedInvalid,
-    RejectedUnavailable,
-    RejectedConflict,
-    RejectedDependency,
+    NoOp,
+    Rejected,
     NeedsClarification,
 }
 
-public sealed record OperationResult
+public enum ApplicationGroupRejectionReason
 {
-    public OperationResult(
-        ProposalField field,
-        OperationResultKind kind)
-    {
-        if (!Enum.IsDefined(field))
-        {
-            throw new ArgumentOutOfRangeException(nameof(field));
-        }
+    Invalid,
+    Unavailable,
+    Conflict,
+    MissingDependency,
+    EnvironmentQueryTooBroad,
+    NoAssignableRoles,
+    RoleChoiceLimitExceeded,
+}
 
+public sealed record ApplicationGroupResult
+{
+    public ApplicationGroupResult(
+        ApplicationGroupResultKind kind,
+        ApplicationGroupRejectionReason? rejectionReason = null)
+    {
         if (!Enum.IsDefined(kind))
         {
             throw new ArgumentOutOfRangeException(nameof(kind));
         }
 
-        Field = field;
+        if (rejectionReason.HasValue && !Enum.IsDefined(rejectionReason.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(rejectionReason));
+        }
+
+        if ((kind == ApplicationGroupResultKind.Rejected)
+            != rejectionReason.HasValue)
+        {
+            throw new ArgumentException(
+                "A rejection reason is required exactly when the group is rejected.",
+                nameof(rejectionReason));
+        }
+
         Kind = kind;
+        RejectionReason = rejectionReason;
     }
 
-    public ProposalField Field { get; }
+    public ApplicationGroupResultKind Kind { get; }
 
-    public OperationResultKind Kind { get; }
+    public ApplicationGroupRejectionReason? RejectionReason { get; }
 }
 
 public abstract record ApplicationOutcome
@@ -68,37 +84,32 @@ public abstract record ApplicationOutcome
     {
     }
 
-    private protected static IReadOnlyList<OperationResult> CopyOperationResults(
-        IEnumerable<OperationResult> operationResults)
+    private protected static void ValidateGroupResults(
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult)
     {
-        ArgumentNullException.ThrowIfNull(operationResults);
-        var results = operationResults.ToArray();
-        if (results.Length == 0)
+        if (scopeResult is null && justificationResult is null)
         {
             throw new ArgumentException(
-                "An operation outcome must contain at least one result.",
-                nameof(operationResults));
+                "A draft application outcome must contain at least one group result.");
         }
-
-        if (results.Any(result => result is null))
-        {
-            throw new ArgumentException(
-                "Operation results cannot contain null values.",
-                nameof(operationResults));
-        }
-
-        return Array.AsReadOnly(results);
     }
 }
 
 public sealed record DraftUpdated : ApplicationOutcome
 {
-    public DraftUpdated(IEnumerable<OperationResult> operationResults)
+    public DraftUpdated(
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult)
     {
-        OperationResults = CopyOperationResults(operationResults);
+        ValidateGroupResults(scopeResult, justificationResult);
+        ScopeResult = scopeResult;
+        JustificationResult = justificationResult;
     }
 
-    public IReadOnlyList<OperationResult> OperationResults { get; }
+    public ApplicationGroupResult? ScopeResult { get; }
+
+    public ApplicationGroupResult? JustificationResult { get; }
 }
 
 public sealed record ClarificationRequired : ApplicationOutcome
@@ -107,7 +118,9 @@ public sealed record ClarificationRequired : ApplicationOutcome
 
     public ClarificationRequired(
         ClarificationTarget target,
-        IEnumerable<ClarificationChoice> choices)
+        IEnumerable<ClarificationChoice> choices,
+        ApplicationGroupResult scopeResult,
+        ApplicationGroupResult? justificationResult)
     {
         if (!Enum.IsDefined(target))
         {
@@ -148,23 +161,38 @@ public sealed record ClarificationRequired : ApplicationOutcome
                 nameof(choices));
         }
 
+        ArgumentNullException.ThrowIfNull(scopeResult);
+        ValidateGroupResults(scopeResult, justificationResult);
+
         Target = target;
         Choices = Array.AsReadOnly(choiceArray);
+        ScopeResult = scopeResult;
+        JustificationResult = justificationResult;
     }
 
     public ClarificationTarget Target { get; }
 
     public IReadOnlyList<ClarificationChoice> Choices { get; }
+
+    public ApplicationGroupResult ScopeResult { get; }
+
+    public ApplicationGroupResult? JustificationResult { get; }
 }
 
 public sealed record DraftUnchanged : ApplicationOutcome
 {
-    public DraftUnchanged(IEnumerable<OperationResult> operationResults)
+    public DraftUnchanged(
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult)
     {
-        OperationResults = CopyOperationResults(operationResults);
+        ValidateGroupResults(scopeResult, justificationResult);
+        ScopeResult = scopeResult;
+        JustificationResult = justificationResult;
     }
 
-    public IReadOnlyList<OperationResult> OperationResults { get; }
+    public ApplicationGroupResult? ScopeResult { get; }
+
+    public ApplicationGroupResult? JustificationResult { get; }
 }
 
 public sealed record DraftDiscussion : ApplicationOutcome

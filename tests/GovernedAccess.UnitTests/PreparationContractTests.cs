@@ -1,5 +1,6 @@
 using System.Reflection;
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 
@@ -201,7 +202,7 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void StructuralFailuresAndOperationResultsAreClosed()
+    public void StructuralFailuresAndApplicationGroupResultsAreClosed()
     {
         Assert.Equal(
             [
@@ -228,15 +229,23 @@ public sealed class PreparationContractTests
             Enum.GetNames<ProposalField>());
         Assert.Equal(
             [
-                nameof(OperationResultKind.Applied),
-                nameof(OperationResultKind.NoOpValueEqual),
-                nameof(OperationResultKind.RejectedInvalid),
-                nameof(OperationResultKind.RejectedUnavailable),
-                nameof(OperationResultKind.RejectedConflict),
-                nameof(OperationResultKind.RejectedDependency),
-                nameof(OperationResultKind.NeedsClarification),
+                nameof(ApplicationGroupResultKind.Applied),
+                nameof(ApplicationGroupResultKind.NoOp),
+                nameof(ApplicationGroupResultKind.Rejected),
+                nameof(ApplicationGroupResultKind.NeedsClarification),
             ],
-            Enum.GetNames<OperationResultKind>());
+            Enum.GetNames<ApplicationGroupResultKind>());
+        Assert.Equal(
+            [
+                nameof(ApplicationGroupRejectionReason.Invalid),
+                nameof(ApplicationGroupRejectionReason.Unavailable),
+                nameof(ApplicationGroupRejectionReason.Conflict),
+                nameof(ApplicationGroupRejectionReason.MissingDependency),
+                nameof(ApplicationGroupRejectionReason.EnvironmentQueryTooBroad),
+                nameof(ApplicationGroupRejectionReason.NoAssignableRoles),
+                nameof(ApplicationGroupRejectionReason.RoleChoiceLimitExceeded),
+            ],
+            Enum.GetNames<ApplicationGroupRejectionReason>());
     }
 
     [Fact]
@@ -265,13 +274,17 @@ public sealed class PreparationContractTests
                 .Order(StringComparer.Ordinal));
 
         var updated = new DraftUpdated(
-            [new OperationResult(ProposalField.Environment, OperationResultKind.Applied)]);
+            new ApplicationGroupResult(ApplicationGroupResultKind.Applied),
+            justificationResult: null);
         var clarification = new ClarificationRequired(
             ClarificationTarget.Environment,
             [
                 EnvironmentChoice("PROD-ALPHA-EU"),
                 EnvironmentChoice("PROD-ALPHA-US"),
-            ]);
+            ],
+            new ApplicationGroupResult(
+                ApplicationGroupResultKind.NeedsClarification),
+            justificationResult: null);
         var discussion = new DraftDiscussion(DiscussionTopic.AllowedChanges);
         var readyId = Guid.NewGuid();
         var ready = new ReadyForConfirmation(readyId);
@@ -280,7 +293,8 @@ public sealed class PreparationContractTests
             successorId,
             RevalidatedPreparationStatus.Collecting);
 
-        Assert.Single(updated.OperationResults);
+        Assert.Equal(ApplicationGroupResultKind.Applied, updated.ScopeResult?.Kind);
+        Assert.Null(updated.JustificationResult);
         Assert.Equal(
             ["PROD-ALPHA-EU", "PROD-ALPHA-US"],
             clarification.Choices.Select(choice => choice.CanonicalId));
@@ -296,23 +310,33 @@ public sealed class PreparationContractTests
         var maximumChoices = Enumerable.Range(1, ClarificationRequired.MaximumChoiceCount)
             .Select(index => EnvironmentChoice($"PROD-{index}"))
             .ToArray();
+        var scopeResult = new ApplicationGroupResult(
+            ApplicationGroupResultKind.NeedsClarification);
         var outcome = new ClarificationRequired(
             ClarificationTarget.Environment,
-            maximumChoices);
+            maximumChoices,
+            scopeResult,
+            justificationResult: null);
 
         Assert.Equal(maximumChoices, outcome.Choices);
         Assert.Throws<ArgumentException>(
             () => new ClarificationRequired(
                 ClarificationTarget.Environment,
-                []));
+                [],
+                scopeResult,
+                justificationResult: null));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new ClarificationRequired(
                 ClarificationTarget.Environment,
-                maximumChoices.Append(EnvironmentChoice("PROD-6"))));
+                maximumChoices.Append(EnvironmentChoice("PROD-6")),
+                scopeResult,
+                justificationResult: null));
         Assert.Throws<ArgumentException>(
             () => new ClarificationRequired(
                 ClarificationTarget.Environment,
-                [EnvironmentChoice("PROD-1"), EnvironmentChoice("PROD-1")]));
+                [EnvironmentChoice("PROD-1"), EnvironmentChoice("PROD-1")],
+                scopeResult,
+                justificationResult: null));
     }
 
     [Fact]
@@ -342,22 +366,37 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void OperationResultContainsOnlySafeStructuredClassification()
+    public void ApplicationGroupResultContainsOnlySafeStructuredClassification()
     {
-        var result = new OperationResult(
-            ProposalField.Environment,
-            OperationResultKind.NeedsClarification);
+        var result = new ApplicationGroupResult(
+            ApplicationGroupResultKind.Rejected,
+            ApplicationGroupRejectionReason.EnvironmentQueryTooBroad);
 
-        Assert.Equal(ProposalField.Environment, result.Field);
-        Assert.Equal(OperationResultKind.NeedsClarification, result.Kind);
+        Assert.Equal(ApplicationGroupResultKind.Rejected, result.Kind);
+        Assert.Equal(
+            ApplicationGroupRejectionReason.EnvironmentQueryTooBroad,
+            result.RejectionReason);
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new OperationResult(
-                (ProposalField)int.MaxValue,
-                OperationResultKind.Applied));
+            () => new ApplicationGroupResult(
+                (ApplicationGroupResultKind)int.MaxValue));
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new OperationResult(
-                ProposalField.Role,
-                (OperationResultKind)int.MaxValue));
+            () => new ApplicationGroupResult(
+                ApplicationGroupResultKind.Rejected,
+                (ApplicationGroupRejectionReason)int.MaxValue));
+        Assert.Throws<ArgumentException>(
+            () => new ApplicationGroupResult(ApplicationGroupResultKind.Rejected));
+        Assert.Throws<ArgumentException>(
+            () => new ApplicationGroupResult(
+                ApplicationGroupResultKind.Applied,
+                ApplicationGroupRejectionReason.Invalid));
+        Assert.Null(typeof(RequestPreparationReducer).Assembly.GetType(
+            "GovernedAccess.Core.Preparations.PatchEvaluation"));
+        Assert.DoesNotContain(
+            typeof(TurnProposal).Assembly.GetTypes(),
+            type => string.Equals(
+                type.Name,
+                "OperationResult",
+                StringComparison.Ordinal));
     }
 
     [Fact]

@@ -8,7 +8,6 @@ namespace GovernedAccess.Core.Preparations;
 public sealed partial class RequestPreparationReducer
 {
     private readonly PreparationScopeEvaluator scopeEvaluator;
-    private readonly PreparationRoleEvaluator roleEvaluator;
 
     public RequestPreparationReducer(
         IProductionEnvironmentSearchAuthority environmentSearch,
@@ -21,11 +20,10 @@ public sealed partial class RequestPreparationReducer
         ArgumentNullException.ThrowIfNull(roleAuthority);
         ArgumentNullException.ThrowIfNull(incidentAuthority);
 
-        roleEvaluator = new PreparationRoleEvaluator(roleAuthority);
         scopeEvaluator = new PreparationScopeEvaluator(
             environmentSearch,
             environmentAuthority,
-            roleEvaluator,
+            new PreparationRoleEvaluator(roleAuthority),
             incidentAuthority);
     }
 
@@ -83,79 +81,96 @@ public sealed partial class RequestPreparationReducer
         CancellationToken cancellationToken)
     {
         var current = preparation.Candidate;
-        var evaluation = new PatchEvaluation(current);
-        var scopeResult = await scopeEvaluator.EvaluateAsync(
-            evaluation,
+        var scope = await scopeEvaluator.EvaluateAsync(
+            current,
             patch,
             cancellationToken);
-
-        await roleEvaluator.ApplyRequestedAsync(
-            evaluation,
-            patch.Role,
-            scopeResult.RoleEvaluation,
-            cancellationToken);
-        PreparationJustificationPolicy.ApplyRequested(
-            evaluation,
+        var justification = PreparationJustificationPolicy.Evaluate(
+            current.Justification,
             patch.Justification);
-
-        var candidate = evaluation.ToCandidate();
+        var candidate = CombineCandidate(
+            current,
+            scope.Candidate,
+            justification.Justification);
+        var changedFields = candidate.ChangedFieldsFrom(current)
+            .OrderBy(FieldOrder)
+            .ToArray();
         var contextConsumed = IsClarificationConsumed(
             preparation.Clarification,
-            candidate.ChangedFieldsFrom(current));
+            changedFields);
         var contextInvalidated = IsClarificationInvalidated(
             preparation.Clarification,
-            patch,
-            evaluation);
+            scope.InvalidClarificationProposal);
         var clarification = await DetermineClarificationAsync(
             preparation,
             candidate,
-            evaluation,
-            scopeResult.EnvironmentClarification,
+            scope,
             contextConsumed,
             contextInvalidated,
             cancellationToken);
+
         return CompleteReduction(
             preparation,
             candidate,
-            clarification,
+            clarification.Clarification,
             contextInvalidated,
-            evaluation);
+            clarification.ScopeResult,
+            justification.Result,
+            changedFields);
     }
 
-    private async Task<ClarificationSeed?> DetermineClarificationAsync(
+    private async Task<ClarificationDecision> DetermineClarificationAsync(
         RequestPreparation preparation,
         PreparationCandidate candidate,
-        PatchEvaluation evaluation,
-        ClarificationSeed? environmentClarification,
+        ScopeApplicationResult scope,
         bool contextConsumed,
         bool contextInvalidated,
         CancellationToken cancellationToken)
     {
-        if (environmentClarification is not null)
+        if (scope.EnvironmentClarification is not null)
         {
-            return environmentClarification;
+            return new ClarificationDecision(
+                scope.EnvironmentClarification,
+                scope.Result!);
         }
 
         if (preparation.Clarification is not null
             && !contextConsumed
             && !contextInvalidated)
         {
-            return null;
+            return new ClarificationDecision(
+                Clarification: null,
+                scope.Result);
         }
 
-        if (evaluation.EnvironmentId is null
-            || (evaluation.RoleId is not null
-                && !evaluation.HasResult(
-                    ProposalField.Role,
-                    OperationResultKind.RejectedUnavailable)))
+        if (!scope.ShouldResolveRoleClarification
+            || candidate.EnvironmentId is null)
         {
-            return null;
+            return new ClarificationDecision(
+                Clarification: null,
+                scope.Result);
         }
 
-        return await roleEvaluator.ResolveClarificationAsync(
-            evaluation.EnvironmentId,
-            evaluation,
+        var roleClarification = await scopeEvaluator.ResolveRoleClarificationAsync(
+            candidate.EnvironmentId,
             cancellationToken);
+        if (roleClarification.Clarification is not null)
+        {
+            return new ClarificationDecision(
+                roleClarification.Clarification,
+                scope.Result?.Kind == ApplicationGroupResultKind.Applied
+                    ? scope.Result
+                    : new ApplicationGroupResult(
+                        ApplicationGroupResultKind.NeedsClarification));
+        }
+
+        return new ClarificationDecision(
+            Clarification: null,
+            scope.Result?.Kind == ApplicationGroupResultKind.Applied
+                ? scope.Result
+                : new ApplicationGroupResult(
+                    ApplicationGroupResultKind.Rejected,
+                    roleClarification.RejectionReason!.Value));
     }
 
     private static RequestPreparationReduction CompleteReduction(
@@ -163,10 +178,10 @@ public sealed partial class RequestPreparationReducer
         PreparationCandidate candidate,
         ClarificationSeed? clarification,
         bool contextInvalidated,
-        PatchEvaluation evaluation)
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult,
+        ProposalField[] changedFields)
     {
-        var changedFields = evaluation.GetChangedFields(candidate);
-        var orderedOperationResults = evaluation.GetOperationResults();
         var clarificationDisposition = clarification is not null
             ? ClarificationContextDisposition.Replace
             : IsClarificationConsumed(
@@ -180,13 +195,15 @@ public sealed partial class RequestPreparationReducer
             candidate,
             clarification,
             changedFields,
-            orderedOperationResults);
+            scopeResult,
+            justificationResult);
 
         return new RequestPreparationReduction(
             candidate,
             clarificationDisposition,
             clarification,
-            orderedOperationResults,
+            scopeResult,
+            justificationResult,
             changedFields,
             outcome);
     }
@@ -196,23 +213,27 @@ public sealed partial class RequestPreparationReducer
         PreparationCandidate candidate,
         ClarificationSeed? clarification,
         ProposalField[] changedFields,
-        IReadOnlyList<OperationResult> operationResults)
+        ApplicationGroupResult? scopeResult,
+        ApplicationGroupResult? justificationResult)
     {
         if (clarification is not null)
         {
             return new ClarificationRequired(
                 clarification.Target,
-                clarification.Choices);
+                clarification.Choices,
+                scopeResult!,
+                justificationResult);
         }
 
-        if (candidate.IsComplete && preparation.Lifecycle == PreparationLifecycle.Collecting)
+        if (candidate.IsComplete
+            && preparation.Lifecycle == PreparationLifecycle.Collecting)
         {
             return new ReadyForConfirmation(preparation.PreparationId);
         }
 
         return changedFields.Length > 0
-            ? new DraftUpdated(operationResults)
-            : new DraftUnchanged(operationResults);
+            ? new DraftUpdated(scopeResult, justificationResult)
+            : new DraftUnchanged(scopeResult, justificationResult);
     }
 
     private static RequestPreparationReduction Unchanged(
@@ -222,7 +243,8 @@ public sealed partial class RequestPreparationReducer
             preparation.Candidate,
             ClarificationContextDisposition.Preserve,
             clarification: null,
-            operationResults: [],
+            scopeResult: null,
+            justificationResult: null,
             changedFields: [],
             outcome);
 
@@ -233,9 +255,46 @@ public sealed partial class RequestPreparationReducer
                 "request-preparation-proposal-structural-invalid",
                 "The structured request proposal is invalid."));
 
+    private static PreparationCandidate CombineCandidate(
+        PreparationCandidate current,
+        PreparationCandidate scopeCandidate,
+        string? justification)
+    {
+        if (string.Equals(
+                current.ClientId,
+                scopeCandidate.ClientId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                current.EnvironmentId,
+                scopeCandidate.EnvironmentId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                current.RoleId,
+                scopeCandidate.RoleId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                current.IncidentId,
+                scopeCandidate.IncidentId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                current.Justification,
+                justification,
+                StringComparison.Ordinal))
+        {
+            return current;
+        }
+
+        return new PreparationCandidate(
+            scopeCandidate.ClientId,
+            scopeCandidate.EnvironmentId,
+            scopeCandidate.RoleId,
+            justification,
+            scopeCandidate.IncidentId);
+    }
+
     private static bool IsClarificationConsumed(
         PreparationClarificationContext? clarification,
-        IReadOnlySet<ProposalField> changedFields) =>
+        IReadOnlyList<ProposalField> changedFields) =>
         clarification?.Target switch
         {
             ClarificationTarget.Environment =>
@@ -246,43 +305,27 @@ public sealed partial class RequestPreparationReducer
             _ => false,
         };
 
-    private static bool IsClarificationConsumed(
-        PreparationClarificationContext? clarification,
-        IReadOnlyList<ProposalField> changedFields) =>
-        IsClarificationConsumed(
-            clarification,
-            changedFields.ToHashSet());
-
     private static bool IsClarificationInvalidated(
         PreparationClarificationContext? clarification,
-        DraftPatch patch,
-        PatchEvaluation evaluation)
+        InvalidClarificationProposal? invalidProposal) =>
+        clarification is not null
+        && invalidProposal is not null
+        && clarification.Target == invalidProposal.Target
+        && clarification.Choices.Any(choice => string.Equals(
+            choice.CanonicalId,
+            invalidProposal.CanonicalId,
+            StringComparison.Ordinal));
+
+    private static int FieldOrder(ProposalField field) => field switch
     {
-        if (clarification is null)
-        {
-            return false;
-        }
+        ProposalField.Environment => 0,
+        ProposalField.Incident => 1,
+        ProposalField.Role => 2,
+        ProposalField.Justification => 3,
+        _ => int.MaxValue,
+    };
 
-        var proposedId = clarification.Target switch
-        {
-            ClarificationTarget.Environment
-                when patch.Environment is SetEnvironmentOperation
-                {
-                    Reference: ExactEnvironmentId exact,
-                }
-                    && evaluation.IsAuthoritativelyInvalid(ProposalField.Environment) =>
-                exact.Id,
-            ClarificationTarget.Role
-                when patch.Role is SetRoleOperation role
-                    && evaluation.IsAuthoritativelyInvalid(ProposalField.Role) =>
-                role.RoleId,
-            _ => null,
-        };
-
-        return proposedId is not null
-            && clarification.Choices.Any(choice => string.Equals(
-                choice.CanonicalId,
-                proposedId,
-                StringComparison.Ordinal));
-    }
+    private sealed record ClarificationDecision(
+        ClarificationSeed? Clarification,
+        ApplicationGroupResult? ScopeResult);
 }

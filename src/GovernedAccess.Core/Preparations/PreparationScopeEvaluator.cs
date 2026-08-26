@@ -13,21 +13,13 @@ internal sealed class PreparationScopeEvaluator(
     IIncidentAuthority incidentAuthority)
 {
     internal async Task<ScopeApplicationResult> EvaluateAsync(
-        PatchEvaluation evaluation,
+        PreparationCandidate current,
         DraftPatch patch,
         CancellationToken cancellationToken)
     {
-        var resolvedPatch = await ResolvePatchAsync(patch, cancellationToken);
-        return await ApplyScopeAsync(
-            evaluation,
-            resolvedPatch,
-            cancellationToken);
-    }
-
-    private async Task<ResolvedPatch> ResolvePatchAsync(
-        DraftPatch patch,
-        CancellationToken cancellationToken)
-    {
+        var hasScopeOperation = patch.Environment is not null
+            || patch.Incident is not null
+            || patch.Role is not null;
         var environment = patch.Environment is null
             ? null
             : await ResolveEnvironmentAsync(patch.Environment, cancellationToken);
@@ -35,329 +27,266 @@ internal sealed class PreparationScopeEvaluator(
             ? null
             : await ResolveIncidentAsync(patch.Incident, cancellationToken);
 
-        return new ResolvedPatch(patch, environment, incident);
-    }
-
-    private async Task<ScopeApplicationResult> ApplyScopeAsync(
-        PatchEvaluation evaluation,
-        ResolvedPatch resolvedPatch,
-        CancellationToken cancellationToken)
-    {
-        var environmentResolution = resolvedPatch.Environment;
-        var incidentResolution = resolvedPatch.Incident;
-
-        if (environmentResolution is not null)
+        if (environment?.Clarification is not null)
         {
-            evaluation.Record(ProposalField.Environment, environmentResolution.Result);
-            if (environmentResolution.IsAuthoritativelyInvalid)
-            {
-                evaluation.RecordAuthoritativelyInvalid(ProposalField.Environment);
-            }
+            return ScopeApplicationResult.NeedsClarification(
+                current,
+                environment.Clarification!);
         }
 
-        if (incidentResolution is not null)
+        if (environment?.IsRejected == true)
         {
-            evaluation.Record(ProposalField.Incident, incidentResolution.Result);
+            return ScopeApplicationResult.Rejected(
+                current,
+                environment.RejectionReason!.Value,
+                InvalidEnvironmentProposal(environment));
         }
 
-        if (resolvedPatch.Patch.Environment is ClearEnvironmentOperation
-            && resolvedPatch.Patch.Incident is SetIncidentOperation)
+        if (incident?.IsRejected == true)
         {
-            evaluation.Record(
-                ProposalField.Environment,
-                OperationResultKind.RejectedConflict);
-            evaluation.Record(
-                ProposalField.Incident,
-                OperationResultKind.RejectedConflict);
-            return new ScopeApplicationResult(
-                RoleEvaluationDisposition.Blocked,
-                EnvironmentClarification: null);
+            return ScopeApplicationResult.Rejected(
+                current,
+                incident.RejectionReason!.Value);
         }
 
-        if (resolvedPatch.Patch.Environment is SetEnvironmentOperation
-            && resolvedPatch.Patch.Incident is SetIncidentOperation)
+        if (patch.Environment is ClearEnvironmentOperation
+            && patch.Incident is SetIncidentOperation)
         {
-            var roleEvaluation = await ApplyExplicitScopeGroupAsync(
-                evaluation,
-                environmentResolution!,
-                incidentResolution!,
-                cancellationToken);
-            return new ScopeApplicationResult(
-                roleEvaluation,
-                environmentResolution!.Clarification);
+            return ScopeApplicationResult.Rejected(
+                current,
+                ApplicationGroupRejectionReason.Conflict);
         }
 
-        var roleEvaluationDisposition = RoleEvaluationDisposition.Allowed;
-        ClarificationSeed? environmentClarification = null;
-        if (environmentResolution is not null)
+        var scope = new TemporaryScope(current);
+        var scopeFailure = await ApplyEnvironmentAndIncidentAsync(
+            scope,
+            patch,
+            environment,
+            incident,
+            cancellationToken);
+        if (scopeFailure.HasValue)
         {
-            roleEvaluationDisposition = await ApplyEnvironmentResolutionAsync(
-                evaluation,
-                environmentResolution,
-                resolvedPatch.Patch.Incident is null
-                    ? RetainedIncidentPolicy.Revalidate
-                    : RetainedIncidentPolicy.PreserveWithoutValidation,
-                cancellationToken);
-            environmentClarification = environmentResolution.Clarification;
+            return ScopeApplicationResult.Rejected(
+                current,
+                scopeFailure.Value);
         }
 
-        if (incidentResolution is not null)
+        var changedBeforeRole = scope.HasChangedFrom(current);
+        var role = await roleEvaluator.ResolveExplicitAsync(
+            scope.EnvironmentId,
+            patch.Role,
+            cancellationToken);
+        if (role.IsRejected)
         {
-            await ApplyIncidentResolutionAsync(
-                evaluation,
-                incidentResolution,
-                cancellationToken);
+            var canClarifyRole = patch.Role is SetRoleOperation
+                && !changedBeforeRole
+                && role.IsAuthoritativelyInvalid
+                && string.Equals(
+                    scope.EnvironmentId,
+                    current.EnvironmentId,
+                    StringComparison.Ordinal);
+            var invalidProposal = canClarifyRole
+                && role.IsAuthoritativelyInvalid
+                && patch.Role is SetRoleOperation set
+                    ? new InvalidClarificationProposal(
+                        ClarificationTarget.Role,
+                        set.RoleId)
+                    : null;
+            return ScopeApplicationResult.Rejected(
+                current,
+                role.RejectionReason!.Value,
+                invalidProposal,
+                shouldResolveRoleClarification: canClarifyRole);
         }
 
+        if (role.RoleId is not null)
+        {
+            scope.RoleId = role.RoleId;
+        }
+        else if (role.IsClear)
+        {
+            scope.RoleId = null;
+        }
+
+        var candidate = scope.ToCandidate(current.Justification);
+        var result = hasScopeOperation
+            ? new ApplicationGroupResult(
+                candidate.ChangedFieldsFrom(current).Count > 0
+                    ? ApplicationGroupResultKind.Applied
+                    : ApplicationGroupResultKind.NoOp)
+            : null;
         return new ScopeApplicationResult(
-            roleEvaluationDisposition,
-            environmentClarification);
+            candidate,
+            result,
+            EnvironmentClarification: null,
+            ShouldResolveRoleClarification:
+                candidate.EnvironmentId is not null && candidate.RoleId is null,
+            InvalidClarificationProposal: null);
     }
 
-    private async Task<RoleEvaluationDisposition> ApplyExplicitScopeGroupAsync(
-        PatchEvaluation evaluation,
-        EnvironmentResolution environment,
-        IncidentResolution incident,
-        CancellationToken cancellationToken)
+    internal Task<RoleClarificationEvaluation> ResolveRoleClarificationAsync(
+        string environmentId,
+        CancellationToken cancellationToken) =>
+        roleEvaluator.ResolveClarificationAsync(environmentId, cancellationToken);
+
+    private async Task<ApplicationGroupRejectionReason?>
+        ApplyEnvironmentAndIncidentAsync(
+            TemporaryScope scope,
+            DraftPatch patch,
+            EnvironmentResolution? environment,
+            IncidentResolution? incident,
+            CancellationToken cancellationToken)
     {
-        if (environment.Environment is null || incident.Incident is null)
+        if (environment?.Environment is not null)
         {
-            if (environment.Clarification is not null)
+            if (incident?.Incident is not null
+                && !string.Equals(
+                    incident.Incident!.EnvironmentId,
+                    environment.Environment!.EnvironmentId,
+                    StringComparison.Ordinal))
             {
-                evaluation.Record(
-                    ProposalField.Incident,
-                    OperationResultKind.RejectedDependency);
-            }
-            else if (environment.Environment is not null)
-            {
-                evaluation.Record(
-                    ProposalField.Environment,
-                    OperationResultKind.RejectedDependency);
-            }
-            else if (incident.Incident is not null)
-            {
-                evaluation.Record(
-                    ProposalField.Incident,
-                    OperationResultKind.RejectedDependency);
+                return ApplicationGroupRejectionReason.Conflict;
             }
 
-            return RoleEvaluationDisposition.Blocked;
+            var environmentFailure = await ApplyEnvironmentAsync(
+                scope,
+                environment.Environment!,
+                revalidateRetainedIncident: patch.Incident is null,
+                cancellationToken);
+            if (environmentFailure.HasValue)
+            {
+                return environmentFailure;
+            }
+        }
+        else if (environment?.IsClear == true)
+        {
+            scope.ClearEnvironment();
+        }
+
+        if (incident?.IsClear == true)
+        {
+            scope.IncidentId = null;
+            return null;
+        }
+
+        if (incident?.Incident is null)
+        {
+            return null;
+        }
+
+        if (incident.Incident!.EnvironmentId is null)
+        {
+            return ApplicationGroupRejectionReason.Unavailable;
+        }
+
+        if (patch.Environment is null)
+        {
+            var relatedEnvironment = await ExactEnvironmentAsync(
+                incident.Incident.EnvironmentId,
+                requestedExactId: null,
+                cancellationToken);
+            if (relatedEnvironment.Environment is null)
+            {
+                return relatedEnvironment.RejectionReason
+                    ?? ApplicationGroupRejectionReason.Unavailable;
+            }
+
+            var environmentFailure = await ApplyEnvironmentAsync(
+                scope,
+                relatedEnvironment.Environment!,
+                revalidateRetainedIncident: false,
+                cancellationToken);
+            if (environmentFailure.HasValue)
+            {
+                return environmentFailure;
+            }
         }
 
         if (!string.Equals(
+                scope.EnvironmentId,
                 incident.Incident.EnvironmentId,
-                environment.Environment.EnvironmentId,
                 StringComparison.Ordinal))
         {
-            evaluation.Record(
-                ProposalField.Environment,
-                OperationResultKind.RejectedConflict);
-            evaluation.Record(
-                ProposalField.Incident,
-                OperationResultKind.RejectedConflict);
-            return RoleEvaluationDisposition.Blocked;
+            return ApplicationGroupRejectionReason.Conflict;
         }
 
-        await ApplyEnvironmentAsync(
-            evaluation,
-            environment.Environment,
-            RetainedIncidentPolicy.PreserveWithoutValidation,
-            cancellationToken);
-        ApplyIncident(evaluation, incident.Incident);
-        return RoleEvaluationDisposition.Allowed;
+        scope.IncidentId = incident.Incident.IncidentId;
+        return null;
     }
 
-    private async Task<RoleEvaluationDisposition> ApplyEnvironmentResolutionAsync(
-        PatchEvaluation evaluation,
-        EnvironmentResolution resolution,
-        RetainedIncidentPolicy retainedIncidentPolicy,
-        CancellationToken cancellationToken)
-    {
-        if (resolution.Environment is not null)
-        {
-            await ApplyEnvironmentAsync(
-                evaluation,
-                resolution.Environment,
-                retainedIncidentPolicy,
-                cancellationToken);
-            return RoleEvaluationDisposition.Allowed;
-        }
-
-        if (resolution.IsClear)
-        {
-            ApplyEnvironmentClear(evaluation);
-            return RoleEvaluationDisposition.Allowed;
-        }
-
-        return RoleEvaluationDisposition.Blocked;
-    }
-
-    private async Task ApplyEnvironmentAsync(
-        PatchEvaluation evaluation,
+    private async Task<ApplicationGroupRejectionReason?> ApplyEnvironmentAsync(
+        TemporaryScope scope,
         EnvironmentAuthorityProjection environment,
-        RetainedIncidentPolicy retainedIncidentPolicy,
+        bool revalidateRetainedIncident,
         CancellationToken cancellationToken)
     {
         var environmentChanged = !string.Equals(
-                evaluation.EnvironmentId,
+                scope.EnvironmentId,
                 environment.EnvironmentId,
                 StringComparison.Ordinal)
             || !string.Equals(
-                evaluation.ClientId,
+                scope.ClientId,
                 environment.ClientId,
                 StringComparison.Ordinal);
-        evaluation.Record(
-            ProposalField.Environment,
-            environmentChanged
-                ? OperationResultKind.Applied
-                : OperationResultKind.NoOpValueEqual);
-        evaluation.EnvironmentId = environment.EnvironmentId;
-        evaluation.ClientId = environment.ClientId;
         if (!environmentChanged)
         {
-            return;
+            return null;
         }
 
-        await roleEvaluator.RevalidateRetainedAsync(
-            evaluation,
+        var retainedRole = await roleEvaluator.EvaluateRetainedAsync(
             environment.EnvironmentId,
+            scope.RoleId,
             cancellationToken);
+        if (retainedRole == RetainedRoleEvaluation.Rejected)
+        {
+            return ApplicationGroupRejectionReason.Unavailable;
+        }
 
-        if (retainedIncidentPolicy == RetainedIncidentPolicy.Revalidate
-            && evaluation.IncidentId is not null)
+        var retainIncident = true;
+        if (revalidateRetainedIncident && scope.IncidentId is not null)
         {
             var incidentResult = await incidentAuthority.GetAsync(
-                evaluation.IncidentId,
+                scope.IncidentId,
                 cancellationToken);
-            if (incidentResult.IsFailure
-                || !incidentResult.Value.IsActive
-                || !string.Equals(
-                    incidentResult.Value.EnvironmentId,
-                    environment.EnvironmentId,
+            if (incidentResult.IsFailure)
+            {
+                if (incidentResult.Failure!.Kind != ApplicationFailureKind.NotFound)
+                {
+                    return ApplicationGroupRejectionReason.Unavailable;
+                }
+
+                retainIncident = false;
+            }
+            else if (!string.Equals(
+                    incidentResult.Value.IncidentId,
+                    scope.IncidentId,
                     StringComparison.Ordinal))
             {
-                evaluation.IncidentId = null;
-                evaluation.Record(
-                    ProposalField.Incident,
-                    OperationResultKind.Applied);
-            }
-        }
-    }
-
-    private static void ApplyEnvironmentClear(PatchEvaluation evaluation)
-    {
-        var hadEnvironment = evaluation.EnvironmentId is not null;
-        var hadRole = evaluation.RoleId is not null;
-        var hadIncident = evaluation.IncidentId is not null;
-        evaluation.EnvironmentId = null;
-        evaluation.ClientId = null;
-        evaluation.RoleId = null;
-        evaluation.IncidentId = null;
-        evaluation.Record(
-            ProposalField.Environment,
-            hadEnvironment
-                ? OperationResultKind.Applied
-                : OperationResultKind.NoOpValueEqual);
-        if (hadRole)
-        {
-            evaluation.Record(ProposalField.Role, OperationResultKind.Applied);
-        }
-
-        if (hadIncident)
-        {
-            evaluation.Record(ProposalField.Incident, OperationResultKind.Applied);
-        }
-    }
-
-    private async Task ApplyIncidentResolutionAsync(
-        PatchEvaluation evaluation,
-        IncidentResolution resolution,
-        CancellationToken cancellationToken)
-    {
-        if (resolution.IsClear)
-        {
-            var changed = evaluation.IncidentId is not null;
-            evaluation.IncidentId = null;
-            if (changed
-                || evaluation.HasResultOtherThan(
-                    ProposalField.Incident,
-                    OperationResultKind.Applied))
-            {
-                evaluation.Record(
-                    ProposalField.Incident,
-                    changed
-                        ? OperationResultKind.Applied
-                        : OperationResultKind.NoOpValueEqual);
-            }
-
-            return;
-        }
-
-        if (resolution.Incident is null)
-        {
-            return;
-        }
-
-        if (evaluation.EnvironmentId is not null)
-        {
-            if (string.Equals(
-                    resolution.Incident.EnvironmentId,
-                    evaluation.EnvironmentId,
-                    StringComparison.Ordinal))
-            {
-                ApplyIncident(evaluation, resolution.Incident);
+                return ApplicationGroupRejectionReason.Unavailable;
             }
             else
             {
-                evaluation.Record(
-                    ProposalField.Incident,
-                    OperationResultKind.RejectedConflict);
+                retainIncident = incidentResult.Value.IsActive
+                    && string.Equals(
+                        incidentResult.Value.EnvironmentId,
+                        environment.EnvironmentId,
+                        StringComparison.Ordinal);
             }
-
-            return;
         }
 
-        if (resolution.Incident.EnvironmentId is null)
+        scope.EnvironmentId = environment.EnvironmentId;
+        scope.ClientId = environment.ClientId;
+        if (retainedRole == RetainedRoleEvaluation.Clear)
         {
-            evaluation.Record(
-                ProposalField.Incident,
-                OperationResultKind.RejectedUnavailable);
-            return;
+            scope.RoleId = null;
         }
 
-        var environmentResolution = await ExactEnvironmentAsync(
-            resolution.Incident.EnvironmentId,
-            cancellationToken);
-        if (environmentResolution.Environment is null)
+        if (!retainIncident)
         {
-            evaluation.Record(
-                ProposalField.Incident,
-                OperationResultKind.RejectedUnavailable);
-            return;
+            scope.IncidentId = null;
         }
 
-        await ApplyEnvironmentAsync(
-            evaluation,
-            environmentResolution.Environment,
-            RetainedIncidentPolicy.PreserveWithoutValidation,
-            cancellationToken);
-        ApplyIncident(evaluation, resolution.Incident);
-    }
-
-    private static void ApplyIncident(
-        PatchEvaluation evaluation,
-        IncidentAuthorityProjection incident)
-    {
-        var changed = !string.Equals(
-            evaluation.IncidentId,
-            incident.IncidentId,
-            StringComparison.Ordinal);
-        evaluation.IncidentId = incident.IncidentId;
-        evaluation.Record(
-            ProposalField.Incident,
-            changed
-                ? OperationResultKind.Applied
-                : OperationResultKind.NoOpValueEqual);
+        return null;
     }
 
     private async Task<EnvironmentResolution> ResolveEnvironmentAsync(
@@ -371,17 +300,22 @@ internal sealed class PreparationScopeEvaluator(
 
         if (operation is not SetEnvironmentOperation set)
         {
-            return EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid);
+            return EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid);
         }
 
         if (set.Reference is ExactEnvironmentId exact)
         {
-            return await ExactEnvironmentAsync(exact.Id, cancellationToken);
+            return await ExactEnvironmentAsync(
+                exact.Id,
+                exact.Id,
+                cancellationToken);
         }
 
         if (set.Reference is not EnvironmentSearchQuery search)
         {
-            return EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid);
+            return EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid);
         }
 
         var searchResult = await environmentSearch.SearchAsync(
@@ -389,28 +323,33 @@ internal sealed class PreparationScopeEvaluator(
             cancellationToken);
         if (searchResult.IsFailure)
         {
-            return EnvironmentResolution.Rejected(OperationResultKind.RejectedUnavailable);
+            return EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Unavailable);
         }
 
         return searchResult.Value.Kind switch
         {
             EnvironmentSearchResultKind.UniqueMatch => await ExactEnvironmentAsync(
                 searchResult.Value.Matches[0].EnvironmentId,
+                requestedExactId: null,
                 cancellationToken),
             EnvironmentSearchResultKind.ClarificationRequired =>
                 EnvironmentResolution.NeedsClarification(
                     searchResult.Value.Matches),
-            EnvironmentSearchResultKind.NoMatches =>
-                EnvironmentResolution.Rejected(OperationResultKind.RejectedUnavailable),
-            EnvironmentSearchResultKind.InvalidQuery
-                or EnvironmentSearchResultKind.TooBroad =>
-                EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid),
-            _ => EnvironmentResolution.Rejected(OperationResultKind.RejectedInvalid),
+            EnvironmentSearchResultKind.NoMatches => EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Unavailable),
+            EnvironmentSearchResultKind.TooBroad => EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.EnvironmentQueryTooBroad),
+            EnvironmentSearchResultKind.InvalidQuery => EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid),
+            _ => EnvironmentResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid),
         };
     }
 
     private async Task<EnvironmentResolution> ExactEnvironmentAsync(
         string environmentId,
+        string? requestedExactId,
         CancellationToken cancellationToken)
     {
         var environmentResult = await environmentAuthority.GetAsync(
@@ -422,9 +361,10 @@ internal sealed class PreparationScopeEvaluator(
                 environmentResult.Value.EnvironmentId,
                 environmentId,
                 StringComparison.Ordinal)
-                ? EnvironmentResolution.Applied(environmentResult.Value)
+                ? EnvironmentResolution.Set(environmentResult.Value)
                 : EnvironmentResolution.Rejected(
-                    OperationResultKind.RejectedUnavailable,
+                    ApplicationGroupRejectionReason.Unavailable,
+                    requestedExactId,
                     isAuthoritativelyInvalid: environmentResult.IsSuccess
                         || environmentResult.Failure!.Kind
                             == ApplicationFailureKind.NotFound);
@@ -441,7 +381,8 @@ internal sealed class PreparationScopeEvaluator(
 
         if (operation is not SetIncidentOperation set)
         {
-            return IncidentResolution.Rejected(OperationResultKind.RejectedInvalid);
+            return IncidentResolution.Rejected(
+                ApplicationGroupRejectionReason.Invalid);
         }
 
         var incidentResult = await incidentAuthority.GetAsync(
@@ -453,50 +394,87 @@ internal sealed class PreparationScopeEvaluator(
                 incidentResult.Value.IncidentId,
                 set.IncidentId,
                 StringComparison.Ordinal)
-            ? IncidentResolution.Applied(incidentResult.Value)
-            : IncidentResolution.Rejected(OperationResultKind.RejectedUnavailable);
+                ? IncidentResolution.Set(incidentResult.Value)
+                : IncidentResolution.Rejected(
+                    ApplicationGroupRejectionReason.Unavailable);
     }
 
-    private enum RetainedIncidentPolicy
+    private static InvalidClarificationProposal? InvalidEnvironmentProposal(
+        EnvironmentResolution environment) =>
+        environment.IsAuthoritativelyInvalid
+        && environment.RequestedExactId is not null
+            ? new InvalidClarificationProposal(
+                ClarificationTarget.Environment,
+                environment.RequestedExactId)
+            : null;
+
+    private sealed class TemporaryScope(PreparationCandidate current)
     {
-        PreserveWithoutValidation,
-        Revalidate,
-    }
+        internal string? ClientId { get; set; } = current.ClientId;
 
-    private sealed record ResolvedPatch(
-        DraftPatch Patch,
-        EnvironmentResolution? Environment,
-        IncidentResolution? Incident);
+        internal string? EnvironmentId { get; set; } = current.EnvironmentId;
+
+        internal string? RoleId { get; set; } = current.RoleId;
+
+        internal string? IncidentId { get; set; } = current.IncidentId;
+
+        internal void ClearEnvironment()
+        {
+            ClientId = null;
+            EnvironmentId = null;
+            RoleId = null;
+            IncidentId = null;
+        }
+
+        internal bool HasChangedFrom(PreparationCandidate candidate) =>
+            !string.Equals(ClientId, candidate.ClientId, StringComparison.Ordinal)
+            || !string.Equals(
+                EnvironmentId,
+                candidate.EnvironmentId,
+                StringComparison.Ordinal)
+            || !string.Equals(RoleId, candidate.RoleId, StringComparison.Ordinal)
+            || !string.Equals(
+                IncidentId,
+                candidate.IncidentId,
+                StringComparison.Ordinal);
+
+        internal PreparationCandidate ToCandidate(string? justification) =>
+            new(ClientId, EnvironmentId, RoleId, justification, IncidentId);
+    }
 
     private sealed record EnvironmentResolution(
-        OperationResultKind Result,
         EnvironmentAuthorityProjection? Environment,
         ClarificationSeed? Clarification,
+        ApplicationGroupRejectionReason? RejectionReason,
         bool IsClear,
+        string? RequestedExactId,
         bool IsAuthoritativelyInvalid)
     {
-        internal static EnvironmentResolution Applied(
+        internal bool IsRejected => RejectionReason.HasValue;
+
+        internal static EnvironmentResolution Set(
             EnvironmentAuthorityProjection environment) =>
             new(
-                OperationResultKind.Applied,
                 environment,
-                null,
+                Clarification: null,
+                RejectionReason: null,
                 IsClear: false,
+                RequestedExactId: null,
                 IsAuthoritativelyInvalid: false);
 
         internal static EnvironmentResolution Clear() =>
             new(
-                OperationResultKind.Applied,
-                null,
-                null,
+                Environment: null,
+                Clarification: null,
+                RejectionReason: null,
                 IsClear: true,
+                RequestedExactId: null,
                 IsAuthoritativelyInvalid: false);
 
         internal static EnvironmentResolution NeedsClarification(
             IEnumerable<EnvironmentSearchMatch> environments) =>
             new(
-                OperationResultKind.NeedsClarification,
-                null,
+                Environment: null,
                 new ClarificationSeed(
                     ClarificationTarget.Environment,
                     environments.Select(environment =>
@@ -507,43 +485,80 @@ internal sealed class PreparationScopeEvaluator(
                             environment.ClientDisplayName,
                             environment.Region,
                             environment.Classification))),
+                RejectionReason: null,
                 IsClear: false,
+                RequestedExactId: null,
                 IsAuthoritativelyInvalid: false);
 
         internal static EnvironmentResolution Rejected(
-            OperationResultKind kind,
+            ApplicationGroupRejectionReason reason,
+            string? requestedExactId = null,
             bool isAuthoritativelyInvalid = false) =>
             new(
-                kind,
-                null,
-                null,
+                Environment: null,
+                Clarification: null,
+                reason,
                 IsClear: false,
-                IsAuthoritativelyInvalid: isAuthoritativelyInvalid);
+                requestedExactId,
+                isAuthoritativelyInvalid);
     }
 
     private sealed record IncidentResolution(
-        OperationResultKind Result,
         IncidentAuthorityProjection? Incident,
+        ApplicationGroupRejectionReason? RejectionReason,
         bool IsClear)
     {
-        internal static IncidentResolution Applied(
+        internal bool IsRejected => RejectionReason.HasValue;
+
+        internal static IncidentResolution Set(
             IncidentAuthorityProjection incident) =>
-            new(OperationResultKind.Applied, incident, IsClear: false);
+            new(incident, RejectionReason: null, IsClear: false);
 
         internal static IncidentResolution Clear() =>
-            new(OperationResultKind.Applied, null, IsClear: true);
+            new(
+                Incident: null,
+                RejectionReason: null,
+                IsClear: true);
 
-        internal static IncidentResolution Rejected(OperationResultKind kind) =>
-            new(kind, null, IsClear: false);
+        internal static IncidentResolution Rejected(
+            ApplicationGroupRejectionReason reason) =>
+            new(Incident: null, reason, IsClear: false);
     }
 }
 
-internal enum RoleEvaluationDisposition
-{
-    Allowed,
-    Blocked,
-}
+internal sealed record InvalidClarificationProposal(
+    ClarificationTarget Target,
+    string CanonicalId);
 
 internal sealed record ScopeApplicationResult(
-    RoleEvaluationDisposition RoleEvaluation,
-    ClarificationSeed? EnvironmentClarification);
+    PreparationCandidate Candidate,
+    ApplicationGroupResult? Result,
+    ClarificationSeed? EnvironmentClarification,
+    bool ShouldResolveRoleClarification,
+    InvalidClarificationProposal? InvalidClarificationProposal)
+{
+    internal static ScopeApplicationResult Rejected(
+        PreparationCandidate current,
+        ApplicationGroupRejectionReason reason,
+        InvalidClarificationProposal? invalidClarificationProposal = null,
+        bool shouldResolveRoleClarification = false) =>
+        new(
+            current,
+            new ApplicationGroupResult(
+                ApplicationGroupResultKind.Rejected,
+                reason),
+            EnvironmentClarification: null,
+            shouldResolveRoleClarification,
+            invalidClarificationProposal);
+
+    internal static ScopeApplicationResult NeedsClarification(
+        PreparationCandidate current,
+        ClarificationSeed clarification) =>
+        new(
+            current,
+            new ApplicationGroupResult(
+                ApplicationGroupResultKind.NeedsClarification),
+            clarification,
+            ShouldResolveRoleClarification: false,
+            InvalidClarificationProposal: null);
+}

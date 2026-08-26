@@ -82,7 +82,7 @@ public sealed class PreparationTurnConcurrencyTests
             CreatedAt,
             "seed");
         await PersistAsync(fixture, initial);
-        var authority = new FakeAuthority();
+        var authority = CompleteAuthority();
         await using var firstScope = fixture.Services.CreateAsyncScope();
         await using var secondScope = fixture.Services.CreateAsyncScope();
         var first = Service(firstScope, authority, CreatedAt.AddMinutes(1));
@@ -103,7 +103,7 @@ public sealed class PreparationTurnConcurrencyTests
             TestContext.Current.CancellationToken);
         var stale = await second.ApplyAsync(
             secondStart.Value,
-            JustificationUpdate("stale justification"),
+            CompleteUpdate("stale justification"),
             TurnAttribution,
             TestContext.Current.CancellationToken);
 
@@ -115,6 +115,8 @@ public sealed class PreparationTurnConcurrencyTests
         Assert.Equal(
             "initial justification",
             stale.Preparation!.Candidate.Justification);
+        Assert.Null(stale.Preparation.Candidate.EnvironmentId);
+        Assert.Null(stale.Preparation.Candidate.RoleId);
         await using var verificationScope = fixture.Services.CreateAsyncScope();
         var persisted = await verificationScope.ServiceProvider
             .GetRequiredService<IRequestPreparationStore>()
@@ -122,6 +124,67 @@ public sealed class PreparationTurnConcurrencyTests
         Assert.True(persisted.IsSuccess);
         Assert.Equal(
             "first committed justification",
+            persisted.Value.Candidate.Justification);
+        Assert.Null(persisted.Value.Candidate.EnvironmentId);
+        Assert.Null(persisted.Value.Candidate.RoleId);
+    }
+
+    [Fact]
+    public async Task AuthorityFailureRejectsScopeAndPersistsIndependentJustificationOnly()
+    {
+        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
+        var authority = new FakeAuthority
+        {
+            EnvironmentFailure = new ApplicationFailure(
+                ApplicationFailureKind.DependencyUnavailable,
+                "environment-source-unavailable",
+                "The environment source is unavailable."),
+        };
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var service = Service(scope, authority, CreatedAt);
+        var started = await service.BeginAsync(
+            Binding(),
+            "authority-failure",
+            TestContext.Current.CancellationToken);
+
+        var result = await service.ApplyAsync(
+            started.Value,
+            new TurnProposal(
+                TurnProposal.CurrentSchemaVersion,
+                DialogueAct.UpdateDraft,
+                patch: new DraftPatch(
+                    environment: new SetEnvironmentOperation(
+                        new ExactEnvironmentId("PROD-ALPHA-EU")),
+                    justification: new SetJustificationOperation(
+                        new JustificationProposal("Restore customer service.")))),
+            TurnAttribution,
+            TestContext.Current.CancellationToken);
+
+        var updated = Assert.IsType<DraftUpdated>(result.Response.Outcome);
+        Assert.Equal(
+            ApplicationGroupResultKind.Rejected,
+            updated.ScopeResult?.Kind);
+        Assert.Equal(
+            ApplicationGroupRejectionReason.Unavailable,
+            updated.ScopeResult?.RejectionReason);
+        Assert.Equal(
+            ApplicationGroupResultKind.Applied,
+            updated.JustificationResult?.Kind);
+        Assert.Null(result.Preparation!.Candidate.EnvironmentId);
+        Assert.Null(result.Preparation.Candidate.RoleId);
+        Assert.Equal(
+            "Restore customer service.",
+            result.Preparation.Candidate.Justification);
+
+        await using var verificationScope = fixture.Services.CreateAsyncScope();
+        var persisted = await verificationScope.ServiceProvider
+            .GetRequiredService<IRequestPreparationStore>()
+            .GetActiveAsync(Binding(), TestContext.Current.CancellationToken);
+        Assert.True(persisted.IsSuccess);
+        Assert.Null(persisted.Value.Candidate.EnvironmentId);
+        Assert.Null(persisted.Value.Candidate.RoleId);
+        Assert.Equal(
+            "Restore customer service.",
             persisted.Value.Candidate.Justification);
     }
 
@@ -589,6 +652,8 @@ public sealed class PreparationTurnConcurrencyTests
         internal EnvironmentSearchResult SearchResult { get; set; } =
             EnvironmentSearchResult.FromMatches([]);
 
+        internal ApplicationFailure? EnvironmentFailure { get; set; }
+
         public Task<ApplicationResult<EnvironmentSearchResult>> SearchAsync(
             string query,
             CancellationToken cancellationToken)
@@ -602,6 +667,13 @@ public sealed class PreparationTurnConcurrencyTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (EnvironmentFailure is not null)
+            {
+                return Task.FromResult(
+                    ApplicationResult.Failed<EnvironmentAuthorityProjection>(
+                        EnvironmentFailure));
+            }
+
             return Task.FromResult(
                 Environments.TryGetValue(environmentId, out var environment)
                     ? ApplicationResult.Succeeded(environment)

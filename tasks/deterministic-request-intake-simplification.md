@@ -1,6 +1,6 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Implementation in progress; Tasks 1–2 complete
+- **Status:** Implementation in progress; Tasks 1–3 complete
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -383,6 +383,8 @@ share the five-result policy/version; >5 exposes no hidden set; four-tool contra
 independent authority failure tests pass.
 
 ### Task 3 — Replace per-field reduction with two atomic application groups
+
+- [x] Complete
 
 **Objective and complexity reduction**
 
