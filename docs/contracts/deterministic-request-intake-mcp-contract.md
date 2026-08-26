@@ -1,9 +1,9 @@
 # Target MCP Contract: Deterministic Request Intake
 
 - **Status:** Approved target; does not replace current as-built `mcp-tools.json` until implementation
-- **Date:** 2026-08-24
+- **Date:** 2026-08-26
 - **Machine-readable companion:** `deterministic-request-intake-mcp-tools.json`
-- **Environment-search policy version:** `1.0.0`
+- **Environment-search policy version:** `2.0.0`
 - **Endpoint/transport:** Existing `/mcp` Streamable HTTP boundary
 - **Normative source:** `SPEC-deterministic-request-intake.md`
 
@@ -94,20 +94,21 @@ policy implementation. They must not maintain separate matching algorithms. Core
 not replay search when the agent returns `exactEnvironmentId`; it exact-reloads that ID
 through the independent environment authority instead.
 
-The policy:
+The policy normalizes and tokenizes deterministically, searches only the approved
+environment, client, region, and canonical classification fields, includes only active
+eligible production environments, and orders by stable environment ID. The component
+contract and tests own exact Unicode, punctuation, tokenization, and storage-provider
+conformance details; neither MCP nor Core may substitute a provider collation such as
+SQLite `NOCASE` for that policy.
 
-1. Unicode NFC-normalizes, trims, and collapses whitespace;
-2. rejects empty or over-200-character queries;
-3. tokenizes on Unicode whitespace and punctuation;
-4. requires every token to match case-insensitively against at least one approved field;
-5. searches only environment ID, environment display name, client ID, client display
-   name, region, and canonical `primary`/`recovery` classification;
-6. includes only active production environments eligible for request intake;
-7. orders by stable environment ID;
-8. returns all matches when count is at most 20;
-9. returns `environments: []` for zero matches; and
-10. returns `Unavailable` with code `environment_query_too_broad` above 20, without
-    ranking or truncation.
+The complete result-count behavior is shared by MCP and Core:
+
+| Count | Behavior |
+|---:|---|
+| 0 | No match. |
+| 1 | Exact-reload the result before accepting it. |
+| 2–5 | Persist and render the complete ordered clarification set. |
+| More than 5 | Return `environment_query_too_broad` and request a more specific description; do not rank or truncate. |
 
 For a `searchQuery` proposal, Core's current result controls
 zero/unique/multiple/too-broad behavior and every rendered choice. When an MCP search
@@ -116,8 +117,8 @@ agent may instead propose its `exactEnvironmentId`; Core then exact-reloads the 
 without re-executing the query.
 
 The application creates selectable clarification context only when the complete result
-contains two to five environments. Six to twenty results produce “narrow the query”
-guidance and no truncated choice list.
+contains two to five environments. More than five results produce “narrow the query”
+guidance without exposing or truncating a larger result set.
 
 ## 5. `search_production_environments`
 
@@ -147,7 +148,7 @@ The adapter does not compare it with raw requester text and does not log it.
 }
 ```
 
-The result contains every deterministic match up to the hard bound in stable
+The result contains every deterministic match up to the five-result hard bound in stable
 environment-ID order. It contains no roles, score, match explanation, pagination token,
 or model ranking.
 
@@ -250,6 +251,9 @@ not trigger search.
 ```
 
 `status` is `Active` or `Inactive`. Unknown identifiers return `NotFound`.
+`environmentId` is the incident authority's one nullable affected production
+environment. A missing value remains a successful read-only lookup but makes the scope
+group ineligible when Core validates the proposal.
 
 Incident title is untrusted model context. Core uses only an independently loaded
 record and application-safe rendering.
@@ -267,7 +271,8 @@ It rejects:
 - repeated calls beyond one per tool;
 - more than four calls;
 - more than six provider iterations;
-- any structured-output repair or second interpreter invocation after output validation failure; and
+- any structured-output repair or second interpreter invocation after output validation
+  failure; and
 - timeout or cancellation.
 
 It does not reject an otherwise safe proposal solely because the model omitted a
@@ -279,11 +284,12 @@ proposals execute authoritative search and exact-reload a unique result.
 
 | Failure | Application consequence |
 |---|---|
-| Search source unavailable | Reject affected environment operation; independent accepted operations may commit |
-| Exact environment unavailable/not found/ineligible | Reject environment and dependent role operation |
-| Entitlement source unavailable | Reject affected role operation; final candidate cannot become ready without a valid role |
+| Search source unavailable | Reject the scope group; a valid justification may still commit |
+| Exact environment unavailable/not found/ineligible | Reject the scope group |
+| Entitlement source unavailable | Reject the scope group; final candidate cannot become ready without a valid role |
 | Known environment with no roles | Typed no-roles outcome; no role choice context |
-| Incident source unavailable/not found/inactive | Reject incident; independent accepted operations may commit |
+| Incident source unavailable/not found/inactive or without an eligible environment | Reject the scope group; a valid justification may still commit |
+| Explicit environment conflicts with the incident environment | Reject the scope group |
 | Exact source result changes after model-side discovery | Core exact reload wins; reject missing/ineligible ID; never trust stale MCP payload |
 | Core `searchQuery` result differs from model-side discovery | Core search result wins; record bounded drift; never trust stale MCP payload |
 | MCP result contains instruction-like text | Treat as data; no policy/authorization effect |

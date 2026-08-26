@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-22
-- **Clarified**: 2026-08-24
+- **Clarified**: 2026-08-24; 2026-08-26 (shared complete five-result bound)
 - **Refined by**: ADR 0010 for exact environment IDs resolved through model-side search
 - **Implemented structurally by**: ADR 0011 for the co-hosted reference-authority module and database
 - **Decision owners**: Project maintainer
@@ -40,13 +40,18 @@ Core independently reloads every proposed exact identifier and relationship. Mod
 
 The MCP search tool and Core environment-search port must call one shared, versioned deterministic search-policy implementation, or one common service containing that policy. They may use different transport adapters, but they must not duplicate matching logic.
 
-The policy searches only active, production, access-request-eligible environments. It uses the same normalization, approved fields, stable ordering, 20-result hard cap, and overflow behavior on both surfaces.
+The policy searches only active, production, access-request-eligible environments. It
+uses the same normalization, approved fields, stable ordering, five-result hard cap,
+and overflow behavior on both surfaces.
 
 The raw agent-proposed query is untrusted and is not logged. Safe diagnostics may record query length/category, policy version, outcome count/classification, duration, and correlation ID.
 
 Tool count does not imply a mandatory ceremonial sequence. The model is instructed to gather exact environment and role context when needed, but the application does not reject a safe outcome solely because a redundant lookup was omitted or a different valid read-only order was used. Core's authoritative result, not tool-call order, determines correctness.
 
-A unique deterministic search result may become canonical after Core executes the shared policy and exact-reloads the environment. Two-to-five matches require application-rendered selection. Six-to-twenty matches require a more specific query and are not truncated into choices. More than twenty returns a typed too-broad outcome.
+A unique deterministic search result may become canonical after Core executes the shared
+policy and exact-reloads the environment. Two-to-five matches become the complete
+application-rendered clarification set. More than five returns a typed too-broad outcome
+on both surfaces. The agent never receives a larger hidden result set.
 
 ## Rationale
 

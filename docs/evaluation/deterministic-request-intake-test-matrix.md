@@ -10,7 +10,7 @@
 - Deterministic rules are proved without a live model.
 - Core tests construct provider-neutral `TurnProposal` values directly.
 - Deterministic test suites do not parse or classify requester-language examples.
-- Linguistic, multilingual, justification-provenance, and prompt-injection behavior belongs at the agent evaluation boundary.
+- Linguistic, multilingual, justification-fidelity, and prompt-injection behavior belongs at the agent evaluation boundary.
 - Negative tests assert both the typed outcome and absence of unauthorized persisted side effects.
 - Exact model tool order is diagnostic unless a contract, allowlist, argument, call, iteration, or timeout bound is violated.
 - Application correctness is the canonical outcome after independent Core authority checks.
@@ -35,11 +35,11 @@ Only deterministic full-host tests that explicitly invoke authenticated card con
 | Layer | Primary ownership |
 |---|---|
 | Architecture/static | Exact `/new` boundary, no requester-text dependency in Core, no parser/phrase dictionary/identifier extractor, provider-neutral type dependency, project-reference graph, module/`DbContext` ownership |
-| Core unit | Closed proposal validation, canonicalization, reducer order, operation outcomes, dependencies, authoritative validity, lifecycle decisions |
-| Component | Independent reference/workflow SQLite persistence, migrations, version semantics, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, confirmation service |
+| Core unit | Closed proposal validation, canonicalization, grouped reduction, authoritative validity, cascades, and lifecycle decisions |
+| Component | Independent reference/workflow SQLite persistence, migrations, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, and confirmation service |
 | Full host | Delivered-versus-target composition isolation, Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, two-database restart journeys, confirmation and replay |
 | Frontend | Ready-card content/prominence, distinct duration/deadline labels, stale/expired outcomes, downstream regression |
-| Live model | Semantic interpretation, multilingual/descriptive clarification references, justification provenance, restraint, prompt injection, read-only tool use |
+| Live model | Semantic interpretation, multilingual/descriptive clarification references, justification fidelity, restraint, prompt injection, read-only tool use |
 
 ## 4. Architecture and source-boundary checks
 
@@ -80,19 +80,18 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 | `requestSubmission`/`unrelated`/`unclear` with any payload | Whole-proposal structural rejection |
 | Unknown field, operation, property, or reference form | Whole-proposal structural rejection |
 | `clear` with value / `set` without value | Whole-proposal structural rejection |
-| Malformed output with a valid second scripted response available | Safe failure; no mutation; no second provider invocation |
-| Schema-invalid or structurally unacceptable output | Safe failure; no mutation; no repair invocation |
+| Structurally invalid directly constructed proposal | Whole-proposal rejection; zero mutation |
 
 ### 5.2 Sparse patch and canonical equality
 
 | Case | Expected result |
 |---|---|
 | Omitted field | Existing canonical value preserved |
-| One accepted operation | Only that operation plus deterministic dependencies changes |
-| Value-equal canonical ID | `ValueEqualNoOp`; no `CandidateVersion` increment |
-| Justification differing only by NFC/line endings/outer whitespace | `ValueEqualNoOp` |
-| Multiple accepted field changes | One atomic commit and one `CandidateVersion` increment |
-| Dependency cascade changes another field | Material change; one version increment for complete commit |
+| One accepted operation | Only its application group plus deterministic cascades changes |
+| Value-equal canonical ID | `NoOp`; no candidate mutation; context consumption, when required, is still an OCC-protected write |
+| Justification differing only by NFC/line endings/outer whitespace | `NoOp` |
+| Multiple accepted scope changes | One atomic scope transition and one complete OCC-protected commit |
+| Dependency cascade changes another field | Material change in the same atomic scope transition |
 | No accepted operation and no clarification | No candidate mutation |
 
 ### 5.3 Environment search and eligibility
@@ -103,11 +102,10 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 | Exact inactive/non-production/ineligible environment | Reject environment and dependent role |
 | Exact eligible environment | Exact-reload only; accept canonical source record and derive client without search replay |
 | Exact ID proposed after unique MCP search | Exact-reload only; do not re-execute the model-side query |
-| Search zero | Reject operation; no choices; preserve unrelated state |
+| Search zero | Reject scope group; no choices; valid justification may still commit |
 | Search unique | Exact reload; accept only if eligible |
 | Search two to five | Preserve existing scope, persist all ordered choice records with exact IDs and safe display fields, create environment clarification |
-| Search six to twenty | Reject without mutation or persisted choices; request more specificity |
-| Search over twenty | Typed `environment_query_too_broad`; no mutation |
+| Search over five | Typed `environment_query_too_broad`; no hidden results, mutation, or persisted choices |
 | Exact MCP result differs from Core exact reload | Core exact result wins; safe drift diagnostic |
 | MCP search differs from current Core `searchQuery` result | Core search result wins; safe drift diagnostic |
 | MCP/Core policy version mismatch | Fail affected operation closed |
@@ -117,13 +115,14 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 
 | Proposal | Expected result |
 |---|---|
-| Incident only, active, no environment | Derive incident environment/client |
-| Incident only, inactive/not found | Reject incident; independent operations may commit |
-| Exact environment + compatible active incident | Accept both scope operations |
-| Exact environment + conflicting incident | Reject both proposed scope operations |
+| Incident only, active, one eligible environment | Exact-reload and derive incident environment/client |
+| Incident only with a different retained environment | Exact-reload and replace scope with normal role/clarification cascades |
+| Incident only, inactive/not found/no eligible environment | Reject scope group; valid justification may still commit |
+| Exact environment + compatible active incident | Apply one atomic scope transition |
+| Exact environment + conflicting incident | Reject the complete scope group |
 | Search-unique environment + compatible incident | Accept both after exact reload |
-| Environment ambiguity + incident | Create environment clarification; reject incident for the turn; do not queue it |
-| Invalid/unavailable environment + valid incident proposed together | Reject both explicit scope operations |
+| Environment ambiguity + incident | Preserve current scope; create environment clarification; do not queue an incident mutation |
+| Invalid/unavailable environment + valid incident proposed together | Reject the complete scope group |
 | Environment clear | Clear environment, client, role, incident, scope clarification |
 | Incident clear | Preserve environment, client, role, justification |
 
@@ -132,10 +131,10 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 | Case | Expected result |
 |---|---|
 | Exact role assigned to final environment | Accept |
-| Exact role unavailable in final environment | Reject role only |
-| Role proposed with no final environment | `RejectedDependency` |
+| Exact role unavailable in final environment | Reject the scope group |
+| Role proposed with no final environment | Reject the scope group |
 | Same-turn environment accepted then role | Validate role against new environment, never old environment |
-| Same-turn environment rejected/ambiguous then role | Reject role as dependent, even if old environment exists |
+| Same-turn environment rejected/ambiguous then role | Reject the scope group; preserve current scope |
 | Final environment has zero available roles | Typed no-roles result; no context |
 | Role missing or proposed role unavailable; one to five available roles | Preserve the current canonical role, persist complete ordered choice records, and create role clarification |
 | More than five available roles | No bounded choice context; request more precise role wording |
@@ -154,7 +153,7 @@ Core deterministic tests cover only storage/business constraints:
 - Unicode NFC, line-ending, and outer-whitespace canonicalization;
 - clear operation making candidate incomplete;
 - omission preserving canonical value;
-- independent justification acceptance while unrelated environment/role/incident data-level operation fails.
+- independent justification acceptance while the scope group fails.
 
 Deterministic Core tests do **not** decide whether text was translated, summarized, paraphrased, or requester-authored. Those dimensions belong to live-model evaluation.
 
@@ -175,33 +174,35 @@ Deterministic Core tests do **not** decide whether text was translated, summariz
 | Active context with otherwise complete candidate | Remain `Collecting`; never transition to `Ready` |
 | Clarification against `Ready A` | Atomically supersede A; create predecessor-linked `Collecting B` with copied candidate and context |
 
-### 5.8 Partial acceptance and clarification precedence
+### 5.8 Atomic groups and clarification precedence
 
 Parameterize combinations proving:
 
-- structural errors never partially apply;
-- independent justification can commit when environment or role is invalid;
-- role cannot commit when its same-turn environment dependency failed;
-- environment and incident conflict reject both scope operations;
+- structural errors never apply either group;
+- independent justification can commit when the scope group is invalid, unavailable,
+  conflicting, or ambiguous;
+- an invalid justification does not discard an otherwise valid scope transition;
+- one invalid explicit scope operation rejects every same-turn scope mutation;
+- environment and incident conflict rejects the complete scope group;
 - environment clarification takes precedence over role clarification;
 - at most one context is persisted;
-- lower-precedence ambiguous operations are rejected, not queued;
+- lower-precedence ambiguous scope is not partially applied or queued;
 - accepted target-field operations and incident-derived scope consume context by the
   normative rules;
 - independent accepted justification and non-mutating/rejected outcomes preserve
   unrelated context;
-- all accepted operations, cascades, context, lifecycle, and versions commit atomically;
+- accepted groups, cascades, context, lifecycle, and the OCC token commit atomically;
 - persistence failure exposes none of them.
 
-### 5.9 Lifecycle and versions
+### 5.9 Lifecycle and concurrency
 
 | Case | Expected result |
 |---|---|
-| Clean `/new` preparation | `Collecting`, `CandidateVersion=0`, valid `ConcurrencyVersion`, timestamps set |
-| First normal turn creates preparation with material candidate | Creation transaction commits `CandidateVersion=1` |
-| Ready revision creates replacement with material revised candidate | Replacement starts with `CandidateVersion=1` |
-| Material collecting change | Same `PreparationId`; `CandidateVersion +1`; `ConcurrencyVersion` changes |
-| Clarification-only persistence with no candidate change | `CandidateVersion` unchanged; `ConcurrencyVersion` changes |
+| Clean `/new` preparation | `Collecting`, valid `ConcurrencyVersion`, timestamps set; no candidate-progress counter |
+| First normal turn creates preparation with material candidate | Creation transaction commits candidate and one OCC token |
+| Ready revision creates replacement with material revised candidate | Replacement receives a new immutable `PreparationId` and its own OCC token |
+| Material collecting change | Same `PreparationId`; `ConcurrencyVersion` changes |
+| Clarification-only persistence with no candidate change | `ConcurrencyVersion` changes |
 | Candidate or clarification context changes during agent invocation | Stale `ConcurrencyVersion` rejects the proposal atomically; no replay against the new snapshot |
 | Complete collecting candidate | Transition to `Ready`; 30-minute deadline set |
 | Discussion/no-op/rejected/failure against Ready | Same ready preparation and deadline |
@@ -263,7 +264,7 @@ For every tool, test:
 - MCP and Core expose identical policy version.
 - MCP and the Core `searchQuery` path share one matcher implementation/service.
 - NFC, trim, whitespace collapse, approved token fields, eligible-only population, and stable ID ordering are identical.
-- Zero, unique, 2–5, 6–20, and overflow outcomes are covered.
+- Zero, unique, two-to-five, and more-than-five outcomes are covered.
 - Search never truncates, ranks, scores, or returns match reasons.
 - Policy mismatch fails closed.
 - `exactEnvironmentId` bypasses search and performs only exact authoritative reload.
@@ -288,7 +289,8 @@ Use deterministic fake chat clients to cover:
 - seventh provider iteration;
 - unknown function;
 - concurrent-call request if unsupported by adapter;
-- immediate fail-closed handling for schema-invalid output without a repair invocation;
+- immediate fail-closed handling for schema-invalid output without a repair or second
+  interpreter invocation;
 - cancellation/timeout across the 30-second shared turn budget.
 
 A safe proposal that omits a redundant exact lookup must not be rejected solely for that omission. Core validation remains required.
@@ -311,7 +313,7 @@ Use deterministic agent-adapter tests to prove:
 
 ### 7.1 Restart
 
-- Canonical candidate, lifecycle, versions, timestamps, deadline, and ordered choice
+- Canonical candidate, lifecycle, one concurrency version, timestamps, deadline, and ordered choice
   records with exact IDs/safe fields persist/reload.
 - Restart reconstructs active provider-neutral clarification input and supports an
   agent-interpreted ordinary exact-ID patch without provider conversation history.
@@ -404,12 +406,12 @@ not require requester selection.
 4. Submit card A; assert no request.
 5. Complete B if necessary and submit card B; assert one request bound to B.
 
-### Journey F: partial acceptance
+### Journey F: grouped atomicity
 
 1. Agent proposes invalid environment, dependent role, and valid justification.
-2. Core rejects environment and role, accepts justification atomically.
-3. Response reports categories.
-4. Candidate/version changes only for justification.
+2. Core rejects the complete scope group and accepts justification in the same commit.
+3. Response reports compact group results.
+4. Candidate changes only for justification; the OCC token protects the complete commit.
 5. No request exists.
 
 ### Journey G: concurrency and replay
@@ -495,7 +497,7 @@ restricted to displayed choice membership.
 - environment/role/incident reference shape;
 - expected clarification-derived exact ID or conservative `unclear`;
 - omission restraint;
-- justification provenance and language preservation;
+- justification fidelity and language preservation;
 - read-only tool allowlist/call bounds;
 - prompt-injection restraint;
 - final canonical outcome after Core validation;
@@ -537,7 +539,7 @@ Any change to the first five requires a new run and explicit re-baseline decisio
 | Acceptance criteria | Evidence layer |
 |---|---|
 | AC-01–AC-06 | Architecture/static checks, exact `/new` host journey, renderer/locale tests |
-| AC-07–AC-14 | Proposal-schema, Core reducer/partial-success matrices, targeted justification eval |
+| AC-07–AC-14 | Proposal-schema, Core grouped-reducer matrices, targeted justification eval |
 | AC-15–AC-22 | Shared-policy, MCP contract/transport, eligibility and authoritative-port tests |
 | AC-23–AC-28 | Agent-input/context lifecycle unit tests, persistence/restart/OCC tests, and live multilingual/descriptive exact-ID scenarios |
 | AC-29–AC-40 | Version, lifecycle, OCC, card, idempotency, and controlled-race tests |

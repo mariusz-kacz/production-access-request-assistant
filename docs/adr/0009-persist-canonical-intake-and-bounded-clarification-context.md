@@ -18,7 +18,7 @@ The target flow needs only a small amount of durable context:
 - the canonical candidate;
 - one ordered environment or role choice set;
 - lifecycle state and timestamps;
-- a candidate-change version plus optimistic-concurrency protection; and
+- optimistic-concurrency protection for the candidate/context snapshot; and
 - immutable ready preparation identity for stale-card safety.
 
 Persisting raw conversations, prompts, model reasoning, complete tool payloads, or
@@ -42,7 +42,6 @@ Persist only:
 - authenticated actor/conversation binding;
 - lifecycle state;
 - sanitized canonical candidate;
-- `CandidateVersion`;
 - storage-managed `ConcurrencyVersion` or equivalent optimistic token;
 - at most one bounded clarification context;
 - `CreatedAt`, `UpdatedAt`, ready and terminal timestamps;
@@ -58,8 +57,7 @@ not retained conversation history.
 ### Preparation identity and ready immutability
 
 A preparation is mutable only while `Collecting`. When it becomes `Ready`, its candidate
-and `CandidateVersion` are immutable. `PreparationId` then identifies one exact card
-scope.
+is immutable. `PreparationId` then identifies one exact card scope.
 
 A committed material revision never mutates `Ready A` back to collecting. In one atomic
 commit it:
@@ -72,26 +70,16 @@ card reloads a terminal old preparation and cannot submit the replacement scope.
 
 There is no pending-revision candidate and no revision-cancellation command.
 
-### Version definitions
-
-`CandidateVersion` starts at zero when a preparation row is created. If the same
-creation transaction persists a material initial or revised candidate, it increments
-once to one. A clean `/new` preparation therefore remains at zero. It is monotonic
-inside one preparation and increments once for each later committed material canonical
-candidate change. It does not increment for:
-
-- discussion, unrelated, unclear, or submission-intent turns;
-- rejected operations;
-- value-equal no-ops; or
-- clarification-only persistence.
+### Concurrency and chronology
 
 `ConcurrencyVersion` changes on every persisted aggregate update, including
 clarification-only changes, lifecycle transitions, lazy expiry, and candidate commits.
 It is used for optimistic concurrency and is not card/request authority.
 
-`CandidateVersion` is not a clarification freshness token. Clarification correctness
-depends on invoking the agent from the current candidate/context snapshot and verifying
-`ConcurrencyVersion` before the short commit.
+There is no separate candidate-progress counter. Clarification correctness depends on
+invoking the agent from the current candidate/context snapshot and verifying
+`ConcurrencyVersion` before the short commit. Timestamps, predecessor linkage,
+correlation data, and bounded audit events/metadata provide chronology.
 
 ### Clarification context
 
@@ -134,10 +122,9 @@ An active clarification context prevents `Ready`. Clarification created while re
 copied candidate and the new context. An accepted ordinary target-field operation on B
 consumes the context and reevaluates readiness normally.
 
-Clarification-only persistence retains `CandidateVersion` but changes
-`ConcurrencyVersion`. There is no independent clarification TTL; context is usable only
-while its preparation is active and until the deterministic lifecycle consumes,
-replaces, or invalidates it.
+Clarification-only persistence changes `ConcurrencyVersion`. There is no independent
+clarification TTL; context is usable only while its preparation is active and until the
+deterministic lifecycle consumes, replaces, or invalidates it.
 
 ### Lifecycle and expiry
 
@@ -149,10 +136,12 @@ The persisted states are:
 - `Superseded`; and
 - `Expired`.
 
-`ReadyDeadline` is exactly 30 minutes after `ReadyAt`. Expiry is evaluated lazily on
-load or confirmation; no background sweeper is required. Non-mutating turns do not
-refresh the deadline. `Collecting` has no feature-specific inactivity TTL in this
-increment. Terminal row retention follows ADR 0005.
+`ReadyDeadline` is exactly 30 minutes after `ReadyAt`. The accepted product baseline
+intentionally permits only unexpired ready confirmation, and the current security model
+uses this window as a submission control. Expiry is evaluated lazily on load or
+confirmation; no background sweeper is required. Non-mutating turns do not refresh the
+deadline. `Collecting` has no feature-specific inactivity TTL, stale warning, age
+rendering, or exhaustion state. Terminal row retention follows ADR 0005.
 
 ### Idempotency and concurrency
 
@@ -183,9 +172,9 @@ Immutable ready preparation identity solves stale-card safety without adding a s
 card version field. A card references one exact immutable preparation; any revision gets
 a different identity.
 
-Separating candidate and concurrency versions prevents one overloaded version counter
-from serving incompatible purposes. Candidate version records canonical candidate
-progress; concurrency version protects candidate/context snapshots and commits.
+One concurrency token is sufficient because immutable `PreparationId` owns card scope
+and audit/timestamp evidence owns chronology. A second counter does not protect a
+boundary that `ConcurrencyVersion` does not already cover.
 
 One active candidate and immediate ready supersession avoid dual-state revision
 machinery while preserving the critical rule that an old card cannot confirm a revised
@@ -200,8 +189,7 @@ scope.
 - Multilingual and descriptive clarification remains at the agent boundary and produces
   the same ordinary sparse exact-ID operations as other updates.
 - Stale card rejection uses one immutable preparation identity.
-- Candidate progress and OCC have distinct, explicit version semantics, with no dead
-  candidate-version clarification binding.
+- One optimistic version protects every candidate/context/lifecycle snapshot and commit.
 - Ready revisions have one atomic transition and no pending-revision state.
 - Duplicate confirmation converges through a named durable idempotency key.
 - No database lock is held across model/tool latency.
@@ -209,7 +197,7 @@ scope.
 
 ### Negative and risks
 
-- Persistence schema grows to include lifecycle timestamps, two version concepts,
+- Persistence schema grows to include lifecycle timestamps, one optimistic version,
   clarification context, predecessor linkage, and bounded interpreter metadata.
 - Ready revision requires atomic old-terminal/new-active creation.
 - A process crash after agent interpretation but before commit loses that interpreted
@@ -233,9 +221,9 @@ cost while remaining less authoritative than canonical state.
 Rejected because provider session shape is infrastructure-specific and unnecessary for
 business correctness.
 
-### Use a mutable ready preparation plus candidate version in the card
+### Use a mutable ready preparation plus a card revision token
 
-Rejected for this bounded feature. A separate version field can be safe, but immutable
+Rejected for this bounded feature. A separate revision field can be safe, but immutable
 ready identity is simpler and aligns with retained terminal tombstones.
 
 ### Keep a ready snapshot active while a pending revision is collected
@@ -253,14 +241,16 @@ sparse patch or conservative `unclear`.
 ### Persist a separate clarification-selection protocol
 
 Rejected because target/index payloads, index-to-ID conversion, and selection-specific
-candidate-version checks duplicate the ordinary reducer. Persisted ordered choices are
+stale checks duplicate the ordinary reducer. Persisted ordered choices are
 semantic agent context; exact authoritative reload and `ConcurrencyVersion` OCC already
 provide the required Core correctness boundaries.
 
-### Use one version counter for clarification and OCC
+### Add a second candidate-progress counter
 
-Rejected because candidate meaning and aggregate-write concurrency change at different
-times. Clarification-only persistence is the clearest counterexample.
+Rejected because it adds schema, mapping, diagnostics, and test semantics without
+protecting card identity, clarification freshness, or commits. Immutable
+`PreparationId`, `ConcurrencyVersion`, timestamps, predecessor linkage, and audit
+evidence already own those concerns.
 
 ### Hold a database lock across the full model turn
 

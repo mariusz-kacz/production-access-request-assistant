@@ -2,12 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Target Governed Access MCP Tool Contract for Deterministic Request Intake",
   "status": "approved-target",
-  "contractVersion": "2.0.0",
-  "environmentSearchPolicyVersion": "1.0.0",
+  "contractVersion": "3.0.0",
+  "environmentSearchPolicyVersion": "2.0.0",
   "endpoint": "/mcp",
   "transport": "streamable-http",
-  "maximumEnvironmentCandidates": 20,
-  "maximumRenderedChoices": 5,
+  "maximumEnvironmentCandidates": 5,
   "maximumCallsPerToolPerTurn": 1,
   "maximumTotalToolCallsPerTurn": 4,
   "maximumProviderIterationsPerTurn": 6,
@@ -54,7 +53,7 @@
         "properties": {
           "environments": {
             "type": "array",
-            "maxItems": 20,
+            "maxItems": 5,
             "items": {
               "$ref": "#/$defs/environmentProjection"
             }
@@ -68,8 +67,7 @@
         "ordering": "environmentId ordinal ascending",
         "zeroMatches": "success with environments empty",
         "selectableRange": "two through five complete results may become clarification choices",
-        "nonSelectableBoundedRange": "six through twenty results require a more precise query and are never truncated into choices",
-        "overflow": "Unavailable with code environment_query_too_broad; never truncate or rank",
+        "overflow": "more than five results return Unavailable with code environment_query_too_broad; never expose a larger hidden set, truncate, or rank",
         "applicationAuthority": "Core independently invokes the shared policy and exact-reloads accepted identity",
         "rawQueryLogging": false
       }
@@ -208,7 +206,10 @@
             ]
           },
           "environmentId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1
           }
         }
@@ -217,6 +218,7 @@
         "exactOnly": true,
         "discovery": false,
         "inference": false,
+        "environmentCardinality": "zero or one authoritative environment; null is ineligible for request scope",
         "titleTrust": "untrusted data"
       }
     }

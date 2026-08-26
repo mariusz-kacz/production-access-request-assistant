@@ -28,7 +28,11 @@ The current full-candidate response asks the model to reproduce previously accep
 
 An attempted deterministic mitigation introduced phrase parsing, identifier extraction, clear commands, or ordinal handling outside the model. That creates a second natural-language interpreter, behaves inconsistently across paraphrases and languages, and blurs responsibility between the agent and Core.
 
-The first refined specification correctly removed that parser boundary but left lifecycle, card identity, version, partial-acceptance, and justification-provenance decisions under-specified. The approved target now resolves those decisions before task planning.
+The first refined specification correctly removed that parser boundary but accumulated
+separate version, per-field verdict, budget, stale-draft, search-cardinality, and
+justification self-certification mechanisms. The approved simplification target removes
+those costs while preserving the authorization, confirmation, concurrency, and
+enterprise-authority boundaries.
 
 ### Target value
 
@@ -39,7 +43,9 @@ Use one model-backed agent for requester-language interpretation while keeping s
 - the agent returns one closed dialogue act and, where applicable, an ordinary sparse
   `set`/`clear` patch or bounded discussion topic;
 - omitted fields are safe no-ops;
-- Core owns structural validation, deterministic operation ordering, authoritative search/reload, partial acceptance, dependency cascades, readiness, lifecycle, persistence, and concurrency;
+- Core owns structural validation, one atomic scope group, independent justification,
+  authoritative search/reload, dependency cascades, readiness, lifecycle, persistence,
+  and concurrency;
 - application code owns all requester-visible responses and cards;
 - four read-only MCP capabilities model distinct enterprise authorities;
 - ready scope is immutable and identified by one `PreparationId`; and
@@ -86,15 +92,13 @@ The target `TurnProposal` has one act and one compatible payload:
 | `unrelated` | No payload |
 | `unclear` | No payload |
 
-Structural contract violations reject the whole proposal. After structural validation, Core follows one explicit data-level order:
-
-1. environment/incident scope;
-2. final environment/client;
-3. role against final environment;
-4. justification;
-5. cascades, clarification, readiness, and lifecycle.
-
-Independent valid operations may commit atomically when another data-level operation fails. Dependent role changes never apply against stale scope. At most one clarification is created per turn, with environment taking precedence over role.
+Structural contract violations reject the whole proposal. After structural validation,
+Core evaluates two groups: environment, incident, and role form one atomic scope group;
+justification is one independent content group. Invalid, unavailable, conflicting, or
+ambiguous explicit scope rejects all same-turn scope mutation, although a bounded
+clarification may persist and a valid justification may still apply. An invalid
+justification does not discard a valid scope transition. Cascades are part of the one
+accepted scope transition, and the complete state commit remains atomic.
 
 ### Target MCP capability model
 
@@ -115,12 +119,12 @@ The model-visible environment search and Core authoritative search use one versi
 
 For an agent-proposed structured environment query:
 
-- zero matches -> reject the environment operation and render no-match guidance;
+- zero matches -> reject the scope group and render no-match guidance;
 - one match -> exact reload and canonical acceptance when eligible;
 - two-to-five matches -> preserve current scope, persist all ordered choice records,
   and render choices;
-- six-to-twenty matches -> reject without truncation and request more specific wording;
-- more than twenty -> typed too-broad failure.
+- more than five matches -> return a typed too-broad result and request more specific
+  wording without exposing, ranking, or truncating a larger hidden result set.
 
 Search considers only active, production, access-request-eligible environments. Core does not inspect requester text to prove how the agent derived the query.
 
@@ -140,18 +144,16 @@ context, and an accepted environment change clears role context. Independent
 justification changes, rejected operations, value-equal no-ops, non-mutating acts, and
 transient failures preserve unrelated context unless its authoritative choices are
 proven stale. Newly required clarification replaces prior context with environment
-before role. Context-only writes leave `CandidateVersion` unchanged but change
-`ConcurrencyVersion`, so candidate/context changes during agent execution reject the
-stale proposal at commit.
+before role. Candidate or context writes change `ConcurrencyVersion`, so changes during
+agent execution reject the stale proposal at commit.
 
 ### Lifecycle, identity, and version policy
 
 The closed states are `Collecting`, `Ready`, `Submitted`, `Superseded`, and `Expired`.
 
-The target uses three explicit correctness concepts:
+The target uses two explicit correctness concepts:
 
 - `PreparationId`: immutable identity of one preparation and one ready scope;
-- `CandidateVersion`: begins at zero on row creation, increments once when creation also persists a material candidate, then increments for later material candidate commits; it has no clarification-selection role;
 - `ConcurrencyVersion`: changes for every persisted aggregate update and protects candidate/context snapshots and optimistic commits.
 
 A ready preparation is immutable. A material revision or clarification-producing revision:
@@ -173,7 +175,10 @@ Request creation is unique by `Request.PreparationId`; duplicate confirmation re
 
 The persisted justification remains requester-authored content in the requester's language. The agent may strip command framing and normalize Unicode, line endings, and outer whitespace. It may not translate, summarize, style-rewrite, or invent facts.
 
-Core validates only deterministic storage/business constraints. Linguistic provenance is controlled through the agent contract, model/prompt versioning, live evaluation, and the human-visible ready card—not by reintroducing requester-text parsing in Core.
+Core validates only deterministic storage/business constraints. Justification fidelity
+is controlled through the agent contract, model/prompt versioning, live evaluation, and
+the human-visible ready card—not through a model-authored certification field or by
+reintroducing requester-text parsing in Core.
 
 ### Responses and prompt-injection posture
 
@@ -183,91 +188,58 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 
 ## Delivery sequence
 
-### Increment 0: reconcile authority and remove contradictory guidance
+### Current branch position
 
-- Adopt the finalized feature specification and accepted ADRs 0007–0009 as target design authority.
-- Accept the four-tool constitution/catalog amendment status consistently.
-- Replace the MCP contract and evaluation matrix with the aligned versions.
-- Remove `docs/deterministic-request-intake-design.md`; its duplicated algorithms are obsolete and risk reintroducing parser/evidence behavior.
-- Remove the existing `tasks/deterministic-request-intake.md`; planning will regenerate it from the finalized authority set.
-- Inspect partial feature code and tests; mark phrase parsers, identifier extractors, numeric/ordinal fast paths, requester-text evidence checks, ambiguous version fields, mutable-ready behavior, and long database transactions for deletion or redesign.
-- Run the updated Codex planning prompt only after this document set is in place.
+The isolated target composition has completed the original foundation through Task 10
+and the ordinary sparse-patch clarification protocol from Task 10A. Production still
+runs the delivered two-tool/full-candidate composition. The target Teams renderer,
+target confirmation/idempotency flow, full isolated host, atomic production cutover,
+legacy deletion, promoted live-model gate, and as-built documentation reconciliation
+remain pending.
 
-**Exit gate:** one consistent target authority set, all blocking lifecycle/schema decisions resolved, and no planned deterministic requester-text interpretation beyond exact `/new`.
+Before those delivery tasks resume, implement the focused simplification plan in
+[`tasks/deterministic-request-intake-simplification.md`](../tasks/deterministic-request-intake-simplification.md).
+It directly removes redundant target mechanisms without a compatibility path.
 
-### Increment 1: closed proposal, aggregate schema, and reducer foundations
+### Increment 1: simplify the isolated target
 
-- Introduce provider-neutral `TurnProposal`, exact act/payload compatibility, sparse operations, bounded discussion topics, typed structural/domain outcomes, and no model-prose channel.
-- Introduce `PreparationId`, `CandidateVersion`, `ConcurrencyVersion`, lifecycle states, timestamps, ready deadline, optional supersession link, and bounded clarification schema.
-- Keep requester free-text at the Teams/agent boundary; Core preparation APIs and reducer must not accept it.
-- Implement immediate structural whole-proposal rejection without a schema-repair invocation.
-- Implement canonicalization and value-equal no-ops.
-- Keep exact `/new` as the sole pre-agent text protocol path.
+- Keep clarification on the already-implemented ordinary sparse-patch path and remove
+  remaining obsolete protocol tests or terminology.
+- Remove the candidate-progress counter and justification self-certification field.
+- Reduce environment, incident, and role handling to one atomic scope group while
+  keeping justification independent and the complete commit atomic.
+- Map each incident to zero or one authoritative environment.
+- Use one shared complete environment-search bound: zero, one, two-to-five, or
+  more-than-five results.
+- Remove preparation-level turn exhaustion and collecting-stale policy while retaining
+  message, tool, provider-iteration, timeout/cancellation, zero-repair fail-closed, and
+  infrastructure rate protections.
+- Retain the 30-minute ready deadline and lazy expiry because the accepted product
+  baseline and security model intentionally require unexpired confirmation.
+- Keep explicit requester role selection; sole-role auto-selection would add a branch
+  without removing the role-choice mechanism.
 
-**Exit gate:** migrations/types/contracts compile; source checks prove no deterministic requester-language path exists; structural tests and version semantics pass.
+**Exit gate:** simplified contracts, schema, reducer, adapters, deterministic tests, and
+isolated live-model suite pass with no old protocol or compatibility adapter registered.
 
-### Increment 2: authoritative reducer order and partial acceptance
+### Increment 2: resume the remaining target delivery
 
-- Implement environment/incident scope-group resolution.
-- Establish final environment/client before role evaluation.
-- Add active/production/access-request-eligibility validation.
-- Add exact role validation and application-owned role-choice handling for the final environment.
-- Implement independent justification handling with requester-authored provenance contract.
-- Implement explicit dependency rejection, environment-over-role clarification precedence, and atomic partial acceptance.
-- Implement readiness and collecting lifecycle behavior from structured proposals only.
+After the simplification exit gate, resume only the still-relevant portions of the
+historical implementation plan:
 
-**Exit gate:** unit matrices prove no stale-environment role application, no mixed conflicting scope, one clarification maximum, and atomic accepted/rejected outcomes.
+- add the target application-owned Teams renderer using compact group outcomes;
+- implement target confirmation with immutable `PreparationId`, ownership, 30-minute
+  lazy expiry, authoritative revalidation, and unique `Request.PreparationId`;
+- prove the isolated full-host workflow and two-database ownership;
+- cut over atomically to exactly four read-only tools and remove the delivered legacy
+  composition without dual registration;
+- record passing promoted live-model evidence; and
+- reconcile current/as-built product documents only after implementation evidence
+  passes.
 
-### Increment 3: one agent boundary and four MCP capabilities
-
-- Adapt the single MAF agent to interpret every non-`/new` free-text turn into the closed provider-neutral proposal.
-- Split environment discovery, exact environment lookup/eligibility, and environment-role lookup; keep exact incident lookup.
-- Add independent environment, entitlement, and incident Core ports/adapters.
-- Implement one shared versioned environment-search policy behind MCP and Core surfaces.
-- Preserve exact allowlist, closed schemas, read-only annotations, call/provider-iteration bounds, the 30-second shared turn timeout, cancellation, safe logging, and typed failures.
-- Treat requester/tool text as untrusted data.
-
-**Exit gate:** contract/integration tests prove exact four-tool catalog, shared policy version, bounded read-only behavior, independent source failures, and absence of state-changing model capabilities.
-
-### Increment 4: application-owned clarification, responses, and ready lifecycle
-
-- Implement complete two-to-five environment-search choices and one-to-five authoritative role choices, with no truncation or automatic selection.
-- Persist one ordered clarification context with exact canonical IDs, safe display
-  fields, stable order, and 1-based rendered positions.
-- Supply that bounded context to the agent and let every free-text choice reply produce
-  an ordinary exact-ID sparse operation or conservative `unclear`.
-- Implement deterministic context consumption, preservation, replacement, and
-  invalidation without a separate choice protocol.
-- Render all progress, choice, accepted/rejected, discussion, unrelated, unclear, submission, failure, and card content in application code.
-- Implement immutable ready preparations, 30-minute lazy expiry, atomic supersession/replacement, and exact stale-card behavior.
-- Ensure no model-generated prose reaches the requester.
-
-**Exit gate:** restart-safe clarification references produce ordinary exact-ID patches or
-conservative `unclear`, ready identity is immutable, old cards cannot submit replacement
-scope, and no free-text turn creates a request.
-
-### Increment 5: concurrency, confirmation, and idempotency
-
-- Ensure no SQLite transaction/write lock spans agent/MCP invocation.
-- Use snapshot read plus short OCC commit with `ConcurrencyVersion`; optionally retain an in-process conversation gate without depending on it for correctness.
-- Reject stale proposals without automatically replaying them against changed state.
-- Add active-preparation uniqueness for actor/conversation.
-- Add unique `Request.PreparationId` and replay response contract.
-- Re-prove confirmation/revision and duplicate-confirmation race convergence.
-
-**Exit gate:** stale commits are atomic failures, one actor/conversation has one active preparation, and duplicate confirmation produces one request identity.
-
-### Increment 6: threat controls, evaluation, and documentation
-
-- Add prompt-injection tests for requester text and instruction-like MCP fields.
-- Make client/environment/role prominent and duration/deadline labels distinct on the card.
-- Enforce message, turn, rate, tool, iteration, 30-second timeout, query, and choice bounds.
-- Record model, prompt, proposal-schema, tool-contract, and search-policy versions in safe diagnostics.
-- Run the aligned deterministic matrix and credentialed live-model suite.
-- Require 100% safety restraint/zero side effects and the specified quality thresholds before feature promotion.
-- After evidence passes, reconcile product baseline, architecture, security, contracts, orchestration, testing, operator guidance, README, and roadmap so all current documents describe one runtime truth.
-
-**Exit gate:** all deterministic gates pass, live evaluation meets promotion thresholds with zero consequential side effects, and current-state documentation matches verified runtime.
+**Exit gate:** all deterministic gates pass, live evaluation meets the detailed matrix
+with zero consequential side effects, production contains only the verified target
+composition, and current-state documentation matches runtime.
 
 ## Explicitly excluded from the increment
 
@@ -282,7 +254,8 @@ scope, and no free-text turn creates a request.
 - Pending ready-draft revisions, rollback, or `/cancel-revision`.
 - A background expiry worker or collecting-inactivity TTL for this feature.
 - Another requester channel, second agent, multi-agent workflow, generic workflow engine, RAG subsystem, new deployable service, message broker, or distributed lock.
-- Changes to downstream approvals, provisioning, retries, audit semantics beyond preparation-version metadata, fixed duration, or grant expiry.
+- Changes to downstream approvals, provisioning, retries, bounded preparation audit
+  metadata, fixed duration, or grant expiry.
 
 ## Delivered increment: environment identifier resolution
 

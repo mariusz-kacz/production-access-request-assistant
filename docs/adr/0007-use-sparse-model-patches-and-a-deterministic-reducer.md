@@ -20,10 +20,10 @@ requester message. That creates a second natural-language interpreter beside the
 leaks language assumptions into Core, and fails for equivalent multilingual or
 paraphrased requests.
 
-The target design also needs an explicit answer for mixed patches. A proposal may
-contain several structurally valid operations where one enterprise lookup fails or one
-relationship is incompatible. Leaving whole-turn versus field-level behavior implicit
-would produce incompatible implementations.
+The target design also needs an explicit answer for mixed patches. Environment,
+incident, and role are one dependent scope, while justification is independent content.
+Treating every field as a separate transaction creates verdict, dependency, renderer,
+and test combinations without adding authority.
 
 ## Decision
 
@@ -62,41 +62,42 @@ Core validates whether a structured proposal is legal, coherent, and supported b
 current authoritative enterprise data. It deliberately does not prove that requester
 wording linguistically entails the proposal.
 
-### Structural and data-level rejection
+### Structural rejection and grouped domain evaluation
 
-The reducer uses a two-tier model:
+The reducer uses two boundaries:
 
 1. **Structural violation** — unknown act, field, operation, payload combination,
    malformed value, or provider-contract translation failure rejects the entire turn
    immediately with zero mutation and no model repair invocation.
-2. **Data-level operation result** — unknown/ineligible environment, unavailable role,
-   incompatible incident, source failure, or dependency failure rejects only the
-   affected and dependent operations. Independent accepted operations commit atomically
-   with any resulting clarification context.
+2. **Grouped domain result** — environment, incident, role, and their deterministic
+   cascades form one atomic scope group; justification forms one independent content
+   group. An invalid, unavailable, conflicting, or ambiguous explicit scope operation
+   discards all temporary scope mutations. A bounded clarification may still persist,
+   and a valid justification may still apply.
 
 The normative evaluation order is:
 
-1. environment;
-2. incident;
-3. coherent final environment/client scope;
-4. role against final environment;
-5. justification;
-6. dependency cascades;
-7. at most one clarification, with environment before role; and
-8. clarification-context lifecycle and readiness.
+1. resolve environment, incident, and role facts without mutation;
+2. accept or reject one complete scope transition including cascades;
+3. evaluate justification independently;
+4. create at most one clarification, with environment before role; and
+5. apply clarification lifecycle, readiness, and one optimistic commit.
 
-There is no unspecified partial-success escape hatch.
+The public behavioral result model is limited to `Applied`, `NoOp`,
+`Rejected(reason)`, and `NeedsClarification` at the group boundary. There is no general
+per-field verdict protocol.
 
-### Justification provenance
+### Justification fidelity
 
 Justification remains requester-authored content in the requester’s language. The agent
 may extract it from conversational framing, trim outer whitespace, normalize line
 endings, and combine explicitly requested edits with the existing canonical value. It
 must not translate, summarize, polish, invent rationale, or add facts.
 
-Core enforces storage constraints but does not compare the proposed justification with
-raw requester text. Provenance quality is governed by the agent contract, targeted live
-evaluation, mandatory ready-card review, and human approval.
+The justification operation contains text only; it has no model-authored
+self-certification field. Core enforces storage constraints but does not compare the
+proposed justification with raw requester text. Fidelity is governed by the agent
+contract, targeted live evaluation, mandatory ready-card review, and human approval.
 
 ### Consequential boundaries
 
@@ -133,14 +134,14 @@ enterprise identities and relationships are exact-reloaded, state/lifecycle rule
 deterministic, free-text cannot create a request, and the requester must review and
 confirm exact canonical scope.
 
-The explicit two-tier rejection model keeps multi-operation turns useful while avoiding
-arbitrary implementation choices. Structural corruption cannot partially apply;
-independent valid business changes need not be discarded because another source or
-field failed.
+The grouped rejection model keeps mixed turns useful without modeling every field as an
+independent transaction. Structural corruption cannot apply. Dependent scope either
+transitions coherently or not at all, while valid requester content remains useful when
+scope fails.
 
 Separating interpretation from reduction keeps Core independent of MAF, MCP, Teams,
 and provider SDK types. Core can be tested with directly constructed proposals, while
-linguistic and provenance quality is evaluated at the agent boundary.
+linguistic and justification-fidelity quality is evaluated at the agent boundary.
 
 ## Consequences
 
@@ -152,8 +153,8 @@ linguistic and provenance quality is evaluated at the agent boundary.
 - Core remains deterministic, provider-neutral, and testable without language corpora.
 - Clarification references and ordinary updates share one proposal and reducer path.
 - Enterprise identifiers and relationships are independently revalidated.
-- Mixed patches have one normative ordering and partial-success policy.
-- Justification provenance is explicit rather than silently model-authored.
+- Mixed patches have one atomic scope group and one independent justification group.
+- Justification fidelity is governed without trusting a model-authored certification.
 - Model prose cannot claim a transition that did not commit.
 - The project demonstrates a credible enterprise GenAI boundary: probabilistic
   interpretation, deterministic state/authority, and explicit confirmation.
@@ -164,8 +165,9 @@ linguistic and provenance quality is evaluated at the agent boundary.
   incurs agent latency and provider-failure risk.
 - A model can propose a structurally valid but semantically unintended change. Core
   rejects illegal/non-authoritative values but does not reinterpret the sentence.
-- Partial success requires typed per-operation outcomes and clear requester rendering.
-- Justification provenance cannot be proven by Core without recreating language
+- The scope group may reject a safe environment update when another same-turn scope
+  operation fails; the requester must retry the coherent scope.
+- Justification fidelity cannot be proven by Core without recreating language
   interpretation; it requires targeted evaluation and human review.
 - The closed proposal/reducer/outcome model adds code compared with trusting one model
   snapshot.
@@ -197,15 +199,16 @@ Rejected. Matching proposed values, clears, or paraphrases to requester wording 
 require Core to reproduce natural-language interpretation and would not generalize
 across languages.
 
-### Reject every mixed patch when one data-level operation fails
+### Reject the whole proposal when one domain group fails
 
-Rejected because it discards independent safe updates and makes source availability
-needlessly destructive. Structural violations still reject the entire turn.
+Rejected because a valid justification is independent requester content and may safely
+commit when scope fails. Scope itself remains atomic.
 
-### Apply every valid-looking operation independently without ordering
+### Apply every valid-looking field independently with ordering
 
-Rejected because environment, incident, and role are dependent. A fixed scope-first
-order and explicit conflict rules are required.
+Rejected because environment, incident, and role are dependent. Per-field temporary
+transactions, dependency verdict propagation, and combinatorial summaries add cost
+without improving safety over one scope-group result.
 
 ### Let the model call a state-changing draft tool
 
