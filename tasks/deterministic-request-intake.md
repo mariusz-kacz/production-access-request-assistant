@@ -359,7 +359,7 @@ increments without production registration.
 
 ### Task 8 - Build the inactive four-tool MCP catalog
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Implement the target four-tool wire surface in separate handlers and
 registration extensions. Do not call the target registration from production
@@ -367,9 +367,9 @@ composition.
 
 **Acceptance criteria:**
 
-- [ ] Exactly the four approved typed read-only tools and closed schemas match the target contract; no mutation or role embedding in exact environment lookup exists.
-- [ ] MCP search and Core's `searchQuery` path use the same search-policy implementation; exact-ID proposals do not replay search, and tool results remain bounded interpretive context.
-- [ ] The delivered production endpoint still exposes exactly its current two tools before cutover.
+- [x] Exactly the four approved typed read-only tools and closed schemas match the target contract; no mutation or role embedding in exact environment lookup exists.
+- [x] MCP search and Core's `searchQuery` path use the same search-policy implementation; exact-ID proposals do not replay search, and tool results remain bounded interpretive context.
+- [x] The delivered production endpoint still exposes exactly its current two tools before cutover.
 
 **Verification:** Target contract/transport/failure tests use an explicit target MCP test host; production-registration regression proves two tools remain active; then standing backend verification.
 
