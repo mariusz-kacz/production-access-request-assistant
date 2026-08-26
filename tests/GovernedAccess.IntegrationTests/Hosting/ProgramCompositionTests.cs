@@ -115,6 +115,8 @@ public sealed class ProgramCompositionTests(
         Assert.Same(concreteStore, sessionStore);
         Assert.IsType<MafRequestPreparationInterpreter>(interpreter);
         Assert.Null(services.GetService<MafTurnProposalInterpreter>());
+        Assert.Null(services.GetService<ITurnProposalInterpreter>());
+        Assert.Null(services.GetService<TargetRequestPreparationOrchestrator>());
         Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,

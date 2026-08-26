@@ -16,6 +16,10 @@ public interface IRequestPreparationStore
         PreparationBinding binding,
         CancellationToken cancellationToken);
 
+    Task<ApplicationResult<RequestPreparation>> GetLatestAsync(
+        PreparationBinding binding,
+        CancellationToken cancellationToken);
+
     Task<ApplicationResult<RequestPreparation>> GetAsync(
         Guid preparationId,
         CancellationToken cancellationToken);

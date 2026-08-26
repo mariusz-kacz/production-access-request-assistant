@@ -303,6 +303,7 @@ public sealed class PreparationContractTests
                 nameof(DraftUpdated),
                 nameof(Failed),
                 nameof(ReadyForConfirmation),
+                nameof(ResetGuidance),
                 nameof(SubmissionGuidance),
                 nameof(TerminalPreparationGuidance),
                 nameof(UnclearGuidance),

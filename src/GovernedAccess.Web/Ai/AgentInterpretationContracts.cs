@@ -280,3 +280,10 @@ internal sealed record AgentInterpretationFailed(
     AgentInterpretationFailure Failure,
     AgentExecutionMetadata ExecutionMetadata)
     : AgentInterpretationResult(ExecutionMetadata);
+
+internal interface ITurnProposalInterpreter
+{
+    Task<AgentInterpretationResult> InterpretAsync(
+        AgentTurnInput turn,
+        CancellationToken cancellationToken);
+}

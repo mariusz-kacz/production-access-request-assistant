@@ -199,6 +199,8 @@ public sealed record UnrelatedGuidance : ApplicationOutcome;
 
 public sealed record UnclearGuidance : ApplicationOutcome;
 
+public sealed record ResetGuidance : ApplicationOutcome;
+
 public sealed record ReadyForConfirmation : ApplicationOutcome
 {
     public ReadyForConfirmation(Guid preparationId)

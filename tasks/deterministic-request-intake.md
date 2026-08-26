@@ -417,16 +417,16 @@ verification.
 
 ### Task 10 - Build target turn orchestration, lifecycle, restart, and races
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Compose target load -> agent -> reduce -> short OCC commit behavior in
 a new application service. It remains reachable only from direct/component tests.
 
 **Acceptance criteria:**
 
-- [ ] Agent/MCP latency occurs outside database transactions; accepted changes and clarification commit atomically; stale proposals are rejected without replay.
-- [ ] The closed reset protocol event, first-turn creation, one-active uniqueness, permanent turn exhaustion, collecting staleness, lazy Ready expiry, and typed failures match the specification; this service never receives or compares requester text.
-- [ ] Ready revisions preserve A for no-op/failure and atomically supersede A/create mandatory-predecessor B for the first accepted material change or clarification.
+- [x] Agent/MCP latency occurs outside database transactions; accepted changes and clarification commit atomically; stale proposals are rejected without replay.
+- [x] The closed reset protocol event, first-turn creation, one-active uniqueness, permanent turn exhaustion, collecting staleness, lazy Ready expiry, and typed failures match the specification; this service never receives or compares requester text.
+- [x] Ready revisions preserve A for no-op/failure and atomically supersede A/create mandatory-predecessor B for the first accepted material change or clarification.
 
 **Verification:** Unit/component tests cover normative lifecycle examples, restart, active-creation races, OCC collisions, deadline behavior, and no side effects on failures; then standing backend verification.
 

@@ -361,7 +361,7 @@ not require requester selection.
 ### Journey D: ambiguous environment and restart
 
 1. Core observes two-to-five matches.
-2. Existing scope is cleared and complete ordered IDs persist.
+2. Existing canonical scope is preserved and complete ordered IDs persist.
 3. Restart host.
 4. Agent receives current choices and returns target/index.
 5. Core maps index, exact-reloads entity, consumes context.

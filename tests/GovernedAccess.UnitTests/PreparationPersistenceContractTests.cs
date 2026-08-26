@@ -16,6 +16,7 @@ public sealed class PreparationPersistenceContractTests
                 "Add",
                 "GetActiveAsync",
                 "GetAsync",
+                "GetLatestAsync",
                 "SaveChangesAsync",
             ],
             storeMethods.Select(method => method.Name).Order().ToArray());

@@ -63,6 +63,36 @@ internal sealed class EfRequestPreparationStore(WorkflowDbContext dbContext)
             cancellationToken);
     }
 
+    public async Task<ApplicationResult<RequestPreparation>> GetLatestAsync(
+        PreparationBinding binding,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        var locallyTracked = trackedPreparations.Values
+            .Where(item => item.Preparation.Binding == binding)
+            .OrderByDescending(item => item.Preparation.CreatedAt)
+            .ThenByDescending(item => item.Preparation.UpdatedAt)
+            .Select(item => item.Preparation)
+            .FirstOrDefault();
+        if (locallyTracked is not null)
+        {
+            return ApplicationResult.Succeeded(locallyTracked);
+        }
+
+        return await FindAsync(
+            QueryPreparations()
+                .Where(record =>
+                    record.Channel == binding.Channel
+                    && record.TenantId == binding.TenantId
+                    && record.ChannelActorId == binding.ChannelActorId
+                    && record.ConversationId == binding.ConversationId
+                    && record.RequesterId == binding.RequesterId)
+                .OrderByDescending(record => record.CreatedAt)
+                .ThenByDescending(record => record.UpdatedAt)
+                .Take(1),
+            cancellationToken);
+    }
+
     public async Task<ApplicationResult<RequestPreparation>> GetAsync(
         Guid preparationId,
         CancellationToken cancellationToken)

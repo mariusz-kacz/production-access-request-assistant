@@ -11,7 +11,7 @@ using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.Web.Ai;
 
-internal sealed partial class MafTurnProposalInterpreter
+internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
     internal const string PromptContractVersion = "1.0.0";
     internal const string McpContractVersion = "2.0.0";
@@ -111,7 +111,7 @@ internal sealed partial class MafTurnProposalInterpreter
         this.httpClientFactory = httpClientFactory;
     }
 
-    internal async Task<AgentInterpretationResult> InterpretAsync(
+    public async Task<AgentInterpretationResult> InterpretAsync(
         AgentTurnInput turn,
         CancellationToken cancellationToken)
     {
