@@ -327,7 +327,7 @@ regressions; then standing backend verification.
 
 ### Task 7 - Complete target downstream workflow persistence
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Extend the isolated workflow module with the final request, approval,
 operation, grant, and audit mappings/store behavior needed after target confirmation.
@@ -336,9 +336,9 @@ production still resolves the delivered unified context.
 
 **Acceptance criteria:**
 
-- [ ] The target workflow database persists authenticated principals, immutable requests, decisions, operations, grants, and audit evidence with existing concurrency/idempotency invariants and no EF relationship to reference facts.
-- [ ] Existing downstream Core behavior runs against the target workflow ports while every environment/client/role/incident read crosses the new authority ports; reference outage and workflow outage remain distinguishable and no cross-database transaction exists.
-- [ ] Focused architecture/composition tests prove the delivered host still uses only delivered persistence and the target fixture uses only `Workflow.Persistence` plus `ReferenceAuthority`, with no shared database file, row, seeder, or dual write.
+- [x] The target workflow database persists authenticated principals, immutable requests, decisions, operations, grants, and audit evidence with existing concurrency/idempotency invariants and no EF relationship to reference facts.
+- [x] Existing downstream Core behavior runs against the target workflow ports while every environment/client/role/incident read crosses the new authority ports; reference outage and workflow outage remain distinguishable and no cross-database transaction exists.
+- [x] Focused architecture/composition tests prove the delivered host still uses only delivered persistence and the target fixture uses only `Workflow.Persistence` plus `ReferenceAuthority`, with no shared database file, row, seeder, or dual write.
 
 **Verification:** Target workflow-store mapping, migration, query, approval, provisioning,
 idempotency, restart, and independent-failure integration tests; ordinary downstream

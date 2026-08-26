@@ -31,6 +31,7 @@ public static class WorkflowPersistenceRegistration
                     typeof(WorkflowDbContext).Assembly.FullName)));
         services.AddScoped<IRequestPreparationStore, EfRequestPreparationStore>();
         services.AddScoped<IAuthenticatedPrincipalReader, EfAuthenticatedPrincipalReader>();
+        services.AddScoped<IWorkflowStore, EfWorkflowStore>();
         return services;
     }
 }

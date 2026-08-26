@@ -3,6 +3,7 @@ using System;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,45 +11,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
 {
     [DbContext(typeof(WorkflowDbContext))]
-    partial class WorkflowDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260826072800_AddRequestsAndAudit")]
+    partial class AddRequestsAndAudit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
-
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AccessGrant", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ActivatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("CorrelationId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ExpiresAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Outcome")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequestId")
-                        .IsUnique();
-
-                    b.ToTable("AccessGrants", (string)null);
-                });
 
             modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", b =>
                 {
@@ -86,52 +56,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                     b.HasIndex("RequesterId");
 
                     b.ToTable("AccessRequests", (string)null);
-                });
-
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.ApprovalDecision", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ApproverId")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CorrelationId")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("DecidedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Decision")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Stage")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApproverId");
-
-                    b.HasIndex("RequestId", "Stage")
-                        .IsUnique();
-
-                    b.ToTable("ApprovalDecisions", (string)null);
                 });
 
             modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AuditEvent", b =>
@@ -176,34 +100,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                     b.HasIndex("RequestId", "OccurredAt", "Id");
 
                     b.ToTable("AuditEvents", (string)null);
-                });
-
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.ProvisioningOperation", b =>
-                {
-                    b.Property<Guid>("RequestId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("CreatedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("LastAttemptAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("LastOutcomeCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("RequestId");
-
-                    b.ToTable("ProvisioningOperations", (string)null);
                 });
 
             modelBuilder.Entity("GovernedAccess.Workflow.Persistence.RequestPreparationRecord", b =>
@@ -341,21 +237,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                     b.ToTable("AuthenticatedPrincipals", (string)null);
                 });
 
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AccessGrant", b =>
-                {
-                    b.HasOne("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", null)
-                        .WithMany()
-                        .HasForeignKey("RequestId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("GovernedAccess.Core.Domain.AccessRequests.ProvisioningOperation", null)
-                        .WithOne()
-                        .HasForeignKey("GovernedAccess.Core.Domain.AccessRequests.AccessGrant", "RequestId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", b =>
                 {
                     b.HasOne("GovernedAccess.Workflow.Persistence.WorkflowPrincipalRecord", null)
@@ -410,21 +291,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.ApprovalDecision", b =>
-                {
-                    b.HasOne("GovernedAccess.Workflow.Persistence.WorkflowPrincipalRecord", null)
-                        .WithMany()
-                        .HasForeignKey("ApproverId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", null)
-                        .WithMany()
-                        .HasForeignKey("RequestId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.AuditEvent", b =>
                 {
                     b.HasOne("GovernedAccess.Workflow.Persistence.WorkflowPrincipalRecord", null)
@@ -432,15 +298,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                         .HasForeignKey("ActorId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", null)
-                        .WithMany()
-                        .HasForeignKey("RequestId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("GovernedAccess.Core.Domain.AccessRequests.ProvisioningOperation", b =>
-                {
                     b.HasOne("GovernedAccess.Core.Domain.AccessRequests.AccessRequest", null)
                         .WithMany()
                         .HasForeignKey("RequestId")

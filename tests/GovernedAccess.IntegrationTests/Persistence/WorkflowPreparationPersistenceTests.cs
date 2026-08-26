@@ -34,13 +34,24 @@ public sealed class WorkflowPreparationPersistenceTests
 
         Assert.Equal(
             [
+                "AccessGrants",
+                "AccessRequests",
+                "ApprovalDecisions",
+                "AuditEvents",
                 "AuthenticatedPrincipals",
+                "ProvisioningOperations",
                 "RequestPreparations",
                 "__EFMigrationsHistory",
                 "__EFMigrationsLock",
             ],
             tables);
-        Assert.Single(migrations);
+        Assert.Equal(
+            [
+                "20260826071021_InitialWorkflowPersistence",
+                "20260826072800_AddRequestsAndAudit",
+                "20260826073338_AddApprovalAndProvisioning",
+            ],
+            migrations);
         Assert.True(requester.IsSuccess);
         Assert.Equal(PrincipalKind.Requester, requester.Value.Kind);
         Assert.Equal(

@@ -69,6 +69,28 @@ public sealed class WorkflowPersistenceArchitectureTests
         Assert.Null(scope.ServiceProvider.GetService<WorkflowDbContext>());
         Assert.Null(scope.ServiceProvider.GetService<IRequestPreparationStore>());
         Assert.Null(scope.ServiceProvider.GetService<IAuthenticatedPrincipalReader>());
+        var deliveredStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+        Assert.Equal(
+            typeof(GovernedAccessDbContext).Assembly,
+            deliveredStore.GetType().Assembly);
+    }
+
+    [Fact]
+    public async Task IsolatedTargetCompositionUsesOnlyModuleOwnedPersistence()
+    {
+        await using var fixture = await TargetPersistenceFixture.CreateAsync();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var workflowStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+
+        Assert.Equal(
+            typeof(WorkflowDbContext).Assembly,
+            workflowStore.GetType().Assembly);
+        Assert.NotNull(scope.ServiceProvider.GetService<WorkflowDbContext>());
+        Assert.NotNull(scope.ServiceProvider.GetService<ReferenceAuthorityDbContext>());
+        Assert.Null(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
+        Assert.NotEqual(
+            Path.GetFullPath(fixture.ReferenceDatabasePath),
+            Path.GetFullPath(fixture.WorkflowDatabasePath));
     }
 
     [Fact]
