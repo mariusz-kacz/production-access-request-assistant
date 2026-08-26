@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using ModelContextProtocol.Client;
@@ -14,6 +15,42 @@ public sealed class TargetMcpContractTests
         "get_production_environment",
         "search_production_environments",
     ];
+
+    [Fact]
+    public void PublishedTargetContractParsesAndMatchesTheBoundedCatalog()
+    {
+        var contractPath = Path.Combine(
+            GetRepositoryRoot(),
+            "docs",
+            "contracts",
+            "deterministic-request-intake-mcp-tools.json");
+        using var contract = JsonDocument.Parse(File.ReadAllText(contractPath));
+        var root = contract.RootElement;
+        var tools = root.GetProperty("tools").EnumerateArray().ToArray();
+
+        Assert.Equal(
+            "https://json-schema.org/draft/2020-12/schema",
+            root.GetProperty("$schema").GetString());
+        Assert.Equal("approved-target", root.GetProperty("status").GetString());
+        Assert.Equal("3.0.0", root.GetProperty("contractVersion").GetString());
+        Assert.Equal(5, root.GetProperty("maximumEnvironmentCandidates").GetInt32());
+        Assert.Equal(4, root.GetProperty("maximumTotalToolCallsPerTurn").GetInt32());
+        Assert.Equal(
+            ExpectedToolNames,
+            tools
+                .Select(tool => tool.GetProperty("name").GetString())
+                .Order(StringComparer.Ordinal));
+        Assert.All(
+            tools,
+            tool =>
+            {
+                var annotations = tool.GetProperty("annotations");
+                Assert.True(annotations.GetProperty("readOnlyHint").GetBoolean());
+                Assert.False(annotations.GetProperty("destructiveHint").GetBoolean());
+                Assert.True(annotations.GetProperty("idempotentHint").GetBoolean());
+                Assert.False(annotations.GetProperty("openWorldHint").GetBoolean());
+            });
+    }
 
     [Fact]
     public async Task TargetServerAdvertisesExactlyTheFourClosedReadOnlyTools()
@@ -377,4 +414,15 @@ public sealed class TargetMcpContractTests
             expectedNames.Order(),
             value.EnumerateObject().Select(property => property.Name).Order());
     }
+
+    private static string GetRepositoryRoot(
+        [CallerFilePath] string sourceFilePath = "") =>
+        Path.GetFullPath(
+            Path.Combine(
+                Path.GetDirectoryName(sourceFilePath)
+                    ?? throw new InvalidOperationException(
+                        "The MCP contract-test source path is unavailable."),
+                "..",
+                "..",
+                ".."));
 }

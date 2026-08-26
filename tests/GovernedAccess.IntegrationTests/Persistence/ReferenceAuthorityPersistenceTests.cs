@@ -32,7 +32,9 @@ public sealed class ReferenceAuthorityPersistenceTests
                 "__EFMigrationsLock",
             ],
             tables);
-        Assert.Single(migrations);
+        Assert.Equal(
+            ["20260825072917_InitialReferenceAuthority"],
+            migrations);
         Assert.Equal(4, await context.Clients.CountAsync(TestContext.Current.CancellationToken));
         Assert.Equal(
             16,
@@ -95,7 +97,8 @@ public sealed class ReferenceAuthorityPersistenceTests
                 16,
                 await restartedContext.ProductionEnvironments.CountAsync(
                     TestContext.Current.CancellationToken));
-            Assert.Single(
+            Assert.Equal(
+                ["20260825072917_InitialReferenceAuthority"],
                 await restartedContext.Database.GetAppliedMigrationsAsync(
                     TestContext.Current.CancellationToken));
         }

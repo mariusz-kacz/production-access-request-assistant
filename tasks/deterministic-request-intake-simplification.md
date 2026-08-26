@@ -1,6 +1,6 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Implementation in progress; Tasks 1–3 complete; Task 4 automated gate implemented, credentialed report pending
+- **Status:** Implementation in progress; Tasks 1–3 complete; Tasks 4–5 automated gates implemented, credentialed report pending
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -571,6 +571,14 @@ simplified behavior; isolated live evaluation records a passing report under the
 matrix's unchanged absolute safety gates and required quality threshold.
 
 ### Task 5 — Cross-boundary verification and post-evidence reconciliation
+
+- [ ] Complete — automated cross-boundary verification, repository validation, and
+  pending-work documentation handoff pass; the credentialed evaluation report inherited
+  from Task 4 remains pending.
+- **Operator-directed dependency override (2026-08-26):** Task 5's automated work ran
+  before the Task 4 live-evaluation dependency was satisfied. No current/as-built
+  document, production composition, or promotion status was advanced, and the full
+  Task 5 exit gate remains open until credentialed evidence passes.
 
 **Objective and complexity reduction**
 

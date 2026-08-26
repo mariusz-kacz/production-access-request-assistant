@@ -81,6 +81,14 @@ public sealed class WorkflowPersistenceArchitectureTests
         await using var fixture = await TargetPersistenceFixture.CreateAsync();
         await using var scope = fixture.Services.CreateAsyncScope();
         var workflowStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+        var workflowContext = scope.ServiceProvider
+            .GetRequiredService<WorkflowDbContext>();
+        var referenceContext = scope.ServiceProvider
+            .GetRequiredService<ReferenceAuthorityDbContext>();
+        var workflowMigrations = await workflowContext.Database
+            .GetAppliedMigrationsAsync(TestContext.Current.CancellationToken);
+        var referenceMigrations = await referenceContext.Database
+            .GetAppliedMigrationsAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(
             typeof(WorkflowDbContext).Assembly,
@@ -91,6 +99,19 @@ public sealed class WorkflowPersistenceArchitectureTests
         Assert.NotEqual(
             Path.GetFullPath(fixture.ReferenceDatabasePath),
             Path.GetFullPath(fixture.WorkflowDatabasePath));
+        Assert.Equal(
+            [
+                "20260826071021_InitialWorkflowPersistence",
+                "20260826072800_AddRequestsAndAudit",
+                "20260826073338_AddApprovalAndProvisioning",
+            ],
+            workflowMigrations);
+        Assert.Equal(
+            ["20260825072917_InitialReferenceAuthority"],
+            referenceMigrations);
+        Assert.Empty(workflowMigrations.Intersect(
+            referenceMigrations,
+            StringComparer.Ordinal));
     }
 
     [Fact]

@@ -190,16 +190,20 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 
 ### Current branch position
 
-The isolated target composition has completed the original foundation through Task 10
-and the ordinary sparse-patch clarification protocol from Task 10A. Production still
-runs the delivered two-tool/full-candidate composition. The target Teams renderer,
-target confirmation/idempotency flow, full isolated host, atomic production cutover,
-legacy deletion, promoted live-model gate, and as-built documentation reconciliation
+The isolated target composition has completed the original foundation through Task 10,
+the ordinary sparse-patch clarification protocol from Task 10A, and the automated
+implementation and cross-boundary verification in the focused simplification plan.
+Production still runs the delivered two-tool/full-candidate composition. The
+credentialed simplification evaluation report remains pending, so the simplification
+promotion gate is not complete. The target Teams renderer, target
+confirmation/idempotency flow, full isolated host, atomic production cutover, legacy
+deletion, promoted live-model gate, and as-built documentation reconciliation also
 remain pending.
 
-Before those delivery tasks resume, implement the focused simplification plan in
+The governing handoff is
 [`tasks/deterministic-request-intake-simplification.md`](../tasks/deterministic-request-intake-simplification.md).
-It directly removes redundant target mechanisms without a compatibility path.
+Remaining delivery resumes only after its full exit gate, including credentialed live
+evidence, passes; it consumes the simplified contracts without a compatibility path.
 
 ### Increment 1: simplify the isolated target
 

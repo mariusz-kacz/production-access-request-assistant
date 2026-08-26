@@ -18,6 +18,8 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
@@ -175,6 +177,21 @@ public sealed class ProgramCompositionTests(
     }
 
     [Fact]
+    public async Task ProductionMcpEndpointExposesOnlyTheDeliveredToolCatalog()
+    {
+        await using var client = await CreateProductionMcpClientAsync(
+            applicationFixture.Factory.CreateClient(),
+            TestContext.Current.CancellationToken);
+
+        var tools = await client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["get_incident", "get_production_environment"],
+            tools.Select(tool => tool.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void TeamsOptionsAcceptTheBoundedTeamsManagedConfiguration()
     {
         var configuration = CreateTeamsConfiguration();
@@ -288,4 +305,36 @@ public sealed class ProgramCompositionTests(
                 System.Reflection.BindingFlags.Instance
                 | System.Reflection.BindingFlags.NonPublic)
             .Select(field => field.GetValue(instance));
+
+    private static async Task<McpClient> CreateProductionMcpClientAsync(
+        HttpClient httpClient,
+        CancellationToken cancellationToken)
+    {
+        var endpoint = new Uri(
+            httpClient.BaseAddress
+                ?? throw new InvalidOperationException(
+                    "The production test client has no base address."),
+            "mcp");
+        var transport = new HttpClientTransport(
+            new HttpClientTransportOptions
+            {
+                Endpoint = endpoint,
+                Name = "governed-access-production-composition-tests",
+                TransportMode = HttpTransportMode.StreamableHttp,
+            },
+            httpClient,
+            ownsHttpClient: true);
+
+        try
+        {
+            return await McpClient.CreateAsync(
+                transport,
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            await transport.DisposeAsync();
+            throw;
+        }
+    }
 }

@@ -116,6 +116,21 @@ public sealed class WorkflowPreparationPersistenceTests
         Assert.Equal(
             "\"Lifecycle\" IN ('Collecting', 'Ready')",
             activeIndex.GetFilter());
+        Assert.Equal(
+            [
+                "IX_RequestPreparations_PredecessorPreparationId",
+                "IX_RequestPreparations_RequesterId",
+                "UX_RequestPreparations_ActiveBinding",
+            ],
+            preparation.GetIndexes()
+                .Select(index => index.GetDatabaseName())
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["PredecessorPreparationId", "RequesterId"],
+            preparation.GetForeignKeys()
+                .SelectMany(foreignKey => foreignKey.Properties)
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]

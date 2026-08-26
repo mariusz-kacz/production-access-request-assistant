@@ -6,6 +6,7 @@
 - **Replanned:** 2026-08-25 for an extractable reference-authority module and two independent target databases
 - **Refined:** 2026-08-26 to replace the special clarification-selection protocol with ordinary sparse exact-ID patches
 - **Refined:** 2026-08-26 to share final Teams transport and card-presentation primitives without coupling the delivered and target intake graphs
+- **Refined:** 2026-08-26 so remaining delivery consumes the simplification plan's grouped outcomes, contracted schemas, and confirmation safeguards
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Primary authority:** `SPEC-deterministic-request-intake.md`
 - **Task-list target:** This file is both the plan and the ordered task checklist
@@ -541,6 +542,33 @@ must land together so two clarification paths never coexist.
 **Acceptance coverage:** AC-01-AC-05, AC-07-AC-13, AC-23-AC-35, AC-41, AC-43,
 AC-45-AC-47.
 
+### Simplification handoff for Tasks 11-17
+
+The focused simplification plan in
+[`deterministic-request-intake-simplification.md`](deterministic-request-intake-simplification.md)
+governs the contracts consumed by the remaining planned work. Completed task records
+above remain historical evidence and are not rewritten to describe the simplified
+implementation retroactively.
+
+- Target renderers consume only the application-owned `ScopeResult` and
+  `JustificationResult`, each expressed as `Applied`, `NoOp`, `Rejected(reason)`, or
+  `NeedsClarification`. They must not rebuild per-field transactions, verdict lists,
+  dependency-propagation summaries, or model prose channels.
+- Target persistence and agent work must not restore a candidate-progress counter,
+  permanent preparation turn budget, collecting-stale policy, justification
+  self-certification, hidden environment-search result tier, incident link table, or
+  separate clarification-selection protocol.
+- Target confirmation continues to require exact owned immutable `PreparationId`, lazy
+  30-minute expiry, independent authoritative revalidation, unique
+  `Request.PreparationId`, stable replay identity, and deterministic fact-drift versus
+  source-unavailable behavior.
+- Tasks 13-16 must prove these contracted absences and safeguards in the isolated host,
+  cutover, deletion, and promoted evidence. Task 17 alone promotes verified final
+  runtime behavior into current/as-built documents.
+
+The simplification plan's credentialed live-evaluation report remains a promotion
+dependency. Automated handoff verification does not satisfy that gate by itself.
+
 ### Task 11 - Extract reusable Teams primitives and build target behavior
 
 - [ ] Planned
@@ -558,6 +586,7 @@ card-layout implementation and do not register the target adapter in production.
 - [ ] Shared Teams components own only authenticated activity/context normalization, locale fallback, conversation/card-activity presentation metadata, activity delivery/update mechanics, and pure rendering from Web-owned presentation models. They reference neither preparation graph and contain no old/target routing or compatibility conversion.
 - [ ] Delivered and target adapters separately own orchestration calls, outcome-to-prose mapping, authoritative fact assembly, closed action parsing, confirmation calls, and outcome-specific telemetry; target code references no delivered intake type.
 - [ ] All prose and selectable choices are application-rendered with authenticated locale, safe encoding, exact canonical facts, five-choice maximum, and no model prose.
+- [ ] Target outcome rendering consumes only compact scope and justification group results; it introduces no per-field verdict protocol or combinatorial operation summary.
 - [ ] Ready cards bind only schema version plus unguessable `PreparationId` and prominently show requester, client/environment/role, incident or no incident, exact justification, fixed eight hours, and localized deadline.
 - [ ] Production registration and delivered behavior remain unchanged: no target registration, feature flag, fallback, dual registration, or request-level router exists before Task 14.
 
@@ -569,7 +598,7 @@ context, failures, injection-shaped text, exact `/new`, card replacement, and ab
 of free-text request creation. Run frontend tests if shared contracts change; then run
 standing backend verification.
 
-**Dependencies:** Task 10A.
+**Dependencies:** Task 10A and the simplification-plan exit gate.
 
 **Files likely touched:**
 
@@ -609,6 +638,7 @@ unique `PreparationId` while the delivered creation path temporarily still compi
 **Acceptance criteria:**
 
 - [ ] Confirmation trusts authenticated actor and persisted target state only, revalidates every fact, distinguishes source outage from fact drift, and applies exact correction cascades through a predecessor-linked successor.
+- [ ] Confirmation accepts only an owned immutable Ready preparation before its lazy 30-minute deadline; expiry is not refreshed or bypassed.
 - [ ] Successful confirmation creates one immutable request and marks the preparation Submitted in one workflow-database commit; unique `Request.PreparationId` provides stable sequential/concurrent replay, with no reference-database write or cross-database transaction.
 - [ ] Confirmation/revision races converge to either one submitted immutable request or one superseded stale card; every failure creates zero requests and preserves/supersedes state exactly as specified.
 
@@ -744,7 +774,7 @@ and retain evidence only from the final post-deletion implementation.
 **Acceptance criteria:**
 
 - [ ] Deterministic tests construct structured proposals rather than language corpora and prove all negative paths create zero requests, decisions, operations, or grants.
-- [ ] The fixed 12-group promoted live suite enforces every absolute safety/provenance/ambiguity/budget gate, uniquely resolved exact-ID behavior without Core search replay, and at least 11/12 outcome classes without selective reruns or waivers.
+- [ ] The fixed 12-group promoted live suite enforces every absolute safety, justification-fidelity, ambiguity, and bounded-execution gate, uniquely resolved exact-ID behavior without Core search replay, and at least 11/12 outcome classes without selective reruns or waivers.
 - [ ] Evaluation artifacts retain commit, dataset/hash, provider/model and contract versions, normalized outcomes, latency, and side-effect counts but no raw messages, prompts, proposals, reasoning, or MCP payloads.
 
 **Verification:** Architecture/source checks; standing backend sequence; frontend suite; one complete credentialed promoted live run; artifact/schema/link validation; `git diff --check`.
