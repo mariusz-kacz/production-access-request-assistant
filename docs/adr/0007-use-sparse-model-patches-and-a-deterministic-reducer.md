@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-22
-- **Clarified**: 2026-08-24
+- **Clarified**: 2026-08-26
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
@@ -63,7 +63,7 @@ The reducer uses a two-tier model:
 
 1. **Structural violation** — unknown act, field, operation, payload combination,
    malformed value, or provider-contract translation failure rejects the entire turn
-   with zero mutation after at most one repair attempt.
+   immediately with zero mutation and no model repair invocation.
 2. **Data-level operation result** — unknown/ineligible environment, unavailable role,
    incompatible incident, source failure, or dependency failure rejects only the
    affected and dependent operations. Independent accepted operations commit atomically

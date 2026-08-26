@@ -137,16 +137,16 @@ and `git diff --check`.
 
 ### Task 1 - Define closed target proposal and outcome contracts
 
-- [ ] In progress
+- [x] Complete
 
 **Description:** Add provider-neutral target contracts in a new preparation namespace.
 Do not edit or implement the delivered proposal types.
 
 **Acceptance criteria:**
 
-- [ ] `TurnProposal` has the exact closed dialogue acts, sparse operations, clarification selection, discussion topics, structural failures, per-operation results, and application outcomes from the specification.
-- [ ] Mutable proposal fields are only environment, role, justification, and optional incident; requester text, client, identity, duration, lifecycle, request identity, approval, and provisioning data are absent.
-- [ ] Target contracts contain no provider, MAF, MCP, Teams, EF, raw JSON, model prose, or delivered proposal types.
+- [x] `TurnProposal` has the exact closed dialogue acts, sparse operations, clarification selection, discussion topics, structural failures, per-operation results, and application outcomes from the specification.
+- [x] Mutable proposal fields are only environment, role, justification, and optional incident; requester text, client, identity, duration, lifecycle, request identity, approval, and provisioning data are absent.
+- [x] Target contracts contain no provider, MAF, MCP, Teams, EF, raw JSON, model prose, or delivered proposal types.
 
 **Verification:** Focused construction/reflection tests for valid and invalid act/payload combinations, omission, bounds, and forbidden dependencies; then standing backend verification.
 
@@ -386,22 +386,23 @@ composition.
 
 ### Task 9 - Build the inactive bounded agent interpreter
 
-- [ ] Planned
+- [x] Complete
 
-**Description:** Add the target MAF interpreter, structured schema translation, repair
-policy, prompt envelope, and execution budgets without changing production AI
-registration.
+**Description:** Add the target MAF interpreter, structured schema translation,
+immediate fail-closed validation, prompt envelope, and execution budgets without
+changing production AI registration.
 
 **Acceptance criteria:**
 
-- [ ] Every non-`/new` target free-text turn reaches the agent and yields only the closed target proposal; a uniquely justified one-result MCP search may produce `exactEnvironmentId`, while ambiguous results must produce `searchQuery`, clarification-compatible behavior, or `unclear`.
-- [ ] Stored justification and MCP display fields are explicitly delimited as untrusted; no raw prompt, response, reasoning, query, transcript, or full MCP payload is logged or persisted.
-- [ ] Startup and execution enforce 4,000 characters, 50 turns per preparation, one call/tool and four total, provider iteration bounds, and one cumulative 30-second budget.
+- [x] Every non-`/new` target free-text turn reaches the agent and yields only the closed target proposal; a uniquely justified one-result MCP search may produce `exactEnvironmentId`, while ambiguous results must produce `searchQuery`, clarification-compatible behavior, or `unclear`.
+- [x] Stored justification and MCP display fields are explicitly delimited as untrusted; no raw prompt, response, reasoning, query, transcript, or full MCP payload is logged or persisted.
+- [x] Startup and execution enforce 4,000 characters, 50 turns per preparation, one call/tool and four total, provider iteration bounds, and one cumulative 30-second budget.
 
 **Verification:** Deterministic chat-client tests cover unique-search-to-exact-ID behavior,
-ambiguous-search restraint, optional tool use, schemas, repair, cancellation, budgets,
-prompt-injection boundaries, and safe telemetry; production AI registration remains
-unchanged; then standing backend verification.
+ambiguous-search restraint, optional tool use, schemas, immediate failure without a
+repair invocation, cancellation, budgets, prompt-injection boundaries, and safe
+telemetry; production AI registration remains unchanged; then standing backend
+verification.
 
 **Dependencies:** Tasks 1 and 8.
 

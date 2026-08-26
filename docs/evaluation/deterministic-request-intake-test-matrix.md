@@ -76,8 +76,8 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 | `requestSubmission`/`unrelated`/`unclear` with any payload | Whole-proposal structural rejection |
 | Unknown field, operation, property, or reference form | Whole-proposal structural rejection |
 | `clear` with value / `set` without value | Whole-proposal structural rejection |
-| Initial malformed output followed by one valid repair | Valid repaired proposal accepted for evaluation |
-| Second malformed output | Safe failure; no mutation; no second repair |
+| Malformed output with a valid second scripted response available | Safe failure; no mutation; no second provider invocation |
+| Schema-invalid or structurally unacceptable output | Safe failure; no mutation; no repair invocation |
 
 ### 5.2 Sparse patch and canonical equality
 
@@ -277,7 +277,7 @@ Use deterministic fake chat clients to cover:
 - seventh provider iteration;
 - unknown function;
 - concurrent-call request if unsupported by adapter;
-- one schema-repair attempt without extra tool budget;
+- immediate fail-closed handling for schema-invalid output without a repair invocation;
 - cancellation/timeout across the 30-second shared turn budget.
 
 A safe proposal that omits a redundant exact lookup must not be rejected solely for that omission. Core validation remains required.
@@ -471,7 +471,7 @@ they must produce bounded application-owned guidance and no mutation.
 - Zero accepted justifications containing invented facts, translation, summary, or style rewrite.
 - At least 11 of 12 promoted scenarios reach the expected safe canonical outcome or expected conservative no-mutation outcome.
 
-Exact dialogue-act accuracy, operation-level accuracy, tool efficiency, repair rate, latency, and token use are advisory unless they cause a blocking safety or canonical-outcome failure.
+Exact dialogue-act accuracy, operation-level accuracy, tool efficiency, latency, and token use are advisory unless they cause a blocking safety or canonical-outcome failure.
 
 Deterministic tests are blocking for every change. Credentialed live evaluation is blocking for feature promotion, not for offline local development when credentials are unavailable.
 

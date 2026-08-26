@@ -1,5 +1,6 @@
 using GovernedAccess.Mcp;
 using GovernedAccess.ReferenceAuthority;
+using GovernedAccess.Web.Ai;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,9 @@ internal sealed class TargetMcpTestHost : IAsyncDisposable
     }
 
     internal IServiceProvider Services => application.Services;
+
+    internal IHttpClientFactory HttpClientFactory =>
+        new TargetMcpTestServerHttpClientFactory(application);
 
     internal static async Task<TargetMcpTestHost> CreateSeededAsync(
         CancellationToken cancellationToken = default)
@@ -116,5 +120,15 @@ internal sealed class TargetMcpTestHost : IAsyncDisposable
     {
         await application.DisposeAsync();
         File.Delete(databasePath);
+    }
+
+    private sealed class TargetMcpTestServerHttpClientFactory(
+        WebApplication application) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name)
+        {
+            Assert.Equal(MafTurnProposalInterpreter.McpHttpClientName, name);
+            return application.GetTestClient();
+        }
     }
 }

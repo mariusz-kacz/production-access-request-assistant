@@ -11,11 +11,11 @@
   "maximumCallsPerToolPerTurn": 1,
   "maximumTotalToolCallsPerTurn": 4,
   "maximumProviderIterationsPerTurn": 6,
-  "maximumStructuredOutputRepairAttempts": 1,
+  "maximumStructuredOutputRepairAttempts": 0,
   "maximumTurnDurationSeconds": 30,
   "sharedPolicies": {
     "environmentSearch": "one protocol-neutral deterministic policy instance is reused by MCP and Core",
-    "turnTimeout": "one 30-second timeout/cancellation budget covers model, MCP, and repair work",
+    "turnTimeout": "one 30-second timeout/cancellation budget covers model and MCP work",
     "rawArgumentLogging": false,
     "rawResultLogging": false,
     "toolResultTextTrust": "untrusted-data-never-instruction-or-authority"

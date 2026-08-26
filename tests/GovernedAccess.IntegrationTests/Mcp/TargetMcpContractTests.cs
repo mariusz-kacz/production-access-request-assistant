@@ -201,9 +201,16 @@ public sealed class TargetMcpContractTests
         var environments = ResolveSchema(root, properties.GetProperty("environments"));
         Assert.Equal("array", environments.GetProperty("type").GetString());
         Assert.Equal(20, environments.GetProperty("maxItems").GetInt32());
-        _ = AssertClosedObjectSchema(
+        var environmentProperties = AssertClosedObjectSchema(
             root,
             ResolveSchema(root, environments.GetProperty("items")),
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+        AssertNonemptyStringSchemas(
+            root,
+            environmentProperties,
             "environmentId",
             "displayName",
             "clientId",
@@ -213,9 +220,16 @@ public sealed class TargetMcpContractTests
     private static void AssertEnvironmentOutputSchema(McpClientTool tool)
     {
         var root = JsonSerializer.SerializeToElement(tool.ProtocolTool.OutputSchema);
-        _ = AssertClosedObjectSchema(
+        var properties = AssertClosedObjectSchema(
             root,
             ResolveSchema(root, root),
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+        AssertNonemptyStringSchemas(
+            root,
+            properties,
             "environmentId",
             "displayName",
             "clientId",
@@ -230,6 +244,7 @@ public sealed class TargetMcpContractTests
             ResolveSchema(root, root),
             "environmentId",
             "roles");
+        AssertNonemptyStringSchemas(root, properties, "environmentId");
         var roles = ResolveSchema(root, properties.GetProperty("roles"));
         Assert.Equal("array", roles.GetProperty("type").GetString());
         var roleProperties = AssertClosedObjectSchema(
@@ -247,6 +262,7 @@ public sealed class TargetMcpContractTests
                 .GetProperty("enum")
                 .EnumerateArray()
                 .Select(item => item.GetString()));
+        AssertNonemptyStringSchemas(root, roleProperties, "displayName");
     }
 
     private static void AssertIncidentOutputSchema(McpClientTool tool)
@@ -258,6 +274,12 @@ public sealed class TargetMcpContractTests
             "incidentId",
             "title",
             "status",
+            "environmentId");
+        AssertNonemptyStringSchemas(
+            root,
+            properties,
+            "incidentId",
+            "title",
             "environmentId");
         Assert.Equal(
             ["Active", "Inactive"],
@@ -285,6 +307,19 @@ public sealed class TargetMcpContractTests
         var properties = schema.GetProperty("properties");
         AssertExactProperties(properties, expectedProperties);
         return properties;
+    }
+
+    private static void AssertNonemptyStringSchemas(
+        JsonElement root,
+        JsonElement properties,
+        params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = ResolveSchema(root, properties.GetProperty(propertyName));
+            Assert.Equal("string", property.GetProperty("type").GetString());
+            Assert.Equal(1, property.GetProperty("minLength").GetInt32());
+        }
     }
 
     private static JsonElement ResolveSchema(JsonElement root, JsonElement schema)

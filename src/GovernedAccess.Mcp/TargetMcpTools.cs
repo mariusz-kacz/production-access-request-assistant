@@ -314,18 +314,18 @@ public sealed record TargetEnvironmentSearchToolResult(
     IReadOnlyList<TargetProductionEnvironmentToolResult> Environments);
 
 public sealed record TargetProductionEnvironmentToolResult(
-    string EnvironmentId,
-    string DisplayName,
-    string ClientId,
-    string ClientDisplayName);
+    [property: MinLength(1)] string EnvironmentId,
+    [property: MinLength(1)] string DisplayName,
+    [property: MinLength(1)] string ClientId,
+    [property: MinLength(1)] string ClientDisplayName);
 
 public sealed record TargetEnvironmentRolesToolResult(
-    string EnvironmentId,
+    [property: MinLength(1)] string EnvironmentId,
     IReadOnlyList<TargetEnvironmentRoleToolProjection> Roles);
 
 public sealed record TargetEnvironmentRoleToolProjection(
     TargetProductionRoleId RoleId,
-    string DisplayName);
+    [property: MinLength(1)] string DisplayName);
 
 public enum TargetProductionRoleId
 {
@@ -335,10 +335,10 @@ public enum TargetProductionRoleId
 }
 
 public sealed record TargetIncidentToolResult(
-    string IncidentId,
-    string Title,
+    [property: MinLength(1)] string IncidentId,
+    [property: MinLength(1)] string Title,
     TargetIncidentStatus Status,
-    string EnvironmentId);
+    [property: MinLength(1)] string EnvironmentId);
 
 public enum TargetIncidentStatus
 {

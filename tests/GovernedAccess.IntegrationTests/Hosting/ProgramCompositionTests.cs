@@ -113,6 +113,8 @@ public sealed class ProgramCompositionTests(
             .GetRequiredService<RequestPreparationModelMetadata>();
 
         Assert.Same(concreteStore, sessionStore);
+        Assert.IsType<MafRequestPreparationInterpreter>(interpreter);
+        Assert.Null(services.GetService<MafTurnProposalInterpreter>());
         Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,

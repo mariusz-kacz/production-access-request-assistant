@@ -183,7 +183,7 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 - Introduce provider-neutral `TurnProposal`, exact act/payload compatibility, sparse operations, clarification selection, bounded discussion topics, typed structural/domain outcomes, and no model-prose channel.
 - Introduce `PreparationId`, `CandidateVersion`, `ConcurrencyVersion`, lifecycle states, timestamps, ready deadline, optional supersession link, and bounded clarification schema.
 - Keep requester free-text at the Teams/agent boundary; Core preparation APIs and reducer must not accept it.
-- Implement structural whole-proposal rejection and at most one schema-repair attempt in the adapter.
+- Implement immediate structural whole-proposal rejection without a schema-repair invocation.
 - Implement canonicalization and value-equal no-ops.
 - Keep exact `/new` as the sole pre-agent text protocol path.
 
@@ -238,7 +238,7 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 
 - Add prompt-injection tests for requester text and instruction-like MCP fields.
 - Make client/environment/role prominent and duration/deadline labels distinct on the card.
-- Enforce message, turn, rate, tool, iteration, repair, 30-second timeout, query, and choice bounds.
+- Enforce message, turn, rate, tool, iteration, 30-second timeout, query, and choice bounds.
 - Record model, prompt, proposal-schema, tool-contract, and search-policy versions in safe diagnostics.
 - Run the aligned deterministic matrix and credentialed live-model suite.
 - Require 100% safety restraint/zero side effects and the specified quality thresholds before feature promotion.

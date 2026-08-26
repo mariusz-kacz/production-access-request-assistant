@@ -68,8 +68,8 @@ facts and relationships before canonical mutation and again before request creat
 - Expected failures use the shared failure envelope.
 - The model receives no hidden authorization facts or state-changing capability.
 - One normal turn allows at most one call to each tool and four calls total.
-- Six provider iterations and one structured-output repair are the outer turn bounds.
-- Model, tool, and repair work share one 30-second timeout/cancellation budget per turn.
+- Six provider iterations and zero structured-output repairs are the outer turn bounds.
+- Model and tool work share one 30-second timeout/cancellation budget per turn.
 - Raw arguments/results and agent-authored search queries are not persisted or logged.
 - Tool-call order is diagnostic. Core revalidation is the correctness boundary.
 
@@ -267,7 +267,7 @@ It rejects:
 - repeated calls beyond one per tool;
 - more than four calls;
 - more than six provider iterations;
-- more than one structured-output repair; and
+- any structured-output repair or second interpreter invocation after output validation failure; and
 - timeout or cancellation.
 
 It does not reject an otherwise safe proposal solely because the model omitted a

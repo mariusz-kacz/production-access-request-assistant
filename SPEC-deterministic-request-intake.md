@@ -222,7 +222,6 @@ The adapter produces provider-neutral execution metadata beside the proposal:
 - structured-output schema version;
 - MCP contract version/hash;
 - environment-search policy version;
-- repair-attempt count;
 - correlation ID and timestamps.
 
 This metadata supports diagnostics, evaluation, and bounded audit evidence. It does not
@@ -236,11 +235,12 @@ Default startup-validated limits are:
 - 50 interpreted turns per active preparation;
 - one call per MCP tool and four MCP calls total per turn;
 - six provider iterations per turn;
-- one structured-output repair attempt; and
-- one 30-second cumulative model/MCP/repair timeout and cancellation budget per turn.
+- zero structured-output repair attempts; and
+- one 30-second cumulative model/MCP timeout and cancellation budget per turn.
 
-The structured-output repair uses the same authenticated message, canonical snapshot,
-schema, and cumulative call/iteration budgets. A second malformed result fails safely.
+Malformed, schema-invalid, or structurally unacceptable provider output fails safely
+after the first completed agent run. The application does not ask the model to repair
+the output.
 
 Budget semantics are distinct:
 
@@ -248,7 +248,7 @@ Budget semantics are distinct:
   the application does not invoke the agent again for that preparation and renders
   `BudgetExhaustedGuidance` explaining that exact `/new` is the only recovery and that
   using it discards the active draft;
-- timeout, provider-iteration, MCP-call, and repair limits fail the current turn only and
+- timeout, provider-iteration, and MCP-call limits fail the current turn only and
   do not reset durable candidate state.
 
 The MVP has no persisted requester-wide rolling-rate ledger. Its local synthetic
@@ -317,8 +317,8 @@ Exactly the following payload combinations are valid:
 | `unclear` | Forbidden | Forbidden | Forbidden | No |
 
 Unknown acts, unknown properties, incompatible payloads, empty `updateDraft` patches,
-malformed operations, or multiple semantic payloads are structural violations. After at
-most one repair attempt, the entire turn is rejected with zero mutation.
+malformed operations, or multiple semantic payloads are structural violations. The
+entire turn is rejected immediately with zero mutation.
 
 ### 10.2 Sparse patch
 
@@ -528,7 +528,7 @@ Tool rules:
 - all display text and incident descriptions returned by tools are treated as untrusted
   data and never as instructions;
 - raw tool arguments/results, including agent-authored search queries, are not logged;
-- limits, timeout, cancellation, and repair budgets are cumulative per turn.
+- limits, timeout, and cancellation budgets are cumulative per turn.
 
 ### 11.1 Shared deterministic environment-search policy
 
@@ -581,7 +581,7 @@ Core validates two distinct layers.
 
 ### 12.1 Structural validation: whole-turn rejection
 
-The whole turn is rejected with zero mutation after at most one repair attempt when:
+The whole turn is rejected immediately with zero mutation when:
 
 - dialogue act is unknown;
 - act/payload compatibility is invalid;
@@ -1201,7 +1201,7 @@ Required race behavior:
 
 | Failure | Required behavior |
 |---|---|
-| Malformed model output after one repair | Preserve committed state; render safe retry guidance |
+| Malformed model output | Reject immediately; preserve committed state; render safe retry guidance |
 | Structural proposal violation | Whole-turn rejection; preserve committed state |
 | Model timeout/cancellation/provider failure | Preserve committed state |
 | MCP contract/tool failure before valid proposal | Preserve committed state |
@@ -1287,7 +1287,6 @@ Structured diagnostics may record:
 - prompt, schema, MCP contract, and environment-search policy versions;
 - lifecycle transition;
 - typed response outcome;
-- repair count; and
 - consequential side-effect counts.
 
 For each accepted material candidate commit, bounded audit metadata records:
@@ -1413,7 +1412,7 @@ the one permitted outcome-quality miss cannot excuse an absolute safety/contract
 failure.
 
 Advisory metrics include exact dialogue-act accuracy, operation-level accuracy, tool-call
-efficiency, clarification rate, repair rate, latency, token usage, and effects of the
+efficiency, clarification rate, latency, token usage, and effects of the
 one-call-per-tool constraint.
 
 Blocking failures may not be selectively rerun until they pass. A new promotion run is
