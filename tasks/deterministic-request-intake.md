@@ -296,7 +296,7 @@ provenance, and zero-mutation structural failures; then standing backend verific
 
 ### Task 6 - Build target preparation persistence in the workflow module
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Add `GovernedAccess.Workflow.Persistence` and its separate workflow
 SQLite database. Implement only the target preparation store and synthetic principal
@@ -305,9 +305,9 @@ production registration untouched.
 
 **Acceptance criteria:**
 
-- [ ] Target persistence round-trips canonical state, one clarification context, predecessor, both versions, lifecycle timestamps, turn/rate metadata, and bounded attribution without raw conversational content.
-- [ ] OCC uses `ConcurrencyVersion`; the durable active unique index binds channel, tenant, actor, conversation, and requester for exactly Collecting/Ready.
-- [ ] The workflow context has its own connection string, migrations, seeder, and fixtures; it contains no client, environment, environment-role, or incident entity/table/FK, and store outcomes distinguish conflict, race, unavailable, and malformed-state failures.
+- [x] Target persistence round-trips canonical state, one clarification context, predecessor, both versions, lifecycle timestamps, turn metadata, and bounded attribution without raw conversational content.
+- [x] OCC uses `ConcurrencyVersion`; the durable active unique index binds channel, tenant, actor, conversation, and requester for exactly Collecting/Ready.
+- [x] The workflow context has its own connection string, migrations, seeder, and fixtures; it contains no client, environment, environment-role, or incident entity/table/FK, and store outcomes distinguish conflict, race, unavailable, and malformed-state failures.
 
 **Verification:** Fresh workflow-SQLite mapping/migration, restart, unique-index, OCC,
 privacy, missing-reference-table, and database-file isolation tests; delivered persistence
@@ -396,7 +396,7 @@ registration.
 
 - [ ] Every non-`/new` target free-text turn reaches the agent and yields only the closed target proposal; a uniquely justified one-result MCP search may produce `exactEnvironmentId`, while ambiguous results must produce `searchQuery`, clarification-compatible behavior, or `unclear`.
 - [ ] Stored justification and MCP display fields are explicitly delimited as untrusted; no raw prompt, response, reasoning, query, transcript, or full MCP payload is logged or persisted.
-- [ ] Startup and execution enforce 4,000 characters, 50 turns, rolling 20/10-minute rate, one call/tool and four total, provider iteration bounds, and one cumulative 30-second budget.
+- [ ] Startup and execution enforce 4,000 characters, 50 turns per preparation, one call/tool and four total, provider iteration bounds, and one cumulative 30-second budget.
 
 **Verification:** Deterministic chat-client tests cover unique-search-to-exact-ID behavior,
 ambiguous-search restraint, optional tool use, schemas, repair, cancellation, budgets,

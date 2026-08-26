@@ -55,6 +55,37 @@ public sealed class RequestPreparation
         }
     }
 
+    private RequestPreparation(RequestPreparationPersistenceState state)
+    {
+        ValidateRestoredState(state);
+
+        PreparationId = state.PreparationId;
+        PredecessorPreparationId = state.PredecessorPreparationId;
+        Binding = state.Binding;
+        Lifecycle = state.Lifecycle;
+        Candidate = state.Candidate;
+        CandidateVersion = state.CandidateVersion;
+        ConcurrencyVersion = state.ConcurrencyVersion;
+        InterpretedTurnCount = state.InterpretedTurnCount;
+        Clarification = state.Clarification is null
+            ? null
+            : new PreparationClarificationContext(
+                state.PreparationId,
+                state.Clarification.CandidateVersion,
+                new ClarificationSeed(
+                    state.Clarification.Target,
+                    state.Clarification.OrderedCanonicalIds),
+                state.Clarification.CreatedAt);
+        CreatedAt = state.CreatedAt.ToUniversalTime();
+        UpdatedAt = state.UpdatedAt.ToUniversalTime();
+        ReadyAt = state.ReadyAt?.ToUniversalTime();
+        ReadyDeadline = state.ReadyDeadline?.ToUniversalTime();
+        TerminalAt = state.TerminalAt?.ToUniversalTime();
+        CorrelationId = MaterialChangeAttribution.NormalizeCorrelationId(
+            state.CorrelationId);
+        materialChangeAttributions = [.. state.MaterialChangeAttributions];
+    }
+
     public Guid PreparationId { get; }
 
     public Guid? PredecessorPreparationId { get; }
@@ -187,6 +218,13 @@ public sealed class RequestPreparation
             attribution,
             normalizedCreatedAt,
             correlationId);
+    }
+
+    public static RequestPreparation RestoreFromPersistence(
+        RequestPreparationPersistenceState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return new RequestPreparation(state);
     }
 
     public void ApplyCandidateChange(
@@ -353,6 +391,171 @@ public sealed class RequestPreparation
         }
 
         ValidateAttribution(changedFields, attribution);
+    }
+
+    private static void ValidateRestoredState(
+        RequestPreparationPersistenceState state)
+    {
+        ArgumentNullException.ThrowIfNull(state.Binding);
+        ArgumentNullException.ThrowIfNull(state.Candidate);
+        ArgumentNullException.ThrowIfNull(state.MaterialChangeAttributions);
+
+        if (state.PreparationId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "A restored preparation requires a nonempty UUID identifier.",
+                nameof(state));
+        }
+
+        if (state.PredecessorPreparationId is { } predecessor
+            && (predecessor == Guid.Empty
+                || predecessor == state.PreparationId))
+        {
+            throw new ArgumentException(
+                "A restored predecessor must be a distinct UUID identifier.",
+                nameof(state));
+        }
+
+        if (!Enum.IsDefined(state.Lifecycle))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state));
+        }
+
+        if (state.CandidateVersion < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(state),
+                state.CandidateVersion,
+                "The restored candidate version is outside its durable bounds.");
+        }
+
+        if (state.ConcurrencyVersion < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(state),
+                state.ConcurrencyVersion,
+                "The restored concurrency version must be positive.");
+        }
+
+        if (state.InterpretedTurnCount < 0
+            || state.InterpretedTurnCount > MaximumInterpretedTurns)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(state),
+                state.InterpretedTurnCount,
+                "The restored interpreted-turn count is outside its durable bounds.");
+        }
+
+        if (!state.Candidate.IsEmpty && state.CandidateVersion == 0)
+        {
+            throw new ArgumentException(
+                "A nonempty restored candidate requires a positive candidate version.",
+                nameof(state));
+        }
+
+        if (state.MaterialChangeAttributions.Count
+            > MaximumMaterialChangeAttributions
+            || state.MaterialChangeAttributions.Any(static attribution => attribution is null))
+        {
+            throw new ArgumentException(
+                "Restored material-change attribution is outside its durable bounds.",
+                nameof(state));
+        }
+
+        var createdAt = state.CreatedAt.ToUniversalTime();
+        var updatedAt = state.UpdatedAt.ToUniversalTime();
+        if (updatedAt < createdAt)
+        {
+            throw new ArgumentException(
+                "A restored update timestamp cannot predate creation.",
+                nameof(state));
+        }
+
+        ValidateRestoredLifecycle(state, createdAt, updatedAt);
+    }
+
+    private static void ValidateRestoredLifecycle(
+        RequestPreparationPersistenceState state,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt)
+    {
+        var isActive = state.Lifecycle is PreparationLifecycle.Collecting
+            or PreparationLifecycle.Ready;
+        if (isActive != (state.TerminalAt is null))
+        {
+            throw new ArgumentException(
+                "Restored active and terminal lifecycle evidence is inconsistent.",
+                nameof(state));
+        }
+
+        if (state.TerminalAt is { } terminalAt
+            && terminalAt.ToUniversalTime() != updatedAt)
+        {
+            throw new ArgumentException(
+                "A restored terminal timestamp must match the final aggregate update.",
+                nameof(state));
+        }
+
+        if (state.Lifecycle != PreparationLifecycle.Collecting
+            && state.Clarification is not null)
+        {
+            throw new ArgumentException(
+                "Only a collecting preparation can retain clarification context.",
+                nameof(state));
+        }
+
+        if (state.Clarification is { } clarification
+            && (clarification.CandidateVersion != state.CandidateVersion
+                || clarification.CreatedAt < createdAt
+                || clarification.CreatedAt > updatedAt))
+        {
+            throw new ArgumentException(
+                "Restored clarification context is stale or chronologically invalid.",
+                nameof(state));
+        }
+
+        var hasReadyAt = state.ReadyAt.HasValue;
+        var hasReadyDeadline = state.ReadyDeadline.HasValue;
+        if (hasReadyAt != hasReadyDeadline
+            || (state.ReadyAt is { } readyAt
+                && state.ReadyDeadline != readyAt.Add(ReadyLifetime)))
+        {
+            throw new ArgumentException(
+                "Restored ready timestamps must form the fixed confirmation window.",
+                nameof(state));
+        }
+
+        if (state.Lifecycle == PreparationLifecycle.Collecting
+            && (hasReadyAt || state.Candidate.IsComplete && state.Clarification is null))
+        {
+            throw new ArgumentException(
+                "Restored collecting state is inconsistent with readiness.",
+                nameof(state));
+        }
+
+        if (state.Lifecycle == PreparationLifecycle.Ready
+            && (!state.Candidate.IsComplete || !hasReadyAt))
+        {
+            throw new ArgumentException(
+                "Restored ready state requires a complete immutable candidate and deadline.",
+                nameof(state));
+        }
+
+        if (!isActive && !state.Candidate.IsEmpty)
+        {
+            throw new ArgumentException(
+                "A restored terminal tombstone cannot retain canonical candidate fields.",
+                nameof(state));
+        }
+
+        if (state.Lifecycle is PreparationLifecycle.Submitted
+            or PreparationLifecycle.Expired
+            && !hasReadyAt)
+        {
+            throw new ArgumentException(
+                "Submitted and expired tombstones require retained ready evidence.",
+                nameof(state));
+        }
     }
 
     private static void ValidateAttribution(

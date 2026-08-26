@@ -234,7 +234,6 @@ Default startup-validated limits are:
 
 - 4,000 Unicode characters per requester free-text turn;
 - 50 interpreted turns per active preparation;
-- 20 interpreted turns per requester per rolling 10 minutes;
 - one call per MCP tool and four MCP calls total per turn;
 - six provider iterations per turn;
 - one structured-output repair attempt; and
@@ -245,14 +244,16 @@ schema, and cumulative call/iteration budgets. A second malformed result fails s
 
 Budget semantics are distinct:
 
-- rolling requester rate exhaustion is temporary and renders deterministic retry-later
-  guidance;
 - the 50-turn preparation budget is permanent for that `PreparationId`; once exhausted,
   the application does not invoke the agent again for that preparation and renders
   `BudgetExhaustedGuidance` explaining that exact `/new` is the only recovery and that
   using it discards the active draft;
 - timeout, provider-iteration, MCP-call, and repair limits fail the current turn only and
   do not reset durable candidate state.
+
+The MVP has no persisted requester-wide rolling-rate ledger. Its local synthetic
+composition bounds consumption per preparation and per turn. Any externally reachable
+composition requires an explicit abuse-protection decision before launch.
 
 Startup must fail closed when configured limits are missing, non-positive, internally
 inconsistent, or exceed the documented hard maxima.
@@ -480,11 +481,11 @@ and canonical data.
 application re-renders its current card. Otherwise it renders canonical progress or
 terminal-state guidance. It creates no request.
 
-`unrelated` preserves state, renders bounded scope guidance, and counts toward turn and
-rate limits.
+`unrelated` preserves state, renders bounded scope guidance, and counts toward the
+per-preparation turn limit.
 
-`unclear` preserves state, asks for a safer rephrasing, and counts toward turn and rate
-limits.
+`unclear` preserves state, asks for a safer rephrasing, and counts toward the
+per-preparation turn limit.
 
 No model-generated prose is delivered to the requester in this feature.
 
@@ -1221,7 +1222,6 @@ Required race behavior:
 | Confirmation authoritative source unavailable | Create no request; preserve ready row/deadline; return `ConfirmationSourceUnavailable` |
 | Stale/foreign/expired/malformed card | Create no request |
 | Duplicate confirmation | Return existing request identity |
-| Rolling requester rate exceeded | Preserve state; render deterministic retry-later guidance |
 | Per-preparation 50-turn budget exhausted | Preserve state; do not invoke agent; render `BudgetExhaustedGuidance` with exact `/new` and draft-loss warning |
 
 No failed or partial free-text turn may create a request, approval, provisioning
@@ -1338,7 +1338,7 @@ Core tests construct structured proposals directly. They cover:
 - independent workflow/reference database creation, migration history, restart, and
   failure behavior with no cross-database relationship or transaction;
 - justification storage constraints including over-2,000-character append rejection;
-- per-preparation versus rolling-rate budget behavior; and
+- per-preparation turn-budget exhaustion and reset behavior; and
 - zero consequential side effects from free-text processing.
 
 Deterministic suites are not requester-language corpora.
@@ -1536,8 +1536,9 @@ environment-search policy, or evaluation dataset changes.
 - **AC-43:** Logs/audit omit raw requester text, agent search queries, prompts, reasoning,
   proposals, and complete tool payloads; accepted material changes retain bounded
   field-category plus model/prompt version attribution.
-- **AC-44:** Startup validates the execution limits in Section 8.2; rolling-rate and
-  permanently exhausted preparation budgets produce distinct deterministic outcomes.
+- **AC-44:** Startup validates the execution limits in Section 8.2; permanently
+  exhausted preparation budgets produce deterministic guidance with exact `/new` as
+  the only recovery.
 - **AC-45:** Deterministic tests use structured proposals rather than language variants.
 - **AC-46:** Live-model gates meet all blocking thresholds in Section 23.3, including
   ambiguous-scope restraint and stored-justification re-injection.

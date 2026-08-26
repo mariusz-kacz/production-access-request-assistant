@@ -401,3 +401,31 @@ public sealed record MaterialChangeAttribution
             ? null
             : NormalizeRequired(value, maximumLength, parameterName);
 }
+
+/// <summary>
+/// Provider- and persistence-technology-neutral input used only to rehydrate one
+/// preparation after a durable read.
+/// </summary>
+public sealed record RequestPreparationPersistenceState(
+    Guid PreparationId,
+    Guid? PredecessorPreparationId,
+    PreparationBinding Binding,
+    PreparationLifecycle Lifecycle,
+    PreparationCandidate Candidate,
+    int CandidateVersion,
+    long ConcurrencyVersion,
+    int InterpretedTurnCount,
+    PreparationClarificationPersistenceState? Clarification,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ReadyAt,
+    DateTimeOffset? ReadyDeadline,
+    DateTimeOffset? TerminalAt,
+    string CorrelationId,
+    IReadOnlyList<MaterialChangeAttribution> MaterialChangeAttributions);
+
+public sealed record PreparationClarificationPersistenceState(
+    int CandidateVersion,
+    ClarificationTarget Target,
+    IReadOnlyList<string> OrderedCanonicalIds,
+    DateTimeOffset CreatedAt);

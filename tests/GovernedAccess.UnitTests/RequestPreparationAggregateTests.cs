@@ -450,6 +450,93 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(PreparationLifecycle.Expired, ready.Lifecycle);
     }
 
+    [Fact]
+    public void PersistedStateRestoresEveryAggregateFieldAndRejectsMalformedState()
+    {
+        var preparation = RequestPreparation.CreateRoot(
+            Binding(),
+            new PreparationCandidate(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                roleId: null,
+                "Investigate the active incident",
+                incidentId: null),
+            new ClarificationSeed(
+                ClarificationTarget.Role,
+                ["ProductionReadOnly", "ProductionSupport"]),
+            Attribution(ProposalField.Environment, ProposalField.Justification),
+            CreatedAt,
+            "persisted-root");
+        preparation.RecordInterpretedTurn(
+            CreatedAt.AddMinutes(1),
+            "persisted-turn");
+        var clarification = Assert.IsType<PreparationClarificationContext>(
+            preparation.Clarification);
+        var state = new RequestPreparationPersistenceState(
+            preparation.PreparationId,
+            preparation.PredecessorPreparationId,
+            preparation.Binding,
+            preparation.Lifecycle,
+            preparation.Candidate,
+            preparation.CandidateVersion,
+            preparation.ConcurrencyVersion,
+            preparation.InterpretedTurnCount,
+            new PreparationClarificationPersistenceState(
+                clarification.CandidateVersion,
+                clarification.Target,
+                clarification.OrderedCanonicalIds,
+                clarification.CreatedAt),
+            preparation.CreatedAt,
+            preparation.UpdatedAt,
+            preparation.ReadyAt,
+            preparation.ReadyDeadline,
+            preparation.TerminalAt,
+            preparation.CorrelationId,
+            preparation.MaterialChangeAttributions);
+
+        var restored = RequestPreparation.RestoreFromPersistence(state);
+
+        Assert.Equal(preparation.PreparationId, restored.PreparationId);
+        Assert.Equal(preparation.PredecessorPreparationId, restored.PredecessorPreparationId);
+        Assert.Equal(preparation.Binding, restored.Binding);
+        Assert.Equal(preparation.Lifecycle, restored.Lifecycle);
+        Assert.Equal(preparation.Candidate, restored.Candidate);
+        Assert.Equal(preparation.CandidateVersion, restored.CandidateVersion);
+        Assert.Equal(preparation.ConcurrencyVersion, restored.ConcurrencyVersion);
+        Assert.Equal(preparation.InterpretedTurnCount, restored.InterpretedTurnCount);
+        var expectedClarification = Assert.IsType<PreparationClarificationContext>(
+            preparation.Clarification);
+        var restoredClarification = Assert.IsType<PreparationClarificationContext>(
+            restored.Clarification);
+        Assert.Equal(expectedClarification.PreparationId, restoredClarification.PreparationId);
+        Assert.Equal(expectedClarification.CandidateVersion, restoredClarification.CandidateVersion);
+        Assert.Equal(expectedClarification.Target, restoredClarification.Target);
+        Assert.Equal(
+            expectedClarification.OrderedCanonicalIds,
+            restoredClarification.OrderedCanonicalIds);
+        Assert.Equal(expectedClarification.CreatedAt, restoredClarification.CreatedAt);
+        Assert.Equal(preparation.CreatedAt, restored.CreatedAt);
+        Assert.Equal(preparation.UpdatedAt, restored.UpdatedAt);
+        Assert.Equal(preparation.ReadyAt, restored.ReadyAt);
+        Assert.Equal(preparation.ReadyDeadline, restored.ReadyDeadline);
+        Assert.Equal(preparation.TerminalAt, restored.TerminalAt);
+        Assert.Equal(preparation.CorrelationId, restored.CorrelationId);
+        Assert.Equal(preparation.MaterialChangeAttributions, restored.MaterialChangeAttributions);
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => RequestPreparation.RestoreFromPersistence(
+                state with { ConcurrencyVersion = 0 }));
+        Assert.Throws<ArgumentException>(
+            () => RequestPreparation.RestoreFromPersistence(
+                state with
+                {
+                    Lifecycle = PreparationLifecycle.Ready,
+                    Clarification = state.Clarification,
+                    ReadyAt = CreatedAt,
+                    ReadyDeadline = CreatedAt.Add(RequestPreparation.ReadyLifetime),
+                }));
+    }
+
     private static RequestPreparation ReadyRoot() =>
         RequestPreparation.CreateRoot(
             Binding(),
