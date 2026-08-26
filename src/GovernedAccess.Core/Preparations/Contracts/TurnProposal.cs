@@ -3,7 +3,6 @@ namespace GovernedAccess.Core.Preparations.Contracts;
 public enum DialogueAct
 {
     UpdateDraft,
-    SelectClarification,
     DiscussDraft,
     RequestSubmission,
     Unrelated,
@@ -26,34 +25,6 @@ public enum ClarificationTarget
     Role,
 }
 
-public sealed record ClarificationSelection
-{
-    public ClarificationSelection(
-        ClarificationTarget target,
-        int optionIndex)
-    {
-        if (!Enum.IsDefined(target))
-        {
-            throw new ArgumentOutOfRangeException(nameof(target));
-        }
-
-        if (optionIndex < 1)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(optionIndex),
-                optionIndex,
-                "A clarification option index must be one-based.");
-        }
-
-        Target = target;
-        OptionIndex = optionIndex;
-    }
-
-    public ClarificationTarget Target { get; }
-
-    public int OptionIndex { get; }
-}
-
 public sealed record TurnProposal
 {
     public const int CurrentSchemaVersion = 1;
@@ -62,7 +33,6 @@ public sealed record TurnProposal
         int schemaVersion,
         DialogueAct dialogueAct,
         DraftPatch? patch = null,
-        ClarificationSelection? clarificationSelection = null,
         DiscussionTopic? discussionTopic = null)
     {
         if (schemaVersion != CurrentSchemaVersion)
@@ -88,21 +58,14 @@ public sealed record TurnProposal
         {
             DialogueAct.UpdateDraft =>
                 patch is not null
-                && clarificationSelection is null
-                && discussionTopic is null,
-            DialogueAct.SelectClarification =>
-                patch is null
-                && clarificationSelection is not null
                 && discussionTopic is null,
             DialogueAct.DiscussDraft =>
                 patch is null
-                && clarificationSelection is null
                 && discussionTopic is not null,
             DialogueAct.RequestSubmission
                 or DialogueAct.Unrelated
                 or DialogueAct.Unclear =>
                 patch is null
-                && clarificationSelection is null
                 && discussionTopic is null,
             _ => false,
         };
@@ -116,7 +79,6 @@ public sealed record TurnProposal
         SchemaVersion = schemaVersion;
         DialogueAct = dialogueAct;
         Patch = patch;
-        ClarificationSelection = clarificationSelection;
         DiscussionTopic = discussionTopic;
     }
 
@@ -125,8 +87,6 @@ public sealed record TurnProposal
     public DialogueAct DialogueAct { get; }
 
     public DraftPatch? Patch { get; }
-
-    public ClarificationSelection? ClarificationSelection { get; }
 
     public DiscussionTopic? DiscussionTopic { get; }
 }

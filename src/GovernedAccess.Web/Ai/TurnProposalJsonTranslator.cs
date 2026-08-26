@@ -7,7 +7,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal static class TurnProposalJsonTranslator
 {
-    internal const string StructuredOutputSchemaVersion = "1.0.0";
+    internal const string StructuredOutputSchemaVersion = "2.0.0";
 
     internal static JsonSerializerOptions SerializerOptions { get; } =
         new(JsonSerializerDefaults.Web)
@@ -27,10 +27,9 @@ internal static class TurnProposalJsonTranslator
             "schemaVersion": { "type": "integer", "const": 1 },
             "dialogueAct": {
               "type": "string",
-              "enum": ["updateDraft", "selectClarification", "discussDraft", "requestSubmission", "unrelated", "unclear"]
+              "enum": ["updateDraft", "discussDraft", "requestSubmission", "unrelated", "unclear"]
             },
             "patch": { "$ref": "#/$defs/patch" },
-            "clarificationSelection": { "$ref": "#/$defs/clarificationSelection" },
             "discussionTopic": {
               "type": "string",
               "enum": ["currentDraft", "missingInformation", "allowedChanges", "confirmationProcess", "resetInstructions", "unsupported"]
@@ -153,15 +152,6 @@ internal static class TurnProposalJsonTranslator
                   }
                 }
               ]
-            },
-            "clarificationSelection": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["target", "optionIndex"],
-              "properties": {
-                "target": { "type": "string", "enum": ["environment", "role"] },
-                "optionIndex": { "type": "integer", "minimum": 1 }
-              }
             }
           }
         }
@@ -198,15 +188,12 @@ internal static class TurnProposalJsonTranslator
 
         public PatchPayload? Patch { get; init; }
 
-        public ClarificationSelectionPayload? ClarificationSelection { get; init; }
-
         public string? DiscussionTopic { get; init; }
 
         public TurnProposal ToProposal() => new(
             SchemaVersion,
             ParseDialogueAct(DialogueAct),
             Patch?.ToPatch(),
-            ClarificationSelection?.ToSelection(),
             ParseDiscussionTopic(DiscussionTopic));
     }
 
@@ -311,27 +298,9 @@ internal static class TurnProposalJsonTranslator
         };
     }
 
-    private sealed class ClarificationSelectionPayload
-    {
-        [JsonRequired]
-        public string? Target { get; init; }
-        [JsonRequired]
-        public int OptionIndex { get; init; }
-
-        public ClarificationSelection ToSelection() => new(
-            Target switch
-            {
-                "environment" => ClarificationTarget.Environment,
-                "role" => ClarificationTarget.Role,
-                _ => throw new JsonException("Invalid clarification target."),
-            },
-            OptionIndex);
-    }
-
     private static DialogueAct ParseDialogueAct(string? value) => value switch
     {
         "updateDraft" => DialogueAct.UpdateDraft,
-        "selectClarification" => DialogueAct.SelectClarification,
         "discussDraft" => DialogueAct.DiscussDraft,
         "requestSubmission" => DialogueAct.RequestSubmission,
         "unrelated" => DialogueAct.Unrelated,

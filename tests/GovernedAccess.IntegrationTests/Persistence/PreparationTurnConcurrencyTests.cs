@@ -138,12 +138,16 @@ public sealed class PreparationTurnConcurrencyTests
                     "PROD-ALPHA-EU",
                     "Production EU",
                     "client-alpha",
-                    "Client Alpha"),
+                    "Client Alpha",
+                    "EU",
+                    EnvironmentClassification.Primary),
                 new EnvironmentSearchMatch(
                     "PROD-BETA-UK",
                     "Production UK",
                     "client-beta",
-                    "Client Beta"),
+                    "Client Beta",
+                    "UK",
+                    EnvironmentClassification.Primary),
             ]);
         authority.Environments["PROD-BETA-UK"] =
             Environment("PROD-BETA-UK", "client-beta");
@@ -181,10 +185,10 @@ public sealed class PreparationTurnConcurrencyTests
             var interpreter = new RecordingInterpreter(
                 new TurnProposal(
                     TurnProposal.CurrentSchemaVersion,
-                    DialogueAct.SelectClarification,
-                    clarificationSelection: new ClarificationSelection(
-                        ClarificationTarget.Environment,
-                        optionIndex: 2)));
+                    DialogueAct.UpdateDraft,
+                    patch: new DraftPatch(
+                        environment: new SetEnvironmentOperation(
+                            new ExactEnvironmentId("PROD-BETA-UK")))));
             var orchestrator = new TargetRequestPreparationOrchestrator(
                 Service(restartedScope, authority, CreatedAt.AddMinutes(1)),
                 interpreter);
@@ -196,11 +200,29 @@ public sealed class PreparationTurnConcurrencyTests
                 TestContext.Current.CancellationToken);
 
             Assert.Equal(1, interpreter.CallCount);
+            var agentClarification = Assert.IsType<AgentClarificationContext>(
+                interpreter.LastInput!.Clarification);
+            Assert.Equal(CreatedAt, agentClarification.CreatedAt);
+            Assert.Equal([1, 2], agentClarification.Choices.Select(choice => choice.Position));
             Assert.Equal(
                 ["PROD-ALPHA-EU", "PROD-BETA-UK"],
-                interpreter.LastInput!.Clarification!.Choices
+                agentClarification.Choices
                     .Select(choice => choice.CanonicalId)
                     .ToArray());
+            Assert.Equal(
+                ["Production EU", "Production UK"],
+                agentClarification.Choices.Select(choice => choice.DisplayName));
+            Assert.Equal(
+                ["client-alpha", "client-beta"],
+                agentClarification.Choices.Select(choice => choice.ClientId));
+            Assert.Equal(
+                ["EU", "UK"],
+                agentClarification.Choices.Select(choice => choice.Region));
+            Assert.All(
+                agentClarification.Choices,
+                choice => Assert.Equal(
+                    EnvironmentClassification.Primary,
+                    choice.EnvironmentClassification));
             Assert.Equal(preparationId, selected.Preparation!.PreparationId);
             Assert.Equal("PROD-BETA-UK", selected.Preparation.Candidate.EnvironmentId);
             Assert.Null(selected.Preparation.Clarification);

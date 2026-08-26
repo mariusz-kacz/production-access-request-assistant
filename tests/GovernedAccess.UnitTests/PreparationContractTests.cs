@@ -1,4 +1,6 @@
 using System.Reflection;
+using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.UnitTests;
@@ -6,12 +8,30 @@ namespace GovernedAccess.UnitTests;
 public sealed class PreparationContractTests
 {
     [Fact]
+    public void ProposalContractContainsNoClarificationSelectionProtocol()
+    {
+        Assert.DoesNotContain(
+            "SelectClarification",
+            Enum.GetNames<DialogueAct>());
+        Assert.DoesNotContain(
+            typeof(TurnProposal).Assembly.GetTypes(),
+            type => string.Equals(
+                type.Name,
+                "ClarificationSelection",
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            typeof(TurnProposal).GetProperties(BindingFlags.Instance | BindingFlags.Public),
+            property => property.Name.Contains(
+                "ClarificationSelection",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DialogueActsAndTopicsAreClosedToTheSpecification()
     {
         Assert.Equal(
             [
                 nameof(DialogueAct.UpdateDraft),
-                nameof(DialogueAct.SelectClarification),
                 nameof(DialogueAct.DiscussDraft),
                 nameof(DialogueAct.RequestSubmission),
                 nameof(DialogueAct.Unrelated),
@@ -36,18 +56,10 @@ public sealed class PreparationContractTests
         var patch = new DraftPatch(
             environment: new SetEnvironmentOperation(
                 new ExactEnvironmentId(" PROD-ALPHA-EU ")));
-        var selection = new ClarificationSelection(
-            ClarificationTarget.Environment,
-            optionIndex: 1);
-
         var update = new TurnProposal(
             TurnProposal.CurrentSchemaVersion,
             DialogueAct.UpdateDraft,
             patch: patch);
-        var select = new TurnProposal(
-            TurnProposal.CurrentSchemaVersion,
-            DialogueAct.SelectClarification,
-            clarificationSelection: selection);
         var discuss = new TurnProposal(
             TurnProposal.CurrentSchemaVersion,
             DialogueAct.DiscussDraft,
@@ -63,14 +75,12 @@ public sealed class PreparationContractTests
             DialogueAct.Unclear);
 
         Assert.Same(patch, update.Patch);
-        Assert.Same(selection, select.ClarificationSelection);
         Assert.Equal(DiscussionTopic.CurrentDraft, discuss.DiscussionTopic);
         Assert.Null(submission.Patch);
-        Assert.Null(unrelated.ClarificationSelection);
+        Assert.Null(unrelated.Patch);
         Assert.Null(unclear.DiscussionTopic);
         Assert.Equal(
             [
-                "ClarificationSelection",
                 "DialogueAct",
                 "DiscussionTopic",
                 "Patch",
@@ -86,28 +96,22 @@ public sealed class PreparationContractTests
     public void ProposalRejectsEveryIncompatibleActPayloadCombination()
     {
         var patch = EnvironmentPatch();
-        var selection = new ClarificationSelection(
-            ClarificationTarget.Environment,
-            optionIndex: 1);
-
         foreach (var dialogueAct in Enum.GetValues<DialogueAct>())
         {
-            for (var payloadMask = 0; payloadMask < 8; payloadMask++)
+            for (var payloadMask = 0; payloadMask < 4; payloadMask++)
             {
                 var exception = Record.Exception(
                     () => new TurnProposal(
                         TurnProposal.CurrentSchemaVersion,
                         dialogueAct,
                         patch: (payloadMask & 1) == 0 ? null : patch,
-                        clarificationSelection: (payloadMask & 2) == 0 ? null : selection,
-                        discussionTopic: (payloadMask & 4) == 0
+                        discussionTopic: (payloadMask & 2) == 0
                             ? null
                             : DiscussionTopic.CurrentDraft));
                 var expectedPayloadMask = dialogueAct switch
                 {
                     DialogueAct.UpdateDraft => 1,
-                    DialogueAct.SelectClarification => 2,
-                    DialogueAct.DiscussDraft => 4,
+                    DialogueAct.DiscussDraft => 2,
                     DialogueAct.RequestSubmission
                         or DialogueAct.Unrelated
                         or DialogueAct.Unclear => 0,
@@ -225,31 +229,6 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void ClarificationSelectionIsOneBasedAndContainsNoAuthorityIdentifier()
-    {
-        var selection = new ClarificationSelection(
-            ClarificationTarget.Role,
-            optionIndex: 5);
-
-        Assert.Equal(ClarificationTarget.Role, selection.Target);
-        Assert.Equal(5, selection.OptionIndex);
-        Assert.Equal(
-            ["OptionIndex", "Target"],
-            typeof(ClarificationSelection)
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new ClarificationSelection(
-                (ClarificationTarget)int.MaxValue,
-                optionIndex: 1));
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new ClarificationSelection(
-                ClarificationTarget.Environment,
-                optionIndex: 0));
-    }
-
-    [Fact]
     public void StructuralFailuresAndOperationResultsAreClosed()
     {
         Assert.Equal(
@@ -264,7 +243,6 @@ public sealed class PreparationContractTests
                 nameof(ProposalStructuralFailure.MissingRequiredValue),
                 nameof(ProposalStructuralFailure.ForbiddenValue),
                 nameof(ProposalStructuralFailure.ValueOutOfBounds),
-                nameof(ProposalStructuralFailure.ClarificationSelectionCombinedWithPatch),
                 nameof(ProposalStructuralFailure.UntranslatableProviderOutput),
             ],
             Enum.GetNames<ProposalStructuralFailure>());
@@ -320,8 +298,8 @@ public sealed class PreparationContractTests
         var clarification = new ClarificationRequired(
             ClarificationTarget.Environment,
             [
-                new ClarificationChoice("PROD-ALPHA-EU"),
-                new ClarificationChoice("PROD-ALPHA-US"),
+                EnvironmentChoice("PROD-ALPHA-EU"),
+                EnvironmentChoice("PROD-ALPHA-US"),
             ]);
         var discussion = new DraftDiscussion(DiscussionTopic.AllowedChanges);
         var readyId = Guid.NewGuid();
@@ -345,7 +323,7 @@ public sealed class PreparationContractTests
     public void ClarificationOutcomePreservesCompleteBoundedAuthoritativeOrder()
     {
         var maximumChoices = Enumerable.Range(1, ClarificationRequired.MaximumChoiceCount)
-            .Select(index => new ClarificationChoice($"PROD-{index}"))
+            .Select(index => EnvironmentChoice($"PROD-{index}"))
             .ToArray();
         var outcome = new ClarificationRequired(
             ClarificationTarget.Environment,
@@ -359,11 +337,26 @@ public sealed class PreparationContractTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new ClarificationRequired(
                 ClarificationTarget.Environment,
-                maximumChoices.Append(new ClarificationChoice("PROD-6"))));
+                maximumChoices.Append(EnvironmentChoice("PROD-6"))));
         Assert.Throws<ArgumentException>(
             () => new ClarificationRequired(
                 ClarificationTarget.Environment,
-                [new ClarificationChoice("PROD-1"), new ClarificationChoice("PROD-1")]));
+                [EnvironmentChoice("PROD-1"), EnvironmentChoice("PROD-1")]));
+    }
+
+    [Fact]
+    public void ClarificationContextHasNoCandidateVersionBinding()
+    {
+        Assert.DoesNotContain(
+            "CandidateVersion",
+            typeof(GovernedAccess.Core.Domain.Preparations.PreparationClarificationContext)
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Select(property => property.Name));
+        Assert.DoesNotContain(
+            "CandidateVersion",
+            typeof(GovernedAccess.Core.Domain.Preparations.PreparationClarificationPersistenceState)
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Select(property => property.Name));
     }
 
     [Fact]
@@ -498,4 +491,13 @@ public sealed class PreparationContractTests
         new(
             environment: new SetEnvironmentOperation(
                 new ExactEnvironmentId("PROD-ALPHA-EU")));
+
+    private static EnvironmentClarificationChoice EnvironmentChoice(string id) =>
+        new(
+            id,
+            $"{id} display",
+            "client-alpha",
+            "Client Alpha",
+            "EU",
+            EnvironmentClassification.Primary);
 }

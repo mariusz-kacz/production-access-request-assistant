@@ -1,3 +1,4 @@
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Core.Preparations.Contracts;
@@ -78,12 +79,14 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
             return null;
         }
 
-        var roleIds = rolesResult.Value
+        var roles = rolesResult.Value
             .Where(role => role.IsCurrentlyAssignable)
-            .Select(role => role.RoleId)
-            .Order(StringComparer.Ordinal)
+            .OrderBy(role => role.RoleId, StringComparer.Ordinal)
             .ToArray();
-        if (roleIds.Distinct(StringComparer.Ordinal).Count() != roleIds.Length)
+        if (roles
+            .Select(role => role.RoleId)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != roles.Length)
         {
             SetClarificationFailure(
                 evaluation,
@@ -91,7 +94,7 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
             return null;
         }
 
-        if (roleIds.Length == 0)
+        if (roles.Length == 0)
         {
             SetClarificationFailure(
                 evaluation,
@@ -99,7 +102,7 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
             return null;
         }
 
-        if (roleIds.Length > RequestPreparation.MaximumClarificationChoices)
+        if (roles.Length > RequestPreparation.MaximumClarificationChoices)
         {
             SetClarificationFailure(
                 evaluation,
@@ -110,7 +113,11 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
         evaluation.Record(
             ProposalField.Role,
             OperationResultKind.NeedsClarification);
-        return new ClarificationSeed(ClarificationTarget.Role, roleIds);
+        return new ClarificationSeed(
+            ClarificationTarget.Role,
+            roles.Select(role => new RoleClarificationChoice(
+                role.RoleId,
+                role.DisplayName)));
     }
 
     private async Task ApplyAsync(
@@ -160,6 +167,12 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
             evaluation.RoleId = roleResult.Value.RoleId;
             evaluation.Record(ProposalField.Role, kind);
             return;
+        }
+
+        if (roleResult.IsSuccess
+            || roleResult.Failure!.Kind == ApplicationFailureKind.NotFound)
+        {
+            evaluation.RecordAuthoritativelyInvalid(ProposalField.Role);
         }
 
         evaluation.Record(

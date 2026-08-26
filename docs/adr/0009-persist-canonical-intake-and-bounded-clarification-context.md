@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-22
-- **Clarified**: 2026-08-24
+- **Clarified**: 2026-08-26
 - **Decision owners**: Project maintainer
 - **Supersedes**: ADR 0006 for request-intake preparation state
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0005-retain-terminal-request-intake-tombstones.md`, `docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md`
@@ -18,7 +18,7 @@ The target flow needs only a small amount of durable context:
 - the canonical candidate;
 - one ordered environment or role choice set;
 - lifecycle state and timestamps;
-- versions sufficient for clarification freshness and optimistic concurrency; and
+- a candidate-change version plus optimistic-concurrency protection; and
 - immutable ready preparation identity for stale-card safety.
 
 Persisting raw conversations, prompts, model reasoning, complete tool payloads, or
@@ -46,7 +46,7 @@ Persist only:
 - storage-managed `ConcurrencyVersion` or equivalent optimistic token;
 - at most one bounded clarification context;
 - `CreatedAt`, `UpdatedAt`, ready and terminal timestamps;
-- predecessor preparation ID when created by revision, when useful for audit; and
+- mandatory predecessor preparation ID when created by revision; and
 - bounded interpreter version/audit metadata without raw text.
 
 Do not persist raw requester transcripts, raw prompts, provider conversation state,
@@ -89,44 +89,55 @@ candidate change. It does not increment for:
 clarification-only changes, lifecycle transitions, lazy expiry, and candidate commits.
 It is used for optimistic concurrency and is not card/request authority.
 
-Clarification context is bound to:
-
-```text
-PreparationId + CandidateVersion + Target
-```
+`CandidateVersion` is not a clarification freshness token. Clarification correctness
+depends on invoking the agent from the current candidate/context snapshot and verifying
+`ConcurrencyVersion` before the short commit.
 
 ### Clarification context
 
 Persist only:
 
-- `PreparationId`;
-- `CandidateVersion`;
+- `PreparationId` through aggregate ownership;
 - target (`environment` or `role`);
-- complete ordered canonical IDs;
+- no more than five choices in stable display order, each with its exact canonical ID
+  and safe authoritative display fields needed to distinguish it; and
 - `CreatedAt`.
 
-The renderer derives 1-based numbering strictly from persisted order. No more than five
-choices are persisted/rendered.
+The renderer derives 1-based numbering strictly from persisted order. The same ordered
+records are reconstructed as bounded provider-neutral agent input after restart.
+Environment records may include environment name/ID, authoritative client name/ID,
+region, and primary/recovery classification. Role records include exact role ID and safe
+display name.
 
-The agent interprets every free-text reply—including numeric, ordinal, exact-ID, and
-multilingual wording—into a structured target and 1-based option index. Core then:
+The agent interprets every free-text reply—including numeric, ordinal, exact-ID,
+descriptive, and multilingual wording—into the ordinary `updateDraft` environment or
+role exact-ID operation. It returns `unclear` when the reference cannot be safely
+resolved. Core exact-reloads and validates the proposed ID through the normal reducer;
+it neither maps positions to IDs nor uses displayed-choice membership as an acceptance
+condition.
 
-1. reloads the active preparation and context;
-2. validates lifecycle, preparation identity, candidate version, target, and bounds;
-3. maps the index to the persisted canonical ID;
-4. exact-reloads the enterprise entity;
-5. applies normal deterministic reduction; and
-6. consumes the context on success.
+Core does not parse the requester’s wording. Persisted context enables restart-safe
+semantic references at the agent boundary; it is untrusted context, not authorization
+evidence or a separate mutation protocol.
 
-Core does not parse the requester’s wording. Persisted context enables deterministic
-application of a structured selection, not deterministic language interpretation.
+Accepted environment/role target-field operations consume matching context; an
+accepted incident operation that establishes or changes environment scope consumes
+environment context; and an accepted environment change clears role context.
+Independent accepted justification changes preserve unrelated context. Rejected
+operations, value-equal no-ops, non-mutating acts, and transient failures preserve
+context unless authoritative reads prove its choices stale. Newly required context
+replaces prior context using environment-before-role precedence. Exact `/new` and
+terminal lifecycle transitions remove or make context unusable.
 
-Any material candidate commit invalidates old context before optional new context is
-stored. Clarification-only persistence retains the current `CandidateVersion` but
-changes `ConcurrencyVersion`.
+An active clarification context prevents `Ready`. Clarification created while revising
+`Ready A` atomically supersedes A and creates predecessor-linked `Collecting B` with a
+copied candidate and the new context. An accepted ordinary target-field operation on B
+consumes the context and reevaluates readiness normally.
 
-There is no independent clarification TTL. Context is valid only while its preparation
-is active and its candidate version matches.
+Clarification-only persistence retains `CandidateVersion` but changes
+`ConcurrencyVersion`. There is no independent clarification TTL; context is usable only
+while its preparation is active and until the deterministic lifecycle consumes,
+replaces, or invalidates it.
 
 ### Lifecycle and expiry
 
@@ -151,9 +162,10 @@ request identity/status. A concurrent unique-key loser reloads and returns the s
 request.
 
 Agent/MCP execution occurs without a database transaction or SQLite write lock. The
-application commits under a short boundary after checking `ConcurrencyVersion` and
-active-preparation uniqueness. A stale snapshot is rejected rather than silently
-applying the old proposal to newer state.
+agent receives the current candidate and active clarification context in one snapshot.
+The application commits under a short boundary after checking `ConcurrencyVersion` and
+active-preparation uniqueness. A proposal interpreted against changed candidate or
+context is rejected rather than silently applied to newer state.
 
 A process-local conversation gate may reduce contention, but the durable correctness
 boundary is optimistic concurrency plus uniqueness.
@@ -163,16 +175,17 @@ boundary is optimistic concurrency plus uniqueness.
 Canonical candidate persistence lets every turn begin from application-owned state.
 Model omission and provider-memory loss cannot erase accepted values.
 
-One bounded ordered choice set is the minimum durable context needed for restart-safe
-clarification. It exposes no raw conversation and keeps Core independent of language.
+One bounded ordered choice set with exact IDs and safe display fields is the minimum
+durable context needed for restart-safe multilingual and descriptive clarification. It
+exposes no raw conversation and keeps Core independent of language.
 
 Immutable ready preparation identity solves stale-card safety without adding a second
 card version field. A card references one exact immutable preparation; any revision gets
 a different identity.
 
 Separating candidate and concurrency versions prevents one overloaded version counter
-from serving incompatible purposes. Candidate version protects choice meaning;
-concurrency version protects commits.
+from serving incompatible purposes. Candidate version records canonical candidate
+progress; concurrency version protects candidate/context snapshots and commits.
 
 One active candidate and immediate ready supersession avoid dual-state revision
 machinery while preserving the critical rule that an old card cannot confirm a revised
@@ -182,11 +195,13 @@ scope.
 
 ### Positive
 
-- Candidate and choice progress survive restart without raw conversation persistence.
-- Clarification selection remains multilingual at the agent boundary and deterministic
-  at the Core application boundary.
+- Candidate and clarification context survive restart without raw conversation
+  persistence.
+- Multilingual and descriptive clarification remains at the agent boundary and produces
+  the same ordinary sparse exact-ID operations as other updates.
 - Stale card rejection uses one immutable preparation identity.
-- Candidate freshness and OCC have distinct, explicit version semantics.
+- Candidate progress and OCC have distinct, explicit version semantics, with no dead
+  candidate-version clarification binding.
 - Ready revisions have one atomic transition and no pending-revision state.
 - Duplicate confirmation converges through a named durable idempotency key.
 - No database lock is held across model/tool latency.
@@ -232,8 +247,15 @@ is revising scope.
 ### Parse ordinal or numeric replies deterministically
 
 Rejected because it creates a language/format fast path and inconsistent multilingual
-behavior. The agent returns a structured index; Core validates it against persisted
-context.
+behavior. The agent receives bounded ordered choices and returns an ordinary exact-ID
+sparse patch or conservative `unclear`.
+
+### Persist a separate clarification-selection protocol
+
+Rejected because target/index payloads, index-to-ID conversion, and selection-specific
+candidate-version checks duplicate the ordinary reducer. Persisted ordered choices are
+semantic agent context; exact authoritative reload and `ConcurrencyVersion` OCC already
+provide the required Core correctness boundaries.
 
 ### Use one version counter for clarification and OCC
 

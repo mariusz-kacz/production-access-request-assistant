@@ -16,14 +16,23 @@ public sealed record EnvironmentSearchMatch
         string environmentId,
         string displayName,
         string clientId,
-        string clientDisplayName)
+        string clientDisplayName,
+        string region,
+        EnvironmentClassification classification)
     {
+        if (!Enum.IsDefined(classification))
+        {
+            throw new ArgumentOutOfRangeException(nameof(classification));
+        }
+
         EnvironmentId = AuthorityValue.Normalize(environmentId, nameof(environmentId));
         DisplayName = AuthorityValue.Normalize(displayName, nameof(displayName));
         ClientId = AuthorityValue.Normalize(clientId, nameof(clientId));
         ClientDisplayName = AuthorityValue.Normalize(
             clientDisplayName,
             nameof(clientDisplayName));
+        Region = AuthorityValue.Normalize(region, nameof(region));
+        Classification = classification;
     }
 
     public string EnvironmentId { get; }
@@ -33,6 +42,10 @@ public sealed record EnvironmentSearchMatch
     public string ClientId { get; }
 
     public string ClientDisplayName { get; }
+
+    public string Region { get; }
+
+    public EnvironmentClassification Classification { get; }
 }
 
 public sealed class EnvironmentSearchResult

@@ -61,10 +61,6 @@ public sealed partial class RequestPreparationReducer
                 preparation,
                 proposal.Patch!,
                 cancellationToken),
-            DialogueAct.SelectClarification => await ReduceSelectionAsync(
-                preparation,
-                proposal.ClarificationSelection!,
-                cancellationToken),
             DialogueAct.DiscussDraft => Unchanged(
                 preparation,
                 new DraftDiscussion(proposal.DiscussionTopic!.Value)),
@@ -79,64 +75,6 @@ public sealed partial class RequestPreparationReducer
                 new UnclearGuidance()),
             _ => Unchanged(preparation, StructuralFailure()),
         };
-    }
-
-    private async Task<RequestPreparationReduction> ReduceSelectionAsync(
-        RequestPreparation preparation,
-        ClarificationSelection selection,
-        CancellationToken cancellationToken)
-    {
-        var mapping = ClarificationSelectionMapper.Map(preparation, selection);
-        if (mapping is SelectionMapping.Rejected rejected)
-        {
-            return RejectedSelection(
-                preparation,
-                rejected.Field,
-                rejected.ClarificationDisposition);
-        }
-
-        var accepted = (SelectionMapping.Accepted)mapping;
-        var reduction = await ReducePatchAsync(
-            preparation,
-            accepted.Patch,
-            cancellationToken);
-        return ConsumeSelectionContext(reduction);
-    }
-
-    private static RequestPreparationReduction ConsumeSelectionContext(
-        RequestPreparationReduction reduction)
-    {
-        if (reduction.ClarificationDisposition
-            != ClarificationContextDisposition.Preserve)
-        {
-            return reduction;
-        }
-
-        return new RequestPreparationReduction(
-            reduction.Candidate,
-            ClarificationContextDisposition.Clear,
-            clarification: null,
-            reduction.OperationResults,
-            reduction.ChangedFields,
-            reduction.Outcome);
-    }
-
-    private static RequestPreparationReduction RejectedSelection(
-        RequestPreparation preparation,
-        ProposalField field,
-        ClarificationContextDisposition clarificationDisposition)
-    {
-        OperationResult[] operationResults =
-        [
-            new(field, OperationResultKind.RejectedInvalid),
-        ];
-        return new RequestPreparationReduction(
-            preparation.Candidate,
-            clarificationDisposition,
-            clarification: null,
-            operationResults,
-            changedFields: [],
-            new DraftUnchanged(operationResults));
     }
 
     private async Task<RequestPreparationReduction> ReducePatchAsync(
@@ -161,26 +99,36 @@ public sealed partial class RequestPreparationReducer
             patch.Justification);
 
         var candidate = evaluation.ToCandidate();
+        var contextConsumed = IsClarificationConsumed(
+            preparation.Clarification,
+            candidate.ChangedFieldsFrom(current));
+        var contextInvalidated = IsClarificationInvalidated(
+            preparation.Clarification,
+            patch,
+            evaluation);
         var clarification = await DetermineClarificationAsync(
             preparation,
-            current,
             candidate,
             evaluation,
             scopeResult.EnvironmentClarification,
+            contextConsumed,
+            contextInvalidated,
             cancellationToken);
         return CompleteReduction(
             preparation,
             candidate,
             clarification,
+            contextInvalidated,
             evaluation);
     }
 
     private async Task<ClarificationSeed?> DetermineClarificationAsync(
         RequestPreparation preparation,
-        PreparationCandidate current,
         PreparationCandidate candidate,
         PatchEvaluation evaluation,
         ClarificationSeed? environmentClarification,
+        bool contextConsumed,
+        bool contextInvalidated,
         CancellationToken cancellationToken)
     {
         if (environmentClarification is not null)
@@ -188,10 +136,14 @@ public sealed partial class RequestPreparationReducer
             return environmentClarification;
         }
 
-        var canReplaceExistingContext = preparation.Clarification is null
-            || !ReferenceEquals(candidate, current);
-        if (!canReplaceExistingContext
-            || evaluation.EnvironmentId is null
+        if (preparation.Clarification is not null
+            && !contextConsumed
+            && !contextInvalidated)
+        {
+            return null;
+        }
+
+        if (evaluation.EnvironmentId is null
             || (evaluation.RoleId is not null
                 && !evaluation.HasResult(
                     ProposalField.Role,
@@ -210,13 +162,17 @@ public sealed partial class RequestPreparationReducer
         RequestPreparation preparation,
         PreparationCandidate candidate,
         ClarificationSeed? clarification,
+        bool contextInvalidated,
         PatchEvaluation evaluation)
     {
         var changedFields = evaluation.GetChangedFields(candidate);
         var orderedOperationResults = evaluation.GetOperationResults();
         var clarificationDisposition = clarification is not null
             ? ClarificationContextDisposition.Replace
-            : changedFields.Length > 0
+            : IsClarificationConsumed(
+                preparation.Clarification,
+                changedFields)
+                || contextInvalidated
                 ? ClarificationContextDisposition.Clear
                 : ClarificationContextDisposition.Preserve;
         var outcome = CreateOutcome(
@@ -246,8 +202,7 @@ public sealed partial class RequestPreparationReducer
         {
             return new ClarificationRequired(
                 clarification.Target,
-                clarification.OrderedCanonicalIds.Select(
-                    identifier => new ClarificationChoice(identifier)));
+                clarification.Choices);
         }
 
         if (candidate.IsComplete && preparation.Lifecycle == PreparationLifecycle.Collecting)
@@ -277,4 +232,57 @@ public sealed partial class RequestPreparationReducer
                 ApplicationFailureKind.InvalidInput,
                 "request-preparation-proposal-structural-invalid",
                 "The structured request proposal is invalid."));
+
+    private static bool IsClarificationConsumed(
+        PreparationClarificationContext? clarification,
+        IReadOnlySet<ProposalField> changedFields) =>
+        clarification?.Target switch
+        {
+            ClarificationTarget.Environment =>
+                changedFields.Contains(ProposalField.Environment),
+            ClarificationTarget.Role =>
+                changedFields.Contains(ProposalField.Environment)
+                || changedFields.Contains(ProposalField.Role),
+            _ => false,
+        };
+
+    private static bool IsClarificationConsumed(
+        PreparationClarificationContext? clarification,
+        IReadOnlyList<ProposalField> changedFields) =>
+        IsClarificationConsumed(
+            clarification,
+            changedFields.ToHashSet());
+
+    private static bool IsClarificationInvalidated(
+        PreparationClarificationContext? clarification,
+        DraftPatch patch,
+        PatchEvaluation evaluation)
+    {
+        if (clarification is null)
+        {
+            return false;
+        }
+
+        var proposedId = clarification.Target switch
+        {
+            ClarificationTarget.Environment
+                when patch.Environment is SetEnvironmentOperation
+                {
+                    Reference: ExactEnvironmentId exact,
+                }
+                    && evaluation.IsAuthoritativelyInvalid(ProposalField.Environment) =>
+                exact.Id,
+            ClarificationTarget.Role
+                when patch.Role is SetRoleOperation role
+                    && evaluation.IsAuthoritativelyInvalid(ProposalField.Role) =>
+                role.RoleId,
+            _ => null,
+        };
+
+        return proposedId is not null
+            && clarification.Choices.Any(choice => string.Equals(
+                choice.CanonicalId,
+                proposedId,
+                StringComparison.Ordinal));
+    }
 }

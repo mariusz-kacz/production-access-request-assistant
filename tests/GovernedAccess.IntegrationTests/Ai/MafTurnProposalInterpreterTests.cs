@@ -1,4 +1,7 @@
+using System.Reflection;
+using System.Text.Json;
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
@@ -44,6 +47,31 @@ public sealed class MafTurnProposalInterpreterTests
           }
         }
         """;
+
+    [Fact]
+    public void AgentClarificationInputCarriesCreationTimePositionsAndSafeFields()
+    {
+        Assert.Contains(
+            "CreatedAt",
+            typeof(AgentClarificationContext)
+                .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Select(property => property.Name));
+        Assert.Equal(
+            [
+                "CanonicalId",
+                "ClientDisplayName",
+                "ClientId",
+                "DisplayName",
+                "EnvironmentClassification",
+                "Position",
+                "Region",
+            ],
+            typeof(AgentClarificationChoice)
+                .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Where(property => property.Name != "EqualityContract")
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal));
+    }
 
     public static TheoryData<string> ProtocolLikeMessages => new()
     {
@@ -182,6 +210,76 @@ public sealed class MafTurnProposalInterpreterTests
     }
 
     [Fact]
+    public async Task PromptEnvelopeCarriesOrderedEnvironmentFactsAndOrdinaryPatchInstructions()
+    {
+        var chatClient = new RecordingChatClient(UnclearProposal);
+        var interpreter = CreateInterpreter(chatClient);
+        var createdAt = new DateTimeOffset(
+            2026,
+            8,
+            26,
+            10,
+            15,
+            0,
+            TimeSpan.Zero);
+        var clarification = new AgentClarificationContext(
+            ClarificationTarget.Environment,
+            createdAt,
+            [
+                new AgentClarificationChoice(
+                    1,
+                    "PROD-ALPHA-EU",
+                    "Production Alpha EU",
+                    "client-alpha",
+                    "Client Alpha",
+                    "EU",
+                    EnvironmentClassification.Primary),
+                new AgentClarificationChoice(
+                    2,
+                    "RECOVERY-PROD-ALPHA-EU",
+                    "Recovery Alpha EU",
+                    "client-alpha",
+                    "Client Alpha",
+                    "EU",
+                    EnvironmentClassification.Recovery),
+            ]);
+        var turn = new AgentTurnInput(
+            "el primero",
+            PreparationCandidate.Empty,
+            PreparationLifecycle.Collecting,
+            interpretedTurnCount: 1,
+            clarification,
+            Guid.NewGuid().ToString("N"));
+
+        _ = await interpreter.InterpretAsync(
+            turn,
+            TestContext.Current.CancellationToken);
+
+        var invocation = Assert.IsType<ModelExecutionChatInvocation>(
+            chatClient.LastInvocation);
+        var envelope = invocation.Messages[^1].Text;
+        using var document = JsonDocument.Parse(envelope);
+        var active = document.RootElement.GetProperty("activeClarification");
+        Assert.Equal(createdAt, active.GetProperty("createdAt").GetDateTimeOffset());
+        Assert.Equal(
+            [1, 2],
+            active.GetProperty("untrustedAuthoritativeDisplayChoices")
+                .EnumerateArray()
+                .Select(choice => choice.GetProperty("position").GetInt32()));
+        Assert.Contains("RECOVERY-PROD-ALPHA-EU", envelope, StringComparison.Ordinal);
+        Assert.Contains("Client Alpha", envelope, StringComparison.Ordinal);
+        Assert.Contains("Recovery", envelope, StringComparison.Ordinal);
+        Assert.Contains(
+            "ordinary updateDraft exact-ID",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            string.Concat("select", "Clarification"),
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OversizedRequesterTextFailsBeforeAgentInvocation()
     {
         var chatClient = new RecordingChatClient(UnclearProposal);
@@ -307,8 +405,8 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Equal("test-provider", metadata.ProviderId);
         Assert.Equal("test-deployment", metadata.ModelDeployment);
         Assert.Equal("test-provider-version", metadata.ProviderModelVersion);
-        Assert.Equal("1.0.0", metadata.PromptContractVersion);
-        Assert.Equal("1.0.0", metadata.StructuredOutputSchemaVersion);
+        Assert.Equal("2.0.0", metadata.PromptContractVersion);
+        Assert.Equal("2.0.0", metadata.StructuredOutputSchemaVersion);
         Assert.Equal("2.0.0", metadata.McpContractVersion);
         Assert.Equal("1.0.0", metadata.EnvironmentSearchPolicyVersion);
         Assert.Equal(turn.CorrelationId, metadata.CorrelationId);

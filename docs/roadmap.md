@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-08-24
+- **Last reviewed**: 2026-08-26
 - **Current baseline**: [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 - **Next feature**: [Agent-Interpreted Request Intake with Deterministic Core](../SPEC-deterministic-request-intake.md)
 
@@ -36,7 +36,8 @@ Use one model-backed agent for requester-language interpretation while keeping s
 
 - exact `/new` is the only deterministic requester-text protocol command;
 - every other requester free-text turn reaches the agent before semantic business handling;
-- the agent returns one closed dialogue act and, where applicable, a sparse `set`/`clear` patch, target/index clarification selection, or bounded discussion topic;
+- the agent returns one closed dialogue act and, where applicable, an ordinary sparse
+  `set`/`clear` patch or bounded discussion topic;
 - omitted fields are safe no-ops;
 - Core owns structural validation, deterministic operation ordering, authoritative search/reload, partial acceptance, dependency cascades, readiness, lifecycle, persistence, and concurrency;
 - application code owns all requester-visible responses and cards;
@@ -80,7 +81,6 @@ The target `TurnProposal` has one act and one compatible payload:
 | Act | Payload |
 |---|---|
 | `updateDraft` | Non-empty sparse patch only |
-| `selectClarification` | Target plus 1-based index only |
 | `discussDraft` | One closed discussion topic only |
 | `requestSubmission` | No payload |
 | `unrelated` | No payload |
@@ -117,7 +117,8 @@ For an agent-proposed structured environment query:
 
 - zero matches -> reject the environment operation and render no-match guidance;
 - one match -> exact reload and canonical acceptance when eligible;
-- two-to-five matches -> clear old scope, persist all ordered canonical IDs, and render choices;
+- two-to-five matches -> preserve current scope, persist all ordered choice records,
+  and render choices;
 - six-to-twenty matches -> reject without truncation and request more specific wording;
 - more than twenty -> typed too-broad failure.
 
@@ -125,7 +126,23 @@ Search considers only active, production, access-request-eligible environments. 
 
 Role proposals contain exact identifiers. When the final environment has a missing or unavailable role, Core may create one complete authoritative role choice set; it does not add a fifth role-search tool or parse requester wording.
 
-For a displayed choice set, the next free-text reply always reaches the agent. The agent returns `selectClarification(target, optionIndex)`. Core validates exact `PreparationId`, `CandidateVersion`, target, persisted order, and 1-based index, then exact-reloads the selected record. Core does not parse numeric, ordinal, descriptive, or multilingual replies.
+For a displayed choice set, the next free-text reply always reaches the agent with the
+active target, exact canonical IDs, safe authoritative distinguishing fields, and
+1-based positions reconstructed from stable persisted order. The agent returns the same
+ordinary `updateDraft` exact-ID environment/role operation used elsewhere, or
+conservative `unclear`. Core exact-reloads the proposed ID through the normal reducer;
+it neither maps an index to an ID nor requires choice membership. Core does not parse
+numeric, ordinal, descriptive, identifier-like, or multilingual replies.
+
+Accepted environment/role target operations consume matching context, an accepted
+incident operation that establishes or changes environment scope consumes environment
+context, and an accepted environment change clears role context. Independent
+justification changes, rejected operations, value-equal no-ops, non-mutating acts, and
+transient failures preserve unrelated context unless its authoritative choices are
+proven stale. Newly required clarification replaces prior context with environment
+before role. Context-only writes leave `CandidateVersion` unchanged but change
+`ConcurrencyVersion`, so candidate/context changes during agent execution reject the
+stale proposal at commit.
 
 ### Lifecycle, identity, and version policy
 
@@ -134,8 +151,8 @@ The closed states are `Collecting`, `Ready`, `Submitted`, `Superseded`, and `Exp
 The target uses three explicit correctness concepts:
 
 - `PreparationId`: immutable identity of one preparation and one ready scope;
-- `CandidateVersion`: begins at zero on row creation, increments once when creation also persists a material candidate, then increments for later material candidate commits; it binds clarification choices;
-- `ConcurrencyVersion`: changes for every persisted aggregate update and protects optimistic commits.
+- `CandidateVersion`: begins at zero on row creation, increments once when creation also persists a material candidate, then increments for later material candidate commits; it has no clarification-selection role;
+- `ConcurrencyVersion`: changes for every persisted aggregate update and protects candidate/context snapshots and optimistic commits.
 
 A ready preparation is immutable. A material revision or clarification-producing revision:
 
@@ -180,7 +197,7 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 
 ### Increment 1: closed proposal, aggregate schema, and reducer foundations
 
-- Introduce provider-neutral `TurnProposal`, exact act/payload compatibility, sparse operations, clarification selection, bounded discussion topics, typed structural/domain outcomes, and no model-prose channel.
+- Introduce provider-neutral `TurnProposal`, exact act/payload compatibility, sparse operations, bounded discussion topics, typed structural/domain outcomes, and no model-prose channel.
 - Introduce `PreparationId`, `CandidateVersion`, `ConcurrencyVersion`, lifecycle states, timestamps, ready deadline, optional supersession link, and bounded clarification schema.
 - Keep requester free-text at the Teams/agent boundary; Core preparation APIs and reducer must not accept it.
 - Implement immediate structural whole-proposal rejection without a schema-repair invocation.
@@ -215,13 +232,19 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 ### Increment 4: application-owned clarification, responses, and ready lifecycle
 
 - Implement complete two-to-five environment-search choices and one-to-five authoritative role choices, with no truncation or automatic selection.
-- Persist one version-bound ordered clarification context with 1-based positions.
-- Let the agent interpret every free-text choice reply into target plus index.
+- Persist one ordered clarification context with exact canonical IDs, safe display
+  fields, stable order, and 1-based rendered positions.
+- Supply that bounded context to the agent and let every free-text choice reply produce
+  an ordinary exact-ID sparse operation or conservative `unclear`.
+- Implement deterministic context consumption, preservation, replacement, and
+  invalidation without a separate choice protocol.
 - Render all progress, choice, accepted/rejected, discussion, unrelated, unclear, submission, failure, and card content in application code.
 - Implement immutable ready preparations, 30-minute lazy expiry, atomic supersession/replacement, and exact stale-card behavior.
 - Ensure no model-generated prose reaches the requester.
 
-**Exit gate:** restart-safe selection works, ready identity is immutable, old cards cannot submit replacement scope, and no free-text turn creates a request.
+**Exit gate:** restart-safe clarification references produce ordinary exact-ID patches or
+conservative `unclear`, ready identity is immutable, old cards cannot submit replacement
+scope, and no free-text turn creates a request.
 
 ### Increment 5: concurrency, confirmation, and idempotency
 

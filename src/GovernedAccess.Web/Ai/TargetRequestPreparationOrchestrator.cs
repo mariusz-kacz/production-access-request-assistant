@@ -96,10 +96,34 @@ internal sealed class TargetRequestPreparationOrchestrator
             ? null
             : new AgentClarificationContext(
                 clarification.Target,
-                clarification.OrderedCanonicalIds.Select(
-                    static identifier => new AgentClarificationChoice(
-                        identifier,
-                        identifier)));
+                clarification.CreatedAt,
+                clarification.Choices.Select(
+                    static (choice, index) => ToAgentChoice(choice, index + 1)));
+
+    private static AgentClarificationChoice ToAgentChoice(
+        ClarificationChoice choice,
+        int position) =>
+        choice switch
+        {
+            EnvironmentClarificationChoice environment => new(
+                position,
+                environment.CanonicalId,
+                environment.DisplayName,
+                environment.ClientId,
+                environment.ClientDisplayName,
+                environment.Region,
+                environment.Classification),
+            RoleClarificationChoice role => new(
+                position,
+                role.CanonicalId,
+                role.DisplayName,
+                clientId: null,
+                clientDisplayName: null,
+                region: null,
+                environmentClassification: null),
+            _ => throw new InvalidOperationException(
+                "The clarification choice type is unsupported."),
+        };
 
     private static PreparationTurnAttribution ToAttribution(
         AgentExecutionMetadata metadata) =>

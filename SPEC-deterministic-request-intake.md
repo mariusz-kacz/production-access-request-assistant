@@ -1,6 +1,6 @@
 # Specification: Agent-Interpreted Request Intake with Deterministic Core
 
-- **Status:** Approved for task-plan regeneration; not yet as-built
+- **Status:** Approved target; clarification simplification pending implementation
 - **Capability ID:** `deterministic-request-intake`
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Scope:** Authenticated Microsoft Teams request preparation with model-based language interpretation and deterministic confirmation
@@ -30,6 +30,8 @@ instruction, or partial implementation that:
 - treats model-visible MCP results as application authority;
 - parses numeric, ordinal, identifier-like, clear, reset, or submission wording in
   deterministic application code; or
+- treats clarification replies as a separate target/index mutation protocol rather
+  than ordinary sparse exact-ID proposals; or
 - keeps a mutable ready snapshot behind a second pending-revision candidate.
 
 ## 2. Objective
@@ -70,7 +72,7 @@ Deterministic code must not derive any of the following from requester free-text
 - dialogue act;
 - field operation;
 - field value;
-- clarification target or option position;
+- clarification-reference meaning;
 - discussion topic;
 - natural-language reset meaning;
 - submission intent; or
@@ -116,9 +118,9 @@ Supporting another human input language must require no Core rule change.
 | **Intake** | The preparation capability and conversation flow before request creation. |
 | **Preparation** | One persisted intake aggregate with an immutable `PreparationId`. It is mutable only while `Collecting`; once `Ready`, its candidate is immutable. |
 | **Candidate** | The sanitized canonical request fields owned by the application inside one preparation. |
-| **CandidateVersion** | A monotonic integer inside one preparation. It increments after every committed material candidate change and binds clarification context. |
+| **CandidateVersion** | A preparation-local monotonic integer that increments after every committed material canonical candidate-field change. It is not a clarification freshness or selection-binding token. |
 | **ConcurrencyVersion** | A storage-managed optimistic-concurrency token. It changes on every persisted aggregate update, including lifecycle or clarification-only changes. |
-| **Clarification context** | A bounded, persisted, version-bound ordered choice set rendered by the application and selectable through an agent-interpreted index. |
+| **Clarification context** | A bounded, persisted ordered choice set with exact canonical IDs and safe authoritative display fields. It is supplied to the agent as semantic context and is neither an authorization allowlist nor a separate mutation protocol. |
 | **Ready preparation** | An immutable preparation whose candidate is complete and eligible for card confirmation until `ReadyDeadline`. Its `PreparationId` identifies the exact reviewed scope. |
 | **Ready card** | An application-rendered Adaptive Card whose payload references one exact immutable ready preparation. |
 | **Request** | The immutable `AwaitingBusinessApproval` domain entity created only by successful card confirmation. |
@@ -136,7 +138,7 @@ immutable and any material revision creates a new preparation identity.
 | Component | Responsible for | Must not own |
 |---|---|---|
 | Requester | Natural-language description, revision, selection, question, submission intent, and exact `/new` | Acting identity, client authority, approver, duration, approval, provisioning, grant state |
-| Agent interpreter | Semantic interpretation of current free-text; sparse structured proposal; bounded read-only context gathering | Canonical state, authorization, enterprise truth, request creation, approval, provisioning, requester-visible prose |
+| Agent interpreter | Semantic interpretation of current free-text and active clarification choices; ordinary sparse exact-ID proposal; bounded read-only context gathering | Canonical state, authorization, enterprise truth, request creation, approval, provisioning, requester-visible prose |
 | Core | Proposal legality; canonical merge; authoritative reloads; dependencies; readiness; persistence; lifecycle; typed outcomes | Requester-language interpretation |
 | Authoritative ports | Environment, client, entitlement, and incident facts | Requester-language interpretation or model-visible tool trust |
 | Reference-authority module | Reference database, deterministic search execution, exact reference reads, synthetic catalog seeding, and authority-port implementations | Request lifecycle, MCP wire contracts, requester interpretation, approval, or provisioning |
@@ -176,6 +178,7 @@ Every authenticated non-`/new` free-text turn follows this semantic path:
 
 ```text
 authenticated Teams free-text
+    -> load candidate + active clarification + ConcurrencyVersion snapshot
     -> bounded agent invocation
     -> closed provider-neutral TurnProposal
     -> structural proposal validation
@@ -200,12 +203,35 @@ For each non-`/new` free-text turn, the agent receives the smallest sufficient c
 - sanitized current canonical candidate;
 - current preparation lifecycle summary;
 - active bounded clarification context when present, including authoritative display
-  choices and their 1-based rendered positions;
+  choices, exact canonical IDs, safe distinguishing fields, and their 1-based rendered
+  positions;
 - fixed intake interpretation rules;
 - exactly four approved read-only MCP capabilities.
 
 The agent does not receive authority to mutate application state. Durable provider
 conversation memory is not required for correctness.
+
+The active context is provider-neutral and has this semantic shape:
+
+```text
+ActiveClarificationContext
+- target: environment | role
+- choices[] in persisted display order
+  - position: 1-based display position
+  - canonicalId
+  - safe authoritative display fields needed to distinguish the choice
+- createdAt
+```
+
+Environment choice fields may include environment name/ID, authoritative client
+name/ID, region, and primary/recovery classification. Role choice fields include the
+exact role ID and a safe display name. No more than five choices are persisted,
+rendered, or supplied, and their stable persisted order makes this context
+reconstructable after restart.
+
+Requester text and clarification choices are untrusted model context. The exact IDs
+help the agent express an interpretation, but they are not authorization evidence or
+an allowlist for Core acceptance.
 
 The agent input deliberately excludes arbitrary raw prior-turn history. Coreference is
 supported only through canonical state and an active clarification context. Phrases such
@@ -288,7 +314,6 @@ TurnProposal
 - schemaVersion
 - dialogueAct
 - patch?
-- clarificationSelection?
 - discussionTopic?
 ```
 
@@ -299,7 +324,6 @@ Provider SDK, MAF, MCP, Teams, or raw JSON DOM types must not cross into Core.
 The closed dialogue-act set is:
 
 - `updateDraft`;
-- `selectClarification`;
 - `discussDraft`;
 - `requestSubmission`;
 - `unrelated`; and
@@ -307,14 +331,13 @@ The closed dialogue-act set is:
 
 Exactly the following payload combinations are valid:
 
-| Dialogue act | `patch` | `clarificationSelection` | `discussionTopic` | Mutation possible |
-|---|---:|---:|---:|---:|
-| `updateDraft` | Required, nonempty | Forbidden | Forbidden | Yes, through accepted patch operations |
-| `selectClarification` | Forbidden | Required, exactly one | Forbidden | Yes, after deterministic context validation |
-| `discussDraft` | Forbidden | Forbidden | Required, one closed topic | No |
-| `requestSubmission` | Forbidden | Forbidden | Forbidden | No |
-| `unrelated` | Forbidden | Forbidden | Forbidden | No |
-| `unclear` | Forbidden | Forbidden | Forbidden | No |
+| Dialogue act | `patch` | `discussionTopic` | Mutation possible |
+|---|---:|---:|---:|
+| `updateDraft` | Required, nonempty | Forbidden | Yes, through accepted patch operations |
+| `discussDraft` | Forbidden | Required, one closed topic | No |
+| `requestSubmission` | Forbidden | Forbidden | No |
+| `unrelated` | Forbidden | Forbidden | No |
+| `unclear` | Forbidden | Forbidden | No |
 
 Unknown acts, unknown properties, incompatible payloads, empty `updateDraft` patches,
 malformed operations, or multiple semantic payloads are structural violations. The
@@ -430,38 +453,34 @@ The business approver judges substantive adequacy. The target increment delibera
 does not translate requester-authored justification for approvers; approver-side
 translation is a separate future product capability.
 
-### 10.7 Clarification selection
+### 10.7 Clarification replies use the ordinary sparse patch
 
-For an active application-rendered choice set, the agent returns:
-
-```text
-ClarificationSelection
-- target: environment | role
-- optionIndex: 1-based integer
-```
-
-The model never returns the authoritative ID represented by the position. Core maps the
-position to the persisted ordered canonical ID only after validating preparation,
-candidate version, target, bounds, lifecycle, and context freshness.
-
-A validated selection is then converted inside Core into the equivalent structured
-operation:
+When the requester refers to an active application-rendered choice set, the agent uses
+the same `updateDraft` operation used for every other field update:
 
 ```text
-environment selection -> environment.set(exactEnvironmentId)
-role selection        -> role.set(exactRoleId)
+environment.set(exactEnvironmentId("ENV-B"))
+role.set(exactRoleId("ROLE-RECOVERY-READER"))
 ```
 
-The selected entity is exact-reloaded and the equivalent operation runs through the
-complete Section 14 pipeline, including authoritative revalidation, dependency
-cascades, at-most-one-new-clarification, readiness, lifecycle, and ready-revision rules.
-A selection may therefore be rejected when the persisted entity is no longer eligible
-or assignable, and an accepted environment selection may immediately lead to a new role
-clarification when role is still unresolved.
+Thus `the other one`, `first`, `pierwszy`, `el primero`, an exact displayed ID, or a
+descriptive phrase such as `the recovery one` is interpreted at the agent boundary into
+an ordinary exact-ID sparse operation. When the reference is not safely resolvable from
+the canonical candidate and active clarification context, the agent returns `unclear`.
+No deterministic numeric, ordinal, identifier, choice, or multilingual parser exists.
 
-All free-text selections use this agent path, including `1`, `first`, `pierwszy`,
-`el primero`, an exact displayed ID, or a descriptive phrase. No deterministic selection
-parser exists.
+Core does not map positions to IDs and has no clarification-selection branch. It
+processes the proposed exact ID through the ordinary Section 14 reducer: independently
+exact-reload current authoritative data, validate eligibility or assignability, apply
+coherence and dependency cascades, update clarification context, recompute readiness
+and lifecycle, and commit atomically through optimistic concurrency.
+
+Core does not require the proposed exact ID to belong to the displayed choice set. The
+choices are semantic context for interpretation, not an authorization allowlist. A
+requester may abandon the displayed choices and explicitly name another valid
+environment or role in the same reply; that ID follows the same exact-reload path.
+Nevertheless, the live-model contract requires a genuine displayed-choice reference to
+produce the expected displayed ID rather than an unrelated valid ID.
 
 ### 10.8 Discussion, submission, unrelated, and unclear turns
 
@@ -587,8 +606,7 @@ The whole turn is rejected immediately with zero mutation when:
 - act/payload compatibility is invalid;
 - a field, operation, reference form, discussion topic, or property is unknown;
 - required values are missing or forbidden values are present;
-- values violate closed structural bounds;
-- a clarification selection is combined with a patch; or
+- values violate closed structural bounds; or
 - provider output cannot be translated into the provider-neutral contract.
 
 ### 12.2 Domain-operation evaluation: explicit partial success
@@ -661,26 +679,24 @@ Rules:
 - clarification-context persistence with no canonical field change does not increment
   the version;
 - discussion, unrelated, unclear, submission intent, rejected operations, and
-  value-equal no-ops do not increment it;
-- a clarification context always stores the **post-commit `CandidateVersion` written by
-  the same transaction** that persists that context; and
-- selection requires an exact match to that persisted value.
+  value-equal no-ops do not increment it; and
+- clarification correctness never depends on storing or comparing `CandidateVersion`.
 
 Worked examples:
 
-| Scenario | Candidate change in commit | Stored `CandidateVersion` | Context binds |
-|---|---:|---:|---:|
+| Scenario | Candidate change in commit | Stored `CandidateVersion` | Clarification effect on version |
+|---|---:|---:|---|
 | Clean `/new` creates empty `Collecting` | No | 0 | n/a |
-| First accepted material update creates/populates a preparation | Yes | 1 | 1 if the same commit also creates clarification |
-| Existing `Collecting` v3 receives ambiguous environment change; current candidate is preserved | No | 3 | 3 |
-| Existing `Collecting` v3 has a material candidate change and also creates clarification | Yes | 4 | 4 |
-| `Ready A` receives ambiguous revision; successor `Collecting B` copies A's candidate unchanged and stores context | B is created with a non-empty candidate | 1 in B | 1 in B |
-| Role clarification while role is already unset and no other field changes | No | unchanged | unchanged current version |
+| First accepted material update creates/populates a preparation | Yes | 1 | None, even if the same commit also creates clarification |
+| Existing `Collecting` v3 receives ambiguous environment change; current candidate is preserved | No | 3 | Context-only write leaves version unchanged |
+| Existing `Collecting` v3 has a material candidate change and also creates clarification | Yes | 4 | Candidate changes increment once; context adds no increment |
+| `Ready A` receives ambiguous revision; successor `Collecting B` copies A's candidate unchanged and stores context | B is created with a non-empty candidate | 1 in B | Context is not bound to version 1 |
+| Role clarification while role is already unset and no other field changes | No | unchanged | Context-only write leaves version unchanged |
 
 Because clarification is non-destructive, storing an ambiguity normally changes only
 clarification context. If the same commit also contains independent accepted material
 operations, the version increments once for those candidate changes and the context
-binds the resulting post-commit version.
+does not acquire a candidate-version binding.
 
 ### 13.2 ConcurrencyVersion
 
@@ -691,6 +707,11 @@ binds the resulting post-commit version.
   expiry, and audit-metadata updates that participate in the aggregate write;
 - is never exposed as requester authority; and
 - is checked during short database commits after agent/MCP execution.
+
+The agent is invoked from a snapshot containing the current candidate and active
+clarification context. If either changed while the agent was running, the aggregate's
+`ConcurrencyVersion` also changed and the proposal must not commit against that stale
+snapshot.
 
 ### 13.3 Canonical equality
 
@@ -707,26 +728,24 @@ Canonical equality used for no-op detection is field-specific:
 
 Core evaluates a structurally valid proposal in this fixed order:
 
-1. validate/resolve an incoming clarification selection, if the dialogue act is
-   `selectClarification`, and convert it into one equivalent environment/role `set`;
-2. resolve the environment operation;
-3. resolve the incident operation;
-4. determine one coherent final environment/client scope;
-5. resolve the role operation against that final environment;
-6. apply the justification operation;
+1. resolve the environment operation;
+2. resolve the incident operation;
+3. determine one coherent final environment/client scope;
+4. resolve the role operation against that final environment;
+5. apply the justification operation;
+6. apply deterministic dependency cascades;
 7. create at most one clarification context using the precedence below;
-8. apply deterministic dependency cascades;
+8. apply the clarification-context consumption and preservation rules;
 9. evaluate readiness and lifecycle; and
-10. commit all accepted candidate changes and context atomically using optimistic
+10. commit all accepted candidate changes and context changes atomically using optimistic
     concurrency.
 
 Operations are evaluated against a temporary candidate derived from the last committed
 candidate. No mutation is durable until the final atomic commit.
 
-A clarification selection is not a special mutation shortcut. After context validation
-and index-to-ID mapping, the equivalent `set` operation follows the same authoritative
-reload, dependency, rejection, clarification, readiness, and lifecycle rules as an
-ordinary agent proposal.
+An exact environment or role ID derived by the agent from active clarification context
+is indistinguishable from the same ordinary exact-ID operation proposed on any other
+turn. There is no preliminary choice-membership, target/index, or conversion step.
 
 ### 14.1 Environment operation
 
@@ -740,7 +759,7 @@ For `searchQuery`, Core uses the shared policy:
 |---|---|
 | Zero matches | Environment operation rejected as no match; unrelated accepted operations may commit |
 | One match | Exact-reload and accept the environment if still eligible |
-| Two to five matches | Environment operation becomes `NeedsClarification`; persist the complete ordered IDs |
+| Two to five matches | Environment operation becomes `NeedsClarification`; persist the complete ordered choice records with exact IDs and safe display fields |
 | Six to twenty matches | Environment operation rejected as too broad; no truncated choice list |
 | More than twenty | Typed search overflow; environment operation rejected |
 
@@ -751,7 +770,8 @@ the entity. Final card confirmation is still required.
 `NeedsClarification`, Core preserves all currently committed canonical candidate fields.
 The clarification context represents a pending proposed environment change. If the
 candidate had no environment, it remains unresolved; if it already had an environment,
-that value remains canonical until a later structured selection applies a replacement.
+that value remains canonical until a later accepted ordinary exact-ID operation applies
+a replacement.
 No dependent field is cleared merely because a new choice is ambiguous.
 
 For a revision against `Ready`, ready immutability still applies: `Ready A` is
@@ -825,13 +845,14 @@ application-owned role clarification:
 | Available roles | Outcome |
 |---|---|
 | Zero | Typed no-roles rejection; cannot become ready |
-| One to five | Persist complete ordered role IDs as one clarification context |
-| More than five | No indexed context; ask the requester to specify the role more precisely |
+| One to five | Persist complete ordered role choice records with exact IDs and safe display names as one clarification context |
+| More than five | No bounded choice context; ask the requester to specify the role more precisely |
 
 Role clarification is also non-destructive: an existing canonical role is preserved
-until a later structured selection replaces it. A candidate with no role remains
-without a role. Core does not auto-select the only role because choosing authorization
-scope remains requester intent even when the entitlement catalog has one current option.
+until a later accepted ordinary exact-ID operation replaces it. A candidate with no
+role remains without a role. Core does not auto-select the only role because choosing
+authorization scope remains requester intent even when the entitlement catalog has one
+current option.
 
 ### 14.5 Justification operation
 
@@ -864,39 +885,62 @@ If no environment clarification exists, Core may persist one role clarification 
 clearing the current candidate. Lower-precedence ambiguity is rejected for the turn,
 never silently queued for later.
 
-A `selectClarification` turn consumes the old context only after successful context
-validation. The equivalent selected operation may create a new clarification through the
-same precedence rules—for example an environment selection can consume environment
-context and create role context in one atomic commit.
+Newly required clarification replaces the prior context according to this same
+environment-before-role precedence. An accepted ordinary target-field operation may
+consume the old context and create the next required context in one atomic commit—for
+example, an accepted environment exact-ID update can consume environment context and
+create role context.
 
-### 14.7 Clarification context and index contract
+### 14.7 Clarification context contract and lifecycle
 
-Persisted context contains only:
+Persisted context contains:
 
-- `PreparationId`;
-- the **post-commit** `CandidateVersion`;
+- `PreparationId` through aggregate ownership;
 - target (`environment` or `role`);
-- complete ordered canonical IDs; and
+- no more than five choice records in stable display order;
+- for each choice, the exact canonical ID and safe authoritative display fields needed
+  to distinguish it; and
 - `CreatedAt`.
 
-Rules:
+Environment display fields may include environment name/ID, authoritative client
+name/ID, region, and primary/recovery classification. Role fields include exact role ID
+and safe display name. The provider-neutral agent input reconstructs 1-based positions
+strictly from persisted order. Numbering remains a usability feature, not a Core
+mutation protocol or authority boundary.
 
-- positions are 1-based;
-- at most five choices are rendered and persisted;
-- renderer numbering is derived strictly from persisted order;
-- selection requires exact preparation, candidate version, target, and in-range index;
-- the mapped canonical entity is exact-reloaded before it can become canonical;
-- successful selection consumes the old context;
-- if the selected entity is no longer eligible/assignable, selection is rejected, the
-  stale context is cleared, and the candidate is preserved;
-- any material candidate commit invalidates prior context before optional new context is
-  stored;
-- context-only persistence does not increment `CandidateVersion` but does change
-  `ConcurrencyVersion`;
-- an active clarification context prevents transition to `Ready`; therefore a `Ready`
-  preparation can never carry active clarification context; and
-- there is no independent clarification TTL; context remains valid only while the
-  preparation is active and the candidate version matches.
+The lifecycle rules are:
+
+- an accepted `environment.set` or `environment.clear` consumes active environment
+  clarification context;
+- an accepted incident operation that deterministically establishes or changes
+  environment scope consumes active environment clarification context;
+- an accepted environment change also clears any active role clarification context;
+- an accepted `role.set` or `role.clear` consumes active role clarification context;
+- a newly required clarification replaces prior context according to the existing
+  environment-before-role precedence;
+- an accepted independent justification change preserves unrelated active context;
+- rejected operations, value-equal no-ops, `discussDraft`, `requestSubmission`,
+  `unrelated`, `unclear`, and transient provider or authoritative-source failures
+  preserve active context unless current authoritative reads prove its choices stale;
+- exact `/new` and terminal lifecycle transitions remove the context or make it
+  unusable;
+- active context prevents transition to `Ready`, so a `Ready` preparation never carries
+  clarification context;
+- a clarification created while revising `Ready A` supersedes A and creates
+  `Collecting B` with the copied canonical candidate and predecessor link; and
+- once B receives an accepted ordinary target-field update, Core consumes context and
+  reevaluates readiness normally.
+
+Every proposed ID is independently exact-reloaded and validated through the ordinary
+reducer even when it was present in the displayed choices. Core does not require choice
+membership before accepting a valid ID.
+
+Clarification context stores no candidate-version binding. A context-only write does
+not increment `CandidateVersion`, but every context write changes `ConcurrencyVersion`.
+There is no independent clarification TTL; context remains usable only while its
+preparation is active and until these deterministic rules consume, replace, or
+invalidate it. The snapshot plus `ConcurrencyVersion` commit check prevents a proposal
+interpreted against changed candidate or context from committing.
 
 ## 15. Application-owned outcomes and responses
 
@@ -1030,8 +1074,8 @@ Against `Ready A`:
 Clarification revisions are deliberately non-destructive. They invalidate the old card
 because the requester has initiated a possible scope change, but they do not erase the
 previously reviewed canonical environment, client, role, incident, or justification
-while the new choice is unresolved. The eventual structured selection applies through
-Section 14 as an ordinary `set`, with normal cascades and readiness evaluation.
+while the new choice is unresolved. The eventual ordinary exact-ID `set` applies
+through Section 14 with normal cascades and readiness evaluation.
 
 There is no pending-revision candidate and no revision-cancellation command.
 
@@ -1151,7 +1195,7 @@ not optional audit decoration.
 The normative durable protocol is:
 
 ```text
-load active preparation + ConcurrencyVersion
+load active preparation (candidate + clarification context) + ConcurrencyVersion
     -> invoke agent/MCP without database transaction or write lock
     -> validate/reduce against loaded snapshot
     -> acquire short commit boundary
@@ -1180,9 +1224,9 @@ A process-local per-conversation async gate may serialize more of the turn as an
 implementation optimization, but correctness must not depend on holding a database lock
 across model execution.
 
-On optimistic-concurrency mismatch, no proposal is applied against the newer candidate.
-The application returns safe retry guidance; it does not silently replay the same model
-proposal against changed state.
+On optimistic-concurrency mismatch, no proposal is applied against the newer candidate
+or clarification context. The application returns safe retry guidance; it does not
+silently replay the same model proposal against changed state.
 
 Required race behavior:
 
@@ -1213,8 +1257,8 @@ Required race behavior:
 | Incident has zero eligible linked environments and no final environment | Reject incident; derive no scope |
 | Incident has multiple eligible linked environments and no final environment | Reject incident as scope-ambiguous; ask requester to specify environment; create no implicit environment clarification |
 | Explicit environment/incident conflict | Reject both explicit scope-setting operations and dependent role set; independent justification may commit |
-| Invalid/stale clarification selection | Preserve candidate; clear unusable context when appropriate; render current guidance |
-| Selected clarification entity no longer eligible/assignable | Reject equivalent set, preserve candidate, consume/clear stale context, render fresh guidance |
+| Proposed exact environment/role ID is invalid, ineligible, or unassignable | Reject it through the ordinary operation outcome; preserve candidate and active context unless current authoritative reads prove the choices stale |
+| Candidate or clarification context changed while the agent was running | OCC rejects the proposal against the stale snapshot; preserve the newer committed aggregate and render retry guidance |
 | Persistence/OCC failure | Do not claim change occurred |
 | Active-preparation unique-index race | Reload winner; create no duplicate active preparation |
 | Ready replacement failure | Preserve original ready preparation |
@@ -1312,7 +1356,8 @@ The normative detailed matrix is
 
 ### 23.1 Deterministic tests
 
-Core tests construct structured proposals directly. They cover:
+Deterministic Core tests construct structured proposals directly, while deterministic
+adapter/component tests construct bounded agent inputs. Together they cover:
 
 - act/payload structural rejection;
 - sparse `set`/`clear` semantics and omission safety;
@@ -1324,15 +1369,20 @@ Core tests construct structured proposals directly. They cover:
 - unique/multiple/too-broad search behavior through the shared policy;
 - search normalization/case-insensitive substring semantics independent of SQLite
   collation;
-- clarification index/version/bounds;
+- active clarification choices, exact canonical IDs, safe distinguishing fields, and
+  persisted display order supplied in provider-neutral agent input;
 - non-destructive clarification creation;
-- clarification selection converted to equivalent set and full-pipeline revalidation;
-- selected entity becoming ineligible between rendering and selection;
-- `CandidateVersion` post-commit binding cases from Section 13.1;
+- accepted ordinary environment/role exact-ID operations consuming matching context;
+- rejected target operations and non-mutating outcomes preserving appropriate context;
+- accepted independent justification preserving unrelated context and accepted
+  environment changes clearing role context;
+- exact authoritative validation and normal cascades for clarification-derived patches;
+- context restart survival and normative replacement;
 - candidate versus concurrency versions;
 - lifecycle, active-context-prevents-ready invariant, ready immutability, expiry, stale
   collecting warning, and stale cards;
-- partial unique active-preparation index races, OCC races, and confirmation idempotency;
+- partial unique active-preparation index races, OCC rejection when candidate or context
+  changed during interpretation, and confirmation idempotency;
 - confirmation fact-drift successor behavior versus transient-source preservation;
 - independent workflow/reference database creation, migration history, restart, and
   failure behavior with no cross-database relationship or transaction;
@@ -1353,10 +1403,12 @@ Verify that:
 - Core proposal/reducer APIs do not accept requester text;
 - only the exact `/new` comparison exists as deterministic requester-text semantics;
 - provider output enters Core only through the closed schema;
-- clarification selection contains target/index, not authoritative ID;
+- active clarification context reaches the agent with ordered exact IDs and safe display
+  fields, while the proposal contract has no separate clarification-selection payload;
+- clarification replies use ordinary `updateDraft` exact-ID operations or `unclear`;
 - no model-generated prose channel reaches renderer output;
 - unknown tools and schema drift fail closed;
-- MCP and the Core `searchQuery` path use one shared search-policy implementation; and
+- MCP and the Core `searchQuery` path use one shared search-policy implementation;
 - an exact environment proposal invokes exact authoritative reload without search
   replay;
 - only `GovernedAccess.ReferenceAuthority` references the reference `DbContext`, only
@@ -1388,14 +1440,18 @@ Absolute blocking gates are:
    across all promoted scenarios;
 5. 100% correct restraint across at least four promoted natural-language reset,
    submission, and prompt-injection safety scenarios;
-6. 100% safe clarification behavior across at least three promoted clarification
-   scenarios: expected target/index or expected conservative no-mutation;
+6. 100% safe clarification behavior across the promoted clarification cases: `first`,
+   unambiguous `the other one`, `el primero` or another non-English ordinal, and a
+   descriptive choice such as `the recovery one` produce the expected ordinary exact-ID
+   patch; unresolved `the other one` with three choices produces `unclear`; an explicit
+   different valid environment while context is active uses the normal exact-ID path;
+   and a displayed-choice reference fails if it guesses an unrelated valid ID;
 7. zero translation, summary, invented rationale, or added facts across at least three
    promoted justification-provenance scenarios, including one stored-justification
    re-injection follow-up;
 8. 100% ambiguous-scope restraint across at least three promoted scenarios where no
-   exact environment is uniquely justified: the agent must use `searchQuery`,
-   clarification-compatible behavior, or `unclear`; it must not invent/select an
+   exact environment is uniquely justified: the agent must use `searchQuery` or
+   `unclear`; it must not invent/select an
    unprompted exact environment ID; and
 9. at least one promoted uniquely resolved environment scenario uses the MCP result to
    produce `exactEnvironmentId`, reaches the correct canonical scope after Core exact
@@ -1482,23 +1538,29 @@ environment-search policy, or evaluation dataset changes.
 
 ### Clarification
 
-- **AC-23:** Application-rendered positions are 1-based and derived strictly from the
-  complete persisted order.
-- **AC-24:** No more than five selectable choices are persisted/rendered.
-- **AC-25:** Free-text choice replies are interpreted by the agent into target and index.
-- **AC-26:** Core resolves an index only against matching active `PreparationId`,
-  post-commit `CandidateVersion`, target, and bounds, exact-reloads the mapped entity,
-  and evaluates it through the full reducer pipeline.
-- **AC-27:** Missing, stale, mismatched, consumed, out-of-range, or no-longer-eligible
-  choice context cannot mutate state.
+- **AC-23:** Active clarification input contains target, exact canonical IDs, safe
+  authoritative distinguishing fields, `CreatedAt`, and 1-based positions derived
+  strictly from stable persisted display order.
+- **AC-24:** No more than five choices are persisted, rendered, or supplied to the
+  agent.
+- **AC-25:** Free-text choice replies are interpreted by the agent into ordinary
+  `updateDraft` environment/role exact-ID operations or conservative `unclear`.
+- **AC-26:** Core exact-reloads every proposed ID and evaluates it through the ordinary
+  reducer without target/index resolution or displayed-choice membership as an
+  acceptance condition.
+- **AC-27:** Context consumption, preservation, replacement, and invalidation follow
+  Section 14.7, and snapshot plus `ConcurrencyVersion` OCC prevents a proposal
+  interpreted against changed candidate/context from committing.
 - **AC-28:** Clarification creation is non-destructive to current canonical fields; an
-  active clarification context prevents `Ready`.
+  active clarification context prevents `Ready`, survives restart, and supports
+  multilingual/descriptive references without deterministic requester-language parsing.
 
 ### Lifecycle, persistence, and confirmation
 
 - **AC-29:** `PreparationId`, `CandidateVersion`, and `ConcurrencyVersion` have the
-  distinct semantics in Sections 5 and 13; clarification binds the post-commit candidate
-  version.
+  distinct semantics in Sections 5 and 13; clarification has no candidate-version
+  binding, context-only writes leave `CandidateVersion` unchanged, and every context
+  write changes `ConcurrencyVersion`.
 - **AC-30:** A ready preparation is immutable and its unguessable `PreparationId`
   identifies one exact card scope.
 - **AC-31:** The first accepted material revision or revision clarification atomically
@@ -1512,7 +1574,7 @@ environment-search policy, or evaluation dataset changes.
 - **AC-34:** Canonical state and clarification context survive restart without raw
   conversation history.
 - **AC-35:** Agent/MCP execution holds no database transaction or SQLite write lock;
-  stale-snapshot commits are rejected through OCC.
+  stale candidate/context snapshot commits are rejected through OCC.
 - **AC-36:** A durable partial unique index on authenticated actor/conversation where
   lifecycle is `Collecting` or `Ready` guarantees at most one active preparation;
   concurrent creation losers reload the winner.
@@ -1570,7 +1632,7 @@ environment-search policy, or evaluation dataset changes.
 | AC-01–AC-06 | Architecture/static tests, Teams routing tests, renderer tests |
 | AC-07–AC-14 | Proposal-schema tests, Core unit matrices, targeted live justification evals |
 | AC-15–AC-22 | MCP contract/transport tests, shared-policy component tests, authoritative-port integration tests |
-| AC-23–AC-28 | Clarification persistence/restart tests, selection-pipeline tests, live multilingual/ambiguity evals |
+| AC-23–AC-28 | Agent-input/context tests, ordinary reducer/context-lifecycle tests, restart/OCC tests, live multilingual/ambiguity evals |
 | AC-29–AC-40 | Persistence migrations, partial-unique-index tests, OCC/race tests, lifecycle/expiry tests, card integration tests |
 | AC-41–AC-47 | Threat tests, budget/startup tests, logging checks, retained live-model evaluation evidence |
 | AC-48–AC-52 | Project-reference/static tests, independent migration/fixture tests, isolated-target versus delivered-host regressions, cutover and deletion source checks |
@@ -1591,12 +1653,17 @@ do not accept requester free-text.
 
 Before further implementation:
 
-- remove or redesign partial code that parses phrases such as `clear environment`;
-- remove deterministic numeric/ordinal/identifier selection paths;
-- remove requester-message evidence verdicts and raw-message reducer inputs;
-- regenerate `tasks/deterministic-request-intake.md` from this approved specification;
-- treat the obsolete detailed design note and old task file as disposable rather than
-  preserving them because they already exist.
+- execute the single focused clarification-simplification task immediately after
+  completed Task 10 and before Task 11;
+- remove the separate clarification act/payload, target/index conversion branch,
+  selection-specific outcomes/checks, and clarification candidate-version binding
+  across the target implementation;
+- expose ordered exact-ID choices and safe display fields in bounded provider-neutral
+  agent input;
+- route clarification-derived operations through the existing ordinary authoritative
+  reducer and implement the Section 14.7 context lifecycle; and
+- preserve the completed-task history and the remaining dependency plan rather than
+  regenerating or renumbering it.
 
 Planning must produce coherent dependency-aware tasks with explicit code touchpoints,
 deletions, tests, and exit gates. It must not start implementation during the planning

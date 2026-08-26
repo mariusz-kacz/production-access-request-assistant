@@ -4,10 +4,11 @@
 - **Replanned:** 2026-08-24 after Tasks 1 and 2 were reverted
 - **Refined:** 2026-08-25 so exact environment proposals use exact reload without Core search replay
 - **Replanned:** 2026-08-25 for an extractable reference-authority module and two independent target databases
+- **Refined:** 2026-08-26 to replace the special clarification-selection protocol with ordinary sparse exact-ID patches
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Primary authority:** `SPEC-deterministic-request-intake.md`
 - **Task-list target:** This file is both the plan and the ordered task checklist
-- **Planned slices:** 17, followed in dependency order unless a task explicitly says otherwise
+- **Planned slices:** 18, followed in dependency order unless a task explicitly says otherwise
 
 ## Outcome
 
@@ -104,8 +105,6 @@ as-built documents outside the changed boundary.
 
 | Conflict | Resolution |
 |---|---|
-| ADR 0009 says predecessor is stored "when useful"; the specification requires it for every revision successor. | Every revision-created preparation has a mandatory predecessor. Only roots have none. |
-| Target matrix and roadmap contain destructive ambiguity examples. | The specification governs: clarification is non-destructive and preserves canonical state. Correct those artifacts only after verified implementation. |
 | Current as-built documents describe the delivered two-tool catalog while the approved target requires four. | `AGENTS.md` records both phase-bound rules: production remains on two tools during Tasks 1-13, the target four-tool catalog is isolated, and Task 14 atomically replaces two with four. Full current-state documentation follows verified final evidence in Task 17. |
 | Current behavior uses complete candidates, process-local choices, `Invalidated`, and reserved request IDs. | Those remain facts about the delivered path only. Target code cannot depend on them, and Task 15 deletes them after cutover. |
 | ADR 0005 describes reserved-request tombstone evidence. | Preserve the tombstone principle, but final target evidence uses immutable preparation identity and unique `Request.PreparationId`; clarify the ADR after implementation. |
@@ -442,6 +441,84 @@ a new application service. It remains reachable only from direct/component tests
 
 **Acceptance coverage:** AC-01-AC-14, AC-23-AC-36, AC-44.
 
+### Task 10A - Simplify clarification to ordinary sparse exact-ID patches
+
+- [ ] In progress
+
+**Description:** Replace the already-built target clarification-selection protocol with
+the ordinary sparse-patch path before Teams rendering or production composition uses
+it. This is one atomic protocol simplification; do not retain compatibility aliases,
+dual contracts, or a fallback selection branch. This task supersedes the
+selection-specific acceptance clauses recorded in completed Tasks 1, 2, 5, 9, and 10
+without reopening or rewriting their completed history.
+
+**Acceptance criteria:**
+
+1. [x] Remove `selectClarification`, `ClarificationSelection`, option-index payloads,
+   selection-to-operation conversion, and selection-specific outcomes/checks from
+   provider-neutral contracts, adapters, prompts, Core, persistence, and renderers where
+   applicable.
+2. [x] Expose active ordered clarification choices—including exact canonical IDs,
+   1-based display positions, safe authoritative distinguishing fields, target, and
+   creation time—in bounded provider-neutral agent input.
+3. [x] Make clarification replies return ordinary `updateDraft` exact-ID environment or
+   role field operations, or conservative `unclear` when the reference is unresolved.
+4. [x] Route those operations through the existing authoritative reducer without a
+   special selection branch or displayed-choice-membership acceptance check.
+5. [x] Simplify clarification persistence by removing candidate-version selection
+   binding and relying on the candidate/context snapshot plus `ConcurrencyVersion` OCC;
+   remove or migrate any existing clarification-bound candidate-version column.
+6. [x] Implement the specification's clarification-context consumption, preservation,
+   replacement, invalidation, ready-immutability, and successor-preparation rules.
+7. [x] Remove dead selection-specific code and schema/migration fields so only one
+   clarification protocol remains.
+8. [ ] Update deterministic, integration, architecture, prompt/schema, restart/OCC, and
+   live-model tests, including multilingual/descriptive references, explicit valid IDs
+   outside displayed choices, conservative ambiguity, normal exact reload/cascades, and
+   zero consequential side effects.
+9. [ ] Update affected as-built documentation only after implementation evidence passes
+   where the repository workflow requires that reconciliation.
+
+**Verification:** Use TDD for each contract/reducer/persistence change; run focused
+proposal, reducer, agent-input, persistence/migration, restart/OCC, architecture,
+renderer, and evaluation tests; then run the standing backend sequence and any affected
+frontend suite sequentially, and run every affected credentialed live-model scenario.
+Task 16 later reruns and promotes the complete final suite.
+
+**Required exit gate:**
+
+- production contracts/code contain no `selectClarification`,
+  `ClarificationSelection`, option-index mutation protocol, or index-to-ID reducer path;
+- exact `/new` remains the only deterministic requester-text command;
+- `first`/`the other one`/`el primero` are interpreted by the agent and result in
+  ordinary exact-ID sparse patches or conservative `unclear`;
+- all accepted IDs are independently exact-reloaded and processed by the normal
+  reducer;
+- active clarification survives restart and is consumed/preserved by the documented
+  rules;
+- stale candidate/context snapshots cannot commit;
+- all affected deterministic/integration/live-model tests pass; and
+- no free-text turn creates a request, approval, provisioning action, or grant.
+
+**Dependencies:** Tasks 1, 2, 5, 6, 9, and 10.
+
+**Files likely touched:**
+
+- target preparation contracts, aggregate, reducer, orchestration, and typed outcomes in
+  `GovernedAccess.Core`
+- target MAF prompt/schema translation and bounded agent-input adapter in
+  `GovernedAccess.Web/Ai/`
+- target clarification persistence mappings and migrations in
+  `GovernedAccess.Workflow.Persistence`
+- affected target renderers plus deterministic, integration, architecture, restart/OCC,
+  prompt/schema, and live-evaluation tests
+
+**Estimated scope:** Large but focused; the protocol, persistence cleanup, and evidence
+must land together so two clarification paths never coexist.
+
+**Acceptance coverage:** AC-01-AC-05, AC-07-AC-13, AC-23-AC-35, AC-41, AC-43,
+AC-45-AC-47.
+
 ### Task 11 - Build target Teams rendering and card behavior
 
 - [ ] Planned
@@ -457,7 +534,7 @@ factory. Do not register them in production.
 
 **Verification:** Target Teams component/card tests cover locale fallback, ambiguity, stale context, failures, injection-shaped text, exact `/new`, and absence of free-text request creation; run frontend tests if shared contracts change; then standing backend verification.
 
-**Dependencies:** Task 10.
+**Dependencies:** Task 10A.
 
 **Files likely touched:**
 
@@ -513,7 +590,7 @@ MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
 
 **Verification:** Run focused target full-host journeys, the full standing backend sequence, frontend suite, target contract checks, and `git diff --check`. No live provider is required at this checkpoint.
 
-**Dependencies:** Tasks 1-12.
+**Dependencies:** Tasks 1-12, including Task 10A.
 
 **Files likely touched:**
 
@@ -671,7 +748,9 @@ Reject an increment if it introduces or implies any of the following:
 - deterministic requester-language interpretation outside exact `/new`;
 - requester text entering Core reduction, model-owned canonical snapshots, client/duration/identity mutation, model prose rendering, state-changing tools, or text-created requests;
 - duplicated environment-search implementations, Core search replay for `exactEnvironmentId`, MCP output treated as authority, roles embedded in exact environment lookup, or ambiguous results ranked/truncated into a choice;
-- destructive ambiguity, selection outside matching persisted context/version, optional revision predecessor, Ready with active context, or mutable Ready scope;
+- destructive ambiguity, a clarification-specific mutation path, accepting a proposed ID
+  without ordinary exact reload, stale candidate/context snapshot commit, optional
+  revision predecessor, Ready with active context, or mutable Ready scope;
 - a database transaction held across model/MCP work, stale proposal replay, read-before-write uniqueness without the durable partial index, or one overloaded version counter;
 - confirmation without unique `Request.PreparationId`, undefined fact-drift/source-outage behavior, or browser/card payload authority beyond authenticated context plus exact preparation identity;
 - raw message/query/transcript/prompt/reasoning/proposal/tool-payload logging or persistence, trusted stored justification, selective live-evaluation reruns, or premature documentation promotion.
@@ -684,8 +763,8 @@ Task 3 -> Task 4 isolated reference authority/database
 Tasks 1-3 -> Task 5 reducer -> Task 6 preparation/workflow persistence
 Tasks 4,6 -> Task 7 downstream workflow persistence
 Tasks 3,4 -> Task 8 MCP -> Task 9 agent
-Tasks 5,6,9 -> Task 10 orchestration -> Task 11 Teams
-Tasks 3,4,6,7,10,11 -> Task 12 confirmation -> Task 13 isolated full host
+Tasks 5,6,9 -> Task 10 orchestration -> Task 10A clarification simplification -> Task 11 Teams
+Tasks 3,4,6,7,10A,11 -> Task 12 confirmation -> Task 13 isolated full host
 Task 13 + human approval -> Task 14 atomic cutover -> Task 15 legacy deletion
 Task 15 -> Task 16 final evidence -> Task 17 documentation
 ```
@@ -694,12 +773,12 @@ Task 15 -> Task 16 final evidence -> Task 17 documentation
 
 | Acceptance area | Primary implementation tasks | Final evidence |
 |---|---|---|
-| AC-01-AC-06 language/response boundary | Tasks 9-11 | Tasks 13, 14, and 16 |
-| AC-07-AC-14 proposal/reduction | Tasks 1 and 5 | Tasks 10, 13, and 16 |
+| AC-01-AC-06 language/response boundary | Tasks 9-11, including 10A | Tasks 13, 14, and 16 |
+| AC-07-AC-14 proposal/reduction | Tasks 1, 5, and 10A | Tasks 10, 13, and 16 |
 | AC-15-AC-22 enterprise authority/MCP | Tasks 3, 4, and 8 | Tasks 12-14 and 16 |
-| AC-23-AC-28 clarification | Tasks 2, 5, and 11 | Tasks 10, 13, and 16 |
-| AC-29-AC-40 lifecycle/persistence/confirmation | Tasks 2, 6, 7, 10, and 12 | Tasks 13-16 |
-| AC-41-AC-44 security/budgets | Tasks 8-12 | Tasks 13, 14, and 16 |
+| AC-23-AC-28 clarification | Tasks 2, 5, 10A, and 11 | Tasks 10, 13, and 16 |
+| AC-29-AC-40 lifecycle/persistence/confirmation | Tasks 2, 6, 7, 10, 10A, and 12 | Tasks 13-16 |
+| AC-41-AC-44 security/budgets | Tasks 8-12, including 10A | Tasks 13, 14, and 16 |
 | AC-45-AC-47 evaluation | Task 16 | Task 16 retained evidence |
 | AC-48-AC-52 modular persistence/extraction | Tasks 4, 6, and 7 | Tasks 13-17 |
 

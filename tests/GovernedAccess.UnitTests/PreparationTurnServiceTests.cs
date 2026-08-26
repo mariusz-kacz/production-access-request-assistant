@@ -201,7 +201,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         Assert.Equal(PreparationLifecycle.Collecting, successor.Lifecycle);
         Assert.Equal(originalCandidate, successor.Candidate);
         Assert.NotNull(successor.Clarification);
-        Assert.Equal(successor.CandidateVersion, successor.Clarification.CandidateVersion);
         Assert.IsType<ClarificationRequired>(result.Response.Outcome);
     }
 

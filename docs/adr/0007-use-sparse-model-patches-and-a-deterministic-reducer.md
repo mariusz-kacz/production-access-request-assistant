@@ -35,9 +35,14 @@ The agent returns one closed, provider-neutral `TurnProposal` with exactly one d
 act and its permitted payload:
 
 - a sparse patch containing explicit `set` or `clear` operations;
-- one clarification selection containing target and 1-based option index;
 - one bounded discussion topic; or
 - no mutation payload for submission intent, unrelated, or unclear turns.
+
+When active clarification choices exist, the bounded agent input includes their stable
+display order, exact canonical IDs, and safe authoritative distinguishing fields. A
+clarification reply uses the same ordinary sparse exact-ID environment or role
+operation as every other update, or `unclear` when the reference is not safely
+resolvable. The choices are semantic context, not an authorization allowlist.
 
 A sparse patch may propose changes only to environment, role, justification, and
 optional incident. Omitted fields mean no proposed change. There is no required `keep`
@@ -50,7 +55,7 @@ Core receives no requester free-text as proposal-validation or reducer input. It
 - deterministic effects of structured `set` and `clear` operations;
 - authoritative environment, client, role, and incident search/reloads;
 - fixed cross-field evaluation order and dependency cascades;
-- clarification target/index/version validation;
+- deterministic clarification-context consumption, preservation, and replacement;
 - readiness, lifecycle, persistence, and typed outcomes.
 
 Core validates whether a structured proposal is legal, coherent, and supported by
@@ -76,8 +81,9 @@ The normative evaluation order is:
 3. coherent final environment/client scope;
 4. role against final environment;
 5. justification;
-6. at most one clarification, with environment before role;
-7. dependency cascades and readiness.
+6. dependency cascades;
+7. at most one clarification, with environment before role; and
+8. clarification-context lifecycle and readiness.
 
 There is no unspecified partial-success escape hatch.
 
@@ -117,6 +123,11 @@ identifier extractors, numeric/ordinal resolvers, or evidence matchers from beco
 second NLP system. English, Polish, Spanish, and other language variants produce the
 same Core contract.
 
+Using the ordinary sparse patch for clarification removes a second structured mutation
+protocol. Core exact-reloads and validates every proposed ID through the same reducer,
+while snapshot plus optimistic concurrency prevents proposals interpreted against
+changed candidate or clarification context from committing.
+
 Deterministic security remains strong without deterministic language reproduction:
 enterprise identities and relationships are exact-reloaded, state/lifecycle rules are
 deterministic, free-text cannot create a request, and the requester must review and
@@ -139,6 +150,7 @@ linguistic and provenance quality is evaluated at the agent boundary.
   snapshot.
 - All requester-language interpretation has one owner.
 - Core remains deterministic, provider-neutral, and testable without language corpora.
+- Clarification references and ordinary updates share one proposal and reducer path.
 - Enterprise identifiers and relationships are independently revalidated.
 - Mixed patches have one normative ordering and partial-success policy.
 - Justification provenance is explicit rather than silently model-authored.
@@ -171,6 +183,13 @@ would preserve the snapshot-loss failure mode.
 Rejected. Parsing `clear environment`, `first`, exact IDs, or similar input outside the
 agent creates a language-specific parallel interpreter. Exact `/new` remains the sole
 protocol exception.
+
+### Keep a separate clarification-selection protocol
+
+Rejected because target/index payloads, index-to-ID conversion, selection-specific
+freshness checks, and distinct outcomes duplicate the ordinary exact-ID patch path.
+Ordered choices remain bounded agent context; Core authority still comes from exact
+reload and deterministic reduction.
 
 ### Make Core verify linguistic evidence
 

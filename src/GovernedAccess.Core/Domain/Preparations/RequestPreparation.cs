@@ -39,7 +39,6 @@ public sealed class RequestPreparation
             ? null
             : new PreparationClarificationContext(
                 PreparationId,
-                CandidateVersion,
                 clarification,
                 CreatedAt);
 
@@ -71,10 +70,9 @@ public sealed class RequestPreparation
             ? null
             : new PreparationClarificationContext(
                 state.PreparationId,
-                state.Clarification.CandidateVersion,
                 new ClarificationSeed(
                     state.Clarification.Target,
-                    state.Clarification.OrderedCanonicalIds),
+                    state.Clarification.Choices),
                 state.Clarification.CreatedAt);
         CreatedAt = state.CreatedAt.ToUniversalTime();
         UpdatedAt = state.UpdatedAt.ToUniversalTime();
@@ -260,7 +258,6 @@ public sealed class RequestPreparation
             ? null
             : new PreparationClarificationContext(
                 PreparationId,
-                CandidateVersion,
                 clarification,
                 operation.OccurredAt);
 
@@ -284,7 +281,6 @@ public sealed class RequestPreparation
         var operation = PrepareUpdate(occurredAt, correlationId);
         Clarification = new PreparationClarificationContext(
             PreparationId,
-            CandidateVersion,
             clarification,
             operation.OccurredAt);
         RecordUpdate(operation);
@@ -505,8 +501,7 @@ public sealed class RequestPreparation
         }
 
         if (state.Clarification is { } clarification
-            && (clarification.CandidateVersion != state.CandidateVersion
-                || clarification.CreatedAt < createdAt
+            && (clarification.CreatedAt < createdAt
                 || clarification.CreatedAt > updatedAt))
         {
             throw new ArgumentException(

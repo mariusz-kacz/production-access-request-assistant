@@ -1,3 +1,4 @@
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Core.Preparations.Authority;
@@ -48,6 +49,10 @@ internal sealed class PreparationScopeEvaluator(
         if (environmentResolution is not null)
         {
             evaluation.Record(ProposalField.Environment, environmentResolution.Result);
+            if (environmentResolution.IsAuthoritativelyInvalid)
+            {
+                evaluation.RecordAuthoritativelyInvalid(ProposalField.Environment);
+            }
         }
 
         if (incidentResolution is not null)
@@ -399,7 +404,7 @@ internal sealed class PreparationScopeEvaluator(
                 cancellationToken),
             EnvironmentSearchResultKind.ClarificationRequired =>
                 EnvironmentResolution.NeedsClarification(
-                    searchResult.Value.Matches.Select(match => match.EnvironmentId)),
+                    searchResult.Value.Matches),
             EnvironmentSearchResultKind.NoMatches =>
                 EnvironmentResolution.Rejected(OperationResultKind.RejectedUnavailable),
             EnvironmentSearchResultKind.InvalidQuery
@@ -424,7 +429,11 @@ internal sealed class PreparationScopeEvaluator(
                 environmentId,
                 StringComparison.Ordinal)
                 ? EnvironmentResolution.Applied(environmentResult.Value)
-                : EnvironmentResolution.Rejected(OperationResultKind.RejectedUnavailable);
+                : EnvironmentResolution.Rejected(
+                    OperationResultKind.RejectedUnavailable,
+                    isAuthoritativelyInvalid: environmentResult.IsSuccess
+                        || environmentResult.Failure!.Kind
+                            == ApplicationFailureKind.NotFound);
     }
 
     private async Task<IncidentResolution> ResolveIncidentAsync(
@@ -469,27 +478,53 @@ internal sealed class PreparationScopeEvaluator(
         OperationResultKind Result,
         EnvironmentAuthorityProjection? Environment,
         ClarificationSeed? Clarification,
-        bool IsClear)
+        bool IsClear,
+        bool IsAuthoritativelyInvalid)
     {
         internal static EnvironmentResolution Applied(
             EnvironmentAuthorityProjection environment) =>
-            new(OperationResultKind.Applied, environment, null, IsClear: false);
+            new(
+                OperationResultKind.Applied,
+                environment,
+                null,
+                IsClear: false,
+                IsAuthoritativelyInvalid: false);
 
         internal static EnvironmentResolution Clear() =>
-            new(OperationResultKind.Applied, null, null, IsClear: true);
+            new(
+                OperationResultKind.Applied,
+                null,
+                null,
+                IsClear: true,
+                IsAuthoritativelyInvalid: false);
 
         internal static EnvironmentResolution NeedsClarification(
-            IEnumerable<string> environmentIds) =>
+            IEnumerable<EnvironmentSearchMatch> environments) =>
             new(
                 OperationResultKind.NeedsClarification,
                 null,
                 new ClarificationSeed(
                     ClarificationTarget.Environment,
-                    environmentIds),
-                IsClear: false);
+                    environments.Select(environment =>
+                        new EnvironmentClarificationChoice(
+                            environment.EnvironmentId,
+                            environment.DisplayName,
+                            environment.ClientId,
+                            environment.ClientDisplayName,
+                            environment.Region,
+                            environment.Classification))),
+                IsClear: false,
+                IsAuthoritativelyInvalid: false);
 
-        internal static EnvironmentResolution Rejected(OperationResultKind kind) =>
-            new(kind, null, null, IsClear: false);
+        internal static EnvironmentResolution Rejected(
+            OperationResultKind kind,
+            bool isAuthoritativelyInvalid = false) =>
+            new(
+                kind,
+                null,
+                null,
+                IsClear: false,
+                IsAuthoritativelyInvalid: isAuthoritativelyInvalid);
     }
 
     private sealed record IncidentResolution(

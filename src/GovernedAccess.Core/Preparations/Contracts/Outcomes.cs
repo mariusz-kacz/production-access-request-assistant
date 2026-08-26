@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.Preparations;
 
 namespace GovernedAccess.Core.Preparations.Contracts;
 
@@ -14,7 +15,6 @@ public enum ProposalStructuralFailure
     MissingRequiredValue,
     ForbiddenValue,
     ValueOutOfBounds,
-    ClarificationSelectionCombinedWithPatch,
     UntranslatableProviderOutput,
 }
 
@@ -99,17 +99,6 @@ public sealed record DraftUpdated : ApplicationOutcome
     }
 
     public IReadOnlyList<OperationResult> OperationResults { get; }
-}
-
-public sealed record ClarificationChoice
-{
-    public ClarificationChoice(string canonicalId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalId);
-        CanonicalId = canonicalId.Trim();
-    }
-
-    public string CanonicalId { get; }
 }
 
 public sealed record ClarificationRequired : ApplicationOutcome

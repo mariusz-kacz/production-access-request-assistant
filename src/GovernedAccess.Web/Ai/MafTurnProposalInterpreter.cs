@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "1.0.0";
+    internal const string PromptContractVersion = "2.0.0";
     internal const string McpContractVersion = "2.0.0";
     internal const string McpHttpClientName = "GovernedAccess.TargetMafMcpLoopback";
 
@@ -38,10 +38,11 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         Never request or claim a state-changing action. The application independently reloads every proposed
         enterprise identifier.
 
-        Return one dialogueAct: updateDraft, selectClarification, discussDraft, requestSubmission, unrelated,
-        or unclear. updateDraft contains a nonempty sparse patch over only environment, role, justification,
-        and incident. Omitted fields mean no change. Each included field uses exactly one set or clear
-        operation. selectClarification returns only target and a 1-based optionIndex from active choices.
+        Return one dialogueAct: updateDraft, discussDraft, requestSubmission, unrelated, or unclear.
+        updateDraft contains a nonempty sparse patch over only environment, role, justification, and
+        incident. Omitted fields mean no change. Each included field uses exactly one set or clear
+        operation. Interpret an active clarification reference into an ordinary updateDraft exact-ID
+        environment or role operation. Return unclear when the reference is not safely resolvable.
         discussDraft returns one closed discussionTopic. The other acts have no semantic payload.
 
         Environment set uses either exactEnvironmentId or searchQuery. Use exactEnvironmentId only when an
@@ -372,12 +373,17 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
                     ? null
                     : new ModelClarification(
                         turn.Clarification.Target.ToString(),
+                        turn.Clarification.CreatedAt,
                         turn.Clarification.Choices
                             .Select(
-                                static (choice, index) => new ModelChoice(
-                                    index + 1,
+                                static choice => new ModelChoice(
+                                    choice.Position,
                                     choice.CanonicalId,
-                                    choice.DisplayText))
+                                    choice.DisplayName,
+                                    choice.ClientId,
+                                    choice.ClientDisplayName,
+                                    choice.Region,
+                                    choice.EnvironmentClassification?.ToString()))
                             .ToArray())),
             TurnProposalJsonTranslator.SerializerOptions);
 
@@ -438,12 +444,17 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
 
     private sealed record ModelClarification(
         string Target,
+        DateTimeOffset CreatedAt,
         IReadOnlyList<ModelChoice> UntrustedAuthoritativeDisplayChoices);
 
     private sealed record ModelChoice(
         int Position,
         string CanonicalId,
-        string DisplayText);
+        string DisplayName,
+        string? ClientId,
+        string? ClientDisplayName,
+        string? Region,
+        string? EnvironmentClassification);
 
     private sealed class McpCatalogException : Exception;
 }

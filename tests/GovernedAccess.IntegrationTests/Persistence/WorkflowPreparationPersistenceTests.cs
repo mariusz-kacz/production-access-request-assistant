@@ -1,6 +1,7 @@
 using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Workflow.Persistence;
@@ -340,6 +341,19 @@ public sealed class WorkflowPreparationPersistenceTests
                     TestContext.Current.CancellationToken);
 
                 Assert.True(saved.IsSuccess);
+                var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+                var clarificationJson = await ReadStringAsync(
+                    context,
+                    "SELECT ClarificationJson FROM RequestPreparations",
+                    TestContext.Current.CancellationToken);
+                Assert.DoesNotContain(
+                    "candidateVersion",
+                    Assert.IsType<string>(clarificationJson),
+                    StringComparison.Ordinal);
+                Assert.Contains(
+                    "Production read-only",
+                    clarificationJson,
+                    StringComparison.Ordinal);
             }
 
             await using var restarted = await WorkflowPersistenceFixture.CreateAsync(databasePath);
@@ -364,6 +378,39 @@ public sealed class WorkflowPreparationPersistenceTests
         }
     }
 
+    [Fact]
+    public async Task MaximumRichEnvironmentClarificationRoundTripsWithinBound()
+    {
+        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
+        var escapedValue = new string('<', AuthorityValue.MaximumLength);
+        var choices = Enumerable.Range(1, RequestPreparation.MaximumClarificationChoices)
+            .Select(index => new EnvironmentClarificationChoice(
+                $"{new string('<', AuthorityValue.MaximumLength - 1)}{index}",
+                escapedValue,
+                escapedValue,
+                escapedValue,
+                escapedValue,
+                EnvironmentClassification.Primary))
+            .ToArray();
+        var preparation = RequestPreparation.CreateRoot(
+            Binding(),
+            PreparationCandidate.Empty,
+            new ClarificationSeed(ClarificationTarget.Environment, choices),
+            attribution: null,
+            CreatedAt,
+            "maximum-rich-clarification");
+        await PersistAsync(fixture, preparation);
+
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IRequestPreparationStore>();
+        var loaded = await store.GetAsync(
+            preparation.PreparationId,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(loaded.IsSuccess);
+        AssertPreparationEqual(preparation, loaded.Value);
+    }
+
     private static RequestPreparation CreateCollectingPreparation()
     {
         var preparation = RequestPreparation.CreateRoot(
@@ -381,7 +428,14 @@ public sealed class WorkflowPreparationPersistenceTests
                 incidentId: null),
             new ClarificationSeed(
                 ClarificationTarget.Role,
-                ["ProductionReadOnly", "ProductionSupport"]),
+                [
+                    new RoleClarificationChoice(
+                        "ProductionReadOnly",
+                        "Production read-only"),
+                    new RoleClarificationChoice(
+                        "ProductionSupport",
+                        "Production support"),
+                ]),
             new MaterialChangeAttribution(
                 [ProposalField.Environment, ProposalField.Justification],
                 "model-deployment",
@@ -478,9 +532,8 @@ public sealed class WorkflowPreparationPersistenceTests
         var actualClarification = Assert.IsType<PreparationClarificationContext>(
             actual.Clarification);
         Assert.Equal(expectedClarification.PreparationId, actualClarification.PreparationId);
-        Assert.Equal(expectedClarification.CandidateVersion, actualClarification.CandidateVersion);
         Assert.Equal(expectedClarification.Target, actualClarification.Target);
-        Assert.Equal(expectedClarification.OrderedCanonicalIds, actualClarification.OrderedCanonicalIds);
+        Assert.Equal(expectedClarification.Choices, actualClarification.Choices);
         Assert.Equal(expectedClarification.CreatedAt, actualClarification.CreatedAt);
     }
 
@@ -523,6 +576,27 @@ public sealed class WorkflowPreparationPersistenceTests
             command.CommandText = commandText;
             return (long)(await command.ExecuteScalarAsync(cancellationToken)
                 ?? throw new InvalidOperationException("The scalar query returned no value."));
+        }
+        finally
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    private static async Task<string> ReadStringAsync(
+        WorkflowDbContext context,
+        string commandText,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+        await connection.OpenAsync(cancellationToken);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = commandText;
+            return (string)(await command.ExecuteScalarAsync(cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "The scalar query returned no value."));
         }
         finally
         {

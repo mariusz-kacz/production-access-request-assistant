@@ -1,6 +1,65 @@
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Core.Domain.Preparations;
+
+public abstract record ClarificationChoice
+{
+    private protected ClarificationChoice(
+        string canonicalId,
+        string displayName)
+    {
+        CanonicalId = AuthorityValue.Normalize(canonicalId, nameof(canonicalId));
+        DisplayName = AuthorityValue.Normalize(displayName, nameof(displayName));
+    }
+
+    public string CanonicalId { get; }
+
+    public string DisplayName { get; }
+}
+
+public sealed record EnvironmentClarificationChoice : ClarificationChoice
+{
+    public EnvironmentClarificationChoice(
+        string canonicalId,
+        string displayName,
+        string clientId,
+        string clientDisplayName,
+        string region,
+        EnvironmentClassification classification)
+        : base(canonicalId, displayName)
+    {
+        if (!Enum.IsDefined(classification))
+        {
+            throw new ArgumentOutOfRangeException(nameof(classification));
+        }
+
+        ClientId = AuthorityValue.Normalize(clientId, nameof(clientId));
+        ClientDisplayName = AuthorityValue.Normalize(
+            clientDisplayName,
+            nameof(clientDisplayName));
+        Region = AuthorityValue.Normalize(region, nameof(region));
+        Classification = classification;
+    }
+
+    public string ClientId { get; }
+
+    public string ClientDisplayName { get; }
+
+    public string Region { get; }
+
+    public EnvironmentClassification Classification { get; }
+}
+
+public sealed record RoleClarificationChoice : ClarificationChoice
+{
+    public RoleClarificationChoice(
+        string canonicalId,
+        string displayName)
+        : base(canonicalId, displayName)
+    {
+    }
+}
 
 public enum PreparationLifecycle
 {
@@ -207,86 +266,87 @@ public sealed record ClarificationSeed
 {
     public ClarificationSeed(
         ClarificationTarget target,
-        IEnumerable<string> orderedCanonicalIds)
+        IEnumerable<ClarificationChoice> choices)
     {
         if (!Enum.IsDefined(target))
         {
             throw new ArgumentOutOfRangeException(nameof(target));
         }
 
-        ArgumentNullException.ThrowIfNull(orderedCanonicalIds);
-        var identifiers = orderedCanonicalIds
-            .Select(NormalizeIdentifier)
-            .ToArray();
-        if (identifiers.Length == 0)
+        ArgumentNullException.ThrowIfNull(choices);
+        var values = choices.ToArray();
+        if (values.Length == 0)
         {
             throw new ArgumentException(
                 "A clarification must contain at least one choice.",
-                nameof(orderedCanonicalIds));
+                nameof(choices));
         }
 
-        if (identifiers.Length > RequestPreparation.MaximumClarificationChoices)
+        if (values.Length > RequestPreparation.MaximumClarificationChoices)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(orderedCanonicalIds),
-                identifiers.Length,
+                nameof(choices),
+                values.Length,
                 $"A clarification cannot contain more than {RequestPreparation.MaximumClarificationChoices} choices.");
         }
 
-        if (identifiers.Distinct(StringComparer.Ordinal).Count() != identifiers.Length)
+        if (values.Any(static choice => choice is null)
+            || values.Any(choice => !MatchesTarget(target, choice)))
+        {
+            throw new ArgumentException(
+                "Clarification choices must match the declared target.",
+                nameof(choices));
+        }
+
+        if (values
+            .Select(static choice => choice.CanonicalId)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != values.Length)
         {
             throw new ArgumentException(
                 "Clarification choice identifiers must be unique.",
-                nameof(orderedCanonicalIds));
+                nameof(choices));
         }
 
         Target = target;
-        OrderedCanonicalIds = Array.AsReadOnly(identifiers);
+        Choices = Array.AsReadOnly(values);
     }
 
     public ClarificationTarget Target { get; }
 
-    public IReadOnlyList<string> OrderedCanonicalIds { get; }
+    public IReadOnlyList<ClarificationChoice> Choices { get; }
 
-    private static string NormalizeIdentifier(string value)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        value = value.Trim();
-        if (value.Length > PreparationCandidate.MaximumIdentifierLength)
+    private static bool MatchesTarget(
+        ClarificationTarget target,
+        ClarificationChoice choice) =>
+        target switch
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value.Length,
-                $"A clarification identifier cannot exceed {PreparationCandidate.MaximumIdentifierLength} characters.");
-        }
-
-        return value;
-    }
+            ClarificationTarget.Environment =>
+                choice is EnvironmentClarificationChoice,
+            ClarificationTarget.Role => choice is RoleClarificationChoice,
+            _ => false,
+        };
 }
 
 public sealed record PreparationClarificationContext
 {
     internal PreparationClarificationContext(
         Guid preparationId,
-        int candidateVersion,
         ClarificationSeed seed,
         DateTimeOffset createdAt)
     {
         ArgumentNullException.ThrowIfNull(seed);
         PreparationId = preparationId;
-        CandidateVersion = candidateVersion;
         Target = seed.Target;
-        OrderedCanonicalIds = seed.OrderedCanonicalIds;
+        Choices = seed.Choices;
         CreatedAt = createdAt.ToUniversalTime();
     }
 
     public Guid PreparationId { get; }
 
-    public int CandidateVersion { get; }
-
     public ClarificationTarget Target { get; }
 
-    public IReadOnlyList<string> OrderedCanonicalIds { get; }
+    public IReadOnlyList<ClarificationChoice> Choices { get; }
 
     public DateTimeOffset CreatedAt { get; }
 }
@@ -425,7 +485,6 @@ public sealed record RequestPreparationPersistenceState(
     IReadOnlyList<MaterialChangeAttribution> MaterialChangeAttributions);
 
 public sealed record PreparationClarificationPersistenceState(
-    int CandidateVersion,
     ClarificationTarget Target,
-    IReadOnlyList<string> OrderedCanonicalIds,
+    IReadOnlyList<ClarificationChoice> Choices,
     DateTimeOffset CreatedAt);

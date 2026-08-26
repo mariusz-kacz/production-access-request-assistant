@@ -120,7 +120,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         Assert.Equal(ClarificationTarget.Environment, result.Clarification?.Target);
         Assert.Equal(
             Enumerable.Range(1, matchCount).Select(index => $"PROD-{index:D2}"),
-            result.Clarification?.OrderedCanonicalIds);
+            result.Clarification?.Choices.Select(choice => choice.CanonicalId));
         Assert.IsType<ClarificationRequired>(result.Outcome);
         AssertResult(result, ProposalField.Environment, OperationResultKind.NeedsClarification);
         AssertSnapshotUnchanged(preparation, existing);
@@ -443,7 +443,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
     }
 
     [Fact]
-    public async Task ValidRoleSelectionMapsStoredOneBasedChoiceAndConsumesContext()
+    public async Task OrdinaryExactRolePatchOutsideDisplayedChoicesIsReloadedAndConsumesContext()
     {
         var authority = new FakePreparationAuthority();
         authority.Roles[("PROD-ALPHA-EU", "ProductionSupport")] = Role(
@@ -455,12 +455,11 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
                 clientId: "client-alpha",
                 justification: "Investigate."),
             ClarificationTarget.Role,
-            "ProductionReadOnly",
-            "ProductionSupport");
+            "ProductionReadOnly");
 
         var result = await Reducer(authority).ReduceAsync(
             preparation,
-            Select(ClarificationTarget.Role, optionIndex: 2),
+            Update(role: new SetRoleOperation("ProductionSupport")),
             CancellationToken.None);
 
         Assert.Equal("ProductionSupport", result.Candidate.RoleId);
@@ -473,7 +472,7 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
     }
 
     [Fact]
-    public async Task EnvironmentSelectionRunsFullPipelineAndCanReplaceContextWithRoleChoices()
+    public async Task OrdinaryExactEnvironmentPatchRunsFullPipelineAndCanCreateRoleContext()
     {
         var authority = new FakePreparationAuthority();
         authority.Environments["PROD-BETA-UK"] = Environment(
@@ -492,78 +491,24 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         var result = await Reducer(authority).ReduceAsync(
             preparation,
-            Select(ClarificationTarget.Environment, optionIndex: 2),
+            Update(environment: new SetEnvironmentOperation(
+                new ExactEnvironmentId("PROD-BETA-UK"))),
             CancellationToken.None);
 
         Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
         Assert.Null(result.Candidate.RoleId);
         Assert.Equal(ClarificationContextDisposition.Replace, result.ClarificationDisposition);
         Assert.Equal(ClarificationTarget.Role, result.Clarification?.Target);
-        Assert.Equal(["Role-01", "Role-02"], result.Clarification?.OrderedCanonicalIds);
+        Assert.Equal(
+            ["Role-01", "Role-02"],
+            result.Clarification?.Choices.Select(choice => choice.CanonicalId));
         Assert.Equal(["PROD-BETA-UK"], authority.EnvironmentGetCalls);
         Assert.Equal(1, authority.RoleListCallCount);
         AssertSnapshotWithContextUnchanged(preparation);
     }
 
-    [Theory]
-    [InlineData(ClarificationTarget.Environment, 1)]
-    [InlineData(ClarificationTarget.Role, 0)]
-    [InlineData(ClarificationTarget.Role, 3)]
-    public async Task MismatchedOrOutOfRangeSelectionPreservesCandidateAndContext(
-        ClarificationTarget selectedTarget,
-        int optionIndex)
-    {
-        var preparation = PreparationWithClarification(
-            Candidate(
-                environmentId: "PROD-ALPHA-EU",
-                clientId: "client-alpha",
-                justification: "Investigate."),
-            ClarificationTarget.Role,
-            "ProductionReadOnly",
-            "ProductionSupport");
-        var proposal = optionIndex < 1
-            ? SelectWithInvalidIndex(selectedTarget, optionIndex)
-            : Select(selectedTarget, optionIndex);
-
-        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
-            preparation,
-            proposal,
-            CancellationToken.None);
-
-        Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedInvalid);
-        AssertSnapshotWithContextUnchanged(preparation);
-    }
-
     [Fact]
-    public async Task StaleCandidateVersionRejectsSelectionAndClearsUnusableContext()
-    {
-        var preparation = PreparationWithClarification(
-            Candidate(
-                environmentId: "PROD-ALPHA-EU",
-                clientId: "client-alpha",
-                justification: "Investigate."),
-            ClarificationTarget.Role,
-            "ProductionReadOnly");
-        SetPrivateProperty(
-            preparation,
-            nameof(RequestPreparation.CandidateVersion),
-            preparation.CandidateVersion + 1);
-
-        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
-            preparation,
-            Select(ClarificationTarget.Role, optionIndex: 1),
-            CancellationToken.None);
-
-        Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Equal(ClarificationContextDisposition.Clear, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedInvalid);
-        Assert.Empty(result.ChangedFields);
-    }
-
-    [Fact]
-    public async Task SelectedRoleThatIsNoLongerAssignableClearsStaleContextAndPreservesCandidate()
+    public async Task InvalidExactRolePatchPreservesCandidateAndActiveContext()
     {
         var preparation = PreparationWithClarification(
             Candidate(
@@ -576,30 +521,126 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
 
         var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
             preparation,
-            Select(ClarificationTarget.Role, optionIndex: 1),
+            Update(role: new SetRoleOperation("ProductionDeployment")),
             CancellationToken.None);
 
         Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Equal(ClarificationContextDisposition.Clear, result.ClarificationDisposition);
+        Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
         AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
         AssertSnapshotWithContextUnchanged(preparation);
     }
 
     [Fact]
-    public async Task MissingClarificationContextRejectsWithoutGuessingOrAuthorityCalls()
+    public async Task AuthoritativelyStaleDisplayedRoleChoiceInvalidatesContext()
     {
-        var authority = new FakePreparationAuthority();
-        var preparation = EmptyPreparation();
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: "PROD-ALPHA-EU",
+                clientId: "client-alpha",
+                roleId: "ProductionReadOnly",
+                justification: "Investigate."),
+            ClarificationTarget.Role,
+            "ProductionSupport");
 
-        var result = await Reducer(authority).ReduceAsync(
+        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
             preparation,
-            Select(ClarificationTarget.Environment, optionIndex: 1),
+            Update(role: new SetRoleOperation("ProductionSupport")),
             CancellationToken.None);
 
         Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Environment, OperationResultKind.RejectedInvalid);
-        Assert.Empty(authority.EnvironmentGetCalls);
+        Assert.Equal(
+            ClarificationContextDisposition.Clear,
+            result.ClarificationDisposition);
+        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+    }
+
+    [Fact]
+    public async Task AuthoritativelyStaleDisplayedEnvironmentChoiceInvalidatesContext()
+    {
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: null,
+                clientId: null,
+                justification: "Investigate."),
+            ClarificationTarget.Environment,
+            "PROD-BETA-UK");
+
+        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
+            preparation,
+            Update(environment: new SetEnvironmentOperation(
+                new ExactEnvironmentId("PROD-BETA-UK"))),
+            CancellationToken.None);
+
+        Assert.Same(preparation.Candidate, result.Candidate);
+        Assert.Equal(
+            ClarificationContextDisposition.Clear,
+            result.ClarificationDisposition);
+        AssertResult(
+            result,
+            ProposalField.Environment,
+            OperationResultKind.RejectedUnavailable);
+    }
+
+    [Fact]
+    public async Task TransientRoleReloadFailurePreservesDisplayedChoiceContext()
+    {
+        var authority = new FakePreparationAuthority
+        {
+            RoleFailure = Failure(
+                ApplicationFailureKind.DependencyUnavailable,
+                "role-source-unavailable"),
+        };
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: "PROD-ALPHA-EU",
+                clientId: "client-alpha",
+                justification: "Investigate."),
+            ClarificationTarget.Role,
+            "ProductionSupport");
+
+        var result = await Reducer(authority).ReduceAsync(
+            preparation,
+            Update(role: new SetRoleOperation("ProductionSupport")),
+            CancellationToken.None);
+
+        Assert.Same(preparation.Candidate, result.Candidate);
+        Assert.Equal(
+            ClarificationContextDisposition.Preserve,
+            result.ClarificationDisposition);
+        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedUnavailable);
+    }
+
+    [Fact]
+    public async Task TransientEnvironmentReloadFailurePreservesDisplayedChoiceContext()
+    {
+        var authority = new FakePreparationAuthority
+        {
+            EnvironmentFailure = Failure(
+                ApplicationFailureKind.DependencyUnavailable,
+                "environment-source-unavailable"),
+        };
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: null,
+                clientId: null,
+                justification: "Investigate."),
+            ClarificationTarget.Environment,
+            "PROD-BETA-UK");
+
+        var result = await Reducer(authority).ReduceAsync(
+            preparation,
+            Update(environment: new SetEnvironmentOperation(
+                new ExactEnvironmentId("PROD-BETA-UK"))),
+            CancellationToken.None);
+
+        Assert.Same(preparation.Candidate, result.Candidate);
+        Assert.Equal(
+            ClarificationContextDisposition.Preserve,
+            result.ClarificationDisposition);
+        AssertResult(
+            result,
+            ProposalField.Environment,
+            OperationResultKind.RejectedUnavailable);
     }
 
     [Fact]
@@ -904,38 +945,6 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
     }
 
     [Fact]
-    public async Task ClarificationContextBoundToAnotherPreparationIsRejectedWithoutConsumption()
-    {
-        var preparation = PreparationWithClarification(
-            Candidate(
-                environmentId: "PROD-ALPHA-EU",
-                clientId: "client-alpha",
-                justification: "Investigate."),
-            ClarificationTarget.Role,
-            "ProductionReadOnly");
-        var foreignContext = new PreparationClarificationContext(
-            Guid.NewGuid(),
-            preparation.CandidateVersion,
-            new ClarificationSeed(
-                ClarificationTarget.Role,
-                ["ProductionReadOnly"]),
-            CreatedAt);
-        SetPrivateProperty(
-            preparation,
-            nameof(RequestPreparation.Clarification),
-            foreignContext);
-
-        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
-            preparation,
-            Select(ClarificationTarget.Role, optionIndex: 1),
-            CancellationToken.None);
-
-        Assert.Equal(ClarificationContextDisposition.Preserve, result.ClarificationDisposition);
-        AssertResult(result, ProposalField.Role, OperationResultKind.RejectedInvalid);
-        Assert.Same(foreignContext, preparation.Clarification);
-    }
-
-    [Fact]
     public async Task NoOpPatchDoesNotReplaceAnExistingHigherPriorityClarification()
     {
         var authority = new FakePreparationAuthority();
@@ -960,5 +969,96 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
         AssertResult(result, ProposalField.Justification, OperationResultKind.NoOpValueEqual);
         Assert.Same(preparation.Candidate, result.Candidate);
     }
-}
 
+    [Fact]
+    public async Task IndependentJustificationUpdatePreservesActiveEnvironmentClarification()
+    {
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: "PROD-ALPHA-EU",
+                clientId: "client-alpha",
+                roleId: "ProductionReadOnly",
+                justification: "Investigate."),
+            ClarificationTarget.Environment,
+            "PROD-ALPHA-US",
+            "PROD-BETA-UK");
+
+        var result = await Reducer(new FakePreparationAuthority()).ReduceAsync(
+            preparation,
+            Update(justification: Justification("Investigate customer impact.")),
+            CancellationToken.None);
+
+        Assert.Equal("Investigate customer impact.", result.Candidate.Justification);
+        Assert.Equal(
+            ClarificationContextDisposition.Preserve,
+            result.ClarificationDisposition);
+        Assert.Null(result.Clarification);
+        AssertResult(result, ProposalField.Justification, OperationResultKind.Applied);
+        AssertSnapshotWithContextUnchanged(preparation);
+    }
+
+    [Fact]
+    public async Task ValueEqualExactRolePatchPreservesActiveRoleClarification()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.Roles[("PROD-ALPHA-EU", "ProductionReadOnly")] = Role(
+            "PROD-ALPHA-EU",
+            "ProductionReadOnly");
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: "PROD-ALPHA-EU",
+                clientId: "client-alpha",
+                roleId: "ProductionReadOnly",
+                justification: "Investigate."),
+            ClarificationTarget.Role,
+            "ProductionReadOnly",
+            "ProductionSupport");
+
+        var result = await Reducer(authority).ReduceAsync(
+            preparation,
+            Update(role: new SetRoleOperation("ProductionReadOnly")),
+            CancellationToken.None);
+
+        Assert.Same(preparation.Candidate, result.Candidate);
+        Assert.Equal(
+            ClarificationContextDisposition.Preserve,
+            result.ClarificationDisposition);
+        AssertResult(result, ProposalField.Role, OperationResultKind.NoOpValueEqual);
+    }
+
+    [Fact]
+    public async Task AcceptedEnvironmentChangeClearsActiveRoleContextWhenRoleRemainsAssignable()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.Environments["PROD-BETA-UK"] = Environment(
+            "PROD-BETA-UK",
+            "client-beta");
+        authority.Roles[("PROD-BETA-UK", "ProductionReadOnly")] = Role(
+            "PROD-BETA-UK",
+            "ProductionReadOnly");
+        var preparation = PreparationWithClarification(
+            Candidate(
+                environmentId: "PROD-ALPHA-EU",
+                clientId: "client-alpha",
+                roleId: "ProductionReadOnly",
+                justification: "Investigate."),
+            ClarificationTarget.Role,
+            "ProductionReadOnly",
+            "ProductionSupport");
+
+        var result = await Reducer(authority).ReduceAsync(
+            preparation,
+            Update(environment: new SetEnvironmentOperation(
+                new ExactEnvironmentId("PROD-BETA-UK"))),
+            CancellationToken.None);
+
+        Assert.Equal("PROD-BETA-UK", result.Candidate.EnvironmentId);
+        Assert.Equal("ProductionReadOnly", result.Candidate.RoleId);
+        Assert.Equal(
+            ClarificationContextDisposition.Clear,
+            result.ClarificationDisposition);
+        Assert.Null(result.Clarification);
+        Assert.Equal(["PROD-BETA-UK"], authority.EnvironmentGetCalls);
+        Assert.Equal(1, authority.RoleGetCallCount);
+    }
+}

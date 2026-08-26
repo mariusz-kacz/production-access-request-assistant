@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 using Microsoft.Extensions.Configuration;
 using System.Globalization;
@@ -170,22 +171,61 @@ internal sealed record AgentModelMetadata
 
 internal sealed record AgentClarificationChoice
 {
-    internal AgentClarificationChoice(string canonicalId, string displayText)
+    internal AgentClarificationChoice(
+        int position,
+        string canonicalId,
+        string displayName,
+        string? clientId,
+        string? clientDisplayName,
+        string? region,
+        EnvironmentClassification? environmentClassification)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(position, 1);
         ArgumentException.ThrowIfNullOrWhiteSpace(canonicalId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(displayText);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        if (environmentClassification.HasValue
+            && !Enum.IsDefined(environmentClassification.Value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(environmentClassification));
+        }
+
+        var hasEnvironmentFields = clientId is not null
+            || clientDisplayName is not null
+            || region is not null
+            || environmentClassification is not null;
+        if (hasEnvironmentFields
+            && (string.IsNullOrWhiteSpace(clientId)
+                || string.IsNullOrWhiteSpace(clientDisplayName)
+                || string.IsNullOrWhiteSpace(region)
+                || environmentClassification is null))
+        {
+            throw new ArgumentException(
+                "Environment clarification display fields must be complete.");
+        }
+
+        Position = position;
         CanonicalId = canonicalId.Trim();
-        DisplayText = displayText.Trim();
+        DisplayName = displayName.Trim();
+        ClientId = clientId?.Trim();
+        ClientDisplayName = clientDisplayName?.Trim();
+        Region = region?.Trim();
+        EnvironmentClassification = environmentClassification;
     }
 
+    internal int Position { get; }
     internal string CanonicalId { get; }
-    internal string DisplayText { get; }
+    internal string DisplayName { get; }
+    internal string? ClientId { get; }
+    internal string? ClientDisplayName { get; }
+    internal string? Region { get; }
+    internal EnvironmentClassification? EnvironmentClassification { get; }
 }
 
 internal sealed record AgentClarificationContext
 {
     internal AgentClarificationContext(
         ClarificationTarget target,
+        DateTimeOffset createdAt,
         IEnumerable<AgentClarificationChoice> choices)
     {
         if (!Enum.IsDefined(target))
@@ -196,16 +236,35 @@ internal sealed record AgentClarificationContext
         ArgumentNullException.ThrowIfNull(choices);
         var values = choices.ToArray();
         if (values.Length is < 1 or > RequestPreparation.MaximumClarificationChoices
-            || values.Any(static value => value is null))
+            || values.Any(static value => value is null)
+            || values.Select(static value => value.Position)
+                .SequenceEqual(Enumerable.Range(1, values.Length)) is false)
         {
             throw new ArgumentOutOfRangeException(nameof(choices));
         }
 
+        var choicesMatchTarget = target switch
+        {
+            ClarificationTarget.Environment => values.All(
+                static choice => choice.EnvironmentClassification is not null),
+            ClarificationTarget.Role => values.All(
+                static choice => choice.EnvironmentClassification is null),
+            _ => false,
+        };
+        if (!choicesMatchTarget)
+        {
+            throw new ArgumentException(
+                "Agent clarification choices must match their target.",
+                nameof(choices));
+        }
+
         Target = target;
+        CreatedAt = createdAt.ToUniversalTime();
         Choices = Array.AsReadOnly(values);
     }
 
     internal ClarificationTarget Target { get; }
+    internal DateTimeOffset CreatedAt { get; }
     internal IReadOnlyList<AgentClarificationChoice> Choices { get; }
 }
 

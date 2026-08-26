@@ -1,13 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Workflow.Persistence;
 
 internal static class RequestPreparationRecordMapper
 {
-    private const int MaximumClarificationJsonLength = 4_096;
+    private const int MaximumClarificationJsonLength = 32_768;
     private const int MaximumAttributionJsonLength = 131_072;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -122,9 +123,8 @@ internal static class RequestPreparationRecordMapper
             ? null
             : JsonSerializer.Serialize(
                 new PersistedClarification(
-                    clarification.CandidateVersion,
                     clarification.Target,
-                    [.. clarification.OrderedCanonicalIds],
+                    clarification.Choices.Select(ToPersistedChoice).ToArray(),
                     clarification.CreatedAt),
                 JsonOptions);
 
@@ -140,15 +140,16 @@ internal static class RequestPreparationRecordMapper
             json,
             MaximumClarificationJsonLength,
             "Stored clarification JSON is invalid.");
-        if (value.OrderedCanonicalIds is null)
+        if (value.Choices is null)
         {
             throw new InvalidOperationException("Stored clarification JSON is invalid.");
         }
 
         return new PreparationClarificationPersistenceState(
-            value.CandidateVersion,
             value.Target,
-            value.OrderedCanonicalIds,
+            value.Choices.Select(choice => ToClarificationChoice(
+                value.Target,
+                choice)).ToArray(),
             value.CreatedAt);
     }
 
@@ -217,11 +218,69 @@ internal static class RequestPreparationRecordMapper
             attribution.OccurredAt,
             attribution.CorrelationId);
 
+    private static PersistedClarificationChoice ToPersistedChoice(
+        ClarificationChoice choice) =>
+        choice switch
+        {
+            EnvironmentClarificationChoice environment => new(
+                environment.CanonicalId,
+                environment.DisplayName,
+                environment.ClientId,
+                environment.ClientDisplayName,
+                environment.Region,
+                environment.Classification),
+            RoleClarificationChoice role => new(
+                role.CanonicalId,
+                role.DisplayName,
+                ClientId: null,
+                ClientDisplayName: null,
+                Region: null,
+                Classification: null),
+            _ => throw new InvalidOperationException(
+                "Stored clarification choice type is invalid."),
+        };
+
+    private static ClarificationChoice ToClarificationChoice(
+        ClarificationTarget target,
+        PersistedClarificationChoice choice) =>
+        target switch
+        {
+            ClarificationTarget.Environment
+                when choice.ClientId is not null
+                    && choice.ClientDisplayName is not null
+                    && choice.Region is not null
+                    && choice.Classification is not null =>
+                new EnvironmentClarificationChoice(
+                    choice.CanonicalId,
+                    choice.DisplayName,
+                    choice.ClientId,
+                    choice.ClientDisplayName,
+                    choice.Region,
+                    choice.Classification.Value),
+            ClarificationTarget.Role
+                when choice.ClientId is null
+                    && choice.ClientDisplayName is null
+                    && choice.Region is null
+                    && choice.Classification is null =>
+                new RoleClarificationChoice(
+                    choice.CanonicalId,
+                    choice.DisplayName),
+            _ => throw new InvalidOperationException(
+                "Stored clarification choice is invalid for its target."),
+        };
+
     private sealed record PersistedClarification(
-        int CandidateVersion,
         ClarificationTarget Target,
-        string[] OrderedCanonicalIds,
+        PersistedClarificationChoice[] Choices,
         DateTimeOffset CreatedAt);
+
+    private sealed record PersistedClarificationChoice(
+        string CanonicalId,
+        string DisplayName,
+        string? ClientId,
+        string? ClientDisplayName,
+        string? Region,
+        EnvironmentClassification? Classification);
 
     private sealed record PersistedAttribution(
         ProposalField[] Fields,

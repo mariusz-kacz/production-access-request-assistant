@@ -50,7 +50,9 @@ public static class EnvironmentSearchPolicy
                     document.EnvironmentId,
                     document.DisplayName,
                     document.ClientId,
-                    document.ClientDisplayName));
+                    document.ClientDisplayName,
+                    document.Region,
+                    document.Classification));
         }
 
         matches.Sort(

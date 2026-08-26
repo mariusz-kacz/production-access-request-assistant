@@ -16,12 +16,6 @@ public sealed class TurnProposalJsonTranslatorTests
         },
         {
             """
-            {"schemaVersion":1,"dialogueAct":"selectClarification","clarificationSelection":{"target":"environment","optionIndex":1}}
-            """,
-            DialogueAct.SelectClarification
-        },
-        {
-            """
             {"schemaVersion":1,"dialogueAct":"discussDraft","discussionTopic":"currentDraft"}
             """,
             DialogueAct.DiscussDraft
@@ -47,6 +41,7 @@ public sealed class TurnProposalJsonTranslatorTests
         """{"schemaVersion":1,"dialogueAct":"updateDraft"}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{}}""",
         """{"schemaVersion":1,"dialogueAct":"unclear","patch":{"role":{"operation":"clear"}}}""",
+        """{"schemaVersion":1,"dialogueAct":"selectClarification","clarificationSelection":{"target":"environment","optionIndex":1}}""",
         """{"schemaVersion":1,"dialogueAct":"selectClarification"}""",
         """{"schemaVersion":1,"dialogueAct":"discussDraft","discussionTopic":"invented"}""",
         """{"schemaVersion":1,"dialogueAct":"requestSubmission","discussionTopic":"currentDraft"}""",
@@ -87,7 +82,6 @@ public sealed class TurnProposalJsonTranslatorTests
         Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(
             [
-                "clarificationSelection",
                 "dialogueAct",
                 "discussionTopic",
                 "patch",
@@ -102,6 +96,30 @@ public sealed class TurnProposalJsonTranslatorTests
             schema.GetRawText(),
             StringComparison.OrdinalIgnoreCase);
         AssertAllObjectSchemasAreClosed(schema);
+    }
+
+    [Fact]
+    public void ProviderContractRejectsTheDeprecatedClarificationSelectionProtocol()
+    {
+        const string payload =
+            """
+            {"schemaVersion":1,"dialogueAct":"selectClarification","clarificationSelection":{"target":"environment","optionIndex":1}}
+            """;
+
+        Assert.False(TurnProposalJsonTranslator.TryTranslate(payload, out var proposal));
+        Assert.Null(proposal);
+        Assert.DoesNotContain(
+            "selectClarification",
+            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "clarificationSelection",
+            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "optionIndex",
+            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
+            StringComparison.Ordinal);
     }
 
     private static void AssertAllObjectSchemasAreClosed(JsonElement element)

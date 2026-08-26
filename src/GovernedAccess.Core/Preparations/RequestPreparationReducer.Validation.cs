@@ -17,24 +17,16 @@ public sealed partial class RequestPreparationReducer
         {
             DialogueAct.UpdateDraft =>
                 proposal.Patch is not null
-                && proposal.ClarificationSelection is null
                 && proposal.DiscussionTopic is null
                 && IsStructurallyValid(proposal.Patch),
-            DialogueAct.SelectClarification =>
-                proposal.Patch is null
-                && proposal.ClarificationSelection is { } selection
-                && Enum.IsDefined(selection.Target)
-                && proposal.DiscussionTopic is null,
             DialogueAct.DiscussDraft =>
                 proposal.Patch is null
-                && proposal.ClarificationSelection is null
                 && proposal.DiscussionTopic is { } topic
                 && Enum.IsDefined(topic),
             DialogueAct.RequestSubmission
                 or DialogueAct.Unrelated
                 or DialogueAct.Unclear =>
                 proposal.Patch is null
-                && proposal.ClarificationSelection is null
                 && proposal.DiscussionTopic is null,
             _ => false,
         };

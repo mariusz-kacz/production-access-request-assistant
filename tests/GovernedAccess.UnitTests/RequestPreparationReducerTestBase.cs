@@ -50,26 +50,6 @@ public abstract class RequestPreparationReducerTestBase
             DialogueAct.UpdateDraft,
             patch: new DraftPatch(environment, role, justification, incident));
 
-    protected static TurnProposal Select(
-        ClarificationTarget target,
-        int optionIndex) =>
-        new(
-            TurnProposal.CurrentSchemaVersion,
-            DialogueAct.SelectClarification,
-            clarificationSelection: new ClarificationSelection(target, optionIndex));
-
-    protected static TurnProposal SelectWithInvalidIndex(
-        ClarificationTarget target,
-        int optionIndex)
-    {
-        var proposal = Select(target, optionIndex: 1);
-        SetPrivateProperty(
-            proposal.ClarificationSelection!,
-            nameof(ClarificationSelection.OptionIndex),
-            optionIndex);
-        return proposal;
-    }
-
     protected static SetJustificationOperation Justification(string text) =>
         new(
             new JustificationProposal(
@@ -98,7 +78,9 @@ public abstract class RequestPreparationReducerTestBase
                         $"PROD-{index:D2}",
                         $"Environment {index}",
                         $"client-{index:D2}",
-                        $"Client {index}")));
+                        $"Client {index}",
+                        $"region-{index:D2}",
+                        EnvironmentClassification.Primary)));
 
     protected static IncidentAuthorityProjection Incident(
         string incidentId,
@@ -171,7 +153,22 @@ public abstract class RequestPreparationReducerTestBase
         RequestPreparation.CreateRoot(
             Binding(),
             candidate,
-            new ClarificationSeed(target, choices),
+            new ClarificationSeed(
+                target,
+                choices.Select(choice => target switch
+                {
+                    ClarificationTarget.Environment =>
+                        (ClarificationChoice)new EnvironmentClarificationChoice(
+                            choice,
+                            $"{choice} display",
+                            "client-context",
+                            "Context Client",
+                            "context-region",
+                            EnvironmentClassification.Primary),
+                    ClarificationTarget.Role =>
+                        new RoleClarificationChoice(choice, $"{choice} display"),
+                    _ => throw new InvalidOperationException(),
+                })),
             Attribution(candidate.ChangedFieldsFrom(PreparationCandidate.Empty)),
             CreatedAt,
             "reducer-test");

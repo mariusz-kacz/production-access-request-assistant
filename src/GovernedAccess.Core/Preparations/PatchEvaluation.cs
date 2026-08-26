@@ -7,6 +7,7 @@ internal sealed class PatchEvaluation
 {
     private readonly PreparationCandidate current;
     private readonly Dictionary<ProposalField, OperationResultKind> operationResults = [];
+    private readonly HashSet<ProposalField> authoritativelyInvalidFields = [];
 
     internal PatchEvaluation(PreparationCandidate current)
     {
@@ -44,6 +45,12 @@ internal sealed class PatchEvaluation
         OperationResultKind expected) =>
         operationResults.TryGetValue(field, out var actual)
         && actual != expected;
+
+    internal void RecordAuthoritativelyInvalid(ProposalField field) =>
+        authoritativelyInvalidFields.Add(field);
+
+    internal bool IsAuthoritativelyInvalid(ProposalField field) =>
+        authoritativelyInvalidFields.Contains(field);
 
     internal PreparationCandidate ToCandidate()
     {

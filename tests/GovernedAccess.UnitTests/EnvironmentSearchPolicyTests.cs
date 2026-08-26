@@ -189,13 +189,20 @@ public sealed class EnvironmentSearchPolicyTests
     }
 
     [Fact]
-    public void SearchReturnsImmutableTransportSafeMatchesWithoutSearchFacts()
+    public void SearchReturnsImmutableTransportSafeMatchesWithDistinguishingFacts()
     {
         var result = EnvironmentSearchPolicy.Search("alpha", [CreateDocument(1)]);
         var match = Assert.Single(result.Matches);
 
         Assert.Equal(
-            ["ClientDisplayName", "ClientId", "DisplayName", "EnvironmentId"],
+            [
+                "Classification",
+                "ClientDisplayName",
+                "ClientId",
+                "DisplayName",
+                "EnvironmentId",
+                "Region",
+            ],
             match.GetType()
                 .GetProperties()
                 .Select(property => property.Name)

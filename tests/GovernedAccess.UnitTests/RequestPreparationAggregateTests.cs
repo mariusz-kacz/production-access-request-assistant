@@ -1,4 +1,5 @@
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.UnitTests;
@@ -120,7 +121,7 @@ public sealed class RequestPreparationAggregateTests
                 incidentId: null),
             new ClarificationSeed(
                 ClarificationTarget.Role,
-                ["ProductionReadOnly", "ProductionSupport"]),
+                RoleChoices("ProductionReadOnly", "ProductionSupport")),
             Attribution(ProposalField.Environment),
             CreatedAt.AddMinutes(1),
             "environment-and-role-context");
@@ -131,11 +132,10 @@ public sealed class RequestPreparationAggregateTests
         var clarification = Assert.IsType<PreparationClarificationContext>(
             preparation.Clarification);
         Assert.Equal(preparation.PreparationId, clarification.PreparationId);
-        Assert.Equal(2, clarification.CandidateVersion);
         Assert.Equal(ClarificationTarget.Role, clarification.Target);
         Assert.Equal(
             ["ProductionReadOnly", "ProductionSupport"],
-            clarification.OrderedCanonicalIds);
+            clarification.Choices.Select(choice => choice.CanonicalId));
     }
 
     [Fact]
@@ -149,13 +149,12 @@ public sealed class RequestPreparationAggregateTests
         preparation.SetClarification(
             new ClarificationSeed(
                 ClarificationTarget.Environment,
-                ["PROD-ALPHA-EU", "PROD-BETA-UK"]),
+                EnvironmentChoices("PROD-ALPHA-EU", "PROD-BETA-UK")),
             CreatedAt.AddMinutes(1),
             "clarification");
 
         Assert.Equal(0, preparation.CandidateVersion);
         Assert.Equal(2, preparation.ConcurrencyVersion);
-        Assert.Equal(0, preparation.Clarification?.CandidateVersion);
         Assert.Equal(CreatedAt.AddMinutes(1), preparation.UpdatedAt);
     }
 
@@ -167,7 +166,7 @@ public sealed class RequestPreparationAggregateTests
             CompleteCandidate(),
             new ClarificationSeed(
                 ClarificationTarget.Role,
-                ["ProductionReadOnly", "ProductionSupport"]),
+                RoleChoices("ProductionReadOnly", "ProductionSupport")),
             Attribution(ProposalField.Environment, ProposalField.Role, ProposalField.Justification),
             CreatedAt,
             "root-with-context");
@@ -254,7 +253,7 @@ public sealed class RequestPreparationAggregateTests
             ready.Candidate,
             new ClarificationSeed(
                 ClarificationTarget.Environment,
-                ["PROD-ALPHA-EU", "PROD-BETA-UK"]),
+                EnvironmentChoices("PROD-ALPHA-EU", "PROD-BETA-UK")),
             attribution: null,
             CreatedAt.AddMinutes(4),
             "revision-clarification");
@@ -263,7 +262,6 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(ready.PreparationId, successor.PredecessorPreparationId);
         Assert.Equal(ready.Candidate, successor.Candidate);
         Assert.Equal(1, successor.CandidateVersion);
-        Assert.Equal(1, successor.Clarification?.CandidateVersion);
         Assert.Empty(successor.MaterialChangeAttributions);
     }
 
@@ -291,7 +289,7 @@ public sealed class RequestPreparationAggregateTests
             () => ready.SetClarification(
                 new ClarificationSeed(
                     ClarificationTarget.Role,
-                    ["ProductionReadOnly"]),
+                    RoleChoices("ProductionReadOnly")),
                 CreatedAt.AddMinutes(2),
                 "forbidden"));
     }
@@ -320,26 +318,31 @@ public sealed class RequestPreparationAggregateTests
     [Fact]
     public void ClarificationIsBoundedOrderedAndUnique()
     {
-        var fiveChoices = Enumerable.Range(1, RequestPreparation.MaximumClarificationChoices)
-            .Select(index => $"PROD-{index}")
-            .ToArray();
+        var fiveChoices = EnvironmentChoices(
+            Enumerable.Range(1, RequestPreparation.MaximumClarificationChoices)
+                .Select(index => $"PROD-{index}")
+                .ToArray());
         var seed = new ClarificationSeed(
             ClarificationTarget.Environment,
             fiveChoices);
 
-        Assert.Equal(fiveChoices, seed.OrderedCanonicalIds);
+        Assert.Equal(fiveChoices, seed.Choices);
         Assert.Throws<ArgumentException>(
             () => new ClarificationSeed(
                 ClarificationTarget.Environment,
-                ["PROD-1", "PROD-1"]));
+                EnvironmentChoices("PROD-1", "PROD-1")));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new ClarificationSeed(
                 ClarificationTarget.Environment,
-                fiveChoices.Append("PROD-6")));
+                fiveChoices.Append(EnvironmentChoice("PROD-6"))));
         Assert.Throws<ArgumentException>(
             () => new ClarificationSeed(
                 ClarificationTarget.Environment,
-                []));
+                Array.Empty<ClarificationChoice>()));
+        Assert.Throws<ArgumentException>(
+            () => new ClarificationSeed(
+                ClarificationTarget.Environment,
+                RoleChoices("ProductionReadOnly")));
     }
 
     [Fact]
@@ -393,7 +396,7 @@ public sealed class RequestPreparationAggregateTests
                 CompleteCandidate(),
                 new ClarificationSeed(
                     ClarificationTarget.Role,
-                    ["ProductionReadOnly", "ProductionSupport"]),
+                    RoleChoices("ProductionReadOnly", "ProductionSupport")),
                 Attribution(ProposalField.Environment, ProposalField.Role, ProposalField.Justification),
                 CreatedAt,
                 "collecting")
@@ -463,7 +466,7 @@ public sealed class RequestPreparationAggregateTests
                 incidentId: null),
             new ClarificationSeed(
                 ClarificationTarget.Role,
-                ["ProductionReadOnly", "ProductionSupport"]),
+                RoleChoices("ProductionReadOnly", "ProductionSupport")),
             Attribution(ProposalField.Environment, ProposalField.Justification),
             CreatedAt,
             "persisted-root");
@@ -482,9 +485,8 @@ public sealed class RequestPreparationAggregateTests
             preparation.ConcurrencyVersion,
             preparation.InterpretedTurnCount,
             new PreparationClarificationPersistenceState(
-                clarification.CandidateVersion,
                 clarification.Target,
-                clarification.OrderedCanonicalIds,
+                clarification.Choices,
                 clarification.CreatedAt),
             preparation.CreatedAt,
             preparation.UpdatedAt,
@@ -509,11 +511,10 @@ public sealed class RequestPreparationAggregateTests
         var restoredClarification = Assert.IsType<PreparationClarificationContext>(
             restored.Clarification);
         Assert.Equal(expectedClarification.PreparationId, restoredClarification.PreparationId);
-        Assert.Equal(expectedClarification.CandidateVersion, restoredClarification.CandidateVersion);
         Assert.Equal(expectedClarification.Target, restoredClarification.Target);
         Assert.Equal(
-            expectedClarification.OrderedCanonicalIds,
-            restoredClarification.OrderedCanonicalIds);
+            expectedClarification.Choices,
+            restoredClarification.Choices);
         Assert.Equal(expectedClarification.CreatedAt, restoredClarification.CreatedAt);
         Assert.Equal(preparation.CreatedAt, restored.CreatedAt);
         Assert.Equal(preparation.UpdatedAt, restored.UpdatedAt);
@@ -572,6 +573,27 @@ public sealed class RequestPreparationAggregateTests
             "schema-v1",
             CreatedAt,
             "correlation");
+
+    private static RoleClarificationChoice[] RoleChoices(params string[] roleIds) =>
+        roleIds
+            .Select(roleId => new RoleClarificationChoice(
+                roleId,
+                $"{roleId} display"))
+            .ToArray();
+
+    private static EnvironmentClarificationChoice[] EnvironmentChoices(
+        params string[] environmentIds) =>
+        environmentIds.Select(EnvironmentChoice).ToArray();
+
+    private static EnvironmentClarificationChoice EnvironmentChoice(
+        string environmentId) =>
+        new(
+            environmentId,
+            $"{environmentId} display",
+            "client-alpha",
+            "Client Alpha",
+            "EU",
+            EnvironmentClassification.Primary);
 
     private static int GetGuidVersion(Guid value) =>
         (value.ToByteArray()[7] >> 4) & 0x0f;
