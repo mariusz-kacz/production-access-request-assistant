@@ -5,6 +5,7 @@
 - **Refined:** 2026-08-25 so exact environment proposals use exact reload without Core search replay
 - **Replanned:** 2026-08-25 for an extractable reference-authority module and two independent target databases
 - **Refined:** 2026-08-26 to replace the special clarification-selection protocol with ordinary sparse exact-ID patches
+- **Refined:** 2026-08-26 to share final Teams transport and card-presentation primitives without coupling the delivered and target intake graphs
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Primary authority:** `SPEC-deterministic-request-intake.md`
 - **Task-list target:** This file is both the plan and the ordered task checklist
@@ -54,6 +55,22 @@ The implementation uses parallel construction, not compatibility mutation:
    flag, per-request router, shadow mutation, or dual write.
 6. Delete the delivered path immediately after the switch.
 
+Parallel construction applies to the authoritative intake graphs, not to identical
+Teams SDK mechanics. Existing delivered Teams code may be behavior-preservingly
+refactored to extract Web-owned transport and pure presentation primitives for reuse by
+the target adapter when all of the following hold:
+
+- the shared code references neither delivered nor target preparation, proposal,
+  persistence, authority, orchestration, or confirmation types;
+- it performs no old/target selection, routing, conversion, fallback, or synchronization;
+- it remains useful and unchanged after the delivered path is deleted in Task 15; and
+- delivered characterization and production-composition tests remain green throughout.
+
+The two flows retain separate thin semantic adapters, authoritative fact assembly,
+closed action-payload handling, and confirmation services. This reuse rule narrows
+temporary presentation duplication without changing ADR 0011's isolated target proof
+or atomic production cutover.
+
 Target code must never adapt a delivered full-candidate snapshot into a sparse proposal,
 share mutable aggregate backing state with `RequestIntakeSession`, or expose legacy
 aliases such as `Id`/`PreparationId` or `PersistenceVersion`/`ConcurrencyVersion` on one
@@ -63,7 +80,7 @@ type. There is no `TaskNineCompatibilityAttribute` or equivalent task-number mar
 
 | Area | Authority before cutover | Target construction rule |
 |---|---|---|
-| Production Teams intake | Delivered `TeamsAccessRequestAgent` graph | Target agent is registered only by the isolated test host until Task 14. |
+| Production Teams intake | Delivered `TeamsAccessRequestAgent` graph | A thin target agent is registered only by the isolated test host until Task 14; both adapters may use final Web-owned transport and pure presentation primitives that satisfy the reuse rule above. |
 | Canonical preparation | Delivered `RequestIntakeSession` | New `RequestPreparation` owns only target state; it never reads or writes a delivered session. |
 | Proposal interpretation | Delivered full-candidate interpreter | New interpreter emits only `TurnProposal`; no translation exists between proposal models. |
 | Persistence | Delivered unified `GovernedAccessDbContext` and database | New target `ReferenceAuthority` and `Workflow.Persistence` projects own separate databases used only by the isolated target composition until Task 14; no entity, row, file, or migration is shared or copied. |
@@ -83,6 +100,11 @@ Only these coexistence points are allowed. They are not aggregate compatibility 
 
 Any additional bridge, alias, dual write, fallback, or synchronization mechanism is a
 material plan change and requires human review.
+
+Shared Teams transport and pure presentation primitives satisfying the reuse rule are
+final implementation components, not an additional coexistence seam. A component that
+accepts either preparation model, translates between flows, or exists only until Task
+15 is a prohibited compatibility seam rather than reusable infrastructure.
 
 ### Database transition
 
@@ -519,31 +541,62 @@ must land together so two clarification paths never coexist.
 **Acceptance coverage:** AC-01-AC-05, AC-07-AC-13, AC-23-AC-35, AC-41, AC-43,
 AC-45-AC-47.
 
-### Task 11 - Build target Teams rendering and card behavior
+### Task 11 - Extract reusable Teams primitives and build target behavior
 
 - [ ] Planned
 
-**Description:** Add a separate target Teams adapter, response renderer, and Ready card
-factory. Do not register them in production.
+**Description:** Characterize the delivered Teams behavior, then refactor its existing
+implementation only far enough to extract final protocol-neutral transport and pure
+Adaptive Card presentation primitives. Build a thin target Teams adapter, target-owned
+semantic response renderer, authoritative Ready-card assembler, closed action-payload
+handling, and confirmation seam on those primitives. Do not create a second complete
+card-layout implementation and do not register the target adapter in production.
 
 **Acceptance criteria:**
 
 - [ ] Only the Teams boundary recognizes exact trimmed case-insensitive `/new`; every other authenticated nonblank message goes through target orchestration.
+- [ ] Shared Teams components own only authenticated activity/context normalization, locale fallback, conversation/card-activity presentation metadata, activity delivery/update mechanics, and pure rendering from Web-owned presentation models. They reference neither preparation graph and contain no old/target routing or compatibility conversion.
+- [ ] Delivered and target adapters separately own orchestration calls, outcome-to-prose mapping, authoritative fact assembly, closed action parsing, confirmation calls, and outcome-specific telemetry; target code references no delivered intake type.
 - [ ] All prose and selectable choices are application-rendered with authenticated locale, safe encoding, exact canonical facts, five-choice maximum, and no model prose.
 - [ ] Ready cards bind only schema version plus unguessable `PreparationId` and prominently show requester, client/environment/role, incident or no incident, exact justification, fixed eight hours, and localized deadline.
+- [ ] Production registration and delivered behavior remain unchanged: no target registration, feature flag, fallback, dual registration, or request-level router exists before Task 14.
 
-**Verification:** Target Teams component/card tests cover locale fallback, ambiguity, stale context, failures, injection-shaped text, exact `/new`, and absence of free-text request creation; run frontend tests if shared contracts change; then standing backend verification.
+**Verification:** Run delivered Teams characterization and production-composition tests
+before and after extraction. Source/dependency tests prove shared components are
+Web-owned and preparation-neutral and that the target adapter has no delivered intake
+dependency. Target Teams component/card tests cover locale fallback, ambiguity, stale
+context, failures, injection-shaped text, exact `/new`, card replacement, and absence
+of free-text request creation. Run frontend tests if shared contracts change; then run
+standing backend verification.
 
 **Dependencies:** Task 10A.
 
 **Files likely touched:**
 
-- new target files under `GovernedAccess.Web/Teams/`
-- new target Teams component tests
+- existing `GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`,
+  `TeamsActorResolver.cs`, `TeamsDraftCardTracker.cs`, and
+  `PreparedRequestCardFactory.cs` only for behavior-preserving extraction
+- new final transport/presentation primitives and thin target semantic adapter files
+  under `GovernedAccess.Web/Teams/`
+- delivered characterization, target component/card, dependency, and production-
+  composition tests
 
-**Estimated scope:** Medium.
+**Estimated scope:** Medium-to-large; extraction must earn its cost by leaving final
+components that survive Task 15 unchanged.
 
 **Acceptance coverage:** AC-01-AC-06, AC-23-AC-25, AC-30-AC-33, AC-41-AC-43.
+
+**Required exit gate:**
+
+- one reusable implementation owns identical Teams transport and card-layout mechanics;
+- shared components accept only Web-owned transport/presentation models and compile
+  without either preparation graph;
+- legacy and target semantic adapters remain independently testable and never translate
+  between their domain contracts;
+- target rendering cannot deliver model prose or use browser/card data as authority;
+- production resolves only the delivered Teams graph; and
+- deleting the delivered adapter in Task 15 will not require modifying the shared
+  transport or presentation components.
 
 ### Task 12 - Build target confirmation and request idempotency
 
@@ -585,7 +638,7 @@ MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
 **Acceptance criteria:**
 
 - [ ] Full target journeys cover complete/incremental preparation, unique MCP search to exact-ID proposal without Core search replay, direct `searchQuery`, clarification across restart, revision, confirmation, business/DevOps approval, provisioning, replay, drift correction, independent database/source failures, abuse limits, and zero consequential side effects from free text.
-- [ ] Architecture tests prove the target project/`DbContext` ownership graph, no target dependency on delivered intake/persistence types, no cross-database EF relationship/query/transaction, and no runtime composition registering both graphs.
+- [ ] Architecture tests prove the target project/`DbContext` ownership graph, no target dependency on delivered intake/persistence types, preparation-neutral shared Teams primitives, no cross-database EF relationship/query/transaction, and no runtime composition registering both graphs.
 - [ ] The ordinary production-host regression exercises only the delivered graph/unified database, while the isolated target host exercises only the replacement graph with distinct reference/workflow database files and independent migration histories.
 
 **Verification:** Run focused target full-host journeys, the full standing backend sequence, frontend suite, target contract checks, and `git diff --check`. No live provider is required at this checkpoint.
@@ -608,6 +661,7 @@ MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
 - [ ] Isolated target host passes all deterministic journeys and security gates.
 - [ ] Isolated target reference/workflow database ownership, migration, restart, outage, and downstream workflow journeys pass.
 - [ ] Target source has no dependency on the delivered preparation implementation.
+- [ ] Shared Teams transport/presentation components depend on neither preparation graph and are retained unchanged by the Task 15 deletion plan.
 - [ ] The transition seam inventory still contains exactly the three declared seams.
 - [ ] Maintainer approves the production cutover after reviewing the isolated target evidence.
 
@@ -653,7 +707,7 @@ Web-owned unified persistence graph, all coexistence seams, and delivered-only t
 
 **Acceptance criteria:**
 
-- [ ] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP/Teams/card/confirmation code, Web persistence duplicates, unified context/migrations/seeder, and tests whose only purpose is delivered behavior.
+- [ ] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP, delivered-only Teams semantic adapter/card assembly/action parsing/confirmation code, Web persistence duplicates, unified context/migrations/seeder, and tests whose only purpose is delivered behavior; retain the preparation-neutral Teams transport and pure presentation primitives extracted in Task 11 unchanged.
 - [ ] Remove the legacy `AccessRequest` creation path; make `AccessRequest.PreparationId` required and uniquely indexed in the final workflow migration, and prove the final reference/workflow schemas contain only their owned tables.
 - [ ] Source checks find no delivered proposal/lifecycle/version/choice/reserved-ID concepts, no compatibility aliases/adapters, no unified context/schema, no Web-owned EF adapter, and no transitional registration.
 
@@ -739,6 +793,7 @@ and remove obsolete contradictions. This task changes no implementation behavior
 Reject an increment if it introduces or implies any of the following:
 
 - target code reading, mutating, inheriting from, or adapting the delivered preparation aggregate or proposal model;
+- shared Teams code accepting either preparation graph, performing semantic outcome mapping, parsing both flows through one compatibility contract, selecting an intake graph, or requiring modification when delivered-only code is deleted;
 - a compatibility attribute, legacy alias on a target type, shared mutable backing state, dual write, runtime fallback, or synchronization between delivered and target preparations;
 - production registration of the target before Task 14 or retention of delivered registration after Task 14;
 - deletion of delivered code before target full-host proof and human cutover approval, or retention after Task 15;
