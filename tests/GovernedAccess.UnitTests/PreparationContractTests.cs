@@ -8,25 +8,6 @@ namespace GovernedAccess.UnitTests;
 public sealed class PreparationContractTests
 {
     [Fact]
-    public void ProposalContractContainsNoClarificationSelectionProtocol()
-    {
-        Assert.DoesNotContain(
-            "SelectClarification",
-            Enum.GetNames<DialogueAct>());
-        Assert.DoesNotContain(
-            typeof(TurnProposal).Assembly.GetTypes(),
-            type => string.Equals(
-                type.Name,
-                "ClarificationSelection",
-                StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            typeof(TurnProposal).GetProperties(BindingFlags.Instance | BindingFlags.Public),
-            property => property.Name.Contains(
-                "ClarificationSelection",
-                StringComparison.Ordinal));
-    }
-
-    [Fact]
     public void DialogueActsAndTopicsAreClosedToTheSpecification()
     {
         Assert.Equal(
@@ -157,9 +138,7 @@ public sealed class PreparationContractTests
             environment: new ClearEnvironmentOperation(),
             role: new SetRoleOperation(" ProductionSupport "),
             justification: new SetJustificationOperation(
-                new JustificationProposal(
-                    " Restore service. ",
-                    JustificationProvenance.RequesterAuthoredNormalized)),
+                new JustificationProposal(" Restore service. ")),
             incident: new ClearIncidentOperation());
 
         Assert.Equal(
@@ -212,17 +191,10 @@ public sealed class PreparationContractTests
         Assert.Throws<ArgumentException>(() => new SetRoleOperation("   "));
         Assert.Throws<ArgumentException>(() => new SetIncidentOperation("   "));
         Assert.Throws<ArgumentException>(
-            () => new JustificationProposal(
-                "   ",
-                JustificationProvenance.RequesterAuthoredNormalized));
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new JustificationProposal(
-                "Requester-authored text",
-                (JustificationProvenance)int.MaxValue));
+            () => new JustificationProposal("   "));
 
         var overDomainLimit = new JustificationProposal(
-            new string('j', JustificationProposal.MaximumCanonicalLength + 1),
-            JustificationProvenance.RequesterAuthoredNormalized);
+            new string('j', JustificationProposal.MaximumCanonicalLength + 1));
         Assert.Equal(
             JustificationProposal.MaximumCanonicalLength + 1,
             overDomainLimit.Text.Length);
@@ -272,7 +244,6 @@ public sealed class PreparationContractTests
     {
         Assert.Equal(
             [
-                nameof(BudgetExhaustedGuidance),
                 nameof(ClarificationRequired),
                 nameof(ConfirmationRevalidationFailed),
                 nameof(ConfirmationSourceUnavailable),
@@ -345,49 +316,29 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void ClarificationContextHasNoCandidateVersionBinding()
+    public void DurablePreparationStateUsesOneOptimisticConcurrencyToken()
     {
-        Assert.DoesNotContain(
-            "CandidateVersion",
-            typeof(GovernedAccess.Core.Domain.Preparations.PreparationClarificationContext)
+        Assert.Equal(
+            [
+                "Binding",
+                "Candidate",
+                "Clarification",
+                "ConcurrencyVersion",
+                "CorrelationId",
+                "CreatedAt",
+                "Lifecycle",
+                "MaterialChangeAttributions",
+                "PredecessorPreparationId",
+                "PreparationId",
+                "ReadyAt",
+                "ReadyDeadline",
+                "TerminalAt",
+                "UpdatedAt",
+            ],
+            typeof(RequestPreparationPersistenceState)
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name));
-        Assert.DoesNotContain(
-            "CandidateVersion",
-            typeof(GovernedAccess.Core.Domain.Preparations.PreparationClarificationPersistenceState)
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name));
-    }
-
-    [Fact]
-    public void CollectingStaleWarningComposesWithProgressOutcomeOnly()
-    {
-        var lastUpdatedAt = new DateTimeOffset(
-            2026,
-            8,
-            1,
-            10,
-            0,
-            0,
-            TimeSpan.Zero);
-        var warning = new CollectingStaleWarning(
-            lastUpdatedAt,
-            lastUpdatedAt.Add(CollectingStaleWarning.MinimumAge));
-        var progress = new PreparationResponse(
-            new DraftUnchanged(
-                [new OperationResult(ProposalField.Role, OperationResultKind.RejectedInvalid)]),
-            warning);
-
-        Assert.Same(warning, progress.StaleWarning);
-        Assert.IsType<DraftUnchanged>(progress.Outcome);
-        Assert.Throws<ArgumentOutOfRangeException>(
-            () => new CollectingStaleWarning(
-                lastUpdatedAt,
-                lastUpdatedAt.Add(CollectingStaleWarning.MinimumAge).AddTicks(-1)));
-        Assert.Throws<ArgumentException>(
-            () => new PreparationResponse(
-                new ReadyForConfirmation(Guid.NewGuid()),
-                warning));
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]

@@ -242,8 +242,6 @@ public sealed record ConfirmationRevalidationFailed : ApplicationOutcome
 
 public sealed record ConfirmationSourceUnavailable : ApplicationOutcome;
 
-public sealed record BudgetExhaustedGuidance : ApplicationOutcome;
-
 public sealed record TerminalPreparationGuidance : ApplicationOutcome;
 
 public sealed record Failed : ApplicationOutcome
@@ -257,58 +255,13 @@ public sealed record Failed : ApplicationOutcome
     public ApplicationFailure Failure { get; }
 }
 
-public sealed record CollectingStaleWarning
-{
-    public static readonly TimeSpan MinimumAge = TimeSpan.FromDays(7);
-
-    public CollectingStaleWarning(
-        DateTimeOffset lastUpdatedAt,
-        DateTimeOffset observedAt)
-    {
-        var age = observedAt - lastUpdatedAt;
-        if (age < MinimumAge)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(observedAt),
-                observedAt,
-                $"A collecting preparation is stale only after {MinimumAge.TotalDays} days.");
-        }
-
-        LastUpdatedAt = lastUpdatedAt;
-        ObservedAt = observedAt;
-        Age = age;
-    }
-
-    public DateTimeOffset LastUpdatedAt { get; }
-
-    public DateTimeOffset ObservedAt { get; }
-
-    public TimeSpan Age { get; }
-}
-
 public sealed record PreparationResponse
 {
-    public PreparationResponse(
-        ApplicationOutcome outcome,
-        CollectingStaleWarning? staleWarning = null)
+    public PreparationResponse(ApplicationOutcome outcome)
     {
         ArgumentNullException.ThrowIfNull(outcome);
-        if (staleWarning is not null
-            && outcome is ReadyForConfirmation
-                or ConfirmationRevalidationFailed
-                or ConfirmationSourceUnavailable
-                or TerminalPreparationGuidance)
-        {
-            throw new ArgumentException(
-                "A collecting-stale warning can accompany only an active collecting outcome.",
-                nameof(staleWarning));
-        }
-
         Outcome = outcome;
-        StaleWarning = staleWarning;
     }
 
     public ApplicationOutcome Outcome { get; }
-
-    public CollectingStaleWarning? StaleWarning { get; }
 }

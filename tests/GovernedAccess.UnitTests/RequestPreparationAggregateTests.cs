@@ -21,9 +21,7 @@ public sealed class RequestPreparationAggregateTests
         Assert.Null(preparation.PredecessorPreparationId);
         Assert.Equal(PreparationLifecycle.Collecting, preparation.Lifecycle);
         Assert.True(preparation.Candidate.IsEmpty);
-        Assert.Equal(0, preparation.CandidateVersion);
         Assert.Equal(1, preparation.ConcurrencyVersion);
-        Assert.Equal(0, preparation.InterpretedTurnCount);
         Assert.Equal(CreatedAt, preparation.CreatedAt);
         Assert.Equal(CreatedAt, preparation.UpdatedAt);
         Assert.Null(preparation.ReadyAt);
@@ -88,7 +86,6 @@ public sealed class RequestPreparationAggregateTests
             "ready-root");
 
         Assert.Equal(PreparationLifecycle.Ready, preparation.Lifecycle);
-        Assert.Equal(1, preparation.CandidateVersion);
         Assert.Equal(CreatedAt, preparation.ReadyAt);
         Assert.Equal(CreatedAt.AddMinutes(30), preparation.ReadyDeadline);
         Assert.Null(preparation.Clarification);
@@ -96,7 +93,7 @@ public sealed class RequestPreparationAggregateTests
     }
 
     [Fact]
-    public void MaterialCommitIncrementsCandidateVersionOnceAndBindsNewContextToPostCommitVersion()
+    public void MaterialCommitChangesCandidateAndContextInOneConcurrencyUpdate()
     {
         var preparation = RequestPreparation.CreateRoot(
             Binding(),
@@ -126,7 +123,6 @@ public sealed class RequestPreparationAggregateTests
             CreatedAt.AddMinutes(1),
             "environment-and-role-context");
 
-        Assert.Equal(2, preparation.CandidateVersion);
         Assert.Equal(concurrencyBefore + 1, preparation.ConcurrencyVersion);
         Assert.Equal(PreparationLifecycle.Collecting, preparation.Lifecycle);
         var clarification = Assert.IsType<PreparationClarificationContext>(
@@ -139,7 +135,7 @@ public sealed class RequestPreparationAggregateTests
     }
 
     [Fact]
-    public void ClarificationOnlyCommitPreservesCandidateVersionButChangesConcurrencyVersion()
+    public void ClarificationOnlyCommitChangesConcurrencyVersion()
     {
         var preparation = RequestPreparation.CreateRoot(
             Binding(),
@@ -153,7 +149,6 @@ public sealed class RequestPreparationAggregateTests
             CreatedAt.AddMinutes(1),
             "clarification");
 
-        Assert.Equal(0, preparation.CandidateVersion);
         Assert.Equal(2, preparation.ConcurrencyVersion);
         Assert.Equal(CreatedAt.AddMinutes(1), preparation.UpdatedAt);
     }
@@ -176,7 +171,6 @@ public sealed class RequestPreparationAggregateTests
             "context-consumed");
 
         Assert.Equal(PreparationLifecycle.Ready, preparation.Lifecycle);
-        Assert.Equal(1, preparation.CandidateVersion);
         Assert.Null(preparation.Clarification);
         Assert.Equal(CreatedAt.AddMinutes(2), preparation.ReadyAt);
         Assert.Equal(CreatedAt.AddMinutes(32), preparation.ReadyDeadline);
@@ -208,7 +202,6 @@ public sealed class RequestPreparationAggregateTests
                 CreatedAt.AddMinutes(1),
                 "wrong-attribution"));
 
-        Assert.Equal(0, preparation.CandidateVersion);
         Assert.True(preparation.Candidate.IsEmpty);
     }
 
@@ -233,7 +226,6 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(4, GetGuidVersion(successor.PreparationId));
         Assert.Equal(ready.PreparationId, successor.PredecessorPreparationId);
         Assert.Equal(PreparationLifecycle.Ready, successor.Lifecycle);
-        Assert.Equal(1, successor.CandidateVersion);
         Assert.Equal(CreatedAt.AddMinutes(35), successor.ReadyDeadline);
         Assert.Equal(PreparationLifecycle.Ready, ready.Lifecycle);
 
@@ -261,22 +253,19 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(PreparationLifecycle.Collecting, successor.Lifecycle);
         Assert.Equal(ready.PreparationId, successor.PredecessorPreparationId);
         Assert.Equal(ready.Candidate, successor.Candidate);
-        Assert.Equal(1, successor.CandidateVersion);
         Assert.Empty(successor.MaterialChangeAttributions);
     }
 
     [Fact]
-    public void ReadyScopeAndDeadlineRemainImmutableAcrossNonMaterialMetadataUpdates()
+    public void ReadyScopeAndDeadlineRemainImmutable()
     {
         var ready = ReadyRoot();
         var candidate = ready.Candidate;
-        var candidateVersion = ready.CandidateVersion;
+        var concurrencyVersion = ready.ConcurrencyVersion;
         var deadline = ready.ReadyDeadline;
 
-        ready.RecordInterpretedTurn(CreatedAt.AddMinutes(1), "discussion");
-
         Assert.Same(candidate, ready.Candidate);
-        Assert.Equal(candidateVersion, ready.CandidateVersion);
+        Assert.Equal(concurrencyVersion, ready.ConcurrencyVersion);
         Assert.Equal(deadline, ready.ReadyDeadline);
         Assert.Throws<InvalidOperationException>(
             () => ready.ApplyCandidateChange(
@@ -295,24 +284,64 @@ public sealed class RequestPreparationAggregateTests
     }
 
     [Fact]
-    public void InterpretedTurnBudgetIsPermanentAtFiftyTurnsPerPreparation()
+    public void MaterialChangeAttributionEvictsOldestMetadataWithoutRejectingCandidateChange()
     {
         var preparation = RequestPreparation.CreateRoot(Binding(), CreatedAt, "root");
 
-        for (var index = 1; index <= RequestPreparation.MaximumInterpretedTurns; index++)
+        for (var index = 1;
+             index <= RequestPreparation.MaximumMaterialChangeAttributions + 1;
+             index++)
         {
-            preparation.RecordInterpretedTurn(
-                CreatedAt.AddSeconds(index),
-                $"turn-{index}");
+            var occurredAt = CreatedAt.AddSeconds(index);
+            preparation.ApplyCandidateChange(
+                new PreparationCandidate(
+                    clientId: null,
+                    environmentId: null,
+                    roleId: null,
+                    justification: $"Investigate change {index}",
+                    incidentId: null),
+                clarification: null,
+                new MaterialChangeAttribution(
+                    [ProposalField.Justification],
+                    "model-deployment",
+                    "provider-version",
+                    "prompt-v1",
+                    "schema-v1",
+                    occurredAt,
+                    $"change-{index}"),
+                occurredAt,
+                $"change-{index}");
         }
 
-        Assert.Equal(50, preparation.InterpretedTurnCount);
-        Assert.False(preparation.CanInterpretTurn);
-        Assert.Throws<InvalidOperationException>(
-            () => preparation.RecordInterpretedTurn(
-                CreatedAt.AddMinutes(2),
-                "turn-exhausted"));
-        Assert.Equal(50, preparation.InterpretedTurnCount);
+        Assert.Equal(
+            RequestPreparation.MaximumMaterialChangeAttributions,
+            preparation.MaterialChangeAttributions.Count);
+        Assert.Equal(
+            "change-2",
+            preparation.MaterialChangeAttributions[0].CorrelationId);
+        Assert.Equal(
+            $"change-{RequestPreparation.MaximumMaterialChangeAttributions + 1}",
+            preparation.MaterialChangeAttributions[^1].CorrelationId);
+        Assert.Equal(
+            $"Investigate change {RequestPreparation.MaximumMaterialChangeAttributions + 1}",
+            preparation.Candidate.Justification);
+
+        var retainedAttributions = preparation.MaterialChangeAttributions.ToArray();
+        var retainedCandidate = preparation.Candidate;
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => preparation.ApplyCandidateChange(
+                new PreparationCandidate(
+                    clientId: null,
+                    environmentId: null,
+                    roleId: null,
+                    justification: "Rejected chronological change",
+                    incidentId: null),
+                clarification: null,
+                Attribution(ProposalField.Justification),
+                CreatedAt,
+                "rejected-change"));
+        Assert.Equal(retainedAttributions, preparation.MaterialChangeAttributions);
+        Assert.Same(retainedCandidate, preparation.Candidate);
     }
 
     [Fact]
@@ -403,7 +432,6 @@ public sealed class RequestPreparationAggregateTests
             : ReadyRoot();
         var preparationId = preparation.PreparationId;
         var binding = preparation.Binding;
-        var candidateVersion = preparation.CandidateVersion;
         var occurredAt = terminalLifecycle == PreparationLifecycle.Expired
             ? Assert.IsType<DateTimeOffset>(preparation.ReadyDeadline)
             : CreatedAt.AddMinutes(1);
@@ -426,15 +454,14 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(terminalLifecycle, preparation.Lifecycle);
         Assert.Equal(preparationId, preparation.PreparationId);
         Assert.Same(binding, preparation.Binding);
-        Assert.Equal(candidateVersion, preparation.CandidateVersion);
         Assert.True(preparation.Candidate.IsEmpty);
         Assert.Null(preparation.Clarification);
         Assert.Equal(occurredAt, preparation.TerminalAt);
         Assert.NotEmpty(preparation.MaterialChangeAttributions);
         Assert.Throws<InvalidOperationException>(
-            () => preparation.RecordInterpretedTurn(
+            () => preparation.MarkSuperseded(
                 occurredAt.AddSeconds(1),
-                "terminal-turn"));
+                "terminal-transition"));
     }
 
     [Fact]
@@ -470,9 +497,6 @@ public sealed class RequestPreparationAggregateTests
             Attribution(ProposalField.Environment, ProposalField.Justification),
             CreatedAt,
             "persisted-root");
-        preparation.RecordInterpretedTurn(
-            CreatedAt.AddMinutes(1),
-            "persisted-turn");
         var clarification = Assert.IsType<PreparationClarificationContext>(
             preparation.Clarification);
         var state = new RequestPreparationPersistenceState(
@@ -481,9 +505,7 @@ public sealed class RequestPreparationAggregateTests
             preparation.Binding,
             preparation.Lifecycle,
             preparation.Candidate,
-            preparation.CandidateVersion,
             preparation.ConcurrencyVersion,
-            preparation.InterpretedTurnCount,
             new PreparationClarificationPersistenceState(
                 clarification.Target,
                 clarification.Choices,
@@ -503,9 +525,7 @@ public sealed class RequestPreparationAggregateTests
         Assert.Equal(preparation.Binding, restored.Binding);
         Assert.Equal(preparation.Lifecycle, restored.Lifecycle);
         Assert.Equal(preparation.Candidate, restored.Candidate);
-        Assert.Equal(preparation.CandidateVersion, restored.CandidateVersion);
         Assert.Equal(preparation.ConcurrencyVersion, restored.ConcurrencyVersion);
-        Assert.Equal(preparation.InterpretedTurnCount, restored.InterpretedTurnCount);
         var expectedClarification = Assert.IsType<PreparationClarificationContext>(
             preparation.Clarification);
         var restoredClarification = Assert.IsType<PreparationClarificationContext>(

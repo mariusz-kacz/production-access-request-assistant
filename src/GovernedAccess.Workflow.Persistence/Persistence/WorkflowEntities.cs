@@ -39,11 +39,7 @@ internal sealed class RequestPreparationRecord
 
     public string? IncidentId { get; set; }
 
-    public int CandidateVersion { get; set; }
-
     public long ConcurrencyVersion { get; set; }
-
-    public int InterpretedTurnCount { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

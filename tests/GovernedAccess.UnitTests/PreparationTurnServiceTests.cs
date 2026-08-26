@@ -80,8 +80,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         var outcome = Assert.IsType<ReadyForConfirmation>(result.Response.Outcome);
         Assert.Equal(preparation.PreparationId, outcome.PreparationId);
         Assert.Equal(PreparationLifecycle.Ready, preparation.Lifecycle);
-        Assert.Equal(1, preparation.CandidateVersion);
-        Assert.Equal(1, preparation.InterpretedTurnCount);
         Assert.Single(store.Preparations);
         Assert.Equal(1, store.SaveCount);
     }
@@ -131,9 +129,9 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         Assert.Equal(ready.PreparationId, preparation.PreparationId);
         Assert.Equal(PreparationLifecycle.Ready, preparation.Lifecycle);
         Assert.Equal(CreatedAt.Add(RequestPreparation.ReadyLifetime), preparation.ReadyDeadline);
-        Assert.Equal(1, preparation.InterpretedTurnCount);
         Assert.IsType<DraftUnchanged>(result.Response.Outcome);
         Assert.Single(store.Preparations);
+        Assert.Equal(0, store.SaveCount);
     }
 
     [Fact]
@@ -165,7 +163,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         Assert.NotEqual(ready.PreparationId, successor.PreparationId);
         Assert.Equal(PreparationLifecycle.Ready, successor.Lifecycle);
         Assert.Equal("ProductionSupport", successor.Candidate.RoleId);
-        Assert.Equal(1, successor.CandidateVersion);
         Assert.IsType<ReadyForConfirmation>(result.Response.Outcome);
         Assert.Equal(2, store.Preparations.Count);
         Assert.Equal(1, store.SaveCount);
@@ -221,7 +218,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
 
         Assert.True(started.IsSuccess);
         Assert.Equal(PreparationLifecycle.Expired, started.Value.Preparation!.Lifecycle);
-        Assert.True(started.Value.RequiresInterpretation);
         Assert.Equal(1, store.SaveCount);
     }
 
@@ -250,47 +246,10 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
     }
 
     [Fact]
-    public async Task ExhaustedPreparationSkipsInterpretationUntilResetCreatesNewIdentity()
-    {
-        var exhausted = RequestPreparation.CreateRoot(Binding(), CreatedAt, "root");
-        for (var turn = 0; turn < RequestPreparation.MaximumInterpretedTurns; turn++)
-        {
-            exhausted.RecordInterpretedTurn(
-                CreatedAt.AddMinutes(turn),
-                $"turn-{turn}");
-        }
-
-        var store = new InMemoryPreparationStore(exhausted);
-        var service = Service(
-            store,
-            new FakePreparationAuthority(),
-            new FakeClock(CreatedAt.AddMinutes(50)));
-
-        var started = await service.BeginAsync(
-            Binding(),
-            "exhausted",
-            TestContext.Current.CancellationToken);
-
-        Assert.True(started.IsSuccess);
-        Assert.False(started.Value.RequiresInterpretation);
-        Assert.IsType<BudgetExhaustedGuidance>(
-            started.Value.ImmediateResponse!.Outcome);
-        Assert.Equal(0, store.SaveCount);
-
-        var reset = await service.ResetAsync(
-            new ResetPreparationCommand(Binding(), "reset"),
-            TestContext.Current.CancellationToken);
-
-        Assert.IsType<ResetGuidance>(reset.Response.Outcome);
-        Assert.NotEqual(exhausted.PreparationId, reset.Preparation!.PreparationId);
-        Assert.Equal(0, reset.Preparation.InterpretedTurnCount);
-    }
-
-    [Fact]
-    public async Task StaleCollectingAgeSurvivesTheTurnUpdateAsResponseMetadata()
+    public async Task OldCollectingPreparationHasNoAgeSpecificResponseOrWrite()
     {
         var collecting = RequestPreparation.CreateRoot(Binding(), CreatedAt, "root");
-        var observedAt = CreatedAt.Add(CollectingStaleWarning.MinimumAge);
+        var observedAt = CreatedAt.AddDays(8);
         var store = new InMemoryPreparationStore(collecting);
         var service = Service(
             store,
@@ -298,7 +257,7 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
             new FakeClock(observedAt));
         var started = await service.BeginAsync(
             Binding(),
-            "stale",
+            "old-collecting",
             TestContext.Current.CancellationToken);
 
         var result = await service.ApplyAsync(
@@ -307,10 +266,9 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
             TurnAttribution,
             TestContext.Current.CancellationToken);
 
-        var warning = Assert.IsType<CollectingStaleWarning>(result.Response.StaleWarning);
-        Assert.Equal(CreatedAt, warning.LastUpdatedAt);
-        Assert.Equal(observedAt, warning.ObservedAt);
-        Assert.Equal(observedAt, result.Preparation!.UpdatedAt);
+        Assert.IsType<UnclearGuidance>(result.Response.Outcome);
+        Assert.Equal(CreatedAt, result.Preparation!.UpdatedAt);
+        Assert.Equal(0, store.SaveCount);
     }
 
     [Fact]
@@ -342,7 +300,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
             "request-preparation-proposal-structural-invalid",
             failure.Failure.Code);
         Assert.Equal(0, store.SaveCount);
-        Assert.Equal(0, collecting.InterpretedTurnCount);
         Assert.Equal(1, collecting.ConcurrencyVersion);
     }
 
@@ -375,7 +332,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
             CreatedAt.Add(RequestPreparation.ReadyLifetime),
             result.Preparation.ReadyDeadline);
         Assert.Equal(0, store.SaveCount);
-        Assert.Equal(0, ready.InterpretedTurnCount);
     }
 
     [Fact]

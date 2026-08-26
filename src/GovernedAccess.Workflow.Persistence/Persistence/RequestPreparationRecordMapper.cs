@@ -63,9 +63,7 @@ internal static class RequestPreparationRecordMapper
                     record.RoleId,
                     record.Justification,
                     record.IncidentId),
-                record.CandidateVersion,
                 record.ConcurrencyVersion,
-                record.InterpretedTurnCount,
                 clarification,
                 record.CreatedAt,
                 record.UpdatedAt,
@@ -102,9 +100,7 @@ internal static class RequestPreparationRecordMapper
         record.RoleId = preparation.Candidate.RoleId;
         record.Justification = preparation.Candidate.Justification;
         record.IncidentId = preparation.Candidate.IncidentId;
-        record.CandidateVersion = preparation.CandidateVersion;
         record.ConcurrencyVersion = preparation.ConcurrencyVersion;
-        record.InterpretedTurnCount = preparation.InterpretedTurnCount;
         record.CreatedAt = preparation.CreatedAt;
         record.UpdatedAt = preparation.UpdatedAt;
         record.ReadyAt = preparation.ReadyAt;

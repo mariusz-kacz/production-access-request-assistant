@@ -440,9 +440,7 @@ public sealed class PreparationTurnConcurrencyTests
                     new ExactEnvironmentId("PROD-ALPHA-EU")),
                 role: new SetRoleOperation("ProductionReadOnly"),
                 justification: new SetJustificationOperation(
-                    new JustificationProposal(
-                        justification,
-                        JustificationProvenance.RequesterAuthoredNormalized))));
+                    new JustificationProposal(justification))));
 
     private static TurnProposal JustificationUpdate(string justification) =>
         new(
@@ -450,9 +448,7 @@ public sealed class PreparationTurnConcurrencyTests
             DialogueAct.UpdateDraft,
             patch: new DraftPatch(
                 justification: new SetJustificationOperation(
-                    new JustificationProposal(
-                        justification,
-                        JustificationProvenance.RequesterAuthoredNormalized))));
+                    new JustificationProposal(justification))));
 
     private static FakeAuthority CompleteAuthority()
     {

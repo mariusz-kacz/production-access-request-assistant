@@ -26,9 +26,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("CandidateVersion")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -70,9 +67,6 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                     b.Property<string>("IncidentId")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("InterpretedTurnCount")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Justification")
                         .HasMaxLength(2000)

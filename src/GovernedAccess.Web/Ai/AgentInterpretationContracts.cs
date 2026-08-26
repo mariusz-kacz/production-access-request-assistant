@@ -12,7 +12,6 @@ internal sealed record AgentExecutionLimits
         "TargetRequestPreparationAgent:Limits";
 
     internal const int HardMaximumMessageCharacters = 4000;
-    internal const int HardMaximumInterpretedTurns = 50;
     internal const int HardMaximumCallsPerTool = 1;
     internal const int HardMaximumToolCalls = 4;
     internal const int HardMaximumProviderIterations = 6;
@@ -21,7 +20,6 @@ internal sealed record AgentExecutionLimits
 
     internal static AgentExecutionLimits Default { get; } = new(
         HardMaximumMessageCharacters,
-        HardMaximumInterpretedTurns,
         HardMaximumCallsPerTool,
         HardMaximumToolCalls,
         HardMaximumProviderIterations,
@@ -29,7 +27,6 @@ internal sealed record AgentExecutionLimits
 
     internal AgentExecutionLimits(
         int maximumMessageCharacters,
-        int maximumInterpretedTurns,
         int maximumCallsPerTool,
         int maximumToolCalls,
         int maximumProviderIterations,
@@ -39,10 +36,6 @@ internal sealed record AgentExecutionLimits
             maximumMessageCharacters,
             HardMaximumMessageCharacters,
             nameof(maximumMessageCharacters));
-        MaximumInterpretedTurns = ValidateBound(
-            maximumInterpretedTurns,
-            HardMaximumInterpretedTurns,
-            nameof(maximumInterpretedTurns));
         MaximumCallsPerTool = ValidateBound(
             maximumCallsPerTool,
             HardMaximumCallsPerTool,
@@ -65,7 +58,6 @@ internal sealed record AgentExecutionLimits
     }
 
     internal int MaximumMessageCharacters { get; }
-    internal int MaximumInterpretedTurns { get; }
     internal int MaximumCallsPerTool { get; }
     internal int MaximumToolCalls { get; }
     internal int MaximumProviderIterations { get; }
@@ -80,7 +72,6 @@ internal sealed record AgentExecutionLimits
         {
             return new AgentExecutionLimits(
                 RequiredInt(section, nameof(MaximumMessageCharacters)),
-                RequiredInt(section, nameof(MaximumInterpretedTurns)),
                 RequiredInt(section, nameof(MaximumCallsPerTool)),
                 RequiredInt(section, nameof(MaximumToolCalls)),
                 RequiredInt(section, nameof(MaximumProviderIterations)),
@@ -274,7 +265,6 @@ internal sealed record AgentTurnInput
         string latestRequesterText,
         PreparationCandidate candidate,
         PreparationLifecycle lifecycle,
-        int interpretedTurnCount,
         AgentClarificationContext? clarification,
         string correlationId)
     {
@@ -285,13 +275,10 @@ internal sealed record AgentTurnInput
             throw new ArgumentOutOfRangeException(nameof(lifecycle));
         }
 
-        ArgumentOutOfRangeException.ThrowIfNegative(interpretedTurnCount);
-
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
         LatestRequesterText = latestRequesterText;
         Candidate = candidate;
         Lifecycle = lifecycle;
-        InterpretedTurnCount = interpretedTurnCount;
         Clarification = clarification;
         CorrelationId = correlationId.Trim();
     }
@@ -299,7 +286,6 @@ internal sealed record AgentTurnInput
     internal string LatestRequesterText { get; }
     internal PreparationCandidate Candidate { get; }
     internal PreparationLifecycle Lifecycle { get; }
-    internal int InterpretedTurnCount { get; }
     internal AgentClarificationContext? Clarification { get; }
     internal string CorrelationId { get; }
 }
@@ -321,7 +307,6 @@ internal sealed record AgentExecutionMetadata(
 internal enum AgentInterpretationFailure
 {
     InvalidInput,
-    BudgetExhausted,
     MalformedModelOutput,
     ExecutionBudgetExceeded,
     Timeout,

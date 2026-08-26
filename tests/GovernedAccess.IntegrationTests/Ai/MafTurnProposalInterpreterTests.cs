@@ -36,8 +36,7 @@ public sealed class MafTurnProposalInterpreterTests
             "justification": {
               "operation": "set",
               "value": {
-                "text": "Investigate elevated customer errors.",
-                "provenance": "requesterAuthoredNormalized"
+                "text": "Investigate elevated customer errors."
               }
             },
             "incident": {
@@ -247,7 +246,6 @@ public sealed class MafTurnProposalInterpreterTests
             "el primero",
             PreparationCandidate.Empty,
             PreparationLifecycle.Collecting,
-            interpretedTurnCount: 1,
             clarification,
             Guid.NewGuid().ToString("N"));
 
@@ -271,10 +269,6 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Contains("Recovery", envelope, StringComparison.Ordinal);
         Assert.Contains(
             "ordinary updateDraft exact-ID",
-            invocation.Options?.Instructions,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            string.Concat("select", "Clarification"),
             invocation.Options?.Instructions,
             StringComparison.Ordinal);
     }
@@ -326,34 +320,11 @@ public sealed class MafTurnProposalInterpreterTests
     }
 
     [Fact]
-    public async Task ExhaustedPreparationTurnBudgetDoesNotInvokeAgent()
-    {
-        var chatClient = new RecordingChatClient(UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
-        var turn = new AgentTurnInput(
-            "One turn beyond the permanent budget.",
-            PreparationCandidate.Empty,
-            PreparationLifecycle.Collecting,
-            interpretedTurnCount: 50,
-            clarification: null,
-            correlationId: Guid.NewGuid().ToString("N"));
-
-        var result = await interpreter.InterpretAsync(
-            turn,
-            TestContext.Current.CancellationToken);
-
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(AgentInterpretationFailure.BudgetExhausted, failed.Failure);
-        Assert.Equal(0, chatClient.InvocationCount);
-    }
-
-    [Fact]
     public async Task CumulativeExecutionTimeoutCancelsTheProvider()
     {
         var chatClient = new BlockingChatClient();
         var limits = new AgentExecutionLimits(
             4000,
-            50,
             1,
             4,
             6,
@@ -405,8 +376,8 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Equal("test-provider", metadata.ProviderId);
         Assert.Equal("test-deployment", metadata.ModelDeployment);
         Assert.Equal("test-provider-version", metadata.ProviderModelVersion);
-        Assert.Equal("2.0.0", metadata.PromptContractVersion);
-        Assert.Equal("2.0.0", metadata.StructuredOutputSchemaVersion);
+        Assert.Equal("3.0.0", metadata.PromptContractVersion);
+        Assert.Equal("3.0.0", metadata.StructuredOutputSchemaVersion);
         Assert.Equal("2.0.0", metadata.McpContractVersion);
         Assert.Equal("1.0.0", metadata.EnvironmentSearchPolicyVersion);
         Assert.Equal(turn.CorrelationId, metadata.CorrelationId);
@@ -437,7 +408,6 @@ public sealed class MafTurnProposalInterpreterTests
                 justification,
                 null),
             PreparationLifecycle.Collecting,
-            interpretedTurnCount: 3,
             clarification: null,
             correlationId: Guid.NewGuid().ToString("N"));
 }

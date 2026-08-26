@@ -339,7 +339,6 @@ public sealed class MafTurnProposalToolBoundaryTests
                     justification,
                     null),
             PreparationLifecycle.Collecting,
-            interpretedTurnCount: 0,
             clarification: null,
             correlationId: Guid.NewGuid().ToString("N"));
 

@@ -132,32 +132,17 @@ public sealed record SetJustificationOperation : JustificationOperation
 
 public sealed record ClearJustificationOperation : JustificationOperation;
 
-public enum JustificationProvenance
-{
-    RequesterAuthoredNormalized,
-}
-
 public sealed record JustificationProposal
 {
     public const int MaximumCanonicalLength = 2000;
 
-    public JustificationProposal(
-        string text,
-        JustificationProvenance provenance)
+    public JustificationProposal(string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        if (!Enum.IsDefined(provenance))
-        {
-            throw new ArgumentOutOfRangeException(nameof(provenance));
-        }
-
         Text = text.Trim();
-        Provenance = provenance;
     }
 
     public string Text { get; }
-
-    public JustificationProvenance Provenance { get; }
 }
 
 public abstract record IncidentOperation

@@ -70,9 +70,7 @@ public sealed record PreparationSnapshot
         Binding = preparation.Binding;
         Lifecycle = preparation.Lifecycle;
         Candidate = preparation.Candidate;
-        CandidateVersion = preparation.CandidateVersion;
         ConcurrencyVersion = preparation.ConcurrencyVersion;
-        InterpretedTurnCount = preparation.InterpretedTurnCount;
         Clarification = preparation.Clarification;
         CreatedAt = preparation.CreatedAt;
         UpdatedAt = preparation.UpdatedAt;
@@ -91,11 +89,7 @@ public sealed record PreparationSnapshot
 
     public PreparationCandidate Candidate { get; }
 
-    public int CandidateVersion { get; }
-
     public long ConcurrencyVersion { get; }
-
-    public int InterpretedTurnCount { get; }
 
     public PreparationClarificationContext? Clarification { get; }
 
@@ -115,31 +109,21 @@ public sealed class PreparationTurnContext
     internal PreparationTurnContext(
         PreparationBinding binding,
         string correlationId,
-        RequestPreparation? preparation,
-        CollectingStaleWarning? staleWarning,
-        PreparationResponse? immediateResponse)
+        RequestPreparation? preparation)
     {
         Binding = binding;
         CorrelationId = correlationId;
         TrackedPreparation = preparation;
         Preparation = preparation is null ? null : new PreparationSnapshot(preparation);
-        StaleWarning = staleWarning;
-        ImmediateResponse = immediateResponse;
     }
 
     public PreparationSnapshot? Preparation { get; }
-
-    public bool RequiresInterpretation => ImmediateResponse is null;
-
-    public PreparationResponse? ImmediateResponse { get; }
 
     internal PreparationBinding Binding { get; }
 
     internal string CorrelationId { get; }
 
     internal RequestPreparation? TrackedPreparation { get; }
-
-    internal CollectingStaleWarning? StaleWarning { get; }
 }
 
 public sealed record PreparationTurnResult

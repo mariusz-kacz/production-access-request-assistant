@@ -1,6 +1,6 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Ready for implementation; no implementation started by this planning run
+- **Status:** Implementation in progress; Task 1 complete
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -185,6 +185,8 @@ changes and keep each task's exit gate green before continuing.
 ## 6. Implementation tasks
 
 ### Task 1 — Contract, clarification, and durable preparation contraction
+
+- [x] Complete
 
 **Objective and complexity reduction**
 

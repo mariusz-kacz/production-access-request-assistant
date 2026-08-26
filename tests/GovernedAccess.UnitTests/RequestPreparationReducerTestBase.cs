@@ -51,10 +51,7 @@ public abstract class RequestPreparationReducerTestBase
             patch: new DraftPatch(environment, role, justification, incident));
 
     protected static SetJustificationOperation Justification(string text) =>
-        new(
-            new JustificationProposal(
-                text,
-                JustificationProvenance.RequesterAuthoredNormalized));
+        new(new JustificationProposal(text));
 
     protected static EnvironmentAuthorityProjection Environment(
         string environmentId,

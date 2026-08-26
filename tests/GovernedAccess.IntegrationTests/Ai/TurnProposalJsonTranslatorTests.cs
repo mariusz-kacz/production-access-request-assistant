@@ -41,8 +41,6 @@ public sealed class TurnProposalJsonTranslatorTests
         """{"schemaVersion":1,"dialogueAct":"updateDraft"}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{}}""",
         """{"schemaVersion":1,"dialogueAct":"unclear","patch":{"role":{"operation":"clear"}}}""",
-        """{"schemaVersion":1,"dialogueAct":"selectClarification","clarificationSelection":{"target":"environment","optionIndex":1}}""",
-        """{"schemaVersion":1,"dialogueAct":"selectClarification"}""",
         """{"schemaVersion":1,"dialogueAct":"discussDraft","discussionTopic":"invented"}""",
         """{"schemaVersion":1,"dialogueAct":"requestSubmission","discussionTopic":"currentDraft"}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"role":{"operation":"keep"}}}""",
@@ -99,27 +97,38 @@ public sealed class TurnProposalJsonTranslatorTests
     }
 
     [Fact]
-    public void ProviderContractRejectsTheDeprecatedClarificationSelectionProtocol()
+    public void TextOnlyJustificationTranslatesThroughTheClosedProviderSchema()
     {
         const string payload =
             """
-            {"schemaVersion":1,"dialogueAct":"selectClarification","clarificationSelection":{"target":"environment","optionIndex":1}}
+            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}}}}
             """;
 
-        Assert.False(TurnProposalJsonTranslator.TryTranslate(payload, out var proposal));
-        Assert.Null(proposal);
-        Assert.DoesNotContain(
-            "selectClarification",
-            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "clarificationSelection",
-            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "optionIndex",
-            TurnProposalJsonTranslator.ProposalSchema.GetRawText(),
-            StringComparison.Ordinal);
+        var translated = TurnProposalJsonTranslator.TryTranslate(
+            payload,
+            out var proposal);
+
+        Assert.True(translated);
+        var patch = Assert.IsType<DraftPatch>(proposal!.Patch);
+        Assert.Equal(
+            "Investigate elevated customer errors.",
+            Assert.IsType<SetJustificationOperation>(patch.Justification).Value.Text);
+        var valueSchema = TurnProposalJsonTranslator.ProposalSchema
+            .GetProperty("$defs")
+            .GetProperty("justificationOperation")
+            .GetProperty("oneOf")[1]
+            .GetProperty("properties")
+            .GetProperty("value");
+        Assert.Equal(
+            ["text"],
+            valueSchema.GetProperty("required")
+                .EnumerateArray()
+                .Select(item => item.GetString()));
+        Assert.Equal(
+            ["text"],
+            valueSchema.GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name));
     }
 
     private static void AssertAllObjectSchemasAreClosed(JsonElement element)

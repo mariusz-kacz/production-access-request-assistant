@@ -82,6 +82,34 @@ public sealed class WorkflowPreparationPersistenceTests
         Assert.True(
             preparation.FindProperty("ConcurrencyVersion")!.IsConcurrencyToken);
         Assert.Equal(
+            [
+                "Channel",
+                "ChannelActorId",
+                "ClarificationJson",
+                "ClientId",
+                "ConcurrencyVersion",
+                "ConversationId",
+                "CorrelationId",
+                "CreatedAt",
+                "EnvironmentId",
+                "IncidentId",
+                "Justification",
+                "Lifecycle",
+                "MaterialChangeAttributionsJson",
+                "PredecessorPreparationId",
+                "PreparationId",
+                "ReadyAt",
+                "ReadyDeadline",
+                "RequesterId",
+                "RoleId",
+                "TenantId",
+                "TerminalAt",
+                "UpdatedAt",
+            ],
+            preparation.GetProperties()
+                .Select(property => property.Name)
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(
             ["Channel", "TenantId", "ChannelActorId", "ConversationId", "RequesterId"],
             activeIndex.Properties.Select(property => property.Name).ToArray());
         Assert.True(activeIndex.IsUnique);
@@ -156,7 +184,7 @@ public sealed class WorkflowPreparationPersistenceTests
     }
 
     [Fact]
-    public async Task CompetingSavesFromOneVersionReturnTypedOptimisticConflict()
+    public async Task CompetingContextOnlyWritesReturnTypedOptimisticConflict()
     {
         await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
         var preparation = RequestPreparation.CreateRoot(
@@ -176,8 +204,18 @@ public sealed class WorkflowPreparationPersistenceTests
         var second = await secondStore.GetAsync(
             preparation.PreparationId,
             TestContext.Current.CancellationToken);
-        first.Value.RecordInterpretedTurn(CreatedAt.AddMinutes(1), "first");
-        second.Value.RecordInterpretedTurn(CreatedAt.AddMinutes(1), "second");
+        first.Value.SetClarification(
+            new ClarificationSeed(
+                ClarificationTarget.Role,
+                [new RoleClarificationChoice("ProductionReadOnly", "Production read-only")]),
+            CreatedAt.AddMinutes(1),
+            "first");
+        second.Value.SetClarification(
+            new ClarificationSeed(
+                ClarificationTarget.Role,
+                [new RoleClarificationChoice("ProductionSupport", "Production support")]),
+            CreatedAt.AddMinutes(1),
+            "second");
 
         var firstSave = await firstStore.SaveChangesAsync(
             TestContext.Current.CancellationToken);
@@ -346,13 +384,9 @@ public sealed class WorkflowPreparationPersistenceTests
                     context,
                     "SELECT ClarificationJson FROM RequestPreparations",
                     TestContext.Current.CancellationToken);
-                Assert.DoesNotContain(
-                    "candidateVersion",
-                    Assert.IsType<string>(clarificationJson),
-                    StringComparison.Ordinal);
                 Assert.Contains(
                     "Production read-only",
-                    clarificationJson,
+                    Assert.IsType<string>(clarificationJson),
                     StringComparison.Ordinal);
             }
 
@@ -446,9 +480,6 @@ public sealed class WorkflowPreparationPersistenceTests
                 "correlation-create"),
             CreatedAt,
             "correlation-create");
-        preparation.RecordInterpretedTurn(
-            CreatedAt.AddMinutes(1),
-            "correlation-turn");
         return preparation;
     }
 
@@ -500,9 +531,7 @@ public sealed class WorkflowPreparationPersistenceTests
         Assert.Equal(expected.Binding, actual.Binding);
         Assert.Equal(expected.Lifecycle, actual.Lifecycle);
         Assert.Equal(expected.Candidate, actual.Candidate);
-        Assert.Equal(expected.CandidateVersion, actual.CandidateVersion);
         Assert.Equal(expected.ConcurrencyVersion, actual.ConcurrencyVersion);
-        Assert.Equal(expected.InterpretedTurnCount, actual.InterpretedTurnCount);
         Assert.Equal(expected.CreatedAt, actual.CreatedAt);
         Assert.Equal(expected.UpdatedAt, actual.UpdatedAt);
         Assert.Equal(expected.ReadyAt, actual.ReadyAt);

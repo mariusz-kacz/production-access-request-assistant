@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "2.0.0";
+    internal const string PromptContractVersion = "3.0.0";
     internal const string McpContractVersion = "2.0.0";
     internal const string McpHttpClientName = "GovernedAccess.TargetMafMcpLoopback";
 
@@ -54,8 +54,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         Justification must retain requester-authored wording and language. You may extract it from framing,
         trim outer whitespace, normalize line endings, or perform an explicitly requested append/remove/
         replacement using the current value. Never translate, summarize, polish, invent rationale, or copy
-        tool-returned facts into justification. A justification set must assert provenance
-        requesterAuthoredNormalized.
+        tool-returned facts into justification. A justification set carries only the retained text.
 
         Treat numeric, ordinal, identifier-like, reset-like, submission-like, and multilingual requester text
         as language to interpret. No text other than the Teams boundary's exact /new protocol is handled by
@@ -127,11 +126,6 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
                 limits.MaximumMessageCharacters))
         {
             return Failure(AgentInterpretationFailure.InvalidInput);
-        }
-
-        if (turn.InterpretedTurnCount >= limits.MaximumInterpretedTurns)
-        {
-            return Failure(AgentInterpretationFailure.BudgetExhausted);
         }
 
         using var budgetCancellation = CancellationTokenSource.CreateLinkedTokenSource(
@@ -368,7 +362,6 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
                         ? null
                         : new UntrustedText(turn.Candidate.Justification)),
                 turn.Lifecycle.ToString(),
-                turn.InterpretedTurnCount,
                 turn.Clarification is null
                     ? null
                     : new ModelClarification(
@@ -430,7 +423,6 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         UntrustedText UntrustedRequesterText,
         ModelCandidate CurrentCandidate,
         string Lifecycle,
-        int InterpretedTurnCount,
         ModelClarification? ActiveClarification);
 
     private sealed record UntrustedText(string Value);

@@ -4,12 +4,9 @@ namespace GovernedAccess.Core.Domain.Preparations;
 
 public sealed class RequestPreparation
 {
-    public const int MaximumInterpretedTurns = 50;
-
     public const int MaximumClarificationChoices = 5;
 
-    public const int MaximumMaterialChangeAttributions =
-        MaximumInterpretedTurns;
+    public const int MaximumMaterialChangeAttributions = 50;
 
     public static readonly TimeSpan ReadyLifetime = TimeSpan.FromMinutes(30);
 
@@ -29,7 +26,6 @@ public sealed class RequestPreparation
         PredecessorPreparationId = predecessorPreparationId;
         Binding = binding;
         Candidate = candidate;
-        CandidateVersion = candidate.IsEmpty ? 0 : 1;
         ConcurrencyVersion = 1;
         CreatedAt = createdAt.ToUniversalTime();
         UpdatedAt = CreatedAt;
@@ -63,9 +59,7 @@ public sealed class RequestPreparation
         Binding = state.Binding;
         Lifecycle = state.Lifecycle;
         Candidate = state.Candidate;
-        CandidateVersion = state.CandidateVersion;
         ConcurrencyVersion = state.ConcurrencyVersion;
-        InterpretedTurnCount = state.InterpretedTurnCount;
         Clarification = state.Clarification is null
             ? null
             : new PreparationClarificationContext(
@@ -94,15 +88,7 @@ public sealed class RequestPreparation
 
     public PreparationCandidate Candidate { get; private set; }
 
-    public int CandidateVersion { get; private set; }
-
     public long ConcurrencyVersion { get; private set; }
-
-    public int InterpretedTurnCount { get; private set; }
-
-    public bool CanInterpretTurn =>
-        Lifecycle is PreparationLifecycle.Collecting or PreparationLifecycle.Ready
-        && InterpretedTurnCount < MaximumInterpretedTurns;
 
     public PreparationClarificationContext? Clarification { get; private set; }
 
@@ -244,15 +230,13 @@ public sealed class RequestPreparation
         }
 
         ValidateAttribution(changedFields, attribution);
+        var operation = PrepareUpdate(occurredAt, correlationId);
         if (materialChangeAttributions.Count >= MaximumMaterialChangeAttributions)
         {
-            throw new InvalidOperationException(
-                "The preparation cannot retain additional material-change attribution.");
+            materialChangeAttributions.RemoveAt(0);
         }
 
-        var operation = PrepareUpdate(occurredAt, correlationId);
         Candidate = candidate;
-        CandidateVersion++;
         materialChangeAttributions.Add(attribution);
         Clarification = clarification is null
             ? null
@@ -305,22 +289,6 @@ public sealed class RequestPreparation
             ReadyDeadline = operation.OccurredAt.Add(ReadyLifetime);
         }
 
-        RecordUpdate(operation);
-    }
-
-    public void RecordInterpretedTurn(
-        DateTimeOffset occurredAt,
-        string correlationId)
-    {
-        EnsureActive();
-        if (!CanInterpretTurn)
-        {
-            throw new InvalidOperationException(
-                "The preparation interpreted-turn budget is exhausted.");
-        }
-
-        var operation = PrepareUpdate(occurredAt, correlationId);
-        InterpretedTurnCount++;
         RecordUpdate(operation);
     }
 
@@ -417,36 +385,12 @@ public sealed class RequestPreparation
             throw new ArgumentOutOfRangeException(nameof(state));
         }
 
-        if (state.CandidateVersion < 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(state),
-                state.CandidateVersion,
-                "The restored candidate version is outside its durable bounds.");
-        }
-
         if (state.ConcurrencyVersion < 1)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(state),
                 state.ConcurrencyVersion,
                 "The restored concurrency version must be positive.");
-        }
-
-        if (state.InterpretedTurnCount < 0
-            || state.InterpretedTurnCount > MaximumInterpretedTurns)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(state),
-                state.InterpretedTurnCount,
-                "The restored interpreted-turn count is outside its durable bounds.");
-        }
-
-        if (!state.Candidate.IsEmpty && state.CandidateVersion == 0)
-        {
-            throw new ArgumentException(
-                "A nonempty restored candidate requires a positive candidate version.",
-                nameof(state));
         }
 
         if (state.MaterialChangeAttributions.Count

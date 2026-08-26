@@ -73,8 +73,7 @@ public sealed partial class RequestPreparationReducer
         {
             null or ClearJustificationOperation => true,
             SetJustificationOperation { Value: { } value } =>
-                !string.IsNullOrWhiteSpace(value.Text)
-                && Enum.IsDefined(value.Provenance),
+                !string.IsNullOrWhiteSpace(value.Text),
             _ => false,
         };
 

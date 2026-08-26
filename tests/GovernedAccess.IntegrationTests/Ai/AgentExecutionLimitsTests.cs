@@ -9,7 +9,6 @@ public sealed class AgentExecutionLimitsTests
         new Dictionary<string, string?>
         {
             ["TargetRequestPreparationAgent:Limits:MaximumMessageCharacters"] = "4000",
-            ["TargetRequestPreparationAgent:Limits:MaximumInterpretedTurns"] = "50",
             ["TargetRequestPreparationAgent:Limits:MaximumCallsPerTool"] = "1",
             ["TargetRequestPreparationAgent:Limits:MaximumToolCalls"] = "4",
             ["TargetRequestPreparationAgent:Limits:MaximumProviderIterations"] = "6",
@@ -24,7 +23,6 @@ public sealed class AgentExecutionLimitsTests
         var limits = AgentExecutionLimits.Load(configuration);
 
         Assert.Equal(4000, limits.MaximumMessageCharacters);
-        Assert.Equal(50, limits.MaximumInterpretedTurns);
         Assert.Equal(1, limits.MaximumCallsPerTool);
         Assert.Equal(4, limits.MaximumToolCalls);
         Assert.Equal(6, limits.MaximumProviderIterations);
@@ -33,7 +31,6 @@ public sealed class AgentExecutionLimitsTests
 
     [Theory]
     [InlineData("MaximumMessageCharacters")]
-    [InlineData("MaximumInterpretedTurns")]
     [InlineData("MaximumCallsPerTool")]
     [InlineData("MaximumToolCalls")]
     [InlineData("MaximumProviderIterations")]
@@ -50,7 +47,6 @@ public sealed class AgentExecutionLimitsTests
 
     [Theory]
     [InlineData("MaximumMessageCharacters", "4001")]
-    [InlineData("MaximumInterpretedTurns", "51")]
     [InlineData("MaximumCallsPerTool", "2")]
     [InlineData("MaximumToolCalls", "5")]
     [InlineData("MaximumProviderIterations", "7")]

@@ -40,9 +40,7 @@ public sealed class PreparationTurnService
                     new PreparationTurnContext(
                         binding,
                         correlationId,
-                        preparation: null,
-                        staleWarning: null,
-                        immediateResponse: null))
+                        preparation: null))
                 : ApplicationResult.Failed<PreparationTurnContext>(
                     latestResult.Failure);
         }
@@ -60,21 +58,11 @@ public sealed class PreparationTurnService
             }
         }
 
-        var staleWarning = CreateStaleWarning(preparation, observedAt);
-        var immediateResponse = preparation.Lifecycle is PreparationLifecycle.Collecting
-                or PreparationLifecycle.Ready
-            && !preparation.CanInterpretTurn
-                ? new PreparationResponse(
-                    new BudgetExhaustedGuidance(),
-                    staleWarning)
-                : null;
         return ApplicationResult.Succeeded(
             new PreparationTurnContext(
                 binding,
                 correlationId,
-                preparation,
-                staleWarning,
-                immediateResponse));
+                preparation));
     }
 
     public async Task<PreparationTurnResult> ApplyAsync(
@@ -87,13 +75,6 @@ public sealed class PreparationTurnService
         ArgumentNullException.ThrowIfNull(proposal);
         ArgumentNullException.ThrowIfNull(attribution);
         cancellationToken.ThrowIfCancellationRequested();
-
-        if (turn.ImmediateResponse is not null)
-        {
-            return new PreparationTurnResult(
-                turn.Preparation,
-                turn.ImmediateResponse);
-        }
 
         var preparation = turn.TrackedPreparation
             ?? RequestPreparation.CreateRoot(
@@ -114,7 +95,7 @@ public sealed class PreparationTurnService
         {
             return new PreparationTurnResult(
                 turn.Preparation,
-                new PreparationResponse(reduction.Outcome, turn.StaleWarning));
+                new PreparationResponse(reduction.Outcome));
         }
 
         var occurredAt = clock.UtcNow.ToUniversalTime();
@@ -166,20 +147,7 @@ public sealed class PreparationTurnService
                 ? Terminal(turn, terminal)
                 : new PreparationTurnResult(
                     turn.Preparation,
-                    new PreparationResponse(new Failed(failure), turn.StaleWarning));
-    }
-
-    public static PreparationTurnResult Exhausted(PreparationTurnContext turn)
-    {
-        ArgumentNullException.ThrowIfNull(turn);
-        return turn.TrackedPreparation is { Lifecycle: not PreparationLifecycle.Collecting
-            and not PreparationLifecycle.Ready } terminal
-                ? Terminal(turn, terminal)
-                : new PreparationTurnResult(
-                    turn.Preparation,
-                    new PreparationResponse(
-                        new BudgetExhaustedGuidance(),
-                        turn.StaleWarning));
+                    new PreparationResponse(new Failed(failure)));
     }
 
     public async Task<PreparationTurnResult> ResetAsync(
@@ -264,7 +232,6 @@ public sealed class PreparationTurnService
             attribution,
             occurredAt,
             turn.CorrelationId);
-        preparation.RecordInterpretedTurn(occurredAt, turn.CorrelationId);
         store.Add(preparation);
         var save = await store.SaveChangesAsync(cancellationToken);
         if (save.IsFailure)
@@ -286,13 +253,24 @@ public sealed class PreparationTurnService
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
+        var requiresCommit = reduction.ChangedFields.Count > 0
+            || reduction.ClarificationDisposition
+                != ClarificationContextDisposition.Preserve;
+        if (!requiresCommit)
+        {
+            return Succeeded(
+                turn,
+                preparation,
+                reduction,
+                becameReady: false);
+        }
+
         ApplyReduction(
             preparation,
             reduction,
             attribution,
             occurredAt,
             turn.CorrelationId);
-        preparation.RecordInterpretedTurn(occurredAt, turn.CorrelationId);
         var save = await store.SaveChangesAsync(cancellationToken);
         return save.IsFailure
             ? SaveFailed(turn, save.Failure!)
@@ -316,11 +294,7 @@ public sealed class PreparationTurnService
                 == ClarificationContextDisposition.Replace;
         if (!requiresSuccessor)
         {
-            preparation.RecordInterpretedTurn(occurredAt, turn.CorrelationId);
-            var unchangedSave = await store.SaveChangesAsync(cancellationToken);
-            return unchangedSave.IsFailure
-                ? SaveFailed(turn, unchangedSave.Failure!)
-                : Succeeded(turn, preparation, reduction, becameReady: false);
+            return Succeeded(turn, preparation, reduction, becameReady: false);
         }
 
         var materialAttribution = CreateMaterialAttribution(
@@ -338,7 +312,6 @@ public sealed class PreparationTurnService
             materialAttribution,
             occurredAt,
             turn.CorrelationId);
-        preparation.RecordInterpretedTurn(occurredAt, turn.CorrelationId);
         preparation.MarkSuperseded(occurredAt, turn.CorrelationId);
         store.Add(successor);
         var save = await store.SaveChangesAsync(cancellationToken);
@@ -439,8 +412,6 @@ public sealed class PreparationTurnService
         RequestPreparation preparation) =>
         preparation.Lifecycle == PreparationLifecycle.Collecting
         && preparation.Candidate.IsEmpty
-        && preparation.CandidateVersion == 0
-        && preparation.InterpretedTurnCount == 0
         && preparation.Clarification is null
         && preparation.PredecessorPreparationId is null;
 
@@ -453,12 +424,9 @@ public sealed class PreparationTurnService
         var outcome = becameReady
             ? new ReadyForConfirmation(preparation.PreparationId)
             : reduction.Outcome;
-        var staleWarning = preparation.Lifecycle == PreparationLifecycle.Collecting
-            ? turn.StaleWarning
-            : null;
         return new PreparationTurnResult(
             new PreparationSnapshot(preparation),
-            new PreparationResponse(outcome, staleWarning));
+            new PreparationResponse(outcome));
     }
 
     private static PreparationTurnResult Terminal(
@@ -473,7 +441,7 @@ public sealed class PreparationTurnService
         ApplicationFailure failure) =>
         new(
             turn.Preparation,
-            new PreparationResponse(new Failed(failure), turn.StaleWarning));
+            new PreparationResponse(new Failed(failure)));
 
     private static PreparationTurnResult FailureWithoutPreparation(
         ApplicationFailure failure) =>
@@ -486,12 +454,4 @@ public sealed class PreparationTurnService
         new(
             new PreparationSnapshot(preparation),
             new PreparationResponse(new ResetGuidance()));
-
-    private static CollectingStaleWarning? CreateStaleWarning(
-        RequestPreparation preparation,
-        DateTimeOffset observedAt) =>
-        preparation.Lifecycle == PreparationLifecycle.Collecting
-        && observedAt - preparation.UpdatedAt >= CollectingStaleWarning.MinimumAge
-            ? new CollectingStaleWarning(preparation.UpdatedAt, observedAt)
-            : null;
 }

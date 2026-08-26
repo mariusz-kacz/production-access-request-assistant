@@ -7,7 +7,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal static class TurnProposalJsonTranslator
 {
-    internal const string StructuredOutputSchemaVersion = "2.0.0";
+    internal const string StructuredOutputSchemaVersion = "3.0.0";
 
     internal static JsonSerializerOptions SerializerOptions { get; } =
         new(JsonSerializerDefaults.Web)
@@ -124,10 +124,9 @@ internal static class TurnProposalJsonTranslator
                     "value": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": ["text", "provenance"],
+                      "required": ["text"],
                       "properties": {
-                        "text": { "type": "string", "minLength": 1 },
-                        "provenance": { "const": "requesterAuthoredNormalized" }
+                        "text": { "type": "string", "minLength": 1 }
                       }
                     }
                   }
@@ -274,14 +273,8 @@ internal static class TurnProposalJsonTranslator
     {
         [JsonRequired]
         public string? Text { get; init; }
-        [JsonRequired]
-        public string? Provenance { get; init; }
 
-        public JustificationProposal ToProposal() => new(
-            Text!,
-            Provenance == "requesterAuthoredNormalized"
-                ? JustificationProvenance.RequesterAuthoredNormalized
-                : throw new JsonException("Invalid justification provenance."));
+        public JustificationProposal ToProposal() => new(Text!);
     }
 
     private sealed class IncidentOperationPayload

@@ -37,13 +37,6 @@ internal sealed class TargetRequestPreparationOrchestrator
         }
 
         var turn = started.Value;
-        if (!turn.RequiresInterpretation)
-        {
-            return new PreparationTurnResult(
-                turn.Preparation,
-                turn.ImmediateResponse!);
-        }
-
         var interpretation = await interpreter.InterpretAsync(
             CreateAgentInput(turn, latestRequesterText, correlationId),
             cancellationToken);
@@ -55,10 +48,6 @@ internal sealed class TargetRequestPreparationOrchestrator
                     succeeded.Proposal,
                     ToAttribution(succeeded.ExecutionMetadata),
                     cancellationToken),
-            AgentInterpretationFailed
-            {
-                Failure: AgentInterpretationFailure.BudgetExhausted,
-            } => PreparationTurnService.Exhausted(turn),
             AgentInterpretationFailed failed => PreparationTurnService.Reject(
                 turn,
                 ToApplicationFailure(failed.Failure)),
@@ -85,7 +74,6 @@ internal sealed class TargetRequestPreparationOrchestrator
             latestRequesterText,
             preparation?.Candidate ?? PreparationCandidate.Empty,
             preparation?.Lifecycle ?? PreparationLifecycle.Collecting,
-            preparation?.InterpretedTurnCount ?? 0,
             CreateAgentClarification(preparation?.Clarification),
             correlationId);
     }
@@ -157,8 +145,6 @@ internal sealed class TargetRequestPreparationOrchestrator
                 ApplicationFailureKind.DependencyUnavailable,
                 "request-preparation-agent-unavailable",
                 "The request-preparation agent is unavailable."),
-            AgentInterpretationFailure.BudgetExhausted => throw new InvalidOperationException(
-                "Budget exhaustion requires its dedicated outcome."),
             _ => throw new InvalidOperationException(
                 "The target interpretation failure is unsupported."),
         };
