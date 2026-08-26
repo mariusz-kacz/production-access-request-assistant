@@ -43,7 +43,7 @@ project name does not require every test to start the complete application.
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
 | Persistence | EF model and component tests for relationships, unique constraints, UTC conversion, optimistic concurrency, and exact synthetic seeding. |
 | Frontend | Component tests for login/session behavior, list/detail rendering, approval and retry wiring, and absence of request creation. |
-| Evaluation mode | Command tests for dataset validation, exact scenario selection, grading, timeouts, cancellation, temporary-database cleanup, route isolation, and zero workflow effects. |
+| Evaluation mode | Command tests for the fixed dataset inventory, grading, timeouts, cancellation, temporary-database cleanup, route isolation, and zero workflow effects. |
 
 Use one cohesive full-host scenario instead of repeating every policy variant through
 HTTP. A full-host test is justified when it proves hosted authentication, routing,
@@ -131,10 +131,10 @@ Live-provider evaluation is an explicit manual gate after the credential-free su
 It may consume provider quota and requires an authorized developer identity. CI and
 routine validation must not invoke it automatically.
 
-The fixed 20-scenario dataset grades only the final normalized application outcome and
-declared final facts. It does not inspect prompts, transcripts, tool order, provider
-iterations, raw payloads, or token use. A full run requires 20 of 20; a focused run
-requires 1 of 1. Both require zero requests, decisions, operations, and grants.
+The fixed dataset contains 12 promoted scenario groups and two advisory groups.
+At least 11 promoted groups must reach the expected safe canonical outcome, every
+variation within a passing group must pass, and all absolute safety gates must pass.
+Every run requires zero requests, decisions, operations, and grants.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,

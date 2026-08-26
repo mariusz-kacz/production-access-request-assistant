@@ -7,6 +7,7 @@ internal sealed class AgentExecutionBudget(AgentExecutionLimits limits)
 {
     private readonly Dictionary<string, int> toolCallCounts =
         new(StringComparer.Ordinal);
+    private readonly List<string> toolNames = [];
     private readonly object sync = new();
     private int providerIterationCount;
     private int toolCallCount;
@@ -29,6 +30,17 @@ internal sealed class AgentExecutionBudget(AgentExecutionLimits limits)
             lock (sync)
             {
                 return toolCallCount;
+            }
+        }
+    }
+
+    internal IReadOnlyList<string> ToolNames
+    {
+        get
+        {
+            lock (sync)
+            {
+                return Array.AsReadOnly(toolNames.ToArray());
             }
         }
     }
@@ -63,6 +75,28 @@ internal sealed class AgentExecutionBudget(AgentExecutionLimits limits)
 
             toolCallCount++;
             toolCallCounts[toolName] = perToolCount + 1;
+            if (!toolNames.Contains(toolName, StringComparer.Ordinal))
+            {
+                toolNames.Add(toolName);
+            }
+        }
+    }
+
+    internal void ObserveProposedToolCalls(ChatResponse response)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        lock (sync)
+        {
+            foreach (var toolName in response.Messages
+                         .SelectMany(static message => message.Contents)
+                         .OfType<FunctionCallContent>()
+                         .Select(static call => call.Name))
+            {
+                if (!toolNames.Contains(toolName, StringComparer.Ordinal))
+                {
+                    toolNames.Add(toolName);
+                }
+            }
         }
     }
 }
@@ -86,13 +120,15 @@ internal sealed class ProviderIterationBudgetChatClient(
     AgentExecutionBudget budget)
     : DelegatingChatClient(innerClient)
 {
-    public override Task<ChatResponse> GetResponseAsync(
+    public override async Task<ChatResponse> GetResponseAsync(
         IEnumerable<ChatMessage> messages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         budget.BeginProviderIteration();
-        return base.GetResponseAsync(messages, options, cancellationToken);
+        var response = await base.GetResponseAsync(messages, options, cancellationToken);
+        budget.ObserveProposedToolCalls(response);
+        return response;
     }
 
     public override async IAsyncEnumerable<ChatResponseUpdate>

@@ -1,122 +1,258 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://governed-access.local/contracts/evaluation-dataset.schema.json",
-  "title": "Governed Access Live-Model Evaluation Dataset",
+  "title": "Governed Access deterministic-intake evaluation dataset",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "datasetVersion", "scenarios"],
+  "required": ["schemaVersion", "datasetVersion", "environment", "groups"],
   "properties": {
     "schemaVersion": { "const": 1 },
-    "datasetVersion": {
-      "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-    },
-    "scenarios": {
+    "datasetVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "environment": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "groups": {
       "type": "array",
-      "minItems": 20,
-      "maxItems": 20,
-      "items": { "$ref": "#/$defs/scenario" }
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/group" }
     }
   },
   "$defs": {
-    "category": {
-      "type": "string",
-      "enum": [
-        "successfulResolution",
-        "clarificationOrNoMatch",
-        "identifierHandling",
-        "multiTurn",
-        "validationConflict",
-        "safetyBoundary"
-      ]
-    },
-    "candidateSetup": {
+    "group": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["id", "promoted", "absoluteOutcomeGate", "variations"],
       "properties": {
-        "clientId": { "type": ["string", "null"] },
-        "environmentId": { "type": ["string", "null"] },
-        "requestedRoleId": { "type": ["string", "null"] },
-        "justification": { "type": ["string", "null"] },
-        "incidentId": { "type": ["string", "null"] }
+        "id": { "type": "string", "pattern": "^(EVAL|ADV)-[0-9]{2}$" },
+        "promoted": { "type": "boolean" },
+        "absoluteOutcomeGate": { "type": "boolean" },
+        "variations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/variation" }
+        }
       }
     },
-    "candidateExpectation": {
+    "variation": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["id", "turns", "expectedFinal"],
       "properties": {
-        "clientId": { "type": ["string", "null"] },
-        "environmentId": { "type": ["string", "null"] },
-        "requestedRoleId": { "type": ["string", "null"] },
-        "hasJustification": { "type": "boolean" },
-        "incidentId": { "type": ["string", "null"] }
+        "id": { "type": "string", "pattern": "^(EVAL|ADV)-[0-9]{2}-[A-Z0-9-]+$" },
+        "startingState": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/startingState" }
+          ]
+        },
+        "turns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/turn" }
+        },
+        "expectedFinal": { "$ref": "#/$defs/finalExpectation" }
+      }
+    },
+    "startingState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate"],
+      "properties": {
+        "candidate": { "$ref": "#/$defs/candidate" },
+        "clarification": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/clarification" }
+          ]
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientId", "environmentId", "roleId", "justification", "incidentId"],
+      "properties": {
+        "clientId": { "type": ["string", "null"], "maxLength": 200 },
+        "environmentId": { "type": ["string", "null"], "maxLength": 200 },
+        "roleId": { "type": ["string", "null"], "maxLength": 200 },
+        "justification": { "type": ["string", "null"], "maxLength": 2000 },
+        "incidentId": { "type": ["string", "null"], "maxLength": 200 }
+      }
+    },
+    "clarification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "choices"],
+      "properties": {
+        "target": { "enum": ["environment", "role"] },
+        "choices": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/choice" }
+        }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalId", "displayName", "clientId", "clientDisplayName", "region", "classification"],
+      "properties": {
+        "canonicalId": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "clientId": { "type": ["string", "null"], "maxLength": 200 },
+        "clientDisplayName": { "type": ["string", "null"], "maxLength": 200 },
+        "region": { "type": ["string", "null"], "maxLength": 200 },
+        "classification": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["primary", "recovery"] }
+          ]
+        }
       }
     },
     "turn": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "requesterMessage"],
+      "required": ["id", "requesterMessage", "expected"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-        "requesterMessage": { "type": "string", "minLength": 1, "maxLength": 4000 }
+        "id": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "requesterMessage": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "expected": { "$ref": "#/$defs/interpretationExpectation" },
+        "failureMode": { "enum": ["none", "providerUnavailable", "mcpUnavailable"] }
       }
     },
-    "expectation": {
+    "interpretationExpectation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["outcome"],
+      "required": ["dialogueAct", "discussionTopic", "failure", "proposal", "allowedTools", "requiredTools", "maximumToolCalls"],
+      "properties": {
+        "dialogueAct": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["updateDraft", "discussDraft", "requestSubmission", "unrelated", "unclear"] }
+          ]
+        },
+        "discussionTopic": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["currentDraft", "missingInformation", "allowedChanges", "confirmationProcess", "resetInstructions", "unsupported"] }
+          ]
+        },
+        "failure": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["invalidInput", "malformedModelOutput", "executionBudgetExceeded", "timeout", "unavailable"] }
+          ]
+        },
+        "proposal": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/proposal" }
+          ]
+        },
+        "allowedTools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/toolName" }
+        },
+        "requiredTools": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/toolName" }
+        },
+        "maximumToolCalls": { "type": "integer", "minimum": 0, "maximum": 4 }
+      }
+    },
+    "toolName": {
+      "enum": [
+        "get_environment_roles",
+        "get_incident",
+        "get_production_environment",
+        "search_production_environments"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "environment": { "$ref": "#/$defs/operation" },
+        "role": { "$ref": "#/$defs/operation" },
+        "justification": { "$ref": "#/$defs/operation" },
+        "incident": { "$ref": "#/$defs/operation" }
+      },
+      "minProperties": 1
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "environmentReferenceKind", "value"],
+      "properties": {
+        "operation": { "enum": ["set", "clear"] },
+        "environmentReferenceKind": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["exactEnvironmentId", "searchQuery"] }
+          ]
+        },
+        "value": { "type": ["string", "null"], "maxLength": 2000 }
+      }
+    },
+    "finalExpectation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "lifecycle", "candidate", "clarificationTarget", "clarificationChoiceIds", "scopeResult", "justificationResult"],
       "properties": {
         "outcome": {
-          "type": "string",
-          "enum": ["ready", "incomplete", "clarification", "rejected", "providerFailure"]
+          "enum": ["ready", "draftUpdated", "draftUnchanged", "clarification", "discussion", "submissionGuidance", "unrelatedGuidance", "unclearGuidance", "failed"]
         },
-        "candidate": { "$ref": "#/$defs/candidateExpectation" },
+        "lifecycle": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["collecting", "ready", "submitted", "superseded", "expired"] }
+          ]
+        },
+        "candidate": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/candidate" }
+          ]
+        },
         "clarificationTarget": {
-          "type": ["string", "null"],
-          "enum": ["environmentId", "requestedRoleId", "justification", "incidentId", null]
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["environment", "role"] }
+          ]
         },
-        "environmentOptionIds": {
+        "clarificationChoiceIds": {
           "type": "array",
+          "maxItems": 5,
           "uniqueItems": true,
-          "maxItems": 20,
-          "items": { "type": "string" }
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
         },
-        "validationCodes": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "type": "string" }
+        "scopeResult": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/groupResult" }
+          ]
         },
-        "preservedFields": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/candidateField" }
-        },
-        "clearedFields": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/candidateField" }
+        "justificationResult": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/groupResult" }
+          ]
         }
       }
     },
-    "candidateField": {
-      "type": "string",
-      "enum": ["clientId", "environmentId", "requestedRoleId", "justification", "incidentId"]
-    },
-    "scenario": {
+    "groupResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "category", "turns", "expected"],
+      "required": ["kind", "rejectionReason"],
       "properties": {
-        "id": { "type": "string", "pattern": "^(RES|CLR|IDF|MTN|VAL|SAFE)-[0-9]{2}$" },
-        "category": { "$ref": "#/$defs/category" },
-        "startingCandidate": { "$ref": "#/$defs/candidateSetup" },
-        "turns": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 8,
-          "items": { "$ref": "#/$defs/turn" }
-        },
-        "expected": { "$ref": "#/$defs/expectation" }
+        "kind": { "enum": ["applied", "noOp", "rejected", "needsClarification"] },
+        "rejectionReason": {
+          "oneOf": [
+            { "type": "null" },
+            { "enum": ["invalid", "unavailable", "conflict", "missingDependency", "environmentQueryTooBroad", "noAssignableRoles", "roleChoiceLimitExceeded"] }
+          ]
+        }
       }
     }
   }

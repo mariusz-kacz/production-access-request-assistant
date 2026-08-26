@@ -247,7 +247,8 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
             executionBudget.ToolCallCount,
             turn.CorrelationId,
             startedAt,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            executionBudget.ToolNames);
     }
 
     private ChatClientAgent CreateAgent(AgentExecutionBudget executionBudget)

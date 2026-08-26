@@ -26,10 +26,12 @@
   <ItemGroup>
     <ProjectReference Include="..\GovernedAccess.Core\GovernedAccess.Core.csproj" />
     <ProjectReference Include="..\GovernedAccess.Mcp\GovernedAccess.Mcp.csproj" />
+    <ProjectReference Include="..\GovernedAccess.ReferenceAuthority\GovernedAccess.ReferenceAuthority.csproj" />
+    <ProjectReference Include="..\GovernedAccess.Workflow.Persistence\GovernedAccess.Workflow.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Evaluation\Datasets\intake-v1.json"
+    <None Update="Evaluation\Datasets\deterministic-intake-v1.json"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Evaluation\Contracts\evaluation-dataset.schema.json"

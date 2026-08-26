@@ -389,14 +389,6 @@ public sealed class PreparationContractTests
             () => new ApplicationGroupResult(
                 ApplicationGroupResultKind.Applied,
                 ApplicationGroupRejectionReason.Invalid));
-        Assert.Null(typeof(RequestPreparationReducer).Assembly.GetType(
-            "GovernedAccess.Core.Preparations.PatchEvaluation"));
-        Assert.DoesNotContain(
-            typeof(TurnProposal).Assembly.GetTypes(),
-            type => string.Equals(
-                type.Name,
-                "OperationResult",
-                StringComparison.Ordinal));
     }
 
     [Fact]

@@ -98,7 +98,7 @@ $env:RequestPreparationModel__FoundryResponses__DeploymentName = "<deployment-na
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model
 ```
 
-Use [live-model evaluation](live-model-evaluation.md) for scenario selection, exit
+Use [live-model evaluation](live-model-evaluation.md) for the fixed inventory, exit
 codes, artifact interpretation, and cleanup. An explicit `--output` may select any
 resolvable directory; only the default artifact location is ignored by repository
 rules.

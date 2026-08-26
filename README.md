@@ -166,30 +166,27 @@ provisioning failure/retry/idempotency, audit evidence, and representative UI wi
 They do not require a live LLM, Teams tenant, Azure subscription, or production
 system.
 
-The explicit `evaluate-live-model` mode instead evaluates stochastic interpretation.
-It starts an isolated loopback host exposing only `/mcp`, creates a temporary SQLite
-database, and runs the checked-in 20-scenario dataset through the real
-`RequestDraftService` path. It grades final normalized application outcomes and
-declared candidate or clarification facts, and it requires zero access requests,
-approval decisions, provisioning operations, and grants. It does not inspect prompts,
-transcripts, tool order, provider iterations, raw payloads, or token usage, and it
-cannot confirm, approve, retry, or provision.
+The explicit `evaluate-live-model` mode instead evaluates stochastic interpretation
+against the isolated deterministic-intake composition. It starts a loopback-only host
+exposing the four read-only MCP tools, creates separate
+temporary reference and workflow SQLite databases, and runs the fixed 12 promoted
+scenario groups plus two advisory groups. Promotion requires at least 11 of 12
+promoted groups and every absolute safety gate, including zero requests, approval
+decisions, provisioning operations, and grants. The mode cannot confirm, approve,
+retry, or provision.
 
-The evaluated checked-in dataset is version `1.2.0` (schema version `1`) and
-contains 20 scenarios in six categories. The latest retained reviewed run records:
+The checked-in evaluation dataset is `deterministic-intake-1.0.0` (schema version `1`).
+No reviewed current run is retained yet because a credentialed passing run is still
+pending. The repository retains the previous delivered evaluator's historical run:
 
 - run ID `e4943a61-16af-4e13-8edd-b735d28c48a0`, completed 2026-08-10;
 - deployment label `production-access-request-model`;
 - 20/20 scenarios passed; and
 - zero requests, approval decisions, provisioning operations, and grants.
 
-See the [human-readable report](docs/evaluation/report.md) and
-[machine-readable result](docs/evaluation/result.json). The retained artifact records
-the run ID, timestamps, dataset version, deployment label, scenario outcomes,
-latencies, and side-effect counts. It does **not** record a commit SHA, prompt or
-schema hash, dataset hash, or exact provider model version. This is evidence from one
-reviewed run, not proof of production reliability, security, reproducibility across
-deployments, or performance at scale.
+See its [human-readable report](docs/evaluation/report.md) and
+[machine-readable result](docs/evaluation/result.json). These historical artifacts are
+not promotion evidence for the current evaluator.
 
 ## Deliberate limitations
 
@@ -262,8 +259,8 @@ dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live
 
 The [local development guide](docs/local-development.md) covers configuration, React
 hot reload, database handling, and troubleshooting. The
-[live-model evaluation guide](docs/live-model-evaluation.md) documents scenario
-selection, exit codes, artifact interpretation, and cleanup.
+[live-model evaluation guide](docs/live-model-evaluation.md) documents the fixed
+inventory, exit codes, artifact interpretation, and cleanup.
 
 ## Design records
 
@@ -276,4 +273,4 @@ selection, exit codes, artifact interpretation, and cleanup.
   [current MCP contract](docs/contracts/mcp-tools.json)
 - [Testing strategy](docs/testing-strategy.md),
   [live-model evaluation](docs/live-model-evaluation.md), and
-  [latest reviewed evidence](docs/evaluation/README.md)
+  [historical reviewed evidence](docs/evaluation/README.md)

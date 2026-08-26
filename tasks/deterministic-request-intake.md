@@ -738,7 +738,7 @@ Web-owned unified persistence graph, all coexistence seams, and delivered-only t
 
 - [ ] Planned
 
-**Description:** Replace baseline-shaped evaluation with the approved fixed target suite
+**Description:** Replace baseline-shaped evaluation with the approved fixed suite
 and retain evidence only from the final post-deletion implementation.
 
 **Acceptance criteria:**

@@ -1,6 +1,6 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Implementation in progress; Tasks 1–3 complete
+- **Status:** Implementation in progress; Tasks 1–3 complete; Task 4 automated gate implemented, credentialed report pending
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -122,10 +122,10 @@ only after this plan's exit gate.
   `ReferenceAuthorityAdapterTests`, `TargetMcpContractTests`,
   `MafTurnProposalInterpreterTests`, `MafTurnProposalToolBoundaryTests`, and
   `TargetRequestPreparationArchitectureTests`.
-- The implemented live-evaluation runner and `Evaluation/Datasets/intake-v1.json`
-  still prove the delivered full-candidate design with 20 scenarios and an all-pass
-  gate. The reviewed target 12-group/11-of-12 gate exists only in the target evaluation
-  matrix; the isolated target live suite remains pending.
+- The isolated evaluator implements the reviewed 12-group/11-of-12 gate from the
+  evaluation matrix. The previous delivered evaluator and dataset have been
+  removed; their reviewed result artifacts remain historical only. A credentialed
+  evaluation run remains pending.
 - The target specification, ADRs 0007–0009, target MCP contract, evaluation matrix, and
   roadmap were simplified by the planning run. Current/as-built baseline,
   architecture, security, orchestration, operator, and README documents deliberately
@@ -142,7 +142,7 @@ only after this plan's exit gate.
 | S5 | Target Core and reference schema support many incident environments through a list and join table. The accepted baseline and synthetic business data use one authoritative environment; no external integration requires many. | Collapse to nullable `Incident.EnvironmentId`. | Zero environment rejects scope; one derives/reloads; explicit conflict rejects scope. Delete join entity/table/index and multi-cardinality reducer/tests. | Evidence-gated; simplification accepted because no binding multi-environment evidence exists |
 | S6 | Shared matcher code exists, but MCP exposes up to 20 results while Core renders only five; `NarrowQuery` and agent-side result-ID policing exist solely for the asymmetry. | Use shared 0/1/2–5/>5 semantics and a complete maximum of five on both surfaces. | Delete the hidden 6–20 set, `NarrowQuery`, 20-result schemas/messages, and selection-policing state. Keep deterministic normalization, approved fields, eligible-only filtering, stable order, and provider-conformance tests. | Mandatory target behavior |
 | S7 | Aggregate, persistence, turn service, agent limits, responses, and tests enforce 50 interpreted turns. Core also emits a seven-day collecting-stale warning. | Remove both domain mechanisms. | Retain 4,000-character messages, zero-repair fail-closed output handling, tool/iteration limits, 30-second timeout/cancellation, and infrastructure rate limiting without lifecycle states. Bounded audit retention evicts or summarizes old metadata and never rejects a candidate change. | Mandatory; approved |
-| S8 | Detailed target inventory, thresholds, reruns, retention, waiver, and rebaseline rules duplicated feature-spec concerns; actual target live suite is not implemented. | Keep only high-level promotion requirements in the feature spec; keep all detailed governance in the evaluation matrix. | Absolute safety gates remain unchanged. Task 4 builds the target suite from the matrix without cases dedicated to removed mechanisms. | Mandatory documentation separation |
+| S8 | Detailed evaluation inventory, thresholds, reruns, retention, waiver, and rebaseline rules duplicated feature-spec concerns; the live suite was not implemented. | Keep only high-level promotion requirements in the feature spec; keep all detailed governance in the evaluation matrix. | Absolute safety gates remain unchanged. Task 4 builds the suite from the matrix without cases dedicated to removed mechanisms. | Mandatory documentation separation |
 | S9 | The accepted product baseline requires an owned **unexpired** ready intake at confirmation, and `docs/security-model.md` intentionally names the 30-minute expiry control. Current target aggregate implements lazy expiry. | Retain `Expired`, `ReadyAt`, `ReadyDeadline`, lazy expiry, confirm-before rendering, and expiry outcomes/tests. | Binding accepted evidence overrides the default removal target. Keep the implementation lazy; add no background worker or collecting TTL. | Evidence-gated; retained |
 | S10 | Current target requires explicit role selection even when one assignable role exists; role is authorization scope and the mandatory card is confirmation, not initial selection. The one-to-five role clarification path is already required. | Retain explicit requester selection; create no separate auto-selection task. | Auto-selection adds a special branch and does not remove role-choice infrastructure. It can be reconsidered only through a product/authorization-scope decision. | Optional assessment; no implementation task |
 
@@ -171,7 +171,7 @@ Task 1: contract + durable state contraction
              |
              +--> Task 3: grouped reducer + compact outcomes
                       |
-                      +--> Task 4: tests + target evaluation evidence
+                      +--> Task 4: tests + evaluation evidence
                                |
                                +--> Task 5: cross-boundary verification + docs handoff
 ```
@@ -477,7 +477,16 @@ No per-field transaction/result framework remains; every reducer case resolves i
 the two groups; unit/integration matrices prove atomic scope, independent justification,
 clarification without scope mutation, cascades, and no leaked temporary state.
 
-### Task 4 — Prune obsolete tests and implement the target evaluation gate
+### Task 4 — Prune obsolete tests and implement the evaluation gate
+
+- [ ] Complete — implementation and automated validation pass; the credentialed
+  evaluation report is pending because this environment has no Foundry live-model
+  configuration.
+- **Operator-directed deviation (2026-08-26):** after the isolated evaluator replacement
+  was implemented, the delivered evaluator command, implementation, dataset, schema,
+  and dedicated tests were removed. Its reviewed artifacts remain labeled as
+  historical evidence and are not current promotion evidence. The surviving evaluator
+  uses canonical names without the temporary `Target` prefix.
 
 **Objective and complexity reduction**
 
@@ -498,9 +507,8 @@ the historical selection protocol.
 **Likely files and consumers**
 
 - All focused test files named in Tasks 1–3 plus target architecture/hosting tests.
-- `src/GovernedAccess.Web/Evaluation/*`,
-  `Evaluation/Contracts/evaluation-dataset.schema.json`, and versioned dataset/config
-  selected for the isolated target run.
+- `src/GovernedAccess.Web/Evaluation/*`, the evaluation dataset schema, and the
+  versioned dataset/config selected for the isolated run.
 - Historical Task 10A remaining evidence items and historical Tasks 11/16 as downstream
   consumers.
 
@@ -513,7 +521,7 @@ the historical selection protocol.
 - Retain negative tests for no parser, unknown schema/properties, immediate fail-closed
   malformed output with no repair, stale OCC, source failures, prompt injection, and
   zero consequential effects.
-- Build one versioned isolated target live suite from the evaluation matrix. Do not
+- Build one versioned isolated live suite from the evaluation matrix. Do not
   weaken absolute gates or overwrite delivered evidence before atomic cutover. Do not
   add scenarios whose sole purpose is policing deleted mechanisms.
 - Record model, prompt, proposal schema, MCP contract, search-policy, dataset version,
@@ -559,7 +567,7 @@ downstream rows.
 **Exit gate**
 
 All obsolete-mechanism tests are gone; the focused deterministic suite proves the
-simplified behavior; isolated target live evaluation records a passing report under the
+simplified behavior; isolated live evaluation records a passing report under the
 matrix's unchanged absolute safety gates and required quality threshold.
 
 ### Task 5 — Cross-boundary verification and post-evidence reconciliation
@@ -613,7 +621,7 @@ Run repository validation sequentially in the mandated order:
 3. `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --no-build --no-restore --blame-hang-timeout 3m`
 4. Run the frontend suite only if the eventual target renderer or a frontend contract
    changed.
-5. Run credentialed target live evaluation for promotion and retain its evidence.
+5. Run credentialed live evaluation for promotion and retain its evidence.
 
 Also run architecture/source checks, migration schema inspection, JSON-schema parsing,
 documentation link validation, and `git diff --check`.
@@ -678,10 +686,10 @@ preserved now and their final proof remains a cutover prerequisite.
 - **Structured repair:** the explicit follow-up decision retains zero repairs, matching
   current target code and the pre-simplification contract. The first invalid output
   fails closed with no second interpreter invocation.
-- **Evaluation authority versus implementation:** the target matrix defines 12 promoted
-  groups and detailed gates, but the executable evaluator/dataset still proves the
-  delivered 20-scenario design. Task 4 implements the isolated target suite; existing
-  delivered evidence is not relabeled.
+- **Evaluation authority versus implementation:** the evaluation matrix defines 12 promoted
+  groups and detailed gates, and Task 4 implements that isolated suite. The
+  removed delivered evaluator's retained result artifacts remain historical and are
+  not relabeled as current evidence.
 - **Clarification simplification:** code already uses ordinary patches, while some tests
   preserve deleted protocol strings only to prove absence. Those redundant fixtures are
   removed; ordinary-patch and closed-schema evidence remains.

@@ -224,6 +224,7 @@ public sealed class MafTurnProposalToolBoundaryTests
             failed.Failure);
         Assert.Equal(0, failed.ExecutionMetadata.ToolCallCount);
         Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
+        Assert.Equal(["approve_request"], failed.ExecutionMetadata.ToolNames);
     }
 
     [Fact]

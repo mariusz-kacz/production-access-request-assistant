@@ -1,6 +1,6 @@
 # Deterministic Request Intake: Test and Evaluation Matrix
 
-- **Status:** Accepted target test authority
+- **Status:** Accepted test and evaluation authority
 - **Date:** 2026-08-26
 - **Normative source:** `SPEC-deterministic-request-intake.md`
 - **Purpose:** Assign each risk to the narrowest credible test layer and define promotion thresholds

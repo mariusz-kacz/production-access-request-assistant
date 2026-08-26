@@ -72,16 +72,15 @@ public sealed class MafTurnProposalInterpreterTests
                 .Order(StringComparer.Ordinal));
     }
 
-    public static TheoryData<string> ProtocolLikeMessages => new()
+    public static TheoryData<string> OrdinaryResetLikeMessages => new()
     {
-        "1",
         "/new please",
         "zresetuj mój wniosek",
     };
 
     [Theory]
-    [MemberData(nameof(ProtocolLikeMessages))]
-    public async Task EveryNonblankProtocolLikeMessageReachesTheAgent(string message)
+    [MemberData(nameof(OrdinaryResetLikeMessages))]
+    public async Task NonExactResetMessagesReachTheAgent(string message)
     {
         var chatClient = new RecordingChatClient(UnclearProposal);
         var interpreter = CreateInterpreter(chatClient);

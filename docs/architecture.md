@@ -210,11 +210,12 @@ outcome. It does not reinterpret an identifier-like exact `NotFound` as a discov
 query.
 
 The same Web executable also supports `evaluate-live-model`. That mode starts an
-isolated loopback host exposing only `/mcp`, uses a unique temporary SQLite database,
-runs the checked-in 20-scenario dataset through `RequestDraftService`, records only
-sanitized final outcomes, and removes temporary database files on disposal. It cannot
-confirm, approve, provision, retry, or revoke. Operator instructions live in the
-[live-model evaluation guide](live-model-evaluation.md).
+isolated loopback host exposing only the four read-only MCP tools, uses separate
+temporary reference and workflow SQLite databases, runs the fixed evaluation
+evaluation inventory through the grouped preparation path, records only sanitized
+outcomes and safety evidence, and removes temporary database files on disposal. It
+cannot confirm, approve, provision, retry, or revoke. Operator instructions live in
+the [live-model evaluation guide](live-model-evaluation.md).
 
 ## Governed workflow
 

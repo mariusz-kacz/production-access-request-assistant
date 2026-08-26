@@ -302,7 +302,8 @@ internal sealed record AgentExecutionMetadata(
     int ToolCallCount,
     string CorrelationId,
     DateTimeOffset StartedAt,
-    DateTimeOffset CompletedAt);
+    DateTimeOffset CompletedAt,
+    IReadOnlyList<string>? ToolNames = null);
 
 internal enum AgentInterpretationFailure
 {
