@@ -204,6 +204,51 @@ public sealed class RequestPreparation
             correlationId);
     }
 
+    public static RequestPreparation CreateAuthoritativeRevision(
+        RequestPreparation predecessor,
+        PreparationCandidate correctedCandidate,
+        DateTimeOffset createdAt,
+        string correlationId)
+    {
+        ArgumentNullException.ThrowIfNull(predecessor);
+        ArgumentNullException.ThrowIfNull(correctedCandidate);
+        if (predecessor.Lifecycle != PreparationLifecycle.Ready)
+        {
+            throw new InvalidOperationException(
+                "Only a ready preparation can receive an authoritative correction.");
+        }
+
+        var normalizedCreatedAt = createdAt.ToUniversalTime();
+        predecessor.EnsureNotExpired(normalizedCreatedAt);
+        predecessor.EnsureChronological(normalizedCreatedAt);
+        if (correctedCandidate.IsEmpty)
+        {
+            throw new ArgumentException(
+                "An authoritative successor must retain a non-empty canonical candidate.",
+                nameof(correctedCandidate));
+        }
+
+        if (correctedCandidate.ChangedFieldsFrom(predecessor.Candidate).Count == 0)
+        {
+            throw new ArgumentException(
+                "An authoritative successor must correct at least one canonical field.",
+                nameof(correctedCandidate));
+        }
+
+        var successor = new RequestPreparation(
+            Guid.NewGuid(),
+            predecessor.PreparationId,
+            predecessor.Binding,
+            correctedCandidate,
+            clarification: null,
+            attribution: null,
+            normalizedCreatedAt,
+            correlationId);
+        successor.materialChangeAttributions.AddRange(
+            predecessor.materialChangeAttributions);
+        return successor;
+    }
+
     public static RequestPreparation RestoreFromPersistence(
         RequestPreparationPersistenceState state)
     {

@@ -73,6 +73,12 @@ public sealed class WorkflowDownstreamPersistenceTests
             request.FindProperty(nameof(AccessRequest.PersistenceVersion))!
                 .IsConcurrencyToken);
         Assert.Contains(
+            request.GetIndexes(),
+            index =>
+                index.IsUnique
+                && index.Properties.Select(property => property.Name).SequenceEqual(
+                    [nameof(AccessRequest.PreparationId)]));
+        Assert.Contains(
             decision!.GetIndexes(),
             index =>
                 index.IsUnique
@@ -92,6 +98,42 @@ public sealed class WorkflowDownstreamPersistenceTests
         Assert.Null(context.Model.FindEntityType(typeof(ProductionEnvironment)));
         Assert.Null(context.Model.FindEntityType(typeof(EnvironmentRole)));
         Assert.Null(context.Model.FindEntityType(typeof(Incident)));
+    }
+
+    [Fact]
+    public async Task TargetRequestPreparationIdRoundTripsAndRejectsDuplicates()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
+        var preparationId = Guid.NewGuid();
+        var firstRequest = CreateRequest(preparationId);
+
+        await using (var firstScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = firstScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddRequest(firstRequest);
+            Assert.True((await store.SaveChangesAsync(cancellationToken)).IsSuccess);
+        }
+
+        await using (var duplicateScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = duplicateScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddRequest(CreateRequest(preparationId));
+            var duplicateSave = await store.SaveChangesAsync(cancellationToken);
+
+            Assert.True(duplicateSave.IsFailure);
+            Assert.Equal(
+                ApplicationFailureKind.DependencyFailure,
+                duplicateSave.Failure!.Kind);
+        }
+
+        await using var verificationScope = fixture.Services.CreateAsyncScope();
+        var verificationStore = verificationScope.ServiceProvider
+            .GetRequiredService<IWorkflowStore>();
+        var requests = await verificationStore.ListRequestsAsync(cancellationToken);
+        var restored = Assert.Single(requests.Value);
+        Assert.Equal(firstRequest.Id, restored.Id);
+        Assert.Equal(preparationId, restored.PreparationId);
     }
 
     [Fact]
@@ -353,6 +395,20 @@ public sealed class WorkflowDownstreamPersistenceTests
     private static AccessRequest CreateRequest() =>
         new(
             Guid.NewGuid(),
+            "requester",
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
+            CreatedAt,
+            "request-created-correlation");
+
+    private static AccessRequest CreateRequest(Guid preparationId) =>
+        new(
+            Guid.NewGuid(),
+            preparationId,
             "requester",
             new ValidatedRequestDetails(
                 "client-alpha",

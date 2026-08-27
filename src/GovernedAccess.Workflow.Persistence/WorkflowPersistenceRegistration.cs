@@ -29,7 +29,11 @@ public static class WorkflowPersistenceRegistration
                 connectionString,
                 sqlite => sqlite.MigrationsAssembly(
                     typeof(WorkflowDbContext).Assembly.FullName)));
-        services.AddScoped<IRequestPreparationStore, EfRequestPreparationStore>();
+        services.AddScoped<EfRequestPreparationStore>();
+        services.AddScoped<IRequestPreparationStore>(services =>
+            services.GetRequiredService<EfRequestPreparationStore>());
+        services.AddScoped<IRequestPreparationConfirmationStore>(services =>
+            services.GetRequiredService<EfRequestPreparationStore>());
         services.AddScoped<IAuthenticatedPrincipalReader, EfAuthenticatedPrincipalReader>();
         services.AddScoped<IWorkflowStore, EfWorkflowStore>();
         return services;

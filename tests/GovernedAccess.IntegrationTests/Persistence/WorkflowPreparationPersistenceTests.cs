@@ -51,6 +51,7 @@ public sealed class WorkflowPreparationPersistenceTests
                 "20260826071021_InitialWorkflowPersistence",
                 "20260826072800_AddRequestsAndAudit",
                 "20260826073338_AddApprovalAndProvisioning",
+                "20260827053353_AddRequestPreparationId",
             ],
             migrations);
         Assert.True(requester.IsSuccess);

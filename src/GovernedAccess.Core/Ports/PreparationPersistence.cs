@@ -28,6 +28,26 @@ public interface IRequestPreparationStore
 }
 
 /// <summary>
+/// Owns the single workflow-database unit of work used by target confirmation.
+/// Implementations atomically persist tracked preparation changes together with
+/// a staged request and its request-created audit evidence.
+/// </summary>
+public interface IRequestPreparationConfirmationStore : IRequestPreparationStore
+{
+    void AddRequest(AccessRequest request);
+
+    void AddAuditEvent(AuditEvent auditEvent);
+
+    Task<ApplicationResult<RequestPreparation>> ReloadAsync(
+        Guid preparationId,
+        CancellationToken cancellationToken);
+
+    Task<ApplicationResult<AccessRequest>> GetRequestByPreparationIdAsync(
+        Guid preparationId,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Reads authenticated synthetic identity snapshots from workflow-owned persistence.
 /// </summary>
 public interface IAuthenticatedPrincipalReader

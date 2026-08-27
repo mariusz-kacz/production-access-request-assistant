@@ -125,6 +125,9 @@ public sealed class WorkflowDbContext(DbContextOptions<WorkflowDbContext> option
     {
         entity.ToTable("AccessRequests");
         entity.HasKey(request => request.Id);
+        entity.HasIndex(request => request.PreparationId)
+            .IsUnique()
+            .HasDatabaseName("UX_AccessRequests_PreparationId");
         entity.Property(request => request.RequesterId)
             .HasMaxLength(IdentifierLength);
         entity.Property(request => request.Status)

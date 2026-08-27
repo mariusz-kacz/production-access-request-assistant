@@ -1,5 +1,7 @@
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Ai;
@@ -151,6 +153,7 @@ public sealed class TargetTeamsAccessRequestAdapterTests
         {
             Result = TargetConfirmationResult.Submitted(
                 requestId,
+                RequestStatus.AwaitingBusinessApproval,
                 wasAlreadySubmitted: false),
         };
         var adapter = CreateAdapter(new StubOrchestrator(), confirmation);
@@ -181,6 +184,40 @@ public sealed class TargetTeamsAccessRequestAdapterTests
         Assert.Equal(TargetTeamsAdapterResultKind.InvalidAction, rejectedLegacy.Kind);
     }
 
+    [Fact]
+    public async Task TargetConfirmationAdapterPreservesReplayStatusFromCore()
+    {
+        var preparationId = Guid.NewGuid();
+        var request = new AccessRequest(
+            Guid.NewGuid(),
+            preparationId,
+            "requester",
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
+            new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
+            "confirmation");
+        request.Status = RequestStatus.Active;
+        var adapter = new TargetRequestConfirmationAdapter(
+            new StubCoreConfirmation(
+                new PreparationConfirmationSubmitted(
+                    request,
+                    WasAlreadySubmitted: true)));
+
+        var result = await adapter.ConfirmAsync(
+            Binding(),
+            preparationId,
+            "replay",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(TargetConfirmationResultKind.AlreadySubmitted, result.Kind);
+        Assert.Equal(request.Id, result.RequestId);
+        Assert.Equal(RequestStatus.Active, result.RequestStatus);
+    }
+
     private static TargetTeamsAccessRequestAdapter CreateAdapter(
         ITargetRequestPreparationOrchestrator orchestrator,
         ITargetRequestConfirmation confirmation,
@@ -200,6 +237,14 @@ public sealed class TargetTeamsAccessRequestAdapterTests
                 FakeTeamsActivityBuilder.DefaultConversationId,
                 "requester"),
             "en-US");
+
+    private static PreparationBinding Binding() =>
+        new(
+            PreparationBinding.TeamsChannel,
+            FakeTeamsActivityBuilder.DefaultTenantId,
+            FakeTeamsActivityBuilder.DefaultActorId,
+            FakeTeamsActivityBuilder.DefaultConversationId,
+            "requester");
 
     private static PreparationTurnResult Result(
         PreparationSnapshot? preparation,
@@ -317,5 +362,14 @@ public sealed class TargetTeamsAccessRequestAdapterTests
             LastPreparationId = preparationId;
             return Task.FromResult(Result);
         }
+    }
+
+    private sealed class StubCoreConfirmation(PreparationConfirmationResult result) :
+        IPreparationConfirmationService
+    {
+        public Task<PreparationConfirmationResult> ConfirmAsync(
+            PreparationConfirmationCommand command,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(result);
     }
 }

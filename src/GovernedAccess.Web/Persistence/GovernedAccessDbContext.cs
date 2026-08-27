@@ -196,6 +196,7 @@ public sealed class GovernedAccessDbContext(DbContextOptions<GovernedAccessDbCon
     {
         entity.ToTable("AccessRequests");
         entity.HasKey(request => request.Id);
+        entity.Ignore(request => request.PreparationId);
         entity.Property(request => request.RequesterId).HasMaxLength(IdentifierLength);
         entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(32);
         entity.Property(request => request.CorrelationId).HasMaxLength(CorrelationIdLength);

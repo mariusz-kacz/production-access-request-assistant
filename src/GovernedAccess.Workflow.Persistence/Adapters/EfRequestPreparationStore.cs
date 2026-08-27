@@ -1,5 +1,6 @@
 using System.Data.Common;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Ports;
 using Microsoft.Data.Sqlite;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace GovernedAccess.Workflow.Persistence;
 
 internal sealed class EfRequestPreparationStore(WorkflowDbContext dbContext)
-    : IRequestPreparationStore
+    : IRequestPreparationConfirmationStore
 {
     private const int SqliteUniqueConstraint = 2067;
     private readonly Dictionary<Guid, TrackedPreparation> trackedPreparations = [];
@@ -27,6 +28,18 @@ internal sealed class EfRequestPreparationStore(WorkflowDbContext dbContext)
         trackedPreparations.Add(
             preparation.PreparationId,
             new TrackedPreparation(preparation, record, isAdded: true));
+    }
+
+    public void AddRequest(AccessRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        dbContext.AccessRequests.Add(request);
+    }
+
+    public void AddAuditEvent(AuditEvent auditEvent)
+    {
+        ArgumentNullException.ThrowIfNull(auditEvent);
+        dbContext.AuditEvents.Add(auditEvent);
     }
 
     public async Task<ApplicationResult<RequestPreparation>> GetActiveAsync(
@@ -106,6 +119,82 @@ internal sealed class EfRequestPreparationStore(WorkflowDbContext dbContext)
             QueryPreparations().Where(record =>
                 record.PreparationId == preparationId),
             cancellationToken);
+    }
+
+    public async Task<ApplicationResult<RequestPreparation>> ReloadAsync(
+        Guid preparationId,
+        CancellationToken cancellationToken)
+    {
+        if (!trackedPreparations.TryGetValue(preparationId, out var tracked))
+        {
+            return await GetAsync(preparationId, cancellationToken);
+        }
+
+        try
+        {
+            await dbContext.Entry(tracked.Record).ReloadAsync(cancellationToken);
+            if (dbContext.Entry(tracked.Record).State == EntityState.Detached)
+            {
+                trackedPreparations.Remove(preparationId);
+                return ApplicationResult.Failed<RequestPreparation>(
+                    WorkflowPersistenceFailures.NotFound());
+            }
+
+            var preparation = RequestPreparationRecordMapper.ToAggregate(
+                tracked.Record);
+            trackedPreparations[preparationId] = new TrackedPreparation(
+                preparation,
+                tracked.Record,
+                isAdded: false);
+            return ApplicationResult.Succeeded(preparation);
+        }
+        catch (DbException)
+        {
+            return ApplicationResult.Failed<RequestPreparation>(
+                WorkflowPersistenceFailures.Unavailable());
+        }
+        catch (ArgumentException)
+        {
+            return ApplicationResult.Failed<RequestPreparation>(
+                WorkflowPersistenceFailures.MalformedState());
+        }
+        catch (InvalidOperationException)
+        {
+            return ApplicationResult.Failed<RequestPreparation>(
+                WorkflowPersistenceFailures.MalformedState());
+        }
+    }
+
+    public async Task<ApplicationResult<AccessRequest>>
+        GetRequestByPreparationIdAsync(
+            Guid preparationId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = await dbContext.AccessRequests
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    candidate => candidate.PreparationId == preparationId,
+                    cancellationToken);
+            return request is null
+                ? ApplicationResult.Failed<AccessRequest>(
+                    new ApplicationFailure(
+                        ApplicationFailureKind.NotFound,
+                        "preparation-request-not-found",
+                        "The request created from the preparation was not found."))
+                : ApplicationResult.Succeeded(request);
+        }
+        catch (DbException)
+        {
+            return ApplicationResult.Failed<AccessRequest>(
+                WorkflowPersistenceFailures.Unavailable());
+        }
+        catch (InvalidOperationException)
+        {
+            return ApplicationResult.Failed<AccessRequest>(
+                WorkflowPersistenceFailures.MalformedState());
+        }
     }
 
     public async Task<ApplicationResult> SaveChangesAsync(

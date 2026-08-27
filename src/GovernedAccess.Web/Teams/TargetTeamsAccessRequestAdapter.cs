@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Contracts;
@@ -47,11 +48,13 @@ internal sealed record TargetConfirmationResult
     private TargetConfirmationResult(
         TargetConfirmationResultKind kind,
         Guid requestId,
+        RequestStatus? requestStatus,
         PreparationTurnResult? revalidation,
         ApplicationFailure? failure)
     {
         Kind = kind;
         RequestId = requestId;
+        RequestStatus = requestStatus;
         Revalidation = revalidation;
         Failure = failure;
     }
@@ -60,12 +63,15 @@ internal sealed record TargetConfirmationResult
 
     internal Guid RequestId { get; }
 
+    internal RequestStatus? RequestStatus { get; }
+
     internal PreparationTurnResult? Revalidation { get; }
 
     internal ApplicationFailure? Failure { get; }
 
     internal static TargetConfirmationResult Submitted(
         Guid requestId,
+        RequestStatus requestStatus,
         bool wasAlreadySubmitted)
     {
         if (requestId == Guid.Empty)
@@ -75,11 +81,17 @@ internal sealed record TargetConfirmationResult
                 nameof(requestId));
         }
 
+        if (!Enum.IsDefined(requestStatus))
+        {
+            throw new ArgumentOutOfRangeException(nameof(requestStatus));
+        }
+
         return new(
             wasAlreadySubmitted
                 ? TargetConfirmationResultKind.AlreadySubmitted
                 : TargetConfirmationResultKind.Submitted,
             requestId,
+            requestStatus,
             revalidation: null,
             failure: null);
     }
@@ -98,6 +110,7 @@ internal sealed record TargetConfirmationResult
         return new(
             TargetConfirmationResultKind.RevalidationFailed,
             Guid.Empty,
+            requestStatus: null,
             result,
             failure: null);
     }
@@ -106,6 +119,7 @@ internal sealed record TargetConfirmationResult
         new(
             TargetConfirmationResultKind.SourceUnavailable,
             Guid.Empty,
+            requestStatus: null,
             revalidation: null,
             failure: null);
 
@@ -116,6 +130,7 @@ internal sealed record TargetConfirmationResult
         return new(
             TargetConfirmationResultKind.Failed,
             Guid.Empty,
+            requestStatus: null,
             revalidation: null,
             failure);
     }
@@ -335,11 +350,26 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
             TeamsAdaptiveCardRenderer.CreateStatusCard(
                 new TeamsStatusCardPresentation(
                     title,
-                    $"Request {result.RequestId:D} is awaiting business approval. Access is not yet approved or granted.")),
+                    $"Request {result.RequestId:D} is {StatusText(result.RequestStatus!.Value)}.")),
             InputHints.IgnoringInput,
             InvalidatesTrackedCard: true,
             preparationId);
     }
+
+    private static string StatusText(RequestStatus status) =>
+        status switch
+        {
+            RequestStatus.AwaitingBusinessApproval =>
+                "awaiting business approval; access is not yet approved or granted",
+            RequestStatus.AwaitingDevOpsApproval =>
+                "awaiting DevOps approval; access is not yet granted",
+            RequestStatus.Rejected => "rejected; access was not granted",
+            RequestStatus.ProvisioningFailed =>
+                "in provisioning-failed state; access was not granted",
+            RequestStatus.Active => "active",
+            _ => throw new InvalidOperationException(
+                "The request status is unsupported."),
+        };
 
     private static TargetTeamsAdapterResult Text(
         string message,

@@ -104,6 +104,7 @@ public sealed class WorkflowPersistenceArchitectureTests
                 "20260826071021_InitialWorkflowPersistence",
                 "20260826072800_AddRequestsAndAudit",
                 "20260826073338_AddApprovalAndProvisioning",
+                "20260827053353_AddRequestPreparationId",
             ],
             workflowMigrations);
         Assert.Equal(

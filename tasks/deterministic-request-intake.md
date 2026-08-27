@@ -658,7 +658,7 @@ not Task 11 completion evidence.
 
 ### Task 12 - Build target confirmation and request idempotency
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Implement target confirmation as a separate Core service and add the
 single shared downstream seam: target-created `AccessRequest` instances require a
@@ -666,10 +666,10 @@ unique `PreparationId` while the delivered creation path temporarily still compi
 
 **Acceptance criteria:**
 
-- [ ] Confirmation trusts authenticated actor and persisted target state only, revalidates every fact, distinguishes source outage from fact drift, and applies exact correction cascades through a predecessor-linked successor.
-- [ ] Confirmation accepts only an owned immutable Ready preparation before its lazy 30-minute deadline; expiry is not refreshed or bypassed.
-- [ ] Successful confirmation creates one immutable request and marks the preparation Submitted in one workflow-database commit; unique `Request.PreparationId` provides stable sequential/concurrent replay, with no reference-database write or cross-database transaction.
-- [ ] Confirmation/revision races converge to either one submitted immutable request or one superseded stale card; every failure creates zero requests and preserves/supersedes state exactly as specified.
+- [x] Confirmation trusts authenticated actor and persisted target state only, revalidates every fact, distinguishes source outage from fact drift, and applies exact correction cascades through a predecessor-linked successor.
+- [x] Confirmation accepts only an owned immutable Ready preparation before its lazy 30-minute deadline; expiry is not refreshed or bypassed.
+- [x] Successful confirmation creates one immutable request and marks the preparation Submitted in one workflow-database commit; unique `Request.PreparationId` provides stable sequential/concurrent replay, with no reference-database write or cross-database transaction.
+- [x] Confirmation/revision races converge to either one submitted immutable request or one superseded stale card; every failure creates zero requests and preserves/supersedes state exactly as specified.
 
 **Verification:** Unit and SQLite race tests cover ownership concealment, expiry, all drift/source outcomes, replay, unique-key loser, and confirmation-vs-revision in both orders; downstream workflow regressions stay green; then standing backend and affected frontend verification.
 
@@ -684,6 +684,13 @@ unique `PreparationId` while the delivered creation path temporarily still compi
 **Estimated scope:** Large because request creation must be one atomic security boundary.
 
 **Acceptance coverage:** AC-19-AC-22, AC-30-AC-43, AC-48-AC-51.
+
+**Completion evidence (2026-08-27):** focused confirmation, target Teams adapter,
+workflow persistence, and request-domain coverage passed (16 unit tests and 22
+integration tests). The warnings-as-errors solution build passed with zero warnings,
+followed by 219 unit tests and 273 integration tests. The React suite was not run
+because Task 12 changed neither co-hosted React behavior nor browser contracts. The
+delivered production composition remains unchanged pending Tasks 13-14.
 
 ### Task 13 - Prove the complete replacement in an isolated host
 

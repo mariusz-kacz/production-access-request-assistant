@@ -23,6 +23,23 @@ public sealed record ValidatedRequestDetails
         string roleId,
         string justification,
         string? incidentId)
+        : this(
+            clientId,
+            environmentId,
+            roleId,
+            justification,
+            incidentId,
+            AccessRequest.MinimumJustificationLength)
+    {
+    }
+
+    private ValidatedRequestDetails(
+        string clientId,
+        string environmentId,
+        string roleId,
+        string justification,
+        string? incidentId,
+        int minimumJustificationLength)
     {
         clientId = AccessRequestNormalization.NormalizeIdentifier(clientId);
         environmentId = AccessRequestNormalization.NormalizeIdentifier(environmentId);
@@ -38,14 +55,13 @@ public sealed record ValidatedRequestDetails
                 "The requested role is not supported by this feature.");
         }
 
-        if (justification.Length is
-            < AccessRequest.MinimumJustificationLength
-            or > AccessRequest.MaximumJustificationLength)
+        if (justification.Length < minimumJustificationLength
+            || justification.Length > AccessRequest.MaximumJustificationLength)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(justification),
                 justification.Length,
-                $"The justification must be between {AccessRequest.MinimumJustificationLength} and {AccessRequest.MaximumJustificationLength} characters.");
+                $"The justification must be between {minimumJustificationLength} and {AccessRequest.MaximumJustificationLength} characters.");
         }
 
         ClientId = clientId;
@@ -54,6 +70,20 @@ public sealed record ValidatedRequestDetails
         Justification = justification;
         IncidentId = incidentId;
     }
+
+    internal static ValidatedRequestDetails CreateFromPreparation(
+        string clientId,
+        string environmentId,
+        string roleId,
+        string justification,
+        string? incidentId) =>
+        new(
+            clientId,
+            environmentId,
+            roleId,
+            justification,
+            incidentId,
+            minimumJustificationLength: 1);
 
     internal static ValidatedRequestDetails? RestorePreparedSnapshot(
         string? clientId,
