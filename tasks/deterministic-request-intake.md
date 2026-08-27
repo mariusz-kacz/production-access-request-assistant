@@ -694,7 +694,7 @@ delivered production composition remains unchanged pending Tasks 13-14.
 
 ### Task 13 - Prove the complete replacement in an isolated host
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Add a test-only composition containing the complete target modular
 monolith: reference authority/database, workflow persistence/database, preparation,
@@ -703,9 +703,9 @@ MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
 
 **Acceptance criteria:**
 
-- [ ] Full target journeys cover complete/incremental preparation, unique MCP search to exact-ID proposal without Core search replay, direct `searchQuery`, clarification across restart, revision, confirmation, business/DevOps approval, provisioning, replay, drift correction, independent database/source failures, abuse limits, and zero consequential side effects from free text.
-- [ ] Architecture tests prove the target project/`DbContext` ownership graph, no target dependency on delivered intake/persistence types, preparation-neutral shared Teams primitives, no cross-database EF relationship/query/transaction, and no runtime composition registering both graphs.
-- [ ] The ordinary production-host regression exercises only the delivered graph/unified database, while the isolated target host exercises only the replacement graph with distinct reference/workflow database files and independent migration histories.
+- [x] Full target journeys cover complete/incremental preparation, unique MCP search to exact-ID proposal without Core search replay, direct `searchQuery`, clarification across restart, revision, confirmation, business/DevOps approval, provisioning, replay, drift correction, independent database/source failures, abuse limits, and zero consequential side effects from free text.
+- [x] Architecture tests prove the target project/`DbContext` ownership graph, no target dependency on delivered intake/persistence types, preparation-neutral shared Teams primitives, no cross-database EF relationship/query/transaction, and no runtime composition registering both graphs.
+- [x] The ordinary production-host regression exercises only the delivered graph/unified database, while the isolated target host exercises only the replacement graph with distinct reference/workflow database files and independent migration histories.
 
 **Verification:** Run focused target full-host journeys, the full standing backend sequence, frontend suite, target contract checks, and `git diff --check`. No live provider is required at this checkpoint.
 
@@ -720,6 +720,14 @@ MCP, interpreter, Teams, confirmation, approvals, and provisioning. Production
 **Estimated scope:** Medium.
 
 **Acceptance coverage:** Deterministic pre-cutover evidence for AC-01-AC-52.
+
+**Completion evidence (2026-08-27):** all seven isolated target full-host composition
+and journey tests passed, followed by 37 focused target MCP, interpreter-boundary,
+architecture, and production-composition checks. The warnings-as-errors solution build
+passed with zero warnings, followed by 219 unit tests, 280 integration tests, and all
+6 React tests. `git diff --check` passed. No live provider was used, and the delivered
+production composition remains unchanged pending human Checkpoint C approval and Task
+14.
 
 ### Checkpoint C - Human cutover approval
 
