@@ -3,7 +3,6 @@ using System.Xml.Linq;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
-using GovernedAccess.Web.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -86,18 +85,17 @@ public sealed class ReferenceAuthorityArchitectureTests
     }
 
     [Fact]
-    public async Task OrdinaryProductionHostStillResolvesOnlyDeliveredPersistence()
+    public async Task ProductionHostResolvesOnlyModuleOwnedReferencePersistence()
     {
         await using var fixture = new DefaultWebApplicationFixture();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
 
-        Assert.NotNull(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
-        Assert.Null(scope.ServiceProvider.GetService<ReferenceAuthorityDbContext>());
-        Assert.Null(
+        Assert.NotNull(scope.ServiceProvider.GetService<ReferenceAuthorityDbContext>());
+        Assert.NotNull(
             scope.ServiceProvider.GetService<IProductionEnvironmentSearchAuthority>());
-        Assert.Null(scope.ServiceProvider.GetService<IProductionEnvironmentAuthority>());
-        Assert.Null(scope.ServiceProvider.GetService<IEnvironmentRoleAuthority>());
-        Assert.Null(scope.ServiceProvider.GetService<IIncidentAuthority>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IProductionEnvironmentAuthority>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IEnvironmentRoleAuthority>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IIncidentAuthority>());
     }
 
     [Fact]
@@ -115,7 +113,6 @@ public sealed class ReferenceAuthorityArchitectureTests
         Assert.Equal(
             Path.GetFullPath(fixture.DatabasePath),
             Path.GetFullPath(dataSource));
-        Assert.Null(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
         Assert.NotNull(
             scope.ServiceProvider.GetService<IProductionEnvironmentSearchAuthority>());
         Assert.NotNull(scope.ServiceProvider.GetService<IProductionEnvironmentAuthority>());

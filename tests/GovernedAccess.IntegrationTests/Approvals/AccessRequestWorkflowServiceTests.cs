@@ -3,7 +3,7 @@ using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,13 +17,14 @@ public sealed class AccessRequestWorkflowServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var (request, _) = await SeedBusinessApprovedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var provisioner = new PersistenceInspectingProvisioner(dbContext);
-        var service = CreateService(dbContext, provisioner, fixture.Clock);
+        var service = CreateService(scope.ServiceProvider, provisioner, fixture.Clock);
 
         var outcome = await service.DecideAsync(
             ApprovalStage.DevOps,
@@ -48,13 +49,14 @@ public sealed class AccessRequestWorkflowServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var request = await SeedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var service = CreateService(
-            dbContext,
+            scope.ServiceProvider,
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
@@ -72,9 +74,9 @@ public sealed class AccessRequestWorkflowServiceTests
             AccessRequestWorkflowService.BusinessApproverNotResponsibleCode,
             outcome.Failure!.Code);
         Assert.Equal(RequestStatus.AwaitingBusinessApproval, request.Status);
-        Assert.Empty(await dbContext.ApprovalDecisions.ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.Set<ApprovalDecision>().ToListAsync(cancellationToken));
         Assert.Single(
-            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            await dbContext.Set<AuditEvent>().ToListAsync(cancellationToken),
             item => item.EventType == AuditEventType.AuthorizationRejected);
     }
 
@@ -84,13 +86,14 @@ public sealed class AccessRequestWorkflowServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var request = await SeedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var service = CreateService(
-            dbContext,
+            scope.ServiceProvider,
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
@@ -117,11 +120,11 @@ public sealed class AccessRequestWorkflowServiceTests
             AccessRequestWorkflowService.BusinessDuplicateDecisionCode,
             duplicate.Failure!.Code);
         var decision = Assert.Single(
-            await dbContext.ApprovalDecisions.ToListAsync(cancellationToken));
+            await dbContext.Set<ApprovalDecision>().ToListAsync(cancellationToken));
         Assert.Equal(ApprovalOutcome.Approved, decision.Decision);
         Assert.Equal("Original decision.", decision.Comment);
         Assert.Single(
-            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            await dbContext.Set<AuditEvent>().ToListAsync(cancellationToken),
             item => item.EventType == AuditEventType.InvalidTransitionRejected);
     }
 
@@ -134,13 +137,14 @@ public sealed class AccessRequestWorkflowServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var (request, _) = await SeedBusinessApprovedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var service = CreateService(
-            dbContext,
+            scope.ServiceProvider,
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
@@ -159,9 +163,9 @@ public sealed class AccessRequestWorkflowServiceTests
             outcome.Failure!.Code);
         Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
         Assert.DoesNotContain(
-            await dbContext.ApprovalDecisions.ToListAsync(cancellationToken),
+            await dbContext.Set<ApprovalDecision>().ToListAsync(cancellationToken),
             item => item.Stage == ApprovalStage.DevOps);
-        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
+        Assert.Empty(await dbContext.Set<ProvisioningOperation>().ToListAsync(
             cancellationToken));
     }
 
@@ -171,13 +175,14 @@ public sealed class AccessRequestWorkflowServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var (request, _) = await SeedBusinessApprovedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var service = CreateService(
-            dbContext,
+            scope.ServiceProvider,
             new PersistenceInspectingProvisioner(dbContext),
             fixture.Clock);
 
@@ -194,18 +199,18 @@ public sealed class AccessRequestWorkflowServiceTests
         Assert.Equal(RequestStatus.Rejected, request.Status);
         Assert.Null(outcome.Value.Operation);
         Assert.Null(outcome.Value.Grant);
-        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
+        Assert.Empty(await dbContext.Set<ProvisioningOperation>().ToListAsync(
             cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.ToListAsync(cancellationToken));
+        Assert.Empty(await dbContext.Set<AccessGrant>().ToListAsync(cancellationToken));
     }
 
     private static AccessRequestWorkflowService CreateService(
-        GovernedAccessDbContext dbContext,
+        IServiceProvider services,
         IAccessProvisioner provisioner,
         IClock clock)
     {
-        var requestContext = new EfRequestContextReader(dbContext);
-        var workflowStore = new EfWorkflowStore(dbContext);
+        var requestContext = services.GetRequiredService<IRequestContextReader>();
+        var workflowStore = services.GetRequiredService<IWorkflowStore>();
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
@@ -217,11 +222,12 @@ public sealed class AccessRequestWorkflowServiceTests
 
     private static async Task<(AccessRequest Request, ApprovalDecision BusinessDecision)>
         SeedBusinessApprovedRequestAsync(
-            GovernedAccessDbContext dbContext,
+            WorkflowDbContext dbContext,
             DateTimeOffset occurredAt,
             CancellationToken cancellationToken)
     {
         var request = new AccessRequest(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
             new ValidatedRequestDetails(
@@ -246,18 +252,19 @@ public sealed class AccessRequestWorkflowServiceTests
             hasExistingDecision: false);
         var applied = Assert.IsType<ApprovalDecisionApplied>(policyResult);
 
-        dbContext.AccessRequests.Add(request);
-        dbContext.ApprovalDecisions.Add(applied.Decision);
+        dbContext.Set<AccessRequest>().Add(request);
+        dbContext.Set<ApprovalDecision>().Add(applied.Decision);
         await dbContext.SaveChangesAsync(cancellationToken);
         return (request, applied.Decision);
     }
 
     private static async Task<AccessRequest> SeedRequestAsync(
-        GovernedAccessDbContext dbContext,
+        WorkflowDbContext dbContext,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
         var request = new AccessRequest(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
             new ValidatedRequestDetails(
@@ -268,13 +275,13 @@ public sealed class AccessRequestWorkflowServiceTests
                 DemoDataIds.PrimaryIncidentId),
             occurredAt,
             "request-correlation");
-        dbContext.AccessRequests.Add(request);
+        dbContext.Set<AccessRequest>().Add(request);
         await dbContext.SaveChangesAsync(cancellationToken);
         return request;
     }
 
     private sealed class PersistenceInspectingProvisioner(
-        GovernedAccessDbContext dbContext) : IAccessProvisioner
+        WorkflowDbContext dbContext) : IAccessProvisioner
     {
         public bool DecisionWasPersistedBeforeInvocation { get; private set; }
 
@@ -287,13 +294,13 @@ public sealed class AccessRequestWorkflowServiceTests
             CancellationToken cancellationToken)
         {
             InvocationCount++;
-            DecisionWasPersistedBeforeInvocation = await dbContext.ApprovalDecisions
+            DecisionWasPersistedBeforeInvocation = await dbContext.Set<ApprovalDecision>()
                 .AsNoTracking()
                 .AnyAsync(
                     item => item.RequestId == request.RequestId
                         && item.Stage == ApprovalStage.DevOps,
                     cancellationToken);
-            OperationWasPersistedBeforeInvocation = await dbContext.ProvisioningOperations
+            OperationWasPersistedBeforeInvocation = await dbContext.Set<ProvisioningOperation>()
                 .AsNoTracking()
                 .AnyAsync(
                     item => item.RequestId == request.RequestId,

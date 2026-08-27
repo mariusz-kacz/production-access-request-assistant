@@ -65,10 +65,10 @@ internal sealed class TargetMcpTestHost : IAsyncDisposable
                     $"Data Source={databasePath};Pooling=False",
             });
         builder.Services.AddReferenceAuthority(builder.Configuration);
-        builder.Services.AddGovernedAccessTargetMcp();
+        builder.Services.AddGovernedAccessMcp();
 
         var application = builder.Build();
-        application.MapGovernedAccessTargetMcp();
+        application.MapGovernedAccessMcp();
 
         try
         {

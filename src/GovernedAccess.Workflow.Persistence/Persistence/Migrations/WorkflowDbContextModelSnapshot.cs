@@ -71,7 +71,7 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid?>("PreparationId")
+                    b.Property<Guid>("PreparationId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequesterId")

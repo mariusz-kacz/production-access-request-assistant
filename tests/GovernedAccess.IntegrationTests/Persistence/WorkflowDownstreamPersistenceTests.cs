@@ -7,6 +7,7 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority;
 using GovernedAccess.ReferenceAuthority.Persistence;
+using GovernedAccess.Web.Authority;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -72,6 +73,8 @@ public sealed class WorkflowDownstreamPersistenceTests
         Assert.True(
             request.FindProperty(nameof(AccessRequest.PersistenceVersion))!
                 .IsConcurrencyToken);
+        Assert.False(
+            request.FindProperty(nameof(AccessRequest.PreparationId))!.IsNullable);
         Assert.Contains(
             request.GetIndexes(),
             index =>
@@ -98,6 +101,20 @@ public sealed class WorkflowDownstreamPersistenceTests
         Assert.Null(context.Model.FindEntityType(typeof(ProductionEnvironment)));
         Assert.Null(context.Model.FindEntityType(typeof(EnvironmentRole)));
         Assert.Null(context.Model.FindEntityType(typeof(Incident)));
+    }
+
+    [Fact]
+    public async Task FreshDatabaseUsesOneFinalWorkflowMigration()
+    {
+        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+
+        var migrations = await context.Database.GetAppliedMigrationsAsync(
+            TestContext.Current.CancellationToken);
+
+        var migration = Assert.Single(migrations);
+        Assert.EndsWith("_InitialWorkflowPersistence", migration);
     }
 
     [Fact]
@@ -395,6 +412,7 @@ public sealed class WorkflowDownstreamPersistenceTests
     private static AccessRequest CreateRequest() =>
         new(
             Guid.NewGuid(),
+            Guid.NewGuid(),
             "requester",
             new ValidatedRequestDetails(
                 "client-alpha",
@@ -477,7 +495,7 @@ public sealed class WorkflowDownstreamPersistenceTests
         var services = new ServiceCollection()
             .AddReferenceAuthority(configuration)
             .AddWorkflowPersistence(configuration)
-            .AddScoped<IRequestContextReader, TargetAuthorityRequestContextReader>()
+            .AddScoped<IRequestContextReader, AuthoritativeRequestContextReader>()
             .BuildServiceProvider(validateScopes: true);
         await ReferenceAuthorityDatabase.InitializeAsync(
             services,

@@ -13,7 +13,6 @@ using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
 using GovernedAccess.Web.Evaluation;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -321,7 +320,6 @@ public sealed class EvaluationEngineTests
 			await using AsyncServiceScope scope = hosting.Services.CreateAsyncScope();
 			Assert.NotNull(scope.ServiceProvider.GetService<ReferenceAuthorityDbContext>());
 			Assert.NotNull(scope.ServiceProvider.GetService<WorkflowDbContext>());
-			Assert.Null(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
 		}
 		finally
 		{

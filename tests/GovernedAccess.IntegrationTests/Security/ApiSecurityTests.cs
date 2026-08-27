@@ -5,7 +5,7 @@ using GovernedAccess.Core.Domain;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -115,14 +115,14 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
             cancellationToken);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        Assert.Empty(await dbContext.AccessRequests.AsNoTracking().ToListAsync(
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        Assert.Empty(await dbContext.Set<AccessRequest>().AsNoTracking().ToListAsync(
             cancellationToken));
-        Assert.Empty(await dbContext.ApprovalDecisions.AsNoTracking().ToListAsync(
+        Assert.Empty(await dbContext.Set<ApprovalDecision>().AsNoTracking().ToListAsync(
             cancellationToken));
-        Assert.Empty(await dbContext.ProvisioningOperations.AsNoTracking().ToListAsync(
+        Assert.Empty(await dbContext.Set<ProvisioningOperation>().AsNoTracking().ToListAsync(
             cancellationToken));
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
+        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
             cancellationToken));
     }
 
@@ -179,18 +179,18 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(HttpStatusCode.OK, devOpsResponse.StatusCode);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.ApprovalDecisions
+        var decisions = await dbContext.Set<ApprovalDecision>()
             .AsNoTracking()
             .OrderBy(item => item.Stage)
             .ToArrayAsync(cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(cancellationToken);
-        var grant = await dbContext.AccessGrants
+        var grant = await dbContext.Set<AccessGrant>()
             .AsNoTracking()
             .SingleAsync(cancellationToken);
 

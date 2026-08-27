@@ -8,6 +8,7 @@ using GovernedAccess.Mcp;
 using GovernedAccess.ReferenceAuthority;
 using GovernedAccess.ReferenceAuthority.Adapters;
 using GovernedAccess.Web.Ai;
+using GovernedAccess.Web.Authority;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Teams;
 using GovernedAccess.Workflow.Persistence;
@@ -206,10 +207,10 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
                     EfProductionEnvironmentSearchAuthority>(),
                 observations));
         builder.Services.AddWorkflowPersistence(builder.Configuration);
-        builder.Services.AddGovernedAccessTargetMcp();
+        builder.Services.AddGovernedAccessMcp();
         builder.Services.AddScoped<
             IRequestContextReader,
-            TargetAuthorityRequestContextReader>();
+            AuthoritativeRequestContextReader>();
         builder.Services.AddSingleton<IClock>(clock);
         builder.Services.AddSingleton<IChatClient>(chatClient);
         builder.Services.AddSingleton(AgentExecutionLimits.Default);
@@ -256,7 +257,7 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
 
         var application = builder.Build();
         httpClientFactory.Application = application;
-        application.MapGovernedAccessTargetMcp();
+        application.MapGovernedAccessMcp();
         return application;
     }
 

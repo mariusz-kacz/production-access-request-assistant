@@ -81,7 +81,7 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		}
 		builder.Services.AddReferenceAuthority(builder.Configuration);
 		builder.Services.AddWorkflowPersistence(builder.Configuration);
-		builder.Services.AddGovernedAccessTargetMcp();
+		builder.Services.AddGovernedAccessMcp();
 		builder.Services.AddRequestPreparationChat(builder.Configuration);
 		builder.Services.AddSingleton<IClock, SystemClock>();
 		builder.Services.AddSingleton(TimeProvider.System);
@@ -105,7 +105,7 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		{
 			await ReferenceAuthorityDatabase.InitializeAsync(application.Services, cancellationToken);
 			await WorkflowPersistenceDatabase.InitializeAsync(application.Services, cancellationToken);
-			application.MapGovernedAccessTargetMcp();
+			application.MapGovernedAccessMcp();
 			await application.StartAsync(cancellationToken);
 			string address = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()?.Addresses.SingleOrDefault() ?? throw new InvalidOperationException("The evaluation host did not publish a loopback address.");
 			evaluationMcpBaseAddress = new Uri(address.EndsWith('/') ? address : (address + "/"), UriKind.Absolute);

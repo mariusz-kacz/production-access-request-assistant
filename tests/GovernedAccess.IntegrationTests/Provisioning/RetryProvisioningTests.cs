@@ -7,8 +7,8 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -48,14 +48,14 @@ public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
             problem.RootElement.GetProperty("code").GetString());
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
+        var auditEvent = await dbContext.Set<AuditEvent>()
             .AsNoTracking()
             .SingleAsync(
                 item => item.RequestId == requestId
@@ -67,7 +67,7 @@ public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(RequestStatus.ProvisioningFailed, storedRequest.Status);
         Assert.Equal(ProvisioningOperationStatus.Failed, operation.Status);
         Assert.Equal(1, operation.AttemptCount);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
+        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
             cancellationToken));
     }
 
@@ -116,11 +116,11 @@ public sealed class RetryProvisioningTests(DefaultWebApplicationFixture fixture)
             problem.RootElement.GetProperty("code").GetString());
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == requestId, cancellationToken);
 
@@ -181,9 +181,10 @@ public sealed class RetryProvisioningComponentTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var provisioner = new LostResponseProvisioner(fixture.Clock);
-        var service = CreateService(dbContext, provisioner, fixture.Clock);
+        var service = CreateService(scope.ServiceProvider, provisioner, fixture.Clock);
         var request = await SeedBusinessApprovedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
@@ -219,7 +220,7 @@ public sealed class RetryProvisioningComponentTests
             provisioner.ActivatedAt.Add(AccessGrant.FixedLifetime),
             retry.Value.Grant.ExpiresAt);
 
-        var auditEvents = await dbContext.AuditEvents
+        var auditEvents = await dbContext.Set<AuditEvent>()
             .Where(item => item.RequestId == request.Id)
             .ToListAsync(cancellationToken);
         Assert.Equal(
@@ -240,13 +241,14 @@ public sealed class RetryProvisioningComponentTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var request = await SeedBusinessApprovedRequestAsync(
             dbContext,
             fixture.Clock.UtcNow,
             cancellationToken);
         var service = CreateService(
-            dbContext,
+            scope.ServiceProvider,
             new LostResponseProvisioner(fixture.Clock),
             fixture.Clock);
 
@@ -261,20 +263,20 @@ public sealed class RetryProvisioningComponentTests
             AccessRequestWorkflowService.ProvisioningRetryInvalidTransitionCode,
             outcome.Failure!.Code);
         Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
-        Assert.Empty(await dbContext.ProvisioningOperations.ToListAsync(
+        Assert.Empty(await dbContext.Set<ProvisioningOperation>().ToListAsync(
             cancellationToken));
         Assert.Single(
-            await dbContext.AuditEvents.ToListAsync(cancellationToken),
+            await dbContext.Set<AuditEvent>().ToListAsync(cancellationToken),
             item => item.EventType == AuditEventType.InvalidTransitionRejected);
     }
 
     private static AccessRequestWorkflowService CreateService(
-        GovernedAccessDbContext dbContext,
+        IServiceProvider services,
         IAccessProvisioner provisioner,
         DeterministicClock clock)
     {
-        var requestContext = new EfRequestContextReader(dbContext);
-        var workflowStore = new EfWorkflowStore(dbContext);
+        var requestContext = services.GetRequiredService<IRequestContextReader>();
+        var workflowStore = services.GetRequiredService<IWorkflowStore>();
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
@@ -285,11 +287,12 @@ public sealed class RetryProvisioningComponentTests
     }
 
     private static async Task<AccessRequest> SeedBusinessApprovedRequestAsync(
-        GovernedAccessDbContext dbContext,
+        WorkflowDbContext dbContext,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
         var request = new AccessRequest(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
             new ValidatedRequestDetails(
@@ -313,8 +316,8 @@ public sealed class RetryProvisioningComponentTests
                     occurredAt,
                     "business-correlation"),
                 hasExistingDecision: false));
-        dbContext.AccessRequests.Add(request);
-        dbContext.ApprovalDecisions.Add(applied.Decision);
+        dbContext.Set<AccessRequest>().Add(request);
+        dbContext.Set<ApprovalDecision>().Add(applied.Decision);
         await dbContext.SaveChangesAsync(cancellationToken);
         return request;
     }

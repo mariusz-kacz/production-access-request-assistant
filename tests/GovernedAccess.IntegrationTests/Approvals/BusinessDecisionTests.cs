@@ -6,7 +6,7 @@ using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Web.Observability;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -50,14 +50,14 @@ public sealed class BusinessDecisionTests(DefaultWebApplicationFixture fixture)
         var actionCorrelationId = ReadCorrelationId(response);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decision = await dbContext.ApprovalDecisions
+        var decision = await dbContext.Set<ApprovalDecision>()
             .AsNoTracking()
             .SingleAsync(cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
+        var auditEvent = await dbContext.Set<AuditEvent>()
             .AsNoTracking()
             .SingleAsync(
                 item => item.RequestId == requestId

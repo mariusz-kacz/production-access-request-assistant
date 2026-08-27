@@ -310,6 +310,7 @@ public sealed class ApprovalDecisionPolicyTests
     private static AccessRequest CreateSubmittedRequest() =>
         new(
             RequestId,
+            Guid.NewGuid(),
             "requester",
             new ValidatedRequestDetails(
                 "client-alpha",

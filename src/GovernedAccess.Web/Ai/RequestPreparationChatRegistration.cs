@@ -100,7 +100,7 @@ internal static class RequestPreparationChatRegistration
         return resolution.Profile switch
         {
             RequestPreparationModelProfile.Deterministic =>
-                new DeterministicChatClient(DeterministicChatMode.Candidate),
+                new DeterministicChatClient(DeterministicChatMode.Unclear),
             RequestPreparationModelProfile.FoundryResponses =>
                 new ProviderFailureMappingChatClient(
                     foundryResponsesClientFactory()),

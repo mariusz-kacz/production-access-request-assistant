@@ -731,13 +731,18 @@ production composition remains unchanged pending human Checkpoint C approval and
 
 ### Checkpoint C - Human cutover approval
 
-- [ ] Delivered production host passes all regressions.
-- [ ] Isolated target host passes all deterministic journeys and security gates.
-- [ ] Isolated target reference/workflow database ownership, migration, restart, outage, and downstream workflow journeys pass.
-- [ ] Target source has no dependency on the delivered preparation implementation.
-- [ ] Shared Teams transport/presentation components depend on neither preparation graph and are retained unchanged by the Task 15 deletion plan.
-- [ ] The transition seam inventory still contains exactly the three declared seams.
-- [ ] Maintainer approves the production cutover after reviewing the isolated target evidence.
+- [x] Delivered production host passes all regressions.
+- [x] Isolated target host passes all deterministic journeys and security gates.
+- [x] Isolated target reference/workflow database ownership, migration, restart, outage, and downstream workflow journeys pass.
+- [x] Target source has no dependency on the delivered preparation implementation.
+- [x] Shared Teams transport/presentation components depend on neither preparation graph and are retained unchanged by the Task 15 deletion plan.
+- [x] The transition seam inventory still contains exactly the three declared seams.
+- [x] Maintainer approves the production cutover after reviewing the isolated target evidence.
+
+**Approval evidence (2026-08-27):** the maintainer explicitly directed implementation
+of Task 14 followed by Task 15. The recorded Task 13 evidence was rechecked with the
+focused isolated-host and architecture gate (20 tests passed) before cutover work
+started, and the seam inventory remained exactly the three declared seams.
 
 Do not start Task 14 without this approval. Failure here is fixed in the owning target
 task; it is not hidden behind a fallback or compatibility adapter.
@@ -746,7 +751,7 @@ task; it is not hidden behind a fallback or compatibility adapter.
 
 ### Task 14 - Atomically switch production composition to the target
 
-- [ ] Planned; blocked on Checkpoint C
+- [x] Complete
 
 **Description:** Change the production composition root and endpoints once so all new
 preparation traffic uses the already-proven target graph. Do not delete delivered code
@@ -754,9 +759,9 @@ inside this task; that makes the wiring change independently reviewable.
 
 **Acceptance criteria:**
 
-- [ ] `Program`, Teams, AI, MCP, reference-authority, workflow-persistence, and confirmation registrations resolve only the target graph and its two databases; there is no runtime flag, fallback, dual registration, dual write, or request-level routing.
-- [ ] Production MCP exposes exactly the target four tools, satisfying the already-documented phase transition in `AGENTS.md`.
-- [ ] After explicit reset and fresh independent migration of both target databases, production full-host journeys match the isolated target host and downstream approval/provisioning behavior remains unchanged.
+- [x] `Program`, Teams, AI, MCP, reference-authority, workflow-persistence, and confirmation registrations resolve only the target graph and its two databases; there is no runtime flag, fallback, dual registration, dual write, or request-level routing.
+- [x] Production MCP exposes exactly the target four tools, satisfying the already-documented phase transition in `AGENTS.md`.
+- [x] After explicit reset and fresh independent migration of both target databases, production full-host journeys match the isolated target host and downstream approval/provisioning behavior remains unchanged.
 
 **Verification:** Source/DI checks prove one active graph; run focused production full-host journeys, standing backend verification, frontend suite, configuration validation, and `git diff --check`.
 
@@ -772,18 +777,26 @@ inside this task; that makes the wiring change independently reviewable.
 
 **Acceptance coverage:** Runtime cutover evidence for AC-01-AC-44 and AC-48-AC-52.
 
+**Completion evidence (2026-08-27):** the production composition resolved only the
+four-tool target graph and the independent reference/workflow modules. Eight focused
+production composition tests, including preparation through confirmation, both human
+approval stages, provisioning, and the fixed eight-hour grant, passed before the
+immediate Task 15 deletion. Final standing verification is recorded with Task 15
+because the two tasks were executed serially as the approved atomic cutover/delete
+sequence.
+
 ### Task 15 - Delete the delivered intake and finalize the fresh schema
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Immediately remove the now-unreachable delivered preparation graph,
 Web-owned unified persistence graph, all coexistence seams, and delivered-only tests.
 
 **Acceptance criteria:**
 
-- [ ] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP, delivered-only Teams semantic adapter/card assembly/action parsing/confirmation code, Web persistence duplicates, unified context/migrations/seeder, and tests whose only purpose is delivered behavior; retain the preparation-neutral Teams transport and pure presentation primitives extracted in Task 11 unchanged.
-- [ ] Remove the legacy `AccessRequest` creation path; make `AccessRequest.PreparationId` required and uniquely indexed in the final workflow migration, and prove the final reference/workflow schemas contain only their owned tables.
-- [ ] Source checks find no delivered proposal/lifecycle/version/choice/reserved-ID concepts, no compatibility aliases/adapters, no unified context/schema, no Web-owned EF adapter, and no transitional registration.
+- [x] Delete delivered full-candidate contracts, `RequestIntakeSession`, draft service/validator, old interpreter/store/MCP, delivered-only Teams semantic adapter/card assembly/action parsing/confirmation code, Web persistence duplicates, unified context/migrations/seeder, and tests whose only purpose is delivered behavior; retain the preparation-neutral Teams transport and pure presentation primitives extracted in Task 11 unchanged.
+- [x] Remove the legacy `AccessRequest` creation path; make `AccessRequest.PreparationId` required and uniquely indexed in the final workflow migration, and prove the final reference/workflow schemas contain only their owned tables.
+- [x] Source checks find no delivered proposal/lifecycle/version/choice/reserved-ID concepts, no compatibility aliases/adapters, no unified context/schema, no Web-owned EF adapter, and no transitional registration.
 
 **Verification:** Compile/source checks first; fresh migration/startup/seeding tests; standing backend verification and frontend suite. An old or transitional database must fail with bounded reset guidance and must never be deleted automatically.
 
@@ -799,12 +812,24 @@ Web-owned unified persistence graph, all coexistence seams, and delivered-only t
 
 **Acceptance coverage:** Structural closure for AC-03, AC-07, AC-09, AC-15, AC-23, AC-24, AC-29-AC-31, AC-34, AC-36, AC-38, AC-43, AC-48-AC-52.
 
+**Completion evidence (2026-08-27):** deletion/source and final-schema focused
+coverage passed (24 tests), including one required and unique request preparation ID,
+one final workflow migration, owned-table inventories, and retained old-database files
+with bounded explicit-reset guidance. The warnings-as-errors solution build passed
+with zero warnings, followed sequentially by 150 unit tests, 231 integration tests,
+and all 6 React tests. EF reported no model changes after the final migration, and
+`git diff --check` passed.
+
 ### Checkpoint D - One implementation remains
 
-- [ ] Only the target preparation graph exists in production source and tests.
-- [ ] Fresh empty reference and workflow databases create only their independently owned final schemas and migration histories.
-- [ ] All backend and frontend regressions pass without legacy fixtures.
-- [ ] No compatibility or rollback path exists inside the application; rollback is source/version redeployment plus disposable database reset.
+- [x] Only the target preparation graph exists in production source and tests.
+- [x] Fresh empty reference and workflow databases create only their independently owned final schemas and migration histories.
+- [x] All backend and frontend regressions pass without legacy fixtures.
+- [x] No compatibility or rollback path exists inside the application; rollback is source/version redeployment plus disposable database reset.
+
+**Checkpoint evidence (2026-08-27):** Task 15 completion evidence above closes all
+four checks. Startup rejects non-final schemas before migration or seeding and leaves
+the configured database intact for explicit operator reset.
 
 ## Phase E - Final evidence and documentation
 

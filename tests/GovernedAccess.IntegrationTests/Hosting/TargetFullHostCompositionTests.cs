@@ -3,7 +3,6 @@ using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -24,11 +23,6 @@ public sealed class TargetFullHostCompositionTests
 
         Assert.NotNull(services.GetService<ReferenceAuthorityDbContext>());
         Assert.NotNull(services.GetService<WorkflowDbContext>());
-        Assert.Null(services.GetService<GovernedAccessDbContext>());
-        Assert.Null(services.GetService<IRequestIntakeStore>());
-        Assert.Null(services.GetService<IRequestPreparationInterpreter>());
-        Assert.Null(services.GetService<RequestDraftService>());
-        Assert.Null(services.GetService<RequestSubmissionService>());
         Assert.IsType<MafTurnProposalInterpreter>(
             services.GetRequiredService<ITurnProposalInterpreter>());
         Assert.IsType<TargetRequestPreparationOrchestrator>(

@@ -9,7 +9,7 @@ public sealed class AccessRequestPreparationTests
         new(2026, 8, 27, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void TargetRequestRequiresAndRetainsPreparationId()
+    public void RequestRequiresAndRetainsPreparationId()
     {
         var preparationId = Guid.NewGuid();
 
@@ -32,16 +32,18 @@ public sealed class AccessRequestPreparationTests
     }
 
     [Fact]
-    public void DeliveredRequestCreationTemporarilyRemainsPreparationNeutral()
+    public void RequestHasNoPreparationNeutralCreationPath()
     {
-        var request = new AccessRequest(
-            Guid.NewGuid(),
-            "requester",
-            Details(),
-            CreatedAt,
-            "delivered-confirmation");
+        var constructor = Assert.Single(
+            typeof(AccessRequest).GetConstructors());
+        var parameters = constructor.GetParameters();
 
-        Assert.Null(request.PreparationId);
+        Assert.Equal(typeof(Guid), parameters[1].ParameterType);
+        Assert.Equal(
+            typeof(Guid),
+            typeof(AccessRequest)
+                .GetProperty(nameof(AccessRequest.PreparationId))!
+                .PropertyType);
     }
 
     private static ValidatedRequestDetails Details() =>

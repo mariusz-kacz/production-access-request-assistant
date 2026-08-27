@@ -1,18 +1,16 @@
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
+using GovernedAccess.ReferenceAuthority;
+using GovernedAccess.Web.Authority;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Evaluation;
 using GovernedAccess.Web.Observability;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using GovernedAccess.Web.Teams;
-using Microsoft.EntityFrameworkCore;
-
-const string databaseConnectionStringName = "GovernedAccess";
-const string defaultDatabaseConnectionString = "Data Source=governed-access.db";
+using GovernedAccess.Workflow.Persistence;
 
 if (LiveModelEvaluationCommand.IsRequested(args))
 {
@@ -20,10 +18,6 @@ if (LiveModelEvaluationCommand.IsRequested(args))
 }
 
 var builder = WebApplication.CreateBuilder(args);
-var databaseConnectionString = builder.Configuration.GetConnectionString(
-        databaseConnectionStringName)
-    ?? defaultDatabaseConnectionString;
-
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails(options =>
 {
@@ -37,11 +31,9 @@ builder.Services.AddProblemDetails(options =>
         }
     };
 });
-builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
-    options.UseSqlite(databaseConnectionString));
-builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
-builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-builder.Services.AddScoped<RequestDraftValidator>();
+builder.Services.AddReferenceAuthority(builder.Configuration);
+builder.Services.AddWorkflowPersistence(builder.Configuration);
+builder.Services.AddScoped<IRequestContextReader, AuthoritativeRequestContextReader>();
 builder.Services.AddScoped<AccessRequestValidator>();
 builder.Services.AddScoped<AccessRequestVisibilityPolicy>();
 builder.Services.AddScoped<AccessRequestCommandContextLoader>();
@@ -81,7 +73,7 @@ app.MapFallback("/api/{**path}", () => Results.NotFound());
 app.MapFallback("/mcp/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 
-await SeedDatabaseAsync(app);
+await InitializeDatabasesAsync(app);
 await app.RunAsync();
 return 0;
 
@@ -167,12 +159,13 @@ static IConfiguration BuildEvaluationConfiguration()
         .Build();
 }
 
-static async Task SeedDatabaseAsync(WebApplication application)
+static async Task InitializeDatabasesAsync(WebApplication application)
 {
-    await using var scope = application.Services.CreateAsyncScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-    await SyntheticDataSeeder.SeedAsync(
-        dbContext,
+    await ReferenceAuthorityDatabase.InitializeAsync(
+        application.Services,
+        application.Lifetime.ApplicationStopping);
+    await WorkflowPersistenceDatabase.InitializeAsync(
+        application.Services,
         application.Lifetime.ApplicationStopping);
 }
 

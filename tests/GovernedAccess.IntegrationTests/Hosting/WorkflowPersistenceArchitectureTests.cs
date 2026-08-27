@@ -3,7 +3,6 @@ using System.Xml.Linq;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -60,19 +59,18 @@ public sealed class WorkflowPersistenceArchitectureTests
     }
 
     [Fact]
-    public async Task OrdinaryProductionHostDoesNotResolveTargetWorkflowPersistence()
+    public async Task ProductionHostResolvesOnlyModuleOwnedWorkflowPersistence()
     {
         await using var fixture = new DefaultWebApplicationFixture();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
 
-        Assert.NotNull(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
-        Assert.Null(scope.ServiceProvider.GetService<WorkflowDbContext>());
-        Assert.Null(scope.ServiceProvider.GetService<IRequestPreparationStore>());
-        Assert.Null(scope.ServiceProvider.GetService<IAuthenticatedPrincipalReader>());
-        var deliveredStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+        Assert.NotNull(scope.ServiceProvider.GetService<WorkflowDbContext>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IRequestPreparationStore>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IAuthenticatedPrincipalReader>());
+        var workflowStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
         Assert.Equal(
-            typeof(GovernedAccessDbContext).Assembly,
-            deliveredStore.GetType().Assembly);
+            typeof(WorkflowDbContext).Assembly,
+            workflowStore.GetType().Assembly);
     }
 
     [Fact]
@@ -95,18 +93,12 @@ public sealed class WorkflowPersistenceArchitectureTests
             workflowStore.GetType().Assembly);
         Assert.NotNull(scope.ServiceProvider.GetService<WorkflowDbContext>());
         Assert.NotNull(scope.ServiceProvider.GetService<ReferenceAuthorityDbContext>());
-        Assert.Null(scope.ServiceProvider.GetService<GovernedAccessDbContext>());
         Assert.NotEqual(
             Path.GetFullPath(fixture.ReferenceDatabasePath),
             Path.GetFullPath(fixture.WorkflowDatabasePath));
-        Assert.Equal(
-            [
-                "20260826071021_InitialWorkflowPersistence",
-                "20260826072800_AddRequestsAndAudit",
-                "20260826073338_AddApprovalAndProvisioning",
-                "20260827053353_AddRequestPreparationId",
-            ],
-            workflowMigrations);
+        Assert.EndsWith(
+            "_InitialWorkflowPersistence",
+            Assert.Single(workflowMigrations));
         Assert.Equal(
             ["20260825072917_InitialReferenceAuthority"],
             referenceMigrations);

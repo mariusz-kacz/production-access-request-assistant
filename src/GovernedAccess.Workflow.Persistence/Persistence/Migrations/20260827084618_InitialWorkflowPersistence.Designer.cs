@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
 {
     [DbContext(typeof(WorkflowDbContext))]
-    [Migration("20260827053353_AddRequestPreparationId")]
-    partial class AddRequestPreparationId
+    [Migration("20260827084618_InitialWorkflowPersistence")]
+    partial class InitialWorkflowPersistence
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -74,7 +74,7 @@ namespace GovernedAccess.Workflow.Persistence.Persistence.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid?>("PreparationId")
+                    b.Property<Guid>("PreparationId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("RequesterId")

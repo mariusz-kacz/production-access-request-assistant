@@ -8,9 +8,9 @@ using ModelContextProtocol.Server;
 
 namespace GovernedAccess.Mcp;
 
-public static class TargetMcpRegistration
+public static class McpRegistration
 {
-    public static IServiceCollection AddGovernedAccessTargetMcp(
+    public static IServiceCollection AddGovernedAccessMcp(
         this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -39,7 +39,7 @@ public static class TargetMcpRegistration
         return services;
     }
 
-    public static IEndpointConventionBuilder MapGovernedAccessTargetMcp(
+    public static IEndpointConventionBuilder MapGovernedAccessMcp(
         this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -51,7 +51,7 @@ public static class TargetMcpRegistration
     {
         var method = typeof(TTool).GetMethod(methodName)
             ?? throw new InvalidOperationException(
-                $"The configured target MCP tool method '{methodName}' does not exist.");
+                $"The configured MCP tool method '{methodName}' does not exist.");
 
         return McpServerTool.Create(
             method,
@@ -76,7 +76,7 @@ public static class TargetMcpRegistration
     {
         var services = context.Server.Services
             ?? throw new InvalidOperationException(
-                "The target MCP server does not have an invocation service provider.");
+                "The MCP server does not have an invocation service provider.");
         return services.GetRequiredService<TTool>();
     }
 }

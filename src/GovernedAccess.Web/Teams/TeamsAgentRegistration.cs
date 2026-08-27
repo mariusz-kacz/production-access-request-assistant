@@ -39,19 +39,10 @@ public static class TeamsAgentRegistration
         builder.Services.AddRequestTimeouts();
 
         AddActivityAuthentication(builder.Services, builder.Configuration);
-
-        builder.Services.AddSingleton(static serviceProvider =>
-            new RequestPreparationMcpEndpoint(
-                () => serviceProvider.GetRequiredService<
-                        IOptions<TeamsAccessRequestOptions>>()
-                    .Value
-                    .TrustedWebBaseUri));
-        builder.Services.AddRequestPreparation();
-        builder.Services.AddScoped<RequestSubmissionService>();
+        builder.Services.AddRequestPreparation(builder.Configuration);
         builder.Services.AddSingleton<TeamsDraftCardTracker>();
         builder.Services.AddScoped<TeamsActivityPresenter>();
         builder.Services.AddScoped<TeamsActorResolver>();
-        builder.Services.AddScoped<PreparedRequestCardFactory>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();
 
         builder.Services.AddAgentApplicationOptions(replaceExisting: false);
@@ -76,9 +67,6 @@ public static class TeamsAgentRegistration
                     .Value
                     .RequestTimeout);
 
-        // The dedicated integration host supplies an authenticated SDK-shaped
-        // identity through its test scheme. Every other environment requires
-        // the Azure Bot Service bearer-token policy registered above.
         return app.Environment.IsEnvironment("Testing")
             ? endpoint.RequireAuthorization()
             : endpoint.RequireAuthorization(ActivityAuthorizationPolicy);

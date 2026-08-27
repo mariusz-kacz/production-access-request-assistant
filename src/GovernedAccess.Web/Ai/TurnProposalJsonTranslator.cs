@@ -22,58 +22,83 @@ internal static class TurnProposalJsonTranslator
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schemaVersion", "dialogueAct"],
+          "required": ["schemaVersion", "dialogueAct", "patch", "discussionTopic"],
           "properties": {
             "schemaVersion": { "type": "integer", "const": 1 },
             "dialogueAct": {
               "type": "string",
               "enum": ["updateDraft", "discussDraft", "requestSubmission", "unrelated", "unclear"]
             },
-            "patch": { "$ref": "#/$defs/patch" },
+            "patch": {
+              "anyOf": [
+                { "$ref": "#/$defs/patch" },
+                { "type": "null" }
+              ]
+            },
             "discussionTopic": {
-              "type": "string",
-              "enum": ["currentDraft", "missingInformation", "allowedChanges", "confirmationProcess", "resetInstructions", "unsupported"]
+              "type": ["string", "null"],
+              "enum": ["currentDraft", "missingInformation", "allowedChanges", "confirmationProcess", "resetInstructions", "unsupported", null]
             }
           },
           "$defs": {
             "patch": {
               "type": "object",
               "additionalProperties": false,
-              "minProperties": 1,
+              "required": ["environment", "role", "justification", "incident"],
               "properties": {
-                "environment": { "$ref": "#/$defs/environmentOperation" },
-                "role": { "$ref": "#/$defs/roleOperation" },
-                "justification": { "$ref": "#/$defs/justificationOperation" },
-                "incident": { "$ref": "#/$defs/incidentOperation" }
+                "environment": {
+                  "anyOf": [
+                    { "$ref": "#/$defs/environmentOperation" },
+                    { "type": "null" }
+                  ]
+                },
+                "role": {
+                  "anyOf": [
+                    { "$ref": "#/$defs/roleOperation" },
+                    { "type": "null" }
+                  ]
+                },
+                "justification": {
+                  "anyOf": [
+                    { "$ref": "#/$defs/justificationOperation" },
+                    { "type": "null" }
+                  ]
+                },
+                "incident": {
+                  "anyOf": [
+                    { "$ref": "#/$defs/incidentOperation" },
+                    { "type": "null" }
+                  ]
+                }
               }
             },
             "environmentOperation": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation"],
-                  "properties": { "operation": { "const": "clear" } }
+                  "properties": { "operation": { "type": "string", "const": "clear" } }
                 },
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation", "reference"],
                   "properties": {
-                    "operation": { "const": "set" },
+                    "operation": { "type": "string", "const": "set" },
                     "reference": { "$ref": "#/$defs/environmentReference" }
                   }
                 }
               ]
             },
             "environmentReference": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["kind", "id"],
                   "properties": {
-                    "kind": { "const": "exactEnvironmentId" },
+                    "kind": { "type": "string", "const": "exactEnvironmentId" },
                     "id": { "type": "string", "minLength": 1 }
                   }
                 },
@@ -82,45 +107,45 @@ internal static class TurnProposalJsonTranslator
                   "additionalProperties": false,
                   "required": ["kind", "query"],
                   "properties": {
-                    "kind": { "const": "searchQuery" },
+                    "kind": { "type": "string", "const": "searchQuery" },
                     "query": { "type": "string", "minLength": 1, "maxLength": 200 }
                   }
                 }
               ]
             },
             "roleOperation": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation"],
-                  "properties": { "operation": { "const": "clear" } }
+                  "properties": { "operation": { "type": "string", "const": "clear" } }
                 },
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation", "roleId"],
                   "properties": {
-                    "operation": { "const": "set" },
+                    "operation": { "type": "string", "const": "set" },
                     "roleId": { "type": "string", "minLength": 1 }
                   }
                 }
               ]
             },
             "justificationOperation": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation"],
-                  "properties": { "operation": { "const": "clear" } }
+                  "properties": { "operation": { "type": "string", "const": "clear" } }
                 },
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation", "value"],
                   "properties": {
-                    "operation": { "const": "set" },
+                    "operation": { "type": "string", "const": "set" },
                     "value": {
                       "type": "object",
                       "additionalProperties": false,
@@ -134,19 +159,19 @@ internal static class TurnProposalJsonTranslator
               ]
             },
             "incidentOperation": {
-              "oneOf": [
+              "anyOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation"],
-                  "properties": { "operation": { "const": "clear" } }
+                  "properties": { "operation": { "type": "string", "const": "clear" } }
                 },
                 {
                   "type": "object",
                   "additionalProperties": false,
                   "required": ["operation", "incidentId"],
                   "properties": {
-                    "operation": { "const": "set" },
+                    "operation": { "type": "string", "const": "set" },
                     "incidentId": { "type": "string", "minLength": 1 }
                   }
                 }

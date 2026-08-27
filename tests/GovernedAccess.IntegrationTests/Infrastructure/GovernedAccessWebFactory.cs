@@ -3,14 +3,17 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Teams;
+using GovernedAccess.ReferenceAuthority;
+using GovernedAccess.ReferenceAuthority.Persistence;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using GovernedAccess.Web.Teams;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Authentication;
@@ -44,8 +47,10 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
     public static readonly Uri DefaultTrustedWebBaseUri =
         new("https://governed-access.test/");
 
-    private readonly string databaseConnectionString =
-        $"Data Source=governed-access-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+    private readonly string referenceDatabaseConnectionString =
+        $"Data Source=governed-access-reference-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+    private readonly string workflowDatabaseConnectionString =
+        $"Data Source=governed-access-workflow-tests-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
     private readonly SemaphoreSlim databaseResetLock = new(1, 1);
     private readonly IChatClient? replacementChatClient;
     private readonly ILoggerProvider? loggerProvider;
@@ -90,7 +95,10 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         try
         {
             await using var scope = Services.CreateAsyncScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+            var referenceContext = scope.ServiceProvider
+                .GetRequiredService<ReferenceAuthorityDbContext>();
+            var workflowContext = scope.ServiceProvider
+                .GetRequiredService<WorkflowDbContext>();
             scope.ServiceProvider
                 .GetRequiredService<SyntheticAccessProvisionerControl>()
                 .Reset();
@@ -98,9 +106,14 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                 .GetRequiredService<TeamsDraftCardTracker>()
                 .Clear();
 
-            await dbContext.Database.EnsureCreatedAsync(cancellationToken);
-            await ClearDatabaseAsync(dbContext, cancellationToken);
-            await MinimalTestDataSeeder.SeedAsync(dbContext, cancellationToken);
+            await ClearDatabaseAsync(referenceContext, cancellationToken);
+            await ClearDatabaseAsync(workflowContext, cancellationToken);
+            await ReferenceAuthorityDatabase.InitializeAsync(
+                Services,
+                cancellationToken);
+            await WorkflowPersistenceDatabase.InitializeAsync(
+                Services,
+                cancellationToken);
         }
         finally
         {
@@ -123,8 +136,9 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         CancellationToken cancellationToken = default)
     {
         await using var scope = Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var workflowStore = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
         var request = new AccessRequest(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             DemoPrincipalKeys.Requester,
             new ValidatedRequestDetails(
@@ -140,9 +154,14 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             request,
             new RequestCreatedAuditDetails(request.Status));
 
-        dbContext.AccessRequests.Add(request);
-        dbContext.AuditEvents.Add(auditEvent);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        workflowStore.AddRequest(request);
+        workflowStore.AddAuditEvent(auditEvent);
+        var saved = await workflowStore.SaveChangesAsync(cancellationToken);
+        if (saved.IsFailure)
+        {
+            throw new InvalidOperationException(saved.Failure!.Message);
+        }
+
         return request;
     }
 
@@ -243,8 +262,10 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
         });
         builder.ConfigureServices((context, services) =>
         {
-            services.RemoveAll<GovernedAccessDbContext>();
-            services.RemoveAll<DbContextOptions<GovernedAccessDbContext>>();
+            services.RemoveAll<ReferenceAuthorityDbContext>();
+            services.RemoveAll<DbContextOptions<ReferenceAuthorityDbContext>>();
+            services.RemoveAll<WorkflowDbContext>();
+            services.RemoveAll<DbContextOptions<WorkflowDbContext>>();
             services.RemoveAll<SqliteConnection>();
             services.RemoveAll<IClock>();
             services.RemoveAll<IChatClient>();
@@ -286,27 +307,30 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             // Full-host tests retain only transport-to-interpreter wiring. Exact MCP
             // catalog and timeout behavior is covered by the lightweight MCP
             // component boundary, so this host uses the internal model-only seam.
-            services.RemoveAll<IRequestPreparationInterpreter>();
-            services.AddSingleton<IRequestPreparationInterpreter>(serviceProvider =>
-                new MafRequestPreparationInterpreter(
+            services.RemoveAll<ITurnProposalInterpreter>();
+            services.AddSingleton<ITurnProposalInterpreter>(serviceProvider =>
+                new MafTurnProposalInterpreter(
                     serviceProvider.GetRequiredService<IChatClient>(),
+                    serviceProvider.GetRequiredService<AgentExecutionLimits>(),
+                    serviceProvider.GetRequiredService<AgentModelMetadata>(),
                     serviceProvider.GetRequiredService<ILoggerFactory>(),
-                    serviceProvider.GetRequiredService<AgentSessionStore>(),
-                    serviceProvider.GetRequiredService<
-                        MafConversationTurnCoordinator>()));
+                    serviceProvider.GetRequiredService<TimeProvider>()));
 
-            services.AddSingleton(_ =>
-            {
-                var keeperConnection = new SqliteConnection(databaseConnectionString);
-                keeperConnection.Open();
-                return keeperConnection;
-            });
-            services.AddDbContext<GovernedAccessDbContext>((serviceProvider, options) =>
-            {
-                _ = serviceProvider.GetRequiredService<SqliteConnection>();
-                options.UseSqlite(databaseConnectionString);
-            });
+            services.AddSingleton(_ => new TestDatabaseConnections(
+                referenceDatabaseConnectionString,
+                workflowDatabaseConnectionString));
+            services.AddDbContext<ReferenceAuthorityDbContext>(
+                (serviceProvider, options) => options.UseSqlite(
+                    serviceProvider
+                        .GetRequiredService<TestDatabaseConnections>()
+                        .Reference));
+            services.AddDbContext<WorkflowDbContext>(
+                (serviceProvider, options) => options.UseSqlite(
+                    serviceProvider
+                        .GetRequiredService<TestDatabaseConnections>()
+                        .Workflow));
             services.AddSingleton<IClock>(Clock);
+            services.AddSingleton<TimeProvider>(Clock);
             services.AddDataProtection().UseEphemeralDataProtectionProvider();
             services
                 .AddAuthentication()
@@ -331,6 +355,10 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
     {
         return new Dictionary<string, string?>
         {
+            ["ConnectionStrings:ReferenceAuthority"] =
+                referenceDatabaseConnectionString,
+            ["ConnectionStrings:WorkflowPersistence"] =
+                workflowDatabaseConnectionString,
             ["TokenValidation:Enabled"] = bool.TrueString,
             ["TokenValidation:Audiences:0"] =
                 FakeTeamsActivityBuilder.DefaultBotAppId,
@@ -364,7 +392,7 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
     }
 
     private static async Task ClearDatabaseAsync(
-        GovernedAccessDbContext dbContext,
+        DbContext dbContext,
         CancellationToken cancellationToken)
     {
         await dbContext.Database.OpenConnectionAsync(cancellationToken);
@@ -488,9 +516,37 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
     }
+
+    private sealed class TestDatabaseConnections : IDisposable
+    {
+        internal TestDatabaseConnections(
+            string referenceConnectionString,
+            string workflowConnectionString)
+        {
+            Reference = Open(referenceConnectionString);
+            Workflow = Open(workflowConnectionString);
+        }
+
+        internal SqliteConnection Reference { get; }
+
+        internal SqliteConnection Workflow { get; }
+
+        public void Dispose()
+        {
+            Reference.Dispose();
+            Workflow.Dispose();
+        }
+
+        private static SqliteConnection Open(string connectionString)
+        {
+            var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            return connection;
+        }
+    }
 }
 
-public sealed class DeterministicClock(DateTimeOffset utcNow) : IClock
+public sealed class DeterministicClock(DateTimeOffset utcNow) : TimeProvider, IClock
 {
     private readonly object syncRoot = new();
     private DateTimeOffset utcNow = utcNow.ToUniversalTime();
@@ -505,6 +561,8 @@ public sealed class DeterministicClock(DateTimeOffset utcNow) : IClock
             }
         }
     }
+
+    public override DateTimeOffset GetUtcNow() => UtcNow;
 
     public void SetUtcNow(DateTimeOffset value)
     {
