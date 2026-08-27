@@ -102,6 +102,28 @@ public sealed class TeamsActorResolverComponentTests
         Assert.False(resolver.TryResolve(activity, unrelatedIdentity, out _));
     }
 
+    [Theory]
+    [InlineData("en-US", "en-US")]
+    [InlineData("EN-us", "en-US")]
+    [InlineData("pl-PL", "en-US")]
+    [InlineData(null, "en-US")]
+    public void ResolverUsesAuthenticatedClientLocaleWithEnglishFallback(
+        string? suppliedLocale,
+        string expectedLocale)
+    {
+        var resolver = CreateResolver();
+        var activity = new FakeTeamsActivityBuilder()
+            .WithLocale(suppliedLocale)
+            .Build();
+
+        Assert.True(
+            resolver.TryResolve(
+                activity.Activity,
+                activity.Identity,
+                out var context));
+        Assert.Equal(expectedLocale, context.Locale);
+    }
+
     private static TeamsActorResolver CreateResolver() =>
         new(
             Options.Create(

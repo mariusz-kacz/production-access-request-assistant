@@ -7,6 +7,9 @@
 - **Refined:** 2026-08-26 to replace the special clarification-selection protocol with ordinary sparse exact-ID patches
 - **Refined:** 2026-08-26 to share final Teams transport and card-presentation primitives without coupling the delivered and target intake graphs
 - **Refined:** 2026-08-26 so remaining delivery consumes the simplification plan's grouped outcomes, contracted schemas, and confirmation safeguards
+- **Refined:** 2026-08-27 by operator direction so Task 11 replaces the delivered card
+  presentation/action contract with the final target-compatible contract instead of
+  preserving legacy card compatibility
 - **Target branch:** `feature/decouple-teams-approval-flow`
 - **Primary authority:** `SPEC-deterministic-request-intake.md`
 - **Task-list target:** This file is both the plan and the ordered task checklist
@@ -66,6 +69,15 @@ the target adapter when all of the following hold:
 - it performs no old/target selection, routing, conversion, fallback, or synchronization;
 - it remains useful and unchanged after the delivered path is deleted in Task 15; and
 - delivered characterization and production-composition tests remain green throughout.
+
+**Operator-directed Task 11 card rule (2026-08-27):** the behavior-preservation rule
+above continues to apply to authentication, activity transport, durable workflow
+semantics, and production registration, but not to the delivered Adaptive Card shape or
+action payload. Task 11 replaces that card surface directly with the final deterministic-
+intake presentation and the closed `{ schemaVersion, preparationId }` payload. No
+legacy card renderer, payload alias, compatibility parser, or duplicate card-layout
+implementation is retained. Production continues to resolve only the delivered
+semantic graph until Task 14, using the final card primitives during the transition.
 
 The two flows retain separate thin semantic adapters, authoritative fact assembly,
 closed action-payload handling, and confirmation services. This reuse rule narrows
@@ -466,7 +478,9 @@ a new application service. It remains reachable only from direct/component tests
 
 ### Task 10A - Simplify clarification to ordinary sparse exact-ID patches
 
-- [ ] In progress
+- [x] Complete - implementation and automated evidence pass; by operator direction
+  on 2026-08-26, credentialed live-model evaluation is deferred to the later
+  promotion gate and is not required to complete Task 10A or begin Task 11.
 
 **Description:** Replace the already-built target clarification-selection protocol with
 the ordinary sparse-patch path before Teams rendering or production composition uses
@@ -495,18 +509,19 @@ without reopening or rewriting their completed history.
    replacement, invalidation, ready-immutability, and successor-preparation rules.
 7. [x] Remove dead selection-specific code and schema/migration fields so only one
    clarification protocol remains.
-8. [ ] Update deterministic, integration, architecture, prompt/schema, restart/OCC, and
-   live-model tests, including multilingual/descriptive references, explicit valid IDs
-   outside displayed choices, conservative ambiguity, normal exact reload/cascades, and
-   zero consequential side effects.
-9. [ ] Update affected as-built documentation only after implementation evidence passes
+8. [x] Update deterministic, integration, architecture, prompt/schema, restart/OCC, and
+   evaluation coverage, including multilingual/descriptive references, explicit valid
+   IDs outside displayed choices, conservative ambiguity, normal exact reload/cascades,
+   and zero consequential side effects. Credentialed execution remains later promotion
+   evidence rather than a Task 10A completion requirement.
+9. [x] Update affected as-built documentation only after implementation evidence passes
    where the repository workflow requires that reconciliation.
 
 **Verification:** Use TDD for each contract/reducer/persistence change; run focused
 proposal, reducer, agent-input, persistence/migration, restart/OCC, architecture,
 renderer, and evaluation tests; then run the standing backend sequence and any affected
-frontend suite sequentially, and run every affected credentialed live-model scenario.
-Task 16 later reruns and promotes the complete final suite.
+frontend suite sequentially. Task 16 later runs and promotes the complete credentialed
+live-model suite.
 
 **Required exit gate:**
 
@@ -520,7 +535,8 @@ Task 16 later reruns and promotes the complete final suite.
 - active clarification survives restart and is consumed/preserved by the documented
   rules;
 - stale candidate/context snapshots cannot commit;
-- all affected deterministic/integration/live-model tests pass; and
+- all affected deterministic and integration tests pass, with credentialed live-model
+  execution retained as a later promotion gate; and
 - no free-text turn creates a request, approval, provisioning action, or grant.
 
 **Dependencies:** Tasks 1, 2, 5, 6, 9, and 10.
@@ -571,32 +587,34 @@ dependency. Automated handoff verification does not satisfy that gate by itself.
 
 ### Task 11 - Extract reusable Teams primitives and build target behavior
 
-- [ ] Planned
+- [x] Complete
 
-**Description:** Characterize the delivered Teams behavior, then refactor its existing
-implementation only far enough to extract final protocol-neutral transport and pure
-Adaptive Card presentation primitives. Build a thin target Teams adapter, target-owned
-semantic response renderer, authoritative Ready-card assembler, closed action-payload
-handling, and confirmation seam on those primitives. Do not create a second complete
-card-layout implementation and do not register the target adapter in production.
+**Description:** Extract final protocol-neutral Teams context, transport, tracking, and
+pure Adaptive Card presentation primitives. Replace the delivered card surface with the
+final target-compatible card contract, then build a thin target Teams adapter,
+target-owned semantic response renderer, authoritative Ready-card assembler, closed
+action-payload handling, and confirmation seam on those primitives. Do not retain a
+legacy card renderer or payload parser, create a second complete card-layout
+implementation, or register the target adapter in production.
 
 **Acceptance criteria:**
 
-- [ ] Only the Teams boundary recognizes exact trimmed case-insensitive `/new`; every other authenticated nonblank message goes through target orchestration.
-- [ ] Shared Teams components own only authenticated activity/context normalization, locale fallback, conversation/card-activity presentation metadata, activity delivery/update mechanics, and pure rendering from Web-owned presentation models. They reference neither preparation graph and contain no old/target routing or compatibility conversion.
-- [ ] Delivered and target adapters separately own orchestration calls, outcome-to-prose mapping, authoritative fact assembly, closed action parsing, confirmation calls, and outcome-specific telemetry; target code references no delivered intake type.
-- [ ] All prose and selectable choices are application-rendered with authenticated locale, safe encoding, exact canonical facts, five-choice maximum, and no model prose.
-- [ ] Target outcome rendering consumes only compact scope and justification group results; it introduces no per-field verdict protocol or combinatorial operation summary.
-- [ ] Ready cards bind only schema version plus unguessable `PreparationId` and prominently show requester, client/environment/role, incident or no incident, exact justification, fixed eight hours, and localized deadline.
-- [ ] Production registration and delivered behavior remain unchanged: no target registration, feature flag, fallback, dual registration, or request-level router exists before Task 14.
+- [x] Only the Teams boundary recognizes exact trimmed case-insensitive `/new`; every other authenticated nonblank message goes through target orchestration.
+- [x] Shared Teams components own only authenticated activity/context normalization, locale fallback, conversation/card-activity presentation metadata, activity delivery/update mechanics, and pure rendering from Web-owned presentation models. They reference neither preparation graph and contain no old/target routing or compatibility conversion.
+- [x] Delivered and target adapters separately own orchestration calls, outcome-to-prose mapping, authoritative fact assembly, closed action handling, confirmation calls, and outcome-specific telemetry; target code references no delivered intake type. Both accept only the final target-compatible payload contract rather than retaining a legacy alias.
+- [x] All prose and selectable choices are application-rendered with authenticated locale, safe encoding, exact canonical facts, five-choice maximum, and no model prose.
+- [x] Target outcome rendering consumes only compact scope and justification group results; it introduces no per-field verdict protocol or combinatorial operation summary.
+- [x] Ready cards bind only schema version plus unguessable `PreparationId` and prominently show requester, client/environment/role, incident or no incident, exact justification, fixed eight hours, and localized deadline.
+- [x] Production registration and delivered workflow semantics remain unchanged: no target registration, feature flag, fallback, dual registration, or request-level router exists before Task 14. Legacy card shape and payload compatibility are explicitly not retained.
 
-**Verification:** Run delivered Teams characterization and production-composition tests
-before and after extraction. Source/dependency tests prove shared components are
-Web-owned and preparation-neutral and that the target adapter has no delivered intake
-dependency. Target Teams component/card tests cover locale fallback, ambiguity, stale
-context, failures, injection-shaped text, exact `/new`, card replacement, and absence
-of free-text request creation. Run frontend tests if shared contracts change; then run
-standing backend verification.
+**Verification:** Source/dependency tests prove shared components are Web-owned and
+preparation-neutral, the target adapter has no delivered intake dependency, and no
+legacy card renderer, `preparedRequestId` payload alias, or compatibility parser
+remains. Target Teams component/card tests cover locale fallback, ambiguity, stale
+context, failures, injection-shaped text, exact `/new`, card replacement, closed
+`preparationId` actions, and absence of free-text request creation. Production-
+composition tests prove only the delivered semantic graph is registered before Task 14.
+Run frontend tests if shared contracts change; then run standing backend verification.
 
 **Dependencies:** Task 10A and the simplification-plan exit gate.
 
@@ -604,7 +622,8 @@ standing backend verification.
 
 - existing `GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs`,
   `TeamsActorResolver.cs`, `TeamsDraftCardTracker.cs`, and
-  `PreparedRequestCardFactory.cs` only for behavior-preserving extraction
+  `PreparedRequestCardFactory.cs` for extraction and direct replacement of the legacy
+  card/payload contract
 - new final transport/presentation primitives and thin target semantic adapter files
   under `GovernedAccess.Web/Teams/`
 - delivered characterization, target component/card, dependency, and production-
@@ -617,15 +636,25 @@ components that survive Task 15 unchanged.
 
 **Required exit gate:**
 
-- one reusable implementation owns identical Teams transport and card-layout mechanics;
+- one reusable implementation owns Teams transport and the only card-layout mechanics;
 - shared components accept only Web-owned transport/presentation models and compile
   without either preparation graph;
 - legacy and target semantic adapters remain independently testable and never translate
   between their domain contracts;
+- every ready card and confirmation action uses only the final target-compatible
+  `{ schemaVersion, preparationId }` payload, with no legacy alias or parser;
 - target rendering cannot deliver model prose or use browser/card data as authority;
 - production resolves only the delivered Teams graph; and
 - deleting the delivered adapter in Task 15 will not require modifying the shared
   transport or presentation components.
+
+**Completion evidence (2026-08-27):** focused Teams, target adapter/card, architecture,
+production-composition, and target-orchestration coverage passed (61 tests). The
+warnings-as-errors solution build passed with zero warnings, followed by 203 unit tests
+and 267 integration tests. The React suite was not run because Task 11 changed neither
+the co-hosted React behavior nor its browser contracts. Credentialed live-model
+evaluation remains deferred to the later promotion gate by operator direction and is
+not Task 11 completion evidence.
 
 ### Task 12 - Build target confirmation and request idempotency
 

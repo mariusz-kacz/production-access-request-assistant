@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
@@ -19,7 +18,7 @@ namespace GovernedAccess.Web.Teams;
 /// confirmation. Durable lifecycle transitions belong to Core; this adapter does
 /// not couple them to the process-lifetime MAF session store.
 /// </summary>
-public sealed partial class TeamsAccessRequestAgent : AgentApplication
+internal sealed partial class TeamsAccessRequestAgent : AgentApplication
 {
     private const string ConfirmAndSubmitVerb = "confirmAndSubmit";
 
@@ -39,6 +38,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     private readonly RequestSubmissionService submissionService;
     private readonly PreparedRequestCardFactory cardFactory;
     private readonly TeamsDraftCardTracker cardTracker;
+    private readonly TeamsActivityPresenter presenter;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
     private readonly RequestPreparationModelMetadata modelMetadata;
 
@@ -49,6 +49,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         RequestSubmissionService submissionService,
         PreparedRequestCardFactory cardFactory,
         TeamsDraftCardTracker cardTracker,
+        TeamsActivityPresenter presenter,
         ILogger<TeamsAccessRequestAgent> logger,
         RequestPreparationModelMetadata modelMetadata)
         : base(options)
@@ -58,6 +59,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         ArgumentNullException.ThrowIfNull(submissionService);
         ArgumentNullException.ThrowIfNull(cardFactory);
         ArgumentNullException.ThrowIfNull(cardTracker);
+        ArgumentNullException.ThrowIfNull(presenter);
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(modelMetadata);
 
@@ -66,6 +68,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         this.submissionService = submissionService;
         this.cardFactory = cardFactory;
         this.cardTracker = cardTracker;
+        this.presenter = presenter;
         this.logger = logger;
         this.modelMetadata = modelMetadata;
 
@@ -85,7 +88,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         if (!actorResolver.TryResolve(
                 turnContext.Activity,
                 turnContext.Identity,
-                out var actor))
+                out var authenticatedContext))
         {
             await SendTextAsync(
                 turnContext,
@@ -94,6 +97,8 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 cancellationToken);
             return;
         }
+
+        var actor = CreateDeliveredActor(authenticatedContext);
 
         var latestMessage = turnContext.Activity.Text?.Trim();
         if (string.IsNullOrEmpty(latestMessage))
@@ -115,6 +120,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             await ResetPreparationAsync(
                 turnContext,
                 actor,
+                authenticatedContext.Conversation,
                 correlationId,
                 cancellationToken);
             return;
@@ -171,7 +177,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 {
                     await DisableTrackedDraftCardAsync(
                         turnContext,
-                        actor,
+                        authenticatedContext.Conversation,
                         "Draft being revised",
                         "This draft is no longer ready for submission. Continue in the chat to complete the revised details.",
                         cancellationToken);
@@ -188,7 +194,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestPreparationResultKind.CandidateRejected:
                 await DisableTrackedDraftCardAsync(
                     turnContext,
-                    actor,
+                    authenticatedContext.Conversation,
                     "Draft being revised",
                     "This draft is no longer ready for submission. Correct the details in the chat to prepare a revised draft.",
                     cancellationToken);
@@ -202,8 +208,9 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestPreparationResultKind.ReadyForConfirmation:
                 await SendReadyCardAsync(
                     turnContext,
-                    actor,
+                    authenticatedContext.Conversation,
                     outcome.Session!,
+                    authenticatedContext.Locale,
                     cancellationToken);
                 return;
 
@@ -223,6 +230,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
     private async Task ResetPreparationAsync(
         ITurnContext turnContext,
         AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         string correlationId,
         CancellationToken cancellationToken)
     {
@@ -256,7 +264,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             case RequestIntakeResetResultKind.Reset:
                 await DisableTrackedDraftCardAsync(
                     turnContext,
-                    actor,
+                    conversation,
                     "Draft discarded",
                     "This draft was discarded and can no longer be submitted.",
                     cancellationToken);
@@ -299,11 +307,13 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         if (!actorResolver.TryResolve(
                 turnContext.Activity,
                 turnContext.Identity,
-                out var actor))
+                out var authenticatedContext))
         {
             return AdaptiveCardInvokeResponseFactory.BadRequest(
                 RejectedActivityMessage);
         }
+
+        var actor = CreateDeliveredActor(authenticatedContext);
 
         if (!TryReadConfirmationData(data, out var preparationId))
         {
@@ -348,7 +358,9 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         if (outcome.Kind is RequestConfirmationResultKind.Submitted
             or RequestConfirmationResultKind.AlreadySubmitted)
         {
-            cardTracker.TryRemove(actor, preparationId);
+            cardTracker.TryRemove(
+                authenticatedContext.Conversation,
+                preparationId);
         }
 
         return outcome.Kind switch
@@ -362,7 +374,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                     outcome.Failure!,
                     out var inactiveCard) =>
                 AdaptiveCardInvokeResponseFactory.AdaptiveCard(
-                    inactiveCard.ToJsonString()),
+                    GetCardJson(inactiveCard)),
             RequestConfirmationResultKind.Failed =>
                 AdaptiveCardInvokeResponseFactory.Message(
                     CreateConfirmationFailureMessage(outcome.Failure!)),
@@ -373,12 +385,14 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
     private async Task SendReadyCardAsync(
         ITurnContext turnContext,
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         RequestIntakeSession session,
+        string locale,
         CancellationToken cancellationToken)
     {
         var cardResult = await cardFactory.CreateAsync(
             session,
+            locale,
             cancellationToken);
         if (cardResult.IsFailure)
         {
@@ -391,114 +405,50 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         await DisableTrackedDraftCardAsync(
             turnContext,
-            actor,
+            conversation,
             "Draft being revised",
             "This draft was replaced by a revised version and can no longer be submitted. Use the latest request draft card.",
             cancellationToken);
 
-        var response = await turnContext.SendActivityAsync(
-            MessageFactory.Attachment(
-                cardResult.Value,
-                inputHint: InputHints.AcceptingInput),
+        var activityId = await TeamsActivityPresenter.SendAttachmentAsync(
+            turnContext,
+            cardResult.Value,
+            InputHints.AcceptingInput,
             cancellationToken);
-        if (!string.IsNullOrWhiteSpace(response.Id))
+        if (activityId is not null)
         {
-            cardTracker.Set(actor, session.Id, response.Id);
+            cardTracker.Set(conversation, session.Id, activityId);
         }
     }
 
     private async Task DisableTrackedDraftCardAsync(
         ITurnContext turnContext,
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         string title,
         string message,
         CancellationToken cancellationToken)
     {
-        if (!cardTracker.TryRemove(actor, out var current))
+        if (!cardTracker.TryRemove(conversation, out var current))
         {
             return;
         }
 
-        _ = await TryUpdateCardActivityAsync(
+        _ = await presenter.TryUpdateAttachmentAsync(
             turnContext,
             current.ActivityId,
             CreateInactiveDraftCardAttachment(title, message),
             cancellationToken);
     }
 
-    private async Task<bool> TryUpdateCardActivityAsync(
-        ITurnContext turnContext,
-        string activityId,
-        Attachment attachment,
-        CancellationToken cancellationToken)
-    {
-        var replacement = turnContext.Activity.CreateReply();
-        replacement.Id = activityId;
-        replacement.InputHint = InputHints.IgnoringInput;
-        replacement.Attachments = [attachment];
-
-        try
-        {
-            await turnContext.UpdateActivityAsync(replacement, cancellationToken);
-            return true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            LogDraftCardUpdateFailed(
-                logger,
-                turnContext.Activity.ChannelId ?? "unknown",
-                turnContext.Activity.Conversation.Id,
-                exception.GetType().Name);
-            return false;
-        }
-    }
-
     private static Attachment CreateInactiveDraftCardAttachment(
         string title,
-        string message)
-    {
-        return new Attachment
-        {
-            ContentType = PreparedRequestCardFactory.AdaptiveCardContentType,
-            Content = JsonSerializer.SerializeToElement(
-                CreateInactiveDraftCard(title, message)),
-        };
-    }
-
-    private static JsonObject CreateInactiveDraftCard(
-        string title,
         string message) =>
-        new()
-        {
-            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
-            ["type"] = "AdaptiveCard",
-            ["version"] = "1.5",
-            ["body"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["size"] = "Medium",
-                    ["weight"] = "Bolder",
-                    ["text"] = title,
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = message,
-                    ["wrap"] = true,
-                },
-            },
-        };
+        TeamsAdaptiveCardRenderer.CreateStatusCard(
+            new TeamsStatusCardPresentation(title, message));
 
     private static bool TryCreateInactiveConfirmationCard(
         ApplicationFailure failure,
-        out JsonObject card)
+        out Attachment card)
     {
         (string Title, string Message)? content = failure.Code switch
         {
@@ -520,7 +470,7 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             return false;
         }
 
-        card = CreateInactiveDraftCard(
+        card = CreateInactiveDraftCardAttachment(
             content.Value.Title,
             content.Value.Message);
         return true;
@@ -659,33 +609,18 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         var title = outcome.WasAlreadySubmitted
             ? "Request already submitted"
             : "Request submitted";
-        var card = new JsonObject
-        {
-            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
-            ["type"] = "AdaptiveCard",
-            ["version"] = "1.5",
-            ["body"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["size"] = "Medium",
-                    ["weight"] = "Bolder",
-                    ["text"] = title,
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] =
-                        $"Request {outcome.RequestId:D} is awaiting business approval. Access is not yet approved or granted.",
-                    ["wrap"] = true,
-                },
-            },
-        };
-
-        return card.ToJsonString();
+        return GetCardJson(
+            TeamsAdaptiveCardRenderer.CreateStatusCard(
+                new TeamsStatusCardPresentation(
+                    title,
+                    $"Request {outcome.RequestId:D} is awaiting business approval. Access is not yet approved or granted.")));
     }
+
+    private static string GetCardJson(Attachment attachment) =>
+        attachment.Content is JsonElement content
+            ? content.GetRawText()
+            : throw new InvalidOperationException(
+                "The Teams card renderer returned unsupported content.");
 
     private static string CreateConfirmationFailureMessage(
         ApplicationFailure failure)
@@ -755,14 +690,14 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
                 || !schemaVersion.TryGetInt32(out var version)
                 || version != 1
                 || !element.TryGetProperty(
-                    "preparedRequestId",
-                    out var preparedRequestId)
-                || preparedRequestId.ValueKind != JsonValueKind.String)
+                    "preparationId",
+                    out var preparationIdProperty)
+                || preparationIdProperty.ValueKind != JsonValueKind.String)
             {
                 return false;
             }
 
-            var reference = preparedRequestId.GetString();
+            var reference = preparationIdProperty.GetString();
             return Guid.TryParseExact(reference, "D", out preparationId)
                 && preparationId != Guid.Empty;
         }
@@ -781,20 +716,11 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         string message,
         string inputHint,
         CancellationToken cancellationToken) =>
-        SendActivityAsync(
+        TeamsActivityPresenter.SendTextAsync(
             turnContext,
-            MessageFactory.Text(
-                message,
-                inputHint: inputHint),
+            message,
+            inputHint,
             cancellationToken);
-
-    private static async Task SendActivityAsync(
-        ITurnContext turnContext,
-        IActivity activity,
-        CancellationToken cancellationToken)
-    {
-        await turnContext.SendActivityAsync(activity, cancellationToken);
-    }
 
     private static string CreateCorrelationId()
     {
@@ -803,6 +729,15 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
             ? traceId.ToString()
             : Guid.NewGuid().ToString("N");
     }
+
+    private static AuthenticatedChannelActor CreateDeliveredActor(
+        TeamsAuthenticatedContext context) =>
+        new(
+            context.Channel,
+            context.TenantId,
+            context.ChannelActorId,
+            context.ConversationId,
+            context.RequesterId);
 
     [LoggerMessage(
         EventId = 1001,
@@ -873,14 +808,4 @@ public sealed partial class TeamsAccessRequestAgent : AgentApplication
         ApplicationFailureKind? failureKind,
         string? failureCode);
 
-    [LoggerMessage(
-        EventId = 1004,
-        EventName = "TeamsDraftCardUpdateFailed",
-        Level = LogLevel.Warning,
-        Message = "Teams draft-card presentation update failed for channel {Channel} and conversation {ConversationId}. Failure type {FailureType}; durable intake validation remains authoritative.")]
-    private static partial void LogDraftCardUpdateFailed(
-        ILogger logger,
-        string? channel,
-        string conversationId,
-        string failureType);
 }

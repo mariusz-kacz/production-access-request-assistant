@@ -83,7 +83,7 @@ public sealed class TeamsRequestConfirmationTests
                     new
                     {
                         schemaVersion = 2,
-                        preparedRequestId = session.Id.ToString("D"),
+                        preparationId = session.Id.ToString("D"),
                     }),
                 HttpStatusCode.BadRequest),
             (
@@ -96,7 +96,7 @@ public sealed class TeamsRequestConfirmationTests
                     new
                     {
                         schemaVersion = 1,
-                        preparedRequestId = "not-a-guid",
+                        preparationId = "not-a-guid",
                     }),
                 HttpStatusCode.BadRequest),
             (
@@ -104,7 +104,7 @@ public sealed class TeamsRequestConfirmationTests
                     new
                     {
                         schemaVersion = 1,
-                        preparedRequestId = session.Id.ToString("D"),
+                        preparationId = session.Id.ToString("D"),
                         requestedRoleId = ProductionRoleIds.Support,
                     }),
                 HttpStatusCode.BadRequest),
@@ -230,7 +230,7 @@ public sealed class TeamsRequestConfirmationTests
         new
         {
             schemaVersion = PreparedRequestCardFactory.ContractSchemaVersion,
-            preparedRequestId = preparationId.ToString("D"),
+            preparationId = preparationId.ToString("D"),
         };
 
     private static async Task<RequestIntakeSession> SeedReadySessionAsync(

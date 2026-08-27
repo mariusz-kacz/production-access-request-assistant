@@ -5,7 +5,22 @@ using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Web.Ai;
 
-internal sealed class TargetRequestPreparationOrchestrator
+internal interface ITargetRequestPreparationOrchestrator
+{
+    Task<PreparationTurnResult> ProcessTurnAsync(
+        PreparationBinding binding,
+        string latestRequesterText,
+        string correlationId,
+        CancellationToken cancellationToken);
+
+    Task<PreparationTurnResult> ResetAsync(
+        PreparationBinding binding,
+        string correlationId,
+        CancellationToken cancellationToken);
+}
+
+internal sealed class TargetRequestPreparationOrchestrator :
+    ITargetRequestPreparationOrchestrator
 {
     private readonly ITurnProposalInterpreter interpreter;
     private readonly PreparationTurnService turnService;
@@ -20,7 +35,7 @@ internal sealed class TargetRequestPreparationOrchestrator
         this.interpreter = interpreter;
     }
 
-    internal async Task<PreparationTurnResult> ProcessTurnAsync(
+    public async Task<PreparationTurnResult> ProcessTurnAsync(
         PreparationBinding binding,
         string latestRequesterText,
         string correlationId,
@@ -56,7 +71,7 @@ internal sealed class TargetRequestPreparationOrchestrator
         };
     }
 
-    internal Task<PreparationTurnResult> ResetAsync(
+    public Task<PreparationTurnResult> ResetAsync(
         PreparationBinding binding,
         string correlationId,
         CancellationToken cancellationToken) =>

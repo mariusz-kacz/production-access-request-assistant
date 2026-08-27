@@ -183,7 +183,7 @@ public sealed class TeamsIntakeLoggingTests
                     {
                         schemaVersion =
                             PreparedRequestCardFactory.ContractSchemaVersion,
-                        preparedRequestId = sessionId.ToString("D"),
+                        preparationId = sessionId.ToString("D"),
                     },
                 },
             })

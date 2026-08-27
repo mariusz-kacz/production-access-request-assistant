@@ -223,7 +223,7 @@ public sealed class TeamsGovernedWorkflowTests
                     {
                         schemaVersion =
                             PreparedRequestCardFactory.ContractSchemaVersion,
-                        preparedRequestId = intakeId.ToString("D"),
+                        preparationId = intakeId.ToString("D"),
                     },
                 },
             })

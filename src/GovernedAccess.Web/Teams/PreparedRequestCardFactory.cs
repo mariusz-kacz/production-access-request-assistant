@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
@@ -9,21 +6,23 @@ using Microsoft.Agents.Core.Models;
 namespace GovernedAccess.Web.Teams;
 
 /// <summary>
-/// Renders an immutable prepared snapshot as the application-owned Adaptive Card
-/// contract. Authoritative lookups supply display text only; identifiers, scope,
-/// expiry, and action data always come from the persisted snapshot.
+/// Assembles final card presentation facts from the delivered authoritative graph.
+/// The pure card layout and action contract are shared with the target graph.
 /// </summary>
 public sealed class PreparedRequestCardFactory(IRequestContextReader requestContext)
 {
     public const string AdaptiveCardContentType =
-        "application/vnd.microsoft.card.adaptive";
+        TeamsAdaptiveCardRenderer.AdaptiveCardContentType;
 
-    public const string ConfirmationVerb = "confirmAndSubmit";
+    public const string ConfirmationVerb =
+        TeamsAdaptiveCardRenderer.ConfirmationVerb;
 
-    public const int ContractSchemaVersion = 1;
+    public const int ContractSchemaVersion =
+        TeamsAdaptiveCardRenderer.ContractSchemaVersion;
 
     public async Task<ApplicationResult<Attachment>> CreateAsync(
         RequestIntakeSession session,
+        string locale,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -37,6 +36,21 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
                 ApplicationFailureKind.InvalidTransition,
                 "prepared_request_not_ready",
                 "Only a ready prepared request can be rendered for confirmation.");
+        }
+
+        var requesterResult = await requestContext.GetPrincipalAsync(
+            session.RequesterId,
+            cancellationToken);
+        if (requesterResult.IsFailure)
+        {
+            return ApplicationResult.Failed<Attachment>(requesterResult.Failure!);
+        }
+
+        var requester = requesterResult.Value;
+        if (!Matches(session.RequesterId, requester.Id)
+            || requester.Kind != PrincipalKind.Requester)
+        {
+            return ContextMismatch();
         }
 
         var environmentResult =
@@ -54,7 +68,6 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
         var environment = environmentContext.Environment;
         var role = environmentContext.AssignedRoles.SingleOrDefault(
             candidate => Matches(details.RoleId, candidate.RoleId));
-
         if (!Matches(details.ClientId, client.Id) || role is null)
         {
             return ContextMismatch();
@@ -80,123 +93,24 @@ public sealed class PreparedRequestCardFactory(IRequestContextReader requestCont
             }
         }
 
-        var facts = new JsonArray
-        {
-            CreateFact(
-                "Client",
-                FormatDisplayValue(
-                    client.DisplayName,
-                    details.ClientId)),
-            CreateFact(
-                "Environment",
-                FormatDisplayValue(
-                    environment.DisplayName,
-                    details.EnvironmentId)),
-            CreateFact(
-                "Requested role",
-                FormatDisplayValue(
-                    GetRoleDisplayName(details.RoleId),
-                    details.RoleId)),
-        };
-
-        if (incident is not null)
-        {
-            facts.Add(
-                CreateFact(
-                    "Incident",
-                    FormatDisplayValue(
-                        incident.Title,
-                        details.IncidentId!)));
-        }
-
-        facts.Add(CreateFact("Access lifetime", "8 hours after provisioning"));
-        facts.Add(
-            CreateFact(
-                "Confirm by",
-                session.ExpiresAt.Value.UtcDateTime.ToString(
-                    "O",
-                    CultureInfo.InvariantCulture)));
-
-        var card = new JsonObject
-        {
-            ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
-            ["type"] = "AdaptiveCard",
-            ["version"] = "1.5",
-            ["body"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["size"] = "Large",
-                    ["weight"] = "Bolder",
-                    ["text"] = "Review request draft",
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] =
-                        "Review the draft below. To change any details, send another message. Confirming submits it for business approval; it does not approve or grant production access.",
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "FactSet",
-                    ["facts"] = facts,
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["weight"] = "Bolder",
-                    ["text"] = "Justification",
-                    ["wrap"] = true,
-                },
-                new JsonObject
-                {
-                    ["type"] = "TextBlock",
-                    ["text"] = details.Justification,
-                    ["wrap"] = true,
-                },
-            },
-            ["actions"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["type"] = "Action.Execute",
-                    ["title"] = "Confirm and submit",
-                    ["verb"] = ConfirmationVerb,
-                    ["associatedInputs"] = "none",
-                    ["data"] = new JsonObject
-                    {
-                        ["schemaVersion"] = ContractSchemaVersion,
-                        ["preparedRequestId"] =
-                            session.Id.ToString("D"),
-                    },
-                },
-            },
-        };
-
         return ApplicationResult.Succeeded(
-            new Attachment
-            {
-                ContentType = AdaptiveCardContentType,
-                Content = JsonSerializer.SerializeToElement(card),
-            });
+            TeamsAdaptiveCardRenderer.CreateReadyCard(
+                new TeamsReadyCardPresentation(
+                    requester.DisplayName,
+                    requester.Id,
+                    client.DisplayName,
+                    details.ClientId,
+                    environment.DisplayName,
+                    details.EnvironmentId,
+                    GetRoleDisplayName(details.RoleId),
+                    details.RoleId,
+                    incident?.Title,
+                    incident?.Id,
+                    details.Justification,
+                    session.ExpiresAt.Value,
+                    locale,
+                    session.Id)));
     }
-
-    private static JsonObject CreateFact(string title, string value) =>
-        new()
-        {
-            ["title"] = title,
-            ["value"] = value,
-        };
-
-    private static string FormatDisplayValue(
-        string displayName,
-        string identifier) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"{displayName} ({identifier})");
 
     private static string GetRoleDisplayName(string roleId) =>
         roleId switch

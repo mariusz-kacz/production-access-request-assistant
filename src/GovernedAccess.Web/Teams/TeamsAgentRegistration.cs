@@ -49,6 +49,7 @@ public static class TeamsAgentRegistration
         builder.Services.AddRequestPreparation();
         builder.Services.AddScoped<RequestSubmissionService>();
         builder.Services.AddSingleton<TeamsDraftCardTracker>();
+        builder.Services.AddScoped<TeamsActivityPresenter>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<PreparedRequestCardFactory>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();

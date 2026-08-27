@@ -119,6 +119,10 @@ public sealed class ProgramCompositionTests(
         Assert.Null(services.GetService<MafTurnProposalInterpreter>());
         Assert.Null(services.GetService<ITurnProposalInterpreter>());
         Assert.Null(services.GetService<TargetRequestPreparationOrchestrator>());
+        Assert.Null(services.GetService<ITargetRequestPreparationOrchestrator>());
+        Assert.Null(services.GetService<TargetTeamsAccessRequestAdapter>());
+        Assert.Null(services.GetService<ITargetPreparedRequestCardFactory>());
+        Assert.Null(services.GetService<ITargetRequestConfirmation>());
         Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,

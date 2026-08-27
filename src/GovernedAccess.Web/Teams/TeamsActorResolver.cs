@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
-using GovernedAccess.Core.Ports;
 using GovernedAccess.Web.Authentication;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Core.Models;
@@ -9,11 +8,11 @@ using Microsoft.Extensions.Options;
 namespace GovernedAccess.Web.Teams;
 
 /// <summary>
-/// Translates an authenticated Teams activity into the application-owned
-/// channel actor binding. Activity payload values never select the synthetic
-/// requester or any authorization claim.
+/// Normalizes authenticated Teams activity context without selecting an intake
+/// implementation. Activity payload values never select the synthetic requester
+/// or any authorization claim.
 /// </summary>
-public sealed class TeamsActorResolver
+internal sealed class TeamsActorResolver
 {
     private const string PersonalConversationType = "personal";
 
@@ -42,9 +41,9 @@ public sealed class TeamsActorResolver
     public bool TryResolve(
         IActivity? activity,
         ClaimsIdentity? identity,
-        [NotNullWhen(true)] out AuthenticatedChannelActor? actor)
+        [NotNullWhen(true)] out TeamsAuthenticatedContext? context)
     {
-        actor = null;
+        context = null;
 
         if (!IsSdkAuthenticated(identity)
             || activity is null
@@ -72,12 +71,14 @@ public sealed class TeamsActorResolver
             return false;
         }
 
-        actor = new AuthenticatedChannelActor(
-            Channels.Msteams,
-            allowedTenantId.ToString("D"),
-            channelActorId,
-            conversationId,
-            DemoPrincipalKeys.Requester);
+        context = new TeamsAuthenticatedContext(
+            new TeamsConversationReference(
+                Channels.Msteams,
+                allowedTenantId.ToString("D"),
+                channelActorId,
+                conversationId,
+                DemoPrincipalKeys.Requester),
+            TeamsLocale.Resolve(activity.Locale));
 
         return true;
     }

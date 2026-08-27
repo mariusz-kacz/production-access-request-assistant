@@ -1,6 +1,7 @@
 # Deterministic Request Intake Simplification Plan
 
-- **Status:** Implementation in progress; Tasks 1–3 complete; Tasks 4–5 automated gates implemented, credentialed report pending
+- **Status:** Implementation and automated handoff complete; credentialed report
+  pending as a later promotion gate that does not block historical Task 11
 - **Prepared:** 2026-08-26
 - **Branch inspected:** `feature/decouple-teams-approval-flow`
 - **Starting commit:** `429d8a0`
@@ -26,7 +27,9 @@ Task 10A in the historical plan already replaced the clarification-selection pro
 in code. Its unfinished deterministic/live evidence work is incorporated into Task 4
 below; its obsolete protocol-specific test inventory is superseded. The historical file
 is not rewritten. Historical Tasks 11–17 remain downstream delivery work and resume
-only after this plan's exit gate.
+only after this plan's automated handoff gate. By operator direction on 2026-08-26,
+credentialed live-model execution remains a later promotion gate and does not block
+historical Task 11.
 
 ## 2. Current-system map
 
@@ -479,9 +482,9 @@ clarification without scope mutation, cascades, and no leaked temporary state.
 
 ### Task 4 — Prune obsolete tests and implement the evaluation gate
 
-- [ ] Complete — implementation and automated validation pass; the credentialed
-  evaluation report is pending because this environment has no Foundry live-model
-  configuration.
+- [x] Complete — implementation and automated validation pass; the credentialed
+  evaluation report remains pending as later promotion evidence because this
+  environment has no Foundry live-model configuration.
 - **Operator-directed deviation (2026-08-26):** after the isolated evaluator replacement
   was implemented, the delivered evaluator command, implementation, dataset, schema,
   and dedicated tests were removed. Its reviewed artifacts remain labeled as
@@ -567,18 +570,20 @@ downstream rows.
 **Exit gate**
 
 All obsolete-mechanism tests are gone; the focused deterministic suite proves the
-simplified behavior; isolated live evaluation records a passing report under the
-matrix's unchanged absolute safety gates and required quality threshold.
+simplified behavior; the isolated live-evaluation suite is ready to record a later
+promotion report under the matrix's unchanged absolute safety gates and required
+quality threshold.
 
 ### Task 5 — Cross-boundary verification and post-evidence reconciliation
 
-- [ ] Complete — automated cross-boundary verification, repository validation, and
+- [x] Complete — automated cross-boundary verification, repository validation, and
   pending-work documentation handoff pass; the credentialed evaluation report inherited
-  from Task 4 remains pending.
-- **Operator-directed dependency override (2026-08-26):** Task 5's automated work ran
-  before the Task 4 live-evaluation dependency was satisfied. No current/as-built
-  document, production composition, or promotion status was advanced, and the full
-  Task 5 exit gate remains open until credentialed evidence passes.
+  from Task 4 remains pending as later promotion evidence.
+- **Operator-directed dependency override (2026-08-26):** Credentialed live-model
+  evaluation is not required to complete Task 10A, close this automated handoff, or
+  begin historical Task 11. No current/as-built document, production composition, or
+  promotion status is advanced; credentialed evidence remains required at the later
+  promotion gate.
 
 **Objective and complexity reduction**
 
@@ -653,10 +658,10 @@ determinism, and the authority order in `spec.md`.
 
 **Exit gate**
 
-All required builds/tests/evaluation pass; fresh target databases match the contracted
+All required automated builds/tests pass; fresh target databases match the contracted
 schema; deleted-name searches are clean; production/target composition isolation holds;
 normative target docs match evidence; and historical Tasks 11–17 can resume against only
-the simplified contracts.
+the simplified contracts. Credentialed evaluation remains a later promotion gate.
 
 ## 7. Preserved-safety verification matrix
 

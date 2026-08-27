@@ -311,7 +311,7 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
         await using var factory = new GovernedAccessWebFactory(chatClient);
         await factory.ResetDatabaseAsync(cancellationToken);
         using var client = factory.CreateTeamsClient();
-        var actor = new AuthenticatedChannelActor(
+        var conversation = new TeamsConversationReference(
             RequestIntakeSession.TeamsChannel,
             FakeTeamsActivityBuilder.DefaultTenantId,
             FakeTeamsActivityBuilder.DefaultActorId,
@@ -331,6 +331,14 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
 
         Assert.Equal(HttpStatusCode.OK, initialHttpResponse.StatusCode);
         Assert.Contains("Review request draft", initialBody, StringComparison.Ordinal);
+        Assert.Contains("Demo Requester", initialBody, StringComparison.Ordinal);
+        Assert.Contains("No incident", initialBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "Requested access duration",
+            initialBody,
+            StringComparison.Ordinal);
+        Assert.Contains("preparationId", initialBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("preparedRequestId", initialBody, StringComparison.Ordinal);
         Guid initialPreparationId;
         await using (var initialScope = factory.Services.CreateAsyncScope())
         {
@@ -343,8 +351,8 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             Assert.Equal(RequestIntakeStatus.Ready, initialDraft.Status);
         }
 
-        cardTracker.Set(actor, initialPreparationId, "initial-ready-card-activity");
-        Assert.True(cardTracker.TryGet(actor, out var initialCard));
+        cardTracker.Set(conversation, initialPreparationId, "initial-ready-card-activity");
+        Assert.True(cardTracker.TryGet(conversation, out var initialCard));
 
         using var clarificationHttpResponse = await client.PostAsJsonAsync(
             "/api/messages",
@@ -368,7 +376,7 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             "Draft being revised",
             clarificationBody,
             StringComparison.Ordinal);
-        Assert.True(cardTracker.TryGet(actor, out var preservedCard));
+        Assert.True(cardTracker.TryGet(conversation, out var preservedCard));
         Assert.Equal(initialCard, preservedCard);
 
         await using (var clarificationScope = factory.Services.CreateAsyncScope())
@@ -399,7 +407,7 @@ public sealed class TeamsRequestPreparationTests(ConfigurableTeamsFixture fixtur
             "RECOVERY-PROD-ALPHA-EU",
             replacementBody,
             StringComparison.Ordinal);
-        Assert.False(cardTracker.TryGet(actor, out _));
+        Assert.False(cardTracker.TryGet(conversation, out _));
 
         await using var scope = factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider
