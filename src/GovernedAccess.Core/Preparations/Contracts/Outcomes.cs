@@ -78,6 +78,31 @@ public sealed record ApplicationGroupResult
     public ApplicationGroupRejectionReason? RejectionReason { get; }
 }
 
+public sealed record SoleRoleSelection
+{
+    public SoleRoleSelection(string roleId, string displayName)
+    {
+        RoleId = Normalize(roleId, nameof(roleId));
+        DisplayName = Normalize(displayName, nameof(displayName));
+    }
+
+    public string RoleId { get; }
+
+    public string DisplayName { get; }
+
+    private static string Normalize(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        value = value.Trim();
+        if (value.Length > PreparationCandidate.MaximumIdentifierLength)
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
+        }
+
+        return value;
+    }
+}
+
 public abstract record ApplicationOutcome
 {
     private protected ApplicationOutcome()
@@ -285,11 +310,25 @@ public sealed record Failed : ApplicationOutcome
 
 public sealed record PreparationResponse
 {
-    public PreparationResponse(ApplicationOutcome outcome)
+    public PreparationResponse(
+        ApplicationOutcome outcome,
+        SoleRoleSelection? soleRoleSelection = null)
     {
         ArgumentNullException.ThrowIfNull(outcome);
+        if (soleRoleSelection is not null
+            && outcome is not DraftUpdated
+            && outcome is not ReadyForConfirmation)
+        {
+            throw new ArgumentException(
+                "A sole role selection can accompany only an updated or ready outcome.",
+                nameof(soleRoleSelection));
+        }
+
         Outcome = outcome;
+        SoleRoleSelection = soleRoleSelection;
     }
 
     public ApplicationOutcome Outcome { get; }
+
+    public SoleRoleSelection? SoleRoleSelection { get; }
 }

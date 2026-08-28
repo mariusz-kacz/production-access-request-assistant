@@ -75,6 +75,8 @@ the same commit. Missing fields remain valid while collecting.
 | Valid active incident | Canonicalize it and derive its required environment and owning client. |
 | Environment/incident conflict or unavailable role | Reject the complete scope group; no dependent partial update. |
 | Accepted environment or incident change | Apply deterministic role/incident cascades in the same scope transition. |
+| Role omitted with exactly one assignable role in the final environment | Select that authoritative role and return an application-owned explanation that it was the only available role. |
+| Role omitted with two to five assignable roles | Preserve canonical scope and persist the complete ordered role choices. |
 | Missing required field | Persist the accepted partial candidate or clarification and remain collecting. |
 
 Confirmation and later trust boundaries revalidate the immutable ready snapshot
@@ -103,8 +105,12 @@ The model instructions require these behaviors:
   `NotFound` remains unresolved and does not trigger discovery or fuzzy correction;
 - client ID is derived from the authoritative environment;
 - a role is proposed only when assigned to the selected environment;
-- a role proposal uses one exact authoritative role ID; Core produces the complete
-  bounded role choice set when a role remains unresolved;
+- when the final exact environment has no selected role, the model loads its roles and
+  proposes the exact role ID when exactly one role is assignable, even if the requester
+  did not name it;
+- a role proposal uses one exact authoritative role ID; Core independently selects a
+  sole assignable role if the model omits it and produces the complete bounded role
+  choice set when two to five roles remain unresolved;
 - incident titles, partial IDs, alerts, and descriptions are not converted into an
   incident ID;
 - a validated incident constrains its environment and therefore the compatible client
@@ -126,6 +132,10 @@ unique choices in stable application-owned order. Environment choices contain ex
 IDs plus safe authoritative environment/client/region/classification fields; role
 choices contain exact role IDs and display names. The renderer derives 1-based
 positions from persisted order and owns all requester-visible prose.
+
+A sole assignable role is not clarification context. Core selects it from authoritative
+data, and the renderer tells the requester which role was selected and that no other
+role was available for the environment.
 
 On the next normal message, the agent receives the active target and exact ordered
 choices. It expresses a safely resolved reference as the same ordinary exact-ID sparse

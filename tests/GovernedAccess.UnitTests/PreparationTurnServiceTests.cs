@@ -62,6 +62,8 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
     public async Task FirstAcceptedCompleteTurnCreatesOneReadyPreparation()
     {
         var authority = CompleteAuthority();
+        authority.RoleLists["PROD-ALPHA-EU"] =
+            [Role("PROD-ALPHA-EU", "ProductionReadOnly")];
         var store = new InMemoryPreparationStore();
         var clock = new FakeClock(CreatedAt);
         var service = Service(store, authority, clock);
@@ -80,6 +82,9 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         var outcome = Assert.IsType<ReadyForConfirmation>(result.Response.Outcome);
         Assert.Equal(preparation.PreparationId, outcome.PreparationId);
         Assert.Equal(PreparationLifecycle.Ready, preparation.Lifecycle);
+        Assert.Equal(
+            "ProductionReadOnly",
+            result.Response.SoleRoleSelection?.RoleId);
         Assert.Single(store.Preparations);
         Assert.Equal(1, store.SaveCount);
     }

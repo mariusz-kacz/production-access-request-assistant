@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "3.0.6";
+    internal const string PromptContractVersion = "3.0.7";
     internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
 
@@ -95,6 +95,11 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         for it. Set the returned role ID only when exactly one listed role safely
         matches the request. Omit the role or return unclear when there is no unique safe match. Never invent
         a role ID or infer one only from schema examples.
+
+        When an exact environment is resolved and the current role is unset, call get_environment_roles even
+        when the requester did not name a role. If it returns exactly one assignable role, set that role even
+        without a requester-named role. If multiple roles are assignable and the request does not
+        identify one uniquely, omit the role so the application can present authoritative choices.
 
         Justification must retain requester-authored wording and language. When extracting a reason from
         framing, retain one complete contiguous requester-authored span, including leading connector words

@@ -124,6 +124,11 @@ In the bot's personal chat, send:
 I need read-only access to Client Alpha production in Europe to inspect logs and configuration while diagnosing INC-1042.
 ```
 
+The assistant immediately sends a transient typing activity and refreshes it every two
+seconds while the message turn is running. Teams clears the indicator when the
+assistant sends its text or card response. This is presentation feedback only; it is
+not persisted workflow evidence and does not imply authorization or execution.
+
 The deterministic profile returns its stable Client Alpha candidate. The live profile
 uses the bounded environment and exact incident tools before Core validates the
 proposal. In both modes:

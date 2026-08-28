@@ -47,18 +47,56 @@ public sealed class TeamsResponsePresenterTests
 
         Assert.Equal(TeamsResponseKind.Text, presentation.Kind);
         Assert.Equal(InputHints.ExpectingInput, presentation.InputHint);
-        Assert.Contains("Choose one environment", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "Choose one by replying with its number, name, or exact ID:",
+            presentation.Message,
+            StringComparison.Ordinal);
         Assert.Contains(
             "1. Client & One (CLIENT-1) — <b>Primary</b> (PROD-1), westeurope, primary",
             presentation.Message,
             StringComparison.Ordinal);
         Assert.Contains("2. Client & One", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("Justification: updated.", presentation.Message, StringComparison.Ordinal);
+        Assert.StartsWith(
+            $"I updated the operational justification.{Environment.NewLine}I found more than one matching production environment.",
+            presentation.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Scope:", presentation.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("model", presentation.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task DraftProgressUsesOnlyCompactGroupResultsAndCanonicalMissingFields()
+    public async Task RoleClarificationExplainsWhyTheRequesterMustChoose()
+    {
+        ClarificationChoice[] choices =
+        [
+            new RoleClarificationChoice("ROLE-1", "Read only"),
+            new RoleClarificationChoice("ROLE-2", "Support"),
+        ];
+        var result = Result(
+            new ClarificationRequired(
+                ClarificationTarget.Role,
+                choices,
+                new ApplicationGroupResult(
+                    ApplicationGroupResultKind.NeedsClarification),
+                justificationResult: null));
+
+        var presentation = await CreatePresenter().PresentTurnAsync(
+            result,
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
+
+        Assert.StartsWith(
+            "This environment has more than one available role. "
+            + "Choose one by replying with its number, name, or exact ID:",
+            presentation.Message,
+            StringComparison.Ordinal);
+        Assert.Contains("1. Read only (ROLE-1)", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains("2. Support (ROLE-2)", presentation.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DraftProgressUsesNaturalGroupResultsAndCanonicalMissingFields()
     {
         var candidate = new PreparationCandidate(
             "CLIENT-1",
@@ -80,17 +118,103 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Contains("Scope: updated.", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains(
-            "Justification: rejected (invalid).",
-            presentation.Message,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Still needed: requested role and operational justification.",
-            presentation.Message,
-            StringComparison.Ordinal);
+        Assert.Equal(
+            "I updated the request scope. "
+            + "I couldn't update the operational justification because some of the information wasn't valid. "
+            + "I still need the requested role and operational justification.",
+            presentation.Message);
         Assert.DoesNotContain("Environment result", presentation.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Role result", presentation.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnchangedScopeExplainsThatTheDraftAlreadyMatches()
+    {
+        var candidate = new PreparationCandidate(
+            "CLIENT-1",
+            "PROD-1",
+            roleId: null,
+            justification: null,
+            incidentId: null);
+        var result = Result(
+            new DraftUnchanged(
+                new ApplicationGroupResult(ApplicationGroupResultKind.NoOp),
+                justificationResult: null),
+            candidate);
+
+        var presentation = await CreatePresenter().PresentTurnAsync(
+            result,
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            "The request scope already matches the draft. "
+            + "I still need the requested role and operational justification.",
+            presentation.Message);
+    }
+
+    [Theory]
+    [InlineData(ApplicationGroupRejectionReason.Invalid, "some of the information wasn't valid")]
+    [InlineData(ApplicationGroupRejectionReason.Unavailable, "the source I use to verify it is temporarily unavailable")]
+    [InlineData(ApplicationGroupRejectionReason.Conflict, "the requested details conflict with each other")]
+    [InlineData(ApplicationGroupRejectionReason.MissingDependency, "some required information is missing")]
+    [InlineData(ApplicationGroupRejectionReason.EnvironmentQueryTooBroad, "the environment description matched too many environments")]
+    [InlineData(ApplicationGroupRejectionReason.NoAssignableRoles, "the selected environment has no roles available for assignment")]
+    [InlineData(ApplicationGroupRejectionReason.RoleChoiceLimitExceeded, "the selected environment has too many roles to show as choices")]
+    public async Task RejectedScopeExplainsWhyItCouldNotBeUpdated(
+        ApplicationGroupRejectionReason reason,
+        string explanation)
+    {
+        var result = Result(
+            new DraftUnchanged(
+                new ApplicationGroupResult(
+                    ApplicationGroupResultKind.Rejected,
+                    reason),
+                justificationResult: null));
+
+        var presentation = await CreatePresenter().PresentTurnAsync(
+            result,
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            $"I couldn't update the request scope because {explanation}. "
+            + "I still need the production environment, requested role, and operational justification.",
+            presentation.Message);
+    }
+
+    [Fact]
+    public async Task AutomaticRoleSelectionExplainsWhyTheRoleWasSet()
+    {
+        var candidate = new PreparationCandidate(
+            "CLIENT-1",
+            "PROD-1",
+            "ROLE-1",
+            justification: null,
+            incidentId: null);
+        var result = Result(
+            new DraftUpdated(
+                new ApplicationGroupResult(ApplicationGroupResultKind.Applied),
+                justificationResult: null),
+            candidate,
+            new SoleRoleSelection("ROLE-1", "Production read-only"));
+
+        var presentation = await CreatePresenter().PresentTurnAsync(
+            result,
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
+            presentation.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "I still need the requested role",
+            presentation.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -150,6 +274,37 @@ public sealed class TeamsResponsePresenterTests
     }
 
     [Fact]
+    public async Task ReadyOutcomeCarriesAutomaticRoleSelectionExplanationWithTheCard()
+    {
+        var preparation = CreatePreparation(
+            new PreparationCandidate(
+                "CLIENT-1",
+                "PROD-1",
+                "ROLE-1",
+                "Investigate the production fault.",
+                incidentId: null));
+        var snapshot = new PreparationSnapshot(preparation);
+
+        var presentation = await CreatePresenter().PresentTurnAsync(
+            new PreparationTurnResult(
+                snapshot,
+                new PreparationResponse(
+                    new ReadyForConfirmation(preparation.PreparationId),
+                    new SoleRoleSelection(
+                        "ROLE-1",
+                        "Production read-only"))),
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(TeamsResponseKind.Card, presentation.Kind);
+        Assert.NotNull(presentation.Card);
+        Assert.Equal(
+            "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
+            presentation.Message);
+    }
+
+    [Fact]
     public async Task CurrentDraftDiscussionRendersCanonicalFactsWithoutModelProse()
     {
         var candidate = new PreparationCandidate(
@@ -196,14 +351,15 @@ public sealed class TeamsResponsePresenterTests
 
     private static PreparationTurnResult Result(
         ApplicationOutcome outcome,
-        PreparationCandidate? candidate = null)
+        PreparationCandidate? candidate = null,
+        SoleRoleSelection? soleRoleSelection = null)
     {
         var preparation = candidate is null
             ? null
             : new PreparationSnapshot(CreatePreparation(candidate));
         return new PreparationTurnResult(
             preparation,
-            new PreparationResponse(outcome));
+            new PreparationResponse(outcome, soleRoleSelection));
     }
 
     private static TeamsResponsePresenter CreatePresenter() =>
@@ -223,20 +379,7 @@ public sealed class TeamsResponsePresenterTests
             attribution: candidate.IsEmpty
                 ? null
                 : new MaterialChangeAttribution(
-                    candidate.IsComplete
-                        ? candidate.IncidentId is null
-                            ? [
-                                ProposalField.Environment,
-                                ProposalField.Role,
-                                ProposalField.Justification,
-                            ]
-                            : [
-                                ProposalField.Environment,
-                                ProposalField.Incident,
-                                ProposalField.Role,
-                                ProposalField.Justification,
-                            ]
-                        : [ProposalField.Environment],
+                    candidate.ChangedFieldsFrom(PreparationCandidate.Empty),
                     "test-model",
                     providerModelVersion: null,
                     "test-prompt",

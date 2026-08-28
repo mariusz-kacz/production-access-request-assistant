@@ -142,9 +142,10 @@ These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and 
 | Same-turn environment accepted then role | Validate role against new environment, never old environment |
 | Same-turn environment rejected/ambiguous then role | Reject the scope group; preserve current scope |
 | Final environment has zero available roles | Typed no-roles result; no context |
-| Role missing or proposed role unavailable; one to five available roles | Preserve the current canonical role, persist complete ordered choice records, and create role clarification |
+| Role missing; exactly one available role | Select the authoritative role, create no clarification, and return an application-owned sole-role explanation |
+| Role missing or proposed role unavailable; two to five available roles | Preserve the current canonical role, persist complete ordered choice records, and create role clarification |
 | More than five available roles | No bounded choice context; request more precise role wording |
-| Exactly one available role but requester did not select it | Render one-option clarification; do not auto-select |
+| Explicit role clear or unavailable role with one different available role | Preserve the explicit operation result; do not silently replace requester intent with the available role |
 | Environment and role both ambiguous | Environment clarification only; role not queued |
 | Role exists but requester eligibility unknown | Role may be prepared; approval/eligibility remains downstream |
 
@@ -475,7 +476,8 @@ Recommended fixed promoted inventory:
 4. unique readable environment;
 5. ambiguous environment followed by `first`, unambiguous `the other one` with two
    choices, unresolved `the other one` with three choices, and an explicitly named
-   different valid environment while context is active;
+   different valid environment with automatic sole-role selection while context is
+   active;
 6. role clarification/change including descriptive `the recovery one` wording against
    a changed environment;
 7. English justification append preserving requester wording;

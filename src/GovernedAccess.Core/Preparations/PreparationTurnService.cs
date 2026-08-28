@@ -223,7 +223,9 @@ public sealed class PreparationTurnService
         {
             return new PreparationTurnResult(
                 preparation: null,
-                new PreparationResponse(reduction.Outcome));
+                new PreparationResponse(
+                    reduction.Outcome,
+                    reduction.SoleRoleSelection));
         }
 
         ApplyReduction(
@@ -426,7 +428,9 @@ public sealed class PreparationTurnService
             : reduction.Outcome;
         return new PreparationTurnResult(
             new PreparationSnapshot(preparation),
-            new PreparationResponse(outcome));
+            new PreparationResponse(
+                outcome,
+                reduction.SoleRoleSelection));
     }
 
     private static PreparationTurnResult Terminal(

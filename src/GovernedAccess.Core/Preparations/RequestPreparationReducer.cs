@@ -113,7 +113,22 @@ public sealed partial class RequestPreparationReducer
             scope,
             contextConsumed,
             contextInvalidated,
+            allowAutomaticRoleSelection: patch.Role is null,
             cancellationToken);
+
+        if (clarification.SoleRoleSelection is { } soleRoleSelection
+            && candidate.RoleId is null)
+        {
+            candidate = new PreparationCandidate(
+                candidate.ClientId,
+                candidate.EnvironmentId,
+                soleRoleSelection.RoleId,
+                candidate.Justification,
+                candidate.IncidentId);
+            changedFields = candidate.ChangedFieldsFrom(current)
+                .OrderBy(FieldOrder)
+                .ToArray();
+        }
 
         return CompleteReduction(
             preparation,
@@ -122,7 +137,8 @@ public sealed partial class RequestPreparationReducer
             contextInvalidated,
             clarification.ScopeResult,
             justification.Result,
-            changedFields);
+            changedFields,
+            clarification.SoleRoleSelection);
     }
 
     private async Task<ClarificationDecision> DetermineClarificationAsync(
@@ -131,13 +147,15 @@ public sealed partial class RequestPreparationReducer
         ScopeApplicationResult scope,
         bool contextConsumed,
         bool contextInvalidated,
+        bool allowAutomaticRoleSelection,
         CancellationToken cancellationToken)
     {
         if (scope.EnvironmentClarification is not null)
         {
             return new ClarificationDecision(
                 scope.EnvironmentClarification,
-                scope.Result!);
+                scope.Result!,
+                SoleRoleSelection: null);
         }
 
         if (preparation.Clarification is not null
@@ -146,7 +164,8 @@ public sealed partial class RequestPreparationReducer
         {
             return new ClarificationDecision(
                 Clarification: null,
-                scope.Result);
+                scope.Result,
+                scope.SoleRoleSelection);
         }
 
         if (!scope.ShouldResolveRoleClarification
@@ -154,12 +173,33 @@ public sealed partial class RequestPreparationReducer
         {
             return new ClarificationDecision(
                 Clarification: null,
-                scope.Result);
+                scope.Result,
+                scope.SoleRoleSelection);
         }
 
         var roleClarification = await scopeEvaluator.ResolveRoleClarificationAsync(
             candidate.EnvironmentId,
             cancellationToken);
+        if (roleClarification.SoleRoleSelection is not null)
+        {
+            if (allowAutomaticRoleSelection
+                && scope.Result?.Kind != ApplicationGroupResultKind.Rejected)
+            {
+                return new ClarificationDecision(
+                    Clarification: null,
+                    scope.Result?.Kind == ApplicationGroupResultKind.Applied
+                        ? scope.Result
+                        : new ApplicationGroupResult(
+                            ApplicationGroupResultKind.Applied),
+                    roleClarification.SoleRoleSelection);
+            }
+
+            return new ClarificationDecision(
+                Clarification: null,
+                scope.Result,
+                SoleRoleSelection: null);
+        }
+
         if (roleClarification.Clarification is not null)
         {
             return new ClarificationDecision(
@@ -167,7 +207,8 @@ public sealed partial class RequestPreparationReducer
                 scope.Result?.Kind == ApplicationGroupResultKind.Applied
                     ? scope.Result
                     : new ApplicationGroupResult(
-                        ApplicationGroupResultKind.NeedsClarification));
+                        ApplicationGroupResultKind.NeedsClarification),
+                SoleRoleSelection: null);
         }
 
         return new ClarificationDecision(
@@ -176,7 +217,8 @@ public sealed partial class RequestPreparationReducer
                 ? scope.Result
                 : new ApplicationGroupResult(
                     ApplicationGroupResultKind.Rejected,
-                    roleClarification.RejectionReason!.Value));
+                    roleClarification.RejectionReason!.Value),
+            SoleRoleSelection: null);
     }
 
     private static RequestPreparationReduction CompleteReduction(
@@ -186,7 +228,8 @@ public sealed partial class RequestPreparationReducer
         bool contextInvalidated,
         ApplicationGroupResult? scopeResult,
         ApplicationGroupResult? justificationResult,
-        ProposalField[] changedFields)
+        ProposalField[] changedFields,
+        SoleRoleSelection? soleRoleSelection)
     {
         var clarificationDisposition = clarification is not null
             ? ClarificationContextDisposition.Replace
@@ -211,7 +254,8 @@ public sealed partial class RequestPreparationReducer
             scopeResult,
             justificationResult,
             changedFields,
-            outcome);
+            outcome,
+            soleRoleSelection);
     }
 
     private static ApplicationOutcome CreateOutcome(
@@ -252,7 +296,8 @@ public sealed partial class RequestPreparationReducer
             scopeResult: null,
             justificationResult: null,
             changedFields: [],
-            outcome);
+            outcome,
+            soleRoleSelection: null);
 
     private static Failed StructuralFailure() =>
         new(
@@ -340,5 +385,6 @@ public sealed partial class RequestPreparationReducer
 
     private sealed record ClarificationDecision(
         ClarificationSeed? Clarification,
-        ApplicationGroupResult? ScopeResult);
+        ApplicationGroupResult? ScopeResult,
+        SoleRoleSelection? SoleRoleSelection);
 }

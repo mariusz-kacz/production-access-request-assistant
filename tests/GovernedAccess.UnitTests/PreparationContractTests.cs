@@ -305,6 +305,32 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
+    public void SoleRoleSelectionNormalizesItsSafeDisplayPayload()
+    {
+        var selection = new SoleRoleSelection(
+            " ROLE-1 ",
+            " Production read-only ");
+
+        Assert.Equal("ROLE-1", selection.RoleId);
+        Assert.Equal("Production read-only", selection.DisplayName);
+    }
+
+    [Fact]
+    public void PreparationResponseBindsSoleRoleSelectionToMutationOutcomes()
+    {
+        var selection = new SoleRoleSelection(
+            "ROLE-1",
+            "Production read-only");
+        var ready = new PreparationResponse(
+            new ReadyForConfirmation(Guid.NewGuid()),
+            selection);
+
+        Assert.Same(selection, ready.SoleRoleSelection);
+        Assert.Throws<ArgumentException>(
+            () => new PreparationResponse(new UnclearGuidance(), selection));
+    }
+
+    [Fact]
     public void ClarificationOutcomePreservesCompleteBoundedAuthoritativeOrder()
     {
         var maximumChoices = Enumerable.Range(1, ClarificationRequired.MaximumChoiceCount)

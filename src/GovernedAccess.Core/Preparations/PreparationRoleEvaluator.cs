@@ -141,6 +141,14 @@ internal sealed class PreparationRoleEvaluator(IEnvironmentRoleAuthority roleAut
                 ApplicationGroupRejectionReason.NoAssignableRoles);
         }
 
+        if (roles.Length == 1)
+        {
+            return RoleClarificationEvaluation.SoleRole(
+                new SoleRoleSelection(
+                    roles[0].RoleId,
+                    roles[0].DisplayName));
+        }
+
         if (roles.Length > RequestPreparation.MaximumClarificationChoices)
         {
             return RoleClarificationEvaluation.Rejected(
@@ -203,14 +211,19 @@ internal sealed record ExplicitRoleResolution(
 }
 
 internal sealed record RoleClarificationEvaluation(
+    SoleRoleSelection? SoleRoleSelection,
     ClarificationSeed? Clarification,
     ApplicationGroupRejectionReason? RejectionReason)
 {
+    internal static RoleClarificationEvaluation SoleRole(
+        SoleRoleSelection selection) =>
+        new(selection, Clarification: null, RejectionReason: null);
+
     internal static RoleClarificationEvaluation NeedsClarification(
         ClarificationSeed clarification) =>
-        new(clarification, RejectionReason: null);
+        new(SoleRoleSelection: null, clarification, RejectionReason: null);
 
     internal static RoleClarificationEvaluation Rejected(
         ApplicationGroupRejectionReason reason) =>
-        new(Clarification: null, reason);
+        new(SoleRoleSelection: null, Clarification: null, reason);
 }

@@ -246,6 +246,18 @@ public sealed class MafTurnProposalInterpreterTests
             "ordinary updateDraft exact-ID",
             invocation.Options?.Instructions,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "exactly one assignable role",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "set that role even",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "without a requester-named role",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -339,7 +351,7 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Equal("test-provider", metadata.ProviderId);
         Assert.Equal("test-deployment", metadata.ModelDeployment);
         Assert.Equal("test-provider-version", metadata.ProviderModelVersion);
-        Assert.Equal("3.0.6", metadata.PromptContractVersion);
+        Assert.Equal("3.0.7", metadata.PromptContractVersion);
         Assert.Equal("3.0.0", metadata.StructuredOutputSchemaVersion);
         Assert.Equal("3.0.0", metadata.McpContractVersion);
         Assert.Equal("2.0.0", metadata.EnvironmentSearchPolicyVersion);

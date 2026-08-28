@@ -132,7 +132,8 @@ For every normal message:
    sparse `set`/`clear` patch, one closed discussion topic, or no semantic payload.
 3. Core validates the proposal structure, evaluates environment/incident/role as one
    atomic scope group and justification independently, reloads authoritative facts,
-   applies dependency cascades, and determines readiness.
+   applies dependency cascades, selects and explains a sole assignable role when the
+   role is otherwise unset, and determines readiness.
 4. The workflow database persists only canonical preparation state, one optimistic
    concurrency version, bounded clarification context, lifecycle evidence, and
    bounded model-version attribution. It stores no raw requester transcript, prompt,

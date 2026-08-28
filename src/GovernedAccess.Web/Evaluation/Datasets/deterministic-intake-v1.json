@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "datasetVersion": "deterministic-intake-2.0.2",
+  "datasetVersion": "deterministic-intake-2.0.3",
   "environment": "isolated-local-synthetic-evaluation",
   "groups": [
     {
@@ -256,15 +256,18 @@
               "id": "EVAL-05-DIFFERENT-EXPLICIT-turn-01", "requesterMessage": "Actually use PROD-BETA-UK.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
-                "proposal": { "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-BETA-UK" } },
-                "allowedTools": ["get_production_environment", "get_environment_roles"], "requiredTools": [], "maximumToolCalls": 2
+                "proposal": {
+                  "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-BETA-UK" },
+                  "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionReadOnly" }
+                },
+                "allowedTools": ["get_production_environment", "get_environment_roles"], "requiredTools": ["get_environment_roles"], "maximumToolCalls": 2
               }
             }
           ],
           "expectedFinal": {
-            "outcome": "clarification", "lifecycle": "collecting",
-            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": null, "justification": "Investigate production symptoms.", "incidentId": null },
-            "clarificationTarget": "role", "clarificationChoiceIds": ["ProductionReadOnly"],
+            "outcome": "ready", "lifecycle": "ready",
+            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": "ProductionReadOnly", "justification": "Investigate production symptoms.", "incidentId": null },
+            "clarificationTarget": null, "clarificationChoiceIds": [],
             "scopeResult": { "kind": "applied", "rejectionReason": null }, "justificationResult": null
           }
         }
@@ -463,15 +466,18 @@
               "requesterMessage": "Check whether incident INC-2042 is active and, if it is, associate it with my draft. Do not change the justification.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
-                "proposal": { "incident": { "operation": "set", "environmentReferenceKind": null, "value": "INC-2042" } },
-                "allowedTools": ["get_incident"], "requiredTools": ["get_incident"], "maximumToolCalls": 1
+                "proposal": {
+                  "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionReadOnly" },
+                  "incident": { "operation": "set", "environmentReferenceKind": null, "value": "INC-2042" }
+                },
+                "allowedTools": ["get_incident", "get_environment_roles"], "requiredTools": ["get_incident", "get_environment_roles"], "maximumToolCalls": 2
               }
             }
           ],
           "expectedFinal": {
-            "outcome": "clarification", "lifecycle": "collecting",
-            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": null, "justification": null, "incidentId": "INC-2042" },
-            "clarificationTarget": "role", "clarificationChoiceIds": ["ProductionReadOnly"],
+            "outcome": "draftUpdated", "lifecycle": "collecting",
+            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": "ProductionReadOnly", "justification": null, "incidentId": "INC-2042" },
+            "clarificationTarget": null, "clarificationChoiceIds": [],
             "scopeResult": { "kind": "applied", "rejectionReason": null }, "justificationResult": null
           }
         }

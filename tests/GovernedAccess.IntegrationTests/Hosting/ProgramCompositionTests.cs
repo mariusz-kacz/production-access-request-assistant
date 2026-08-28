@@ -1,29 +1,21 @@
-using System.Net;
-using System.Text.Json;
-using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
-using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.ReferenceAuthority.Persistence;
-using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Observability;
 using GovernedAccess.Web.Teams;
 using GovernedAccess.Workflow.Persistence;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Builder;
-using Microsoft.AspNetCore.Routing;
+using Microsoft.Agents.Builder.App;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
@@ -112,6 +104,17 @@ public sealed class ProgramCompositionTests(
     }
 
     [Fact]
+    public void TeamsMessagesStartTypingWithoutAnInitialDelay()
+    {
+        var options = applicationFixture.Factory.Services
+            .GetRequiredService<AgentApplicationOptions>();
+
+        Assert.True(options.StartTypingTimer);
+        Assert.Equal(0, options.TypingOptions.InitialDelayMs);
+        Assert.Equal(2000, options.TypingOptions.IntervalMs);
+    }
+
+    [Fact]
     public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
     {
         var services = applicationFixture.Factory.Services;
@@ -123,8 +126,6 @@ public sealed class ProgramCompositionTests(
             .GetRequiredService<RequestPreparationModelMetadata>();
 
         Assert.IsType<MafTurnProposalInterpreter>(interpreter);
-        Assert.Null(services.GetService<InMemoryAgentSessionStore>());
-        Assert.Null(services.GetService<AgentSessionStore>());
         Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,

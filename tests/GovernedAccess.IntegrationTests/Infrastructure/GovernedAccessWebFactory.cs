@@ -1,9 +1,7 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
-using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.ReferenceAuthority;
 using GovernedAccess.ReferenceAuthority.Persistence;
@@ -14,7 +12,6 @@ using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using GovernedAccess.Web.Teams;
 using GovernedAccess.Workflow.Persistence;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;

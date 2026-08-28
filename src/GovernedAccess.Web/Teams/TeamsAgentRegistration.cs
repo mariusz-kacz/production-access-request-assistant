@@ -1,10 +1,7 @@
-using GovernedAccess.Core.Application;
 using GovernedAccess.Web.Ai;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
+using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Hosting.AspNetCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Validators;
@@ -46,10 +43,23 @@ public static class TeamsAgentRegistration
         builder.Services.AddScoped<TeamsRequestHandler>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();
 
+        builder.Services.AddSingleton<AgentApplicationOptions>(
+            static services => CreateAgentApplicationOptions(services));
         builder.Services.AddAgentApplicationOptions(replaceExisting: false);
         builder.AddAgent<ScopedTeamsAccessRequestAgentDispatcher>();
 
         return builder;
+    }
+
+    private static AgentApplicationOptions CreateAgentApplicationOptions(
+        IServiceProvider services)
+    {
+        var options = ActivatorUtilities.CreateInstance<AgentApplicationOptions>(
+            services);
+        options.StartTypingTimer = true;
+        options.TypingOptions.InitialDelayMs = 0;
+        options.TypingOptions.IntervalMs = 2000;
+        return options;
     }
 
     public static IEndpointConventionBuilder MapGovernedAccessTeams(

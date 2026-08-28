@@ -59,22 +59,23 @@ internal sealed class TeamsResponsePresenter(
         invalidatesTrackedCard |=
             result.Preparation?.PredecessorPreparationId is not null;
         var preparationId = result.Preparation?.PreparationId;
+        var soleRoleSelection = RenderSoleRoleSelection(
+            result.Response.SoleRoleSelection);
 
         return result.Response.Outcome switch
         {
             DraftUpdated updated => Text(
                 RenderDraftResult(
-                    "Draft updated.",
                     updated.ScopeResult,
                     updated.JustificationResult,
-                    result.Preparation),
+                    result.Preparation,
+                    soleRoleSelection),
                 InputHints.AcceptingInput),
             ClarificationRequired clarification => Text(
                 RenderClarification(clarification),
                 InputHints.ExpectingInput),
             DraftUnchanged unchanged => Text(
                 RenderDraftResult(
-                    "The draft was not changed.",
                     unchanged.ScopeResult,
                     unchanged.JustificationResult,
                     result.Preparation),
@@ -86,7 +87,7 @@ internal sealed class TeamsResponsePresenter(
                 await PresentReadyAsync(
                     result.Preparation!,
                     locale,
-                    message: null,
+                    soleRoleSelection,
                     invalidatesTrackedCard,
                     cancellationToken),
             SubmissionGuidance => Text(
@@ -104,7 +105,7 @@ internal sealed class TeamsResponsePresenter(
             ReadyForConfirmation ready => await PresentReadyAsync(
                 GetReadyPreparation(ready, result.Preparation),
                 locale,
-                message: null,
+                soleRoleSelection,
                 invalidatesTrackedCard,
                 cancellationToken),
             ConfirmationRevalidationFailed revalidation =>
@@ -254,18 +255,28 @@ internal sealed class TeamsResponsePresenter(
     }
 
     private static string RenderDraftResult(
-        string heading,
         ApplicationGroupResult? scope,
         ApplicationGroupResult? justification,
-        PreparationSnapshot? preparation)
+        PreparationSnapshot? preparation,
+        string? soleRoleSelection = null)
     {
-        var message = new StringBuilder(heading);
-        AppendGroup(message, "Scope", scope);
-        AppendGroup(message, "Justification", justification);
-        message.Append(' ');
-        message.Append(RenderMissing(preparation));
+        var message = new StringBuilder();
+        AppendGroup(message, "request scope", scope);
+        if (soleRoleSelection is not null)
+        {
+            AppendSentence(message, soleRoleSelection);
+        }
+
+        AppendGroup(message, "operational justification", justification);
+        AppendSentence(message, RenderMissing(preparation));
         return message.ToString();
     }
+
+    private static string? RenderSoleRoleSelection(
+        SoleRoleSelection? selection) =>
+        selection is null
+            ? null
+            : $"Only {selection.DisplayName} ({selection.RoleId}) is available for this environment, so I selected it for the draft.";
 
     private static void AppendGroup(
         StringBuilder message,
@@ -277,41 +288,51 @@ internal sealed class TeamsResponsePresenter(
             return;
         }
 
+        AppendSentence(message, result.Kind switch
+        {
+            ApplicationGroupResultKind.Applied =>
+                $"I updated the {group}.",
+            ApplicationGroupResultKind.NoOp =>
+                $"The {group} already matches the draft.",
+            ApplicationGroupResultKind.NeedsClarification =>
+                $"I need a little more information before I can update the {group}.",
+            ApplicationGroupResultKind.Rejected =>
+                $"I couldn't update the {group} because {RenderReason(result.RejectionReason!.Value)}.",
+            _ => throw new InvalidOperationException(
+                "The application-group result is unsupported."),
+        });
+    }
+
+    private static void AppendSentence(
+        StringBuilder message,
+        string sentence)
+    {
         if (message.Length > 0)
         {
             message.Append(' ');
         }
 
-        message.Append(group);
-        message.Append(": ");
-        message.Append(result.Kind switch
-        {
-            ApplicationGroupResultKind.Applied => "updated.",
-            ApplicationGroupResultKind.NoOp => "unchanged.",
-            ApplicationGroupResultKind.NeedsClarification =>
-                "needs clarification.",
-            ApplicationGroupResultKind.Rejected =>
-                $"rejected ({RenderReason(result.RejectionReason!.Value)}).",
-            _ => throw new InvalidOperationException(
-                "The application-group result is unsupported."),
-        });
+        message.Append(sentence);
     }
 
     private static string RenderReason(
         ApplicationGroupRejectionReason reason) =>
         reason switch
         {
-            ApplicationGroupRejectionReason.Invalid => "invalid",
-            ApplicationGroupRejectionReason.Unavailable => "source unavailable",
-            ApplicationGroupRejectionReason.Conflict => "conflict",
+            ApplicationGroupRejectionReason.Invalid =>
+                "some of the information wasn't valid",
+            ApplicationGroupRejectionReason.Unavailable =>
+                "the source I use to verify it is temporarily unavailable",
+            ApplicationGroupRejectionReason.Conflict =>
+                "the requested details conflict with each other",
             ApplicationGroupRejectionReason.MissingDependency =>
-                "missing dependency",
+                "some required information is missing",
             ApplicationGroupRejectionReason.EnvironmentQueryTooBroad =>
-                "environment query too broad",
+                "the environment description matched too many environments",
             ApplicationGroupRejectionReason.NoAssignableRoles =>
-                "no assignable roles",
+                "the selected environment has no roles available for assignment",
             ApplicationGroupRejectionReason.RoleChoiceLimitExceeded =>
-                "too many role choices",
+                "the selected environment has too many roles to show as choices",
             _ => throw new InvalidOperationException(
                 "The application-group rejection reason is unsupported."),
         };
@@ -320,10 +341,18 @@ internal sealed class TeamsResponsePresenter(
         ClarificationRequired clarification)
     {
         var message = new StringBuilder();
-        AppendGroup(message, "Scope", clarification.ScopeResult);
+        if (clarification.ScopeResult.Kind
+            != ApplicationGroupResultKind.NeedsClarification)
+        {
+            AppendGroup(
+                message,
+                "request scope",
+                clarification.ScopeResult);
+        }
+
         AppendGroup(
             message,
-            "Justification",
+            "operational justification",
             clarification.JustificationResult);
         if (message.Length > 0)
         {
@@ -332,8 +361,8 @@ internal sealed class TeamsResponsePresenter(
 
         message.Append(
             clarification.Target == ClarificationTarget.Environment
-                ? "Choose one environment by replying with its number, name, or exact ID:"
-                : "Choose one requested role by replying with its number, name, or exact ID:");
+                ? "I found more than one matching production environment. Choose one by replying with its number, name, or exact ID:"
+                : "This environment has more than one available role. Choose one by replying with its number, name, or exact ID:");
 
         for (var index = 0; index < clarification.Choices.Count; index++)
         {
@@ -415,8 +444,8 @@ internal sealed class TeamsResponsePresenter(
         }
 
         return missing.Count == 0
-            ? "The canonical draft is complete."
-            : $"Still needed: {JoinItems(missing)}.";
+            ? "The draft is complete and ready for confirmation."
+            : $"I still need the {JoinItems(missing)}.";
     }
 
     private static string JoinItems(List<string> items) =>

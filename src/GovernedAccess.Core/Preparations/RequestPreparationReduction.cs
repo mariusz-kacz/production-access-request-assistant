@@ -19,7 +19,8 @@ public sealed class RequestPreparationReduction
         ApplicationGroupResult? scopeResult,
         ApplicationGroupResult? justificationResult,
         IEnumerable<ProposalField> changedFields,
-        ApplicationOutcome outcome)
+        ApplicationOutcome outcome,
+        SoleRoleSelection? soleRoleSelection)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(changedFields);
@@ -46,6 +47,18 @@ public sealed class RequestPreparationReduction
                 nameof(changedFields));
         }
 
+        if (soleRoleSelection is not null
+            && (!string.Equals(
+                    candidate.RoleId,
+                    soleRoleSelection.RoleId,
+                    StringComparison.Ordinal)
+                || !changedFieldArray.Contains(ProposalField.Role)))
+        {
+            throw new ArgumentException(
+                "A sole role selection must match a changed canonical role.",
+                nameof(soleRoleSelection));
+        }
+
         Candidate = candidate;
         ClarificationDisposition = clarificationDisposition;
         Clarification = clarification;
@@ -53,6 +66,7 @@ public sealed class RequestPreparationReduction
         JustificationResult = justificationResult;
         ChangedFields = Array.AsReadOnly(changedFieldArray);
         Outcome = outcome;
+        SoleRoleSelection = soleRoleSelection;
     }
 
     public PreparationCandidate Candidate { get; }
@@ -68,4 +82,6 @@ public sealed class RequestPreparationReduction
     public IReadOnlyList<ProposalField> ChangedFields { get; }
 
     public ApplicationOutcome Outcome { get; }
+
+    public SoleRoleSelection? SoleRoleSelection { get; }
 }

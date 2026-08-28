@@ -99,9 +99,26 @@ internal sealed class PreparationScopeEvaluator(
                 shouldResolveRoleClarification: canClarifyRole);
         }
 
+        SoleRoleSelection? soleRoleSelection = null;
         if (role.RoleId is not null)
         {
             scope.RoleId = role.RoleId;
+            if (!string.Equals(
+                    current.RoleId,
+                    scope.RoleId,
+                    StringComparison.Ordinal))
+            {
+                var availableRoles = await roleEvaluator.ResolveClarificationAsync(
+                    scope.EnvironmentId!,
+                    cancellationToken);
+                if (string.Equals(
+                        availableRoles.SoleRoleSelection?.RoleId,
+                        scope.RoleId,
+                        StringComparison.Ordinal))
+                {
+                    soleRoleSelection = availableRoles.SoleRoleSelection;
+                }
+            }
         }
         else if (role.IsClear)
         {
@@ -121,7 +138,8 @@ internal sealed class PreparationScopeEvaluator(
             EnvironmentClarification: null,
             ShouldResolveRoleClarification:
                 candidate.EnvironmentId is not null && candidate.RoleId is null,
-            InvalidClarificationProposal: null);
+            InvalidClarificationProposal: null,
+            soleRoleSelection);
     }
 
     internal Task<RoleClarificationEvaluation> ResolveRoleClarificationAsync(
@@ -535,7 +553,8 @@ internal sealed record ScopeApplicationResult(
     ApplicationGroupResult? Result,
     ClarificationSeed? EnvironmentClarification,
     bool ShouldResolveRoleClarification,
-    InvalidClarificationProposal? InvalidClarificationProposal)
+    InvalidClarificationProposal? InvalidClarificationProposal,
+    SoleRoleSelection? SoleRoleSelection)
 {
     internal static ScopeApplicationResult Rejected(
         PreparationCandidate current,
@@ -549,7 +568,8 @@ internal sealed record ScopeApplicationResult(
                 reason),
             EnvironmentClarification: null,
             shouldResolveRoleClarification,
-            invalidClarificationProposal);
+            invalidClarificationProposal,
+            SoleRoleSelection: null);
 
     internal static ScopeApplicationResult NeedsClarification(
         PreparationCandidate current,
@@ -560,5 +580,6 @@ internal sealed record ScopeApplicationResult(
                 ApplicationGroupResultKind.NeedsClarification),
             clarification,
             ShouldResolveRoleClarification: false,
-            InvalidClarificationProposal: null);
+            InvalidClarificationProposal: null,
+            SoleRoleSelection: null);
 }

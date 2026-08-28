@@ -367,8 +367,36 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             result.ChangedFields);
     }
 
+    [Fact]
+    public async Task MissingRoleAutomaticallySelectsTheOnlyAssignableRole()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.RoleLists["PROD-ALPHA-EU"] = Roles("PROD-ALPHA-EU", 1);
+        var existing = Candidate(
+            environmentId: "PROD-ALPHA-EU",
+            clientId: "client-alpha",
+            justification: "Investigate.");
+
+        var result = await Reducer(authority).ReduceAsync(
+            Preparation(existing),
+            Update(justification: Justification("Investigate.")),
+            CancellationToken.None);
+
+        Assert.Equal("Role-01", result.Candidate.RoleId);
+        Assert.Null(result.Clarification);
+        Assert.Equal(
+            ClarificationContextDisposition.Preserve,
+            result.ClarificationDisposition);
+        Assert.Equal([ProposalField.Role], result.ChangedFields);
+        Assert.Equal("Role-01", result.SoleRoleSelection?.RoleId);
+        Assert.Equal("Role 1", result.SoleRoleSelection?.DisplayName);
+        Assert.Equal(1, authority.RoleListCallCount);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
+        Assert.IsType<ReadyForConfirmation>(result.Outcome);
+    }
+
     [Theory]
-    [InlineData(1, true)]
+    [InlineData(2, true)]
     [InlineData(5, true)]
     [InlineData(6, false)]
     public async Task MissingRoleCreatesOnlyBoundedNonDestructiveRoleClarification(
@@ -405,6 +433,56 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             expectsClarification
                 ? null
                 : ApplicationGroupRejectionReason.RoleChoiceLimitExceeded);
+    }
+
+    [Fact]
+    public async Task ExplicitSoleRoleSelectionCarriesAutomaticSelectionNotice()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.Roles[("PROD-ALPHA-EU", "Role-01")] = Role(
+            "PROD-ALPHA-EU",
+            "Role-01");
+        authority.RoleLists["PROD-ALPHA-EU"] = Roles("PROD-ALPHA-EU", 1);
+        var existing = Candidate(
+            environmentId: "PROD-ALPHA-EU",
+            clientId: "client-alpha",
+            justification: "Investigate.");
+
+        var result = await Reducer(authority).ReduceAsync(
+            Preparation(existing),
+            Update(role: new SetRoleOperation("Role-01")),
+            CancellationToken.None);
+
+        Assert.Equal("Role-01", result.Candidate.RoleId);
+        Assert.Equal("Role-01", result.SoleRoleSelection?.RoleId);
+        Assert.Equal("Role 1", result.SoleRoleSelection?.DisplayName);
+        Assert.Equal(1, authority.RoleGetCallCount);
+        Assert.Equal(1, authority.RoleListCallCount);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
+    }
+
+    [Fact]
+    public async Task ExplicitRoleClearDoesNotImmediatelyReselectTheSoleRole()
+    {
+        var authority = new FakePreparationAuthority();
+        authority.RoleLists["PROD-ALPHA-EU"] = Roles("PROD-ALPHA-EU", 1);
+        var existing = Candidate(
+            environmentId: "PROD-ALPHA-EU",
+            clientId: "client-alpha",
+            roleId: "Role-01",
+            justification: "Investigate.");
+
+        var result = await Reducer(authority).ReduceAsync(
+            Preparation(existing),
+            Update(role: new ClearRoleOperation()),
+            CancellationToken.None);
+
+        Assert.Null(result.Candidate.RoleId);
+        Assert.Null(result.SoleRoleSelection);
+        Assert.Null(result.Clarification);
+        Assert.Equal([ProposalField.Role], result.ChangedFields);
+        Assert.Equal(1, authority.RoleListCallCount);
+        AssertScopeResult(result, ApplicationGroupResultKind.Applied);
     }
 
     [Fact]
