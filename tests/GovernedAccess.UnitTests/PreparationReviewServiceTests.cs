@@ -78,7 +78,7 @@ public sealed class PreparationReviewServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsFailure);
-        Assert.Equal("prepared_card_context_mismatch", result.Failure!.Code);
+        Assert.Equal("preparation_review_context_mismatch", result.Failure!.Code);
     }
 
     [Fact]

@@ -47,7 +47,7 @@ public sealed class PreparationReviewService(
             return Failed(
                 ApplicationFailureKind.InvalidTransition,
                 "prepared_request_not_ready",
-                "Only an immutable ready preparation can be rendered for confirmation.");
+                "Only an immutable ready preparation can be reviewed for confirmation.");
         }
 
         var requesterResult = await principalReader.GetPrincipalAsync(
@@ -145,8 +145,8 @@ public sealed class PreparationReviewService(
     private static ApplicationResult<PreparationReview> ContextMismatch() =>
         Failed(
             ApplicationFailureKind.DependencyFailure,
-            "prepared_card_context_mismatch",
-            "The ready preparation could not be rendered from current authoritative context.");
+            "preparation_review_context_mismatch",
+            "The ready preparation could not be reviewed from current authoritative context.");
 
     private static ApplicationResult<PreparationReview> Failed(
         ApplicationFailureKind kind,
