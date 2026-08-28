@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace GovernedAccess.Web.Ai;
 
-internal static class RequestPreparationRegistration
+internal static class PreparationApplicationRegistration
 {
     internal static IServiceCollection AddRequestPreparation(
         this IServiceCollection services,
