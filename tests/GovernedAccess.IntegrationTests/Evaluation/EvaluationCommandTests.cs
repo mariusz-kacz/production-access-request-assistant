@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Evaluation;
@@ -16,47 +16,26 @@ namespace GovernedAccess.IntegrationTests.Evaluation;
 public sealed class EvaluationCommandTests
 {
 	[Fact]
-	public void WebProjectContainsOnlyTheCanonicalEvaluationAssets()
+	public void CommandRejectsUnsupportedOrIncompleteArguments()
 	{
-		string repositoryRoot = GetRepositoryRoot();
-		string evaluationRoot = Path.Combine(repositoryRoot, "src", "GovernedAccess.Web", "Evaluation");
-		string[] expectedSourceFiles =
+		string[][] invalidArguments =
 		[
-			"EvaluationArtifactWriter.cs",
-			"EvaluationContracts.cs",
-			"EvaluationDatasetLoader.cs",
-			"EvaluationExecution.cs",
-			"EvaluationGrader.cs",
-			"EvaluationHosting.cs",
-			"LiveModelEvaluationCommand.cs",
+			["--unknown"],
+			["--output"],
+			["--output", "first", "--output", "second"],
+			["--scenario", "unsupported-selection"],
+			["--group", "unsupported-selection"],
 		];
-		Assert.Equal(
-			expectedSourceFiles,
-			Directory.GetFiles(evaluationRoot, "*.cs")
-				.Select(static path => Path.GetFileName(path)!)
-				.Order(StringComparer.Ordinal));
-		Assert.Equal(
-			["evaluation-dataset.schema.json"],
-			Directory.GetFiles(Path.Combine(evaluationRoot, "Contracts"))
-				.Select(Path.GetFileName));
-		Assert.Equal(
-			["deterministic-intake-v1.json"],
-			Directory.GetFiles(Path.Combine(evaluationRoot, "Datasets"))
-				.Select(Path.GetFileName));
-		Assert.Equal("evaluate-live-model", LiveModelEvaluationCommand.CommandName);
-	}
 
-	[Theory]
-	[InlineData(new object[] { "--unknown" })]
-	[InlineData(new object[] { "--output" })]
-	[InlineData(new object[] { "--output", "first", "--output", "second" })]
-	[InlineData(new object[] { "--scenario", "EVAL-01" })]
-	[InlineData(new object[] { "--group", "EVAL-01" })]
-	public void CommandAcceptsOnlyOneOptionalOutputDirectory(params string[] arguments)
-	{
-		ApplicationResult<LiveModelEvaluationArguments> result = LiveModelEvaluationCommand.ParseArguments(arguments, Path.GetFullPath("evaluation-command-tests"));
-		Assert.True(result.IsFailure);
-		Assert.Equal(ApplicationFailureKind.InvalidInput, result.Failure!.Kind);
+		Assert.All(invalidArguments, arguments =>
+		{
+			ApplicationResult<LiveModelEvaluationArguments> result =
+				LiveModelEvaluationCommand.ParseArguments(
+					arguments,
+					Path.GetFullPath("evaluation-command-tests"));
+			Assert.True(result.IsFailure);
+			Assert.Equal(ApplicationFailureKind.InvalidInput, result.Failure!.Kind);
+		});
 	}
 
 	[Fact]
@@ -79,18 +58,17 @@ public sealed class EvaluationCommandTests
 		Assert.Equal(ApplicationFailureKind.InvalidInput, deterministic.Failure!.Kind);
 	}
 
-	[Theory]
-	[InlineData(new object[] { 0, 0 })]
-	[InlineData(new object[] { 1, 1 })]
-	[InlineData(new object[] { 3, 2 })]
-	[InlineData(new object[] { 2, 130 })]
-	public void RunStatusMapsToTheDocumentedExitCode(int statusValue, int expectedExitCode)
+	[Fact]
+	public void RunStatusesMapToTheDocumentedExitCodes()
 	{
-		Assert.Equal(expectedExitCode, LiveModelEvaluationCommand.GetExitCode((EvaluationRunStatus)statusValue));
+		Assert.Equal(0, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Passed));
+		Assert.Equal(1, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Failed));
+		Assert.Equal(2, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.PrerequisiteFailed));
+		Assert.Equal(130, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Cancelled));
 	}
 
 	[Fact]
-	public async Task ArtifactRecordsSafeVersionedPromotionEvidenceWithoutRawContent()
+	public async Task ArtifactRecordsVersionedPromotionEvidenceWithoutProviderPayloads()
 	{
 		string outputRoot = Path.Combine(Path.GetTempPath(), $"evaluation-artifact-tests-{Guid.NewGuid():N}");
 		try
@@ -100,7 +78,7 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
 			Assert.Equal(result.DatasetVersion, root.GetProperty("datasetVersion").GetString());
 			Assert.Equal(result.Environment, root.GetProperty("environment").GetString());
 			Assert.Equal("evaluation-deployment", root.GetProperty("versions").GetProperty("modelDeployment").GetString());
@@ -111,9 +89,7 @@ public sealed class EvaluationCommandTests
 			Assert.Equal(0, root.GetProperty("sideEffects").GetProperty("requests").GetInt32());
 			Assert.Equal(12, root.GetProperty("summary").GetProperty("promotedPassed").GetInt32());
 			Assert.Equal(11, root.GetProperty("summary").GetProperty("requiredPasses").GetInt32());
-			Assert.DoesNotContain("RAW_REQUESTER_SECRET", json, StringComparison.Ordinal);
-			Assert.DoesNotContain("RAW_PROPOSAL_SECRET", json, StringComparison.Ordinal);
-			Assert.DoesNotContain("requesterMessage", json, StringComparison.Ordinal);
+			Assert.Contains("Synthetic passing requester message.", json, StringComparison.Ordinal);
 			Assert.DoesNotContain("proposalPayload", json, StringComparison.Ordinal);
 			Assert.DoesNotContain("reasoning", json, StringComparison.OrdinalIgnoreCase);
 			Assert.DoesNotContain("toolPayload", json, StringComparison.Ordinal);
@@ -122,8 +98,84 @@ public sealed class EvaluationCommandTests
 			Assert.Contains("12/12", report, StringComparison.Ordinal);
 			Assert.Contains("11 required", report, StringComparison.Ordinal);
 			Assert.Contains("Absolute safety: PASS", report, StringComparison.Ordinal);
-			Assert.DoesNotContain("RAW_REQUESTER_SECRET", report, StringComparison.Ordinal);
-			Assert.DoesNotContain("RAW_PROPOSAL_SECRET", report, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(outputRoot))
+			{
+				Directory.Delete(outputRoot, recursive: true);
+			}
+		}
+	}
+
+	[Fact]
+	public async Task ArtifactPreservesExactFailedVariationDiagnostics()
+	{
+		string outputRoot = Path.Combine(Path.GetTempPath(), $"evaluation-artifact-failure-tests-{Guid.NewGuid():N}");
+		try
+		{
+			EvaluationRunResult result = CreateFailingRun();
+			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(result, outputRoot, TestContext.Current.CancellationToken);
+			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
+			using JsonDocument document = JsonDocument.Parse(json);
+			JsonElement root = document.RootElement;
+			Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
+			JsonElement variation = root.GetProperty("groups")[0].GetProperty("variations")[0];
+			Assert.Equal("draftUpdated", variation.GetProperty("outcome").GetString());
+			Assert.Contains("canonical.outcome", variation.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement canonicalComparison = variation.GetProperty("canonicalComparison");
+			Assert.Equal("discussion", canonicalComparison.GetProperty("expected").GetProperty("outcome").GetString());
+			Assert.Equal("draftUpdated", canonicalComparison.GetProperty("observed").GetProperty("outcome").GetString());
+			Assert.Equal(
+				["roleId"],
+				canonicalComparison.GetProperty("candidateMismatchFields").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement turn = variation.GetProperty("turns")[0];
+			Assert.Equal(
+				"Synthetic failed requester message.",
+				turn.GetProperty("requesterMessage").GetString());
+			Assert.Contains("interpretation.dialogueAct", turn.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement turnComparison = turn.GetProperty("comparison");
+			Assert.Equal("discussDraft", turnComparison.GetProperty("interpretation").GetProperty("expected").GetProperty("dialogueAct").GetString());
+			Assert.Equal("updateDraft", turnComparison.GetProperty("interpretation").GetProperty("observed").GetProperty("dialogueAct").GetString());
+			Assert.False(turnComparison.GetProperty("proposal").GetProperty("expectedPresent").GetBoolean());
+			Assert.True(turnComparison.GetProperty("proposal").GetProperty("observedPresent").GetBoolean());
+			Assert.Equal(
+				"synthetic environment query",
+				turnComparison.GetProperty("proposal").GetProperty("environment").GetProperty("observed").GetProperty("value").GetString());
+			Assert.Equal(
+				"observed justification",
+				turnComparison.GetProperty("proposal").GetProperty("justification").GetProperty("observed").GetProperty("value").GetString());
+			Assert.Equal(2, turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("callCount").GetInt32());
+			Assert.Contains(
+				"unexpected.tool/name",
+				turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("names").EnumerateArray().Select(static item => item.GetString()));
+			Assert.Equal(
+				"UNREDACTED_CANONICAL_VALUE",
+				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("roleId").GetString());
+			Assert.Equal(
+				"observed justification",
+				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("justification").GetString());
+			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", json, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_CANONICAL_VALUE", json, StringComparison.Ordinal);
+			Assert.DoesNotContain("diagnostic.redacted", json, StringComparison.Ordinal);
+
+			string report = await File.ReadAllTextAsync(paths.MarkdownPath, TestContext.Current.CancellationToken);
+			Assert.Contains("## Failed variations", report, StringComparison.Ordinal);
+			Assert.Contains("TEST-FAILURE", report, StringComparison.Ordinal);
+			Assert.Contains("canonical.outcome", report, StringComparison.Ordinal);
+			Assert.Contains("safety.absolute", report, StringComparison.Ordinal);
+			Assert.Contains("interpretation.dialogueAct", report, StringComparison.Ordinal);
+			Assert.Contains("Expected vs observed", report, StringComparison.Ordinal);
+			Assert.Contains("discussion", report, StringComparison.Ordinal);
+			Assert.Contains("draftUpdated", report, StringComparison.Ordinal);
+			Assert.Contains("discussDraft", report, StringComparison.Ordinal);
+			Assert.Contains("updateDraft", report, StringComparison.Ordinal);
+			Assert.Contains("synthetic environment query", report, StringComparison.Ordinal);
+			Assert.Contains("observed justification", report, StringComparison.Ordinal);
+			Assert.Contains("unexpected.tool/name", report, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", report, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_CANONICAL_VALUE", report, StringComparison.Ordinal);
+			Assert.DoesNotContain("diagnostic.redacted", report, StringComparison.Ordinal);
 		}
 		finally
 		{
@@ -136,16 +188,16 @@ public sealed class EvaluationCommandTests
 
 	private static EvaluationRunResult CreatePassingRun()
 	{
-		EvaluationGroupResult[] groups = Enumerable.Range(1, 12).Select(index =>
+		EvaluationGroupResult Group(int index)
 		{
-			string id = $"EVAL-{index:00}";
+			string id = $"TEST-GROUP-{index:00}";
 			return new EvaluationGroupResult(
 				id,
 				Promoted: true,
-				AbsoluteOutcomeGate: index is >= 5 and <= 11,
+				AbsoluteOutcomeGate: false,
 				EvaluationScenarioStatus.Passed,
 				[new EvaluationVariationResult(
-					$"{id}-A",
+					$"{id}-SUCCESS",
 					EvaluationScenarioStatus.Passed,
 					CanonicalOutcomeMatched: true,
 					EvaluationSafetyResult.Passed,
@@ -153,7 +205,8 @@ public sealed class EvaluationCommandTests
 					WorkflowSideEffectCounts.None,
 					FailureCodes: [],
 					Turns: [new EvaluationTurnResult(
-						$"{id}-turn-01",
+						$"{id}-SUCCESS-turn-01",
+						"Synthetic passing requester message.",
 						EvaluationScenarioStatus.Passed,
 						DialogueAct.UpdateDraft,
 						Failure: null,
@@ -161,12 +214,148 @@ public sealed class EvaluationCommandTests
 						ProviderIterationCount: 1,
 						ToolNames: [],
 						FailureCodes: [])])]);
-		}).ToArray();
-		return new EvaluationRunResult(Guid.Parse("2865611e-a1ac-4420-bf3c-122336ac30e3"), "deterministic-intake-1.0.0", "isolated-local-synthetic-evaluation", new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 8, 26, 10, 2, 0, TimeSpan.Zero), EvaluationRunStatus.Passed, new EvaluationVersionMetadata("evaluation-deployment", "model-2026-08", "3.0.0", "3.0.0", "3.0.0", "2.0.0"), new EvaluationSummary(12, 12, 11, 0, 0, AbsoluteSafetyPassed: true), WorkflowSideEffectCounts.None, Array.AsReadOnly(groups));
+		}
+
+		EvaluationGroupResult[] groups = Enumerable
+			.Range(1, EvaluationGrader.PromotedGroupCount)
+			.Select(Group)
+			.ToArray();
+		return new EvaluationRunResult(
+			Guid.Parse("2865611e-a1ac-4420-bf3c-122336ac30e3"),
+			"test-dataset-1.0.0",
+			"isolated-test",
+			new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 8, 26, 10, 2, 0, TimeSpan.Zero),
+			EvaluationRunStatus.Passed,
+			new EvaluationVersionMetadata(
+				"evaluation-deployment",
+				"model-2026-08",
+				"3.0.0",
+				"3.0.0",
+				"3.0.0",
+				"2.0.0"),
+			new EvaluationSummary(12, 12, 11, 0, 0, AbsoluteSafetyPassed: true),
+			WorkflowSideEffectCounts.None,
+			Array.AsReadOnly(groups));
 	}
 
-	private static string GetRepositoryRoot([CallerFilePath] string sourceFilePath = "")
+	private static EvaluationRunResult CreateFailingRun()
 	{
-		return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath) ?? throw new InvalidOperationException("The evaluation test source path is unavailable."), "..", "..", ".."));
+		EvaluationCandidateSnapshot candidate = new(
+			"expected-client",
+			"ENV-EXPECTED",
+			"expected-role",
+			Justification: "expected justification",
+			IncidentId: null);
+		EvaluationCandidateSnapshot unsafeObservedCandidate = candidate with
+		{
+			RoleId = "UNREDACTED_CANONICAL_VALUE",
+			Justification = "observed justification",
+		};
+		EvaluationProposalFieldComparison unexpectedEnvironment = new(
+			Matches: false,
+			Expected: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EvaluationEnvironmentReferenceKind.ExactEnvironmentId,
+				Value: "ENV-EXPECTED"),
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EvaluationEnvironmentReferenceKind.SearchQuery,
+				Value: "synthetic environment query"));
+		EvaluationProposalFieldComparison unsafeObservedRole = new(
+			Matches: false,
+			Expected: null,
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "UNREDACTED_PROPOSAL_VALUE"));
+		EvaluationProposalFieldComparison unexpectedJustification = new(
+			Matches: false,
+			Expected: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "expected justification"),
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "observed justification"));
+		EvaluationProposalFieldComparison unchangedIncident = new(
+			Matches: true,
+			Expected: null,
+			Observed: null);
+		EvaluationTurnResult turn = new(
+			"TEST-FAILURE-turn-01",
+			"Synthetic failed requester message.",
+			EvaluationScenarioStatus.Failed,
+			DialogueAct.UpdateDraft,
+			Failure: null,
+			ProviderModelVersion: "model-2026-08",
+			ProviderIterationCount: 1,
+			ToolNames: ["search_production_environments", "unexpected.tool/name"],
+			FailureCodes: ["interpretation.dialogueAct"],
+			Comparison: new EvaluationTurnComparison(
+				new EvaluationInterpretationComparison(
+					new EvaluationInterpretationSnapshot(DialogueAct.DiscussDraft, DiscussionTopic.ResetInstructions, Failure: null),
+					new EvaluationInterpretationSnapshot(DialogueAct.UpdateDraft, DiscussionTopic: null, Failure: null)),
+				new EvaluationProposalComparison(
+					ExpectedPresent: false,
+					ObservedPresent: true,
+					Environment: unexpectedEnvironment,
+					Role: unsafeObservedRole,
+					Justification: unexpectedJustification,
+					Incident: unchangedIncident),
+				new EvaluationToolUseComparison(
+					new EvaluationToolUseExpectation(["search_production_environments"], ["search_production_environments"], MaximumCalls: 2),
+					new EvaluationToolUseObservation(["search_production_environments", "unexpected.tool/name"], CallCount: 2))));
+		EvaluationVariationResult variation = new(
+			"TEST-FAILURE",
+			EvaluationScenarioStatus.Failed,
+			CanonicalOutcomeMatched: false,
+			EvaluationSafetyResult.Passed with
+			{
+				AuthoritativeIdentifiers = false,
+				Restraint = false,
+			},
+			ElapsedMilliseconds: 4_065,
+			WorkflowSideEffectCounts.None,
+			FailureCodes: ["canonical.outcome", "canonical.candidate", "safety.absolute"],
+			Turns: [turn],
+			Outcome: EvaluationOutcome.DraftUpdated,
+			CanonicalComparison: new EvaluationCanonicalComparison(
+				new EvaluationCanonicalSnapshot(
+					EvaluationOutcome.Discussion,
+					PreparationLifecycle.Ready,
+					candidate,
+					ClarificationTarget: null,
+					ClarificationChoiceIds: [],
+					ScopeResult: null,
+					JustificationResult: null),
+				new EvaluationCanonicalSnapshot(
+					EvaluationOutcome.DraftUpdated,
+					PreparationLifecycle.Ready,
+					unsafeObservedCandidate,
+					ClarificationTarget: null,
+					ClarificationChoiceIds: [],
+					ScopeResult: null,
+					JustificationResult: null),
+				CandidateMismatchFields: ["roleId"]));
+		EvaluationGroupResult group = new(
+			"TEST-GROUP",
+			Promoted: true,
+			AbsoluteOutcomeGate: true,
+			EvaluationScenarioStatus.Failed,
+			[variation]);
+		return new EvaluationRunResult(
+			Guid.Parse("fde25625-a14c-4af4-8ba1-c74dec36a532"),
+			"test-dataset-1.0.0",
+			"isolated-test",
+			new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 8, 27, 10, 1, 0, TimeSpan.Zero),
+			EvaluationRunStatus.Failed,
+			new EvaluationVersionMetadata("evaluation-deployment", "model-2026-08", "3.0.1", "3.0.0", "3.0.0", "2.0.0"),
+			new EvaluationSummary(12, 8, 11, 0, 0, AbsoluteSafetyPassed: false),
+			WorkflowSideEffectCounts.None,
+			[group]);
 	}
+
 }

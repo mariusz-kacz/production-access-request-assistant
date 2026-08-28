@@ -135,6 +135,42 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
     }
 
     [Fact]
+    public async Task ClearAllReadyTurnFailsClosedAndPreservesReadyPreparation()
+    {
+        var ready = ReadyPreparation();
+        var store = new InMemoryPreparationStore(ready);
+        var service = Service(
+            store,
+            CompleteAuthority(),
+            new FakeClock(CreatedAt.AddMinutes(5)));
+        var started = await service.BeginAsync(
+            Binding(),
+            "turn-clear-all",
+            TestContext.Current.CancellationToken);
+
+        var result = await service.ApplyAsync(
+            started.Value,
+            Update(
+                environment: new ClearEnvironmentOperation(),
+                justification: new ClearJustificationOperation()),
+            TurnAttribution,
+            TestContext.Current.CancellationToken);
+
+        var failure = Assert.IsType<Failed>(result.Response.Outcome);
+        Assert.Equal(
+            "request-preparation-ready-clear-all-not-allowed",
+            failure.Failure.Code);
+        Assert.Equal(ready.PreparationId, result.Preparation!.PreparationId);
+        Assert.Equal(PreparationLifecycle.Ready, result.Preparation.Lifecycle);
+        Assert.Equal(ready.Candidate, result.Preparation.Candidate);
+        Assert.Equal(
+            CreatedAt.Add(RequestPreparation.ReadyLifetime),
+            result.Preparation.ReadyDeadline);
+        Assert.Single(store.Preparations);
+        Assert.Equal(0, store.SaveCount);
+    }
+
+    [Fact]
     public async Task AcceptedReadyRevisionAtomicallyCreatesMandatoryPredecessorSuccessor()
     {
         var authority = CompleteAuthority();

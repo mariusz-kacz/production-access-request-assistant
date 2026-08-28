@@ -95,6 +95,12 @@ public sealed partial class RequestPreparationReducer
         var changedFields = candidate.ChangedFieldsFrom(current)
             .OrderBy(FieldOrder)
             .ToArray();
+        if (preparation.Lifecycle == PreparationLifecycle.Ready
+            && candidate.IsEmpty)
+        {
+            return Unchanged(preparation, ReadyClearAllFailure());
+        }
+
         var contextConsumed = IsClarificationConsumed(
             preparation.Clarification,
             changedFields);
@@ -254,6 +260,13 @@ public sealed partial class RequestPreparationReducer
                 ApplicationFailureKind.InvalidInput,
                 "request-preparation-proposal-structural-invalid",
                 "The structured request proposal is invalid."));
+
+    private static Failed ReadyClearAllFailure() =>
+        new(
+            new ApplicationFailure(
+                ApplicationFailureKind.InvalidInput,
+                "request-preparation-ready-clear-all-not-allowed",
+                "A ready request preparation cannot be cleared by a draft update."));
 
     private static PreparationCandidate CombineCandidate(
         PreparationCandidate current,

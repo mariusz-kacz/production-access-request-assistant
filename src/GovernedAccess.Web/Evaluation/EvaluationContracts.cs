@@ -109,9 +109,33 @@ internal sealed record EvaluationSafetyResult(bool ZeroConsequentialSideEffects,
 	internal bool IsPassed => ZeroConsequentialSideEffects && NoUnknownOrMutatingToolCalls && NoModelProse && AuthoritativeIdentifiers && Restraint && ClarificationResolution && JustificationFidelity;
 }
 
-internal sealed record EvaluationTurnResult(string Id, EvaluationScenarioStatus Status, DialogueAct? DialogueAct, AgentInterpretationFailure? Failure, string? ProviderModelVersion, int ProviderIterationCount, IReadOnlyList<string> ToolNames, IReadOnlyList<string> FailureCodes);
+internal sealed record EvaluationInterpretationSnapshot(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure);
 
-internal sealed record EvaluationVariationResult(string Id, EvaluationScenarioStatus Status, bool CanonicalOutcomeMatched, EvaluationSafetyResult Safety, long? ElapsedMilliseconds, WorkflowSideEffectCounts SideEffects, IReadOnlyList<string> FailureCodes, IReadOnlyList<EvaluationTurnResult> Turns, EvaluationOutcome? Outcome = null);
+internal sealed record EvaluationInterpretationComparison(EvaluationInterpretationSnapshot Expected, EvaluationInterpretationSnapshot Observed);
+
+internal sealed record EvaluationOperationSnapshot(EvaluationOperationKind Operation, EvaluationEnvironmentReferenceKind? EnvironmentReferenceKind, string? Value);
+
+internal sealed record EvaluationProposalFieldComparison(bool Matches, EvaluationOperationSnapshot? Expected, EvaluationOperationSnapshot? Observed);
+
+internal sealed record EvaluationProposalComparison(bool ExpectedPresent, bool ObservedPresent, EvaluationProposalFieldComparison Environment, EvaluationProposalFieldComparison Role, EvaluationProposalFieldComparison Justification, EvaluationProposalFieldComparison Incident);
+
+internal sealed record EvaluationToolUseExpectation(IReadOnlyList<string> AllowedNames, IReadOnlyList<string> RequiredNames, int MaximumCalls);
+
+internal sealed record EvaluationToolUseObservation(IReadOnlyList<string> Names, int CallCount);
+
+internal sealed record EvaluationToolUseComparison(EvaluationToolUseExpectation Expected, EvaluationToolUseObservation Observed);
+
+internal sealed record EvaluationTurnComparison(EvaluationInterpretationComparison Interpretation, EvaluationProposalComparison Proposal, EvaluationToolUseComparison Tools);
+
+internal sealed record EvaluationCandidateSnapshot(string? ClientId, string? EnvironmentId, string? RoleId, string? Justification, string? IncidentId);
+
+internal sealed record EvaluationCanonicalSnapshot(EvaluationOutcome? Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidateSnapshot? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult);
+
+internal sealed record EvaluationCanonicalComparison(EvaluationCanonicalSnapshot Expected, EvaluationCanonicalSnapshot? Observed, IReadOnlyList<string> CandidateMismatchFields);
+
+internal sealed record EvaluationTurnResult(string Id, string RequesterMessage, EvaluationScenarioStatus Status, DialogueAct? DialogueAct, AgentInterpretationFailure? Failure, string? ProviderModelVersion, int ProviderIterationCount, IReadOnlyList<string> ToolNames, IReadOnlyList<string> FailureCodes, EvaluationTurnComparison? Comparison = null);
+
+internal sealed record EvaluationVariationResult(string Id, EvaluationScenarioStatus Status, bool CanonicalOutcomeMatched, EvaluationSafetyResult Safety, long? ElapsedMilliseconds, WorkflowSideEffectCounts SideEffects, IReadOnlyList<string> FailureCodes, IReadOnlyList<EvaluationTurnResult> Turns, EvaluationOutcome? Outcome = null, EvaluationCanonicalComparison? CanonicalComparison = null);
 
 internal sealed record EvaluationGroupResult(string Id, bool Promoted, bool AbsoluteOutcomeGate, EvaluationScenarioStatus Status, IReadOnlyList<EvaluationVariationResult> Variations);
 

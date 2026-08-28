@@ -128,10 +128,11 @@ static async Task<int> RunLiveModelEvaluationAsync(string[] arguments)
         return LiveModelEvaluationCommand.GetExitCode(
             EvaluationRunStatus.Cancelled);
     }
-    catch (Exception)
+    catch (Exception ex)
     {
         Console.Error.WriteLine(
             "Live-model evaluation could not start because a required dependency is unavailable.");
+        Console.Error.WriteLine(ex.Message);
         return LiveModelEvaluationCommand.GetExitCode(
             EvaluationRunStatus.PrerequisiteFailed);
     }

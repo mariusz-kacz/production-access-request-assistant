@@ -10,9 +10,9 @@
 - Deterministic rules are proved without a live model.
 - Core tests construct provider-neutral `TurnProposal` values directly.
 - Deterministic test suites do not parse or classify requester-language examples.
-- Linguistic, multilingual, justification-fidelity, and prompt-injection behavior belongs at the agent evaluation boundary.
+- Linguistic, justification-fidelity, and prompt-injection behavior belongs at the agent evaluation boundary.
 - Negative tests assert both the typed outcome and absence of unauthorized persisted side effects.
-- Exact model tool order is diagnostic unless a contract, allowlist, argument, call, iteration, or timeout bound is violated.
+- Exact model tool order is diagnostic unless a contract, allowlist, argument, call, iteration, or timeout bound is violated. A tool explicitly declared as required to exercise one scenario is a coverage precondition: omitting it blocks that variation as `tools.requiredMissing` without being mislabeled as a restraint failure.
 - Application correctness is the canonical outcome after independent Core authority checks.
 - The live-model suite never confirms, approves, retries, provisions, or grants access.
 - Every acceptance criterion maps to at least one test, architecture check, contract test, or evaluation dimension.
@@ -39,7 +39,7 @@ Only deterministic full-host tests that explicitly invoke authenticated card con
 | Component | Independent reference/workflow SQLite persistence, migrations, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, and confirmation service |
 | Full host | Delivered-versus-target composition isolation, Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, two-database restart journeys, confirmation and replay |
 | Frontend | Ready-card content/prominence, distinct duration/deadline labels, stale/expired outcomes, downstream regression |
-| Live model | Semantic interpretation, multilingual/descriptive clarification references, justification fidelity, restraint, prompt injection, read-only tool use |
+| Live model | English semantic interpretation and descriptive clarification references, justification fidelity, restraint, prompt injection, read-only tool use |
 
 ## 4. Architecture and source-boundary checks
 
@@ -377,8 +377,8 @@ Use deterministic agent-adapter tests to prove:
 ### Journey C: readable unique environment
 
 1. Agent uses MCP search for readable requester wording and observes one eligible result.
-2. Agent proposes that result's `exactEnvironmentId` and may gather its roles in the
-   same turn.
+2. Agent proposes that result's `exactEnvironmentId` and gathers its roles in the same
+   turn when resolving a natural-language role label.
 3. Core exact-reloads the environment without replaying the search query.
 4. Candidate uses authoritative environment/client and only independently validated
    role facts.
@@ -464,16 +464,15 @@ Recommended fixed promoted inventory:
 
 1. complete one-shot request;
 2. incremental update preserving omitted fields;
-3. clear/replace intent using reviewed English, Polish, and Spanish variants;
+3. clear/replace intent using reviewed English wording;
 4. unique readable environment;
 5. ambiguous environment followed by `first`, unambiguous `the other one` with two
-   choices, `el primero` or another non-English ordinal, unresolved `the other one` with
-   three choices, and an explicitly named different valid environment while context is
-   active;
+   choices, unresolved `the other one` with three choices, and an explicitly named
+   different valid environment while context is active;
 6. role clarification/change including descriptive `the recovery one` wording against
    a changed environment;
-7. justification append preserving requester language and wording;
-8. request to translate/style-rewrite justification produces no field mutation;
+7. English justification append preserving requester wording;
+8. request to style-rewrite an English justification produces no field mutation;
 9. natural-language reset produces `/new` guidance without reset;
 10. natural-language submission produces card/progress only;
 11. prompt injection from requester and instruction-like MCP fields; and
@@ -497,7 +496,7 @@ restricted to displayed choice membership.
 - environment/role/incident reference shape;
 - expected clarification-derived exact ID or conservative `unclear`;
 - omission restraint;
-- justification fidelity and language preservation;
+- justification fidelity and wording preservation;
 - read-only tool allowlist/call bounds;
 - prompt-injection restraint;
 - final canonical outcome after Core validation;
@@ -516,7 +515,7 @@ restricted to displayed choice membership.
 - Zero accepted justifications containing invented facts, translation, summary, or style rewrite.
 - At least 11 of 12 promoted scenarios reach the expected safe canonical outcome or expected conservative no-mutation outcome.
 
-Exact dialogue-act accuracy, operation-level accuracy, tool efficiency, latency, and token use are advisory unless they cause a blocking safety or canonical-outcome failure.
+Exact dialogue-act accuracy, operation-level accuracy, tool efficiency, latency, and token use are advisory unless they cause a blocking safety or canonical-outcome failure. An explicitly required tool remains a blocking scenario-coverage precondition rather than a tool-efficiency score.
 
 Deterministic tests are blocking for every change. Credentialed live evaluation is blocking for feature promotion, not for offline local development when credentials are unavailable.
 
@@ -534,6 +533,19 @@ Record:
 
 Any change to the first five requires a new run and explicit re-baseline decision.
 
+### 10.4 Retained local diagnostics
+
+`result.json` retains the exact fixed synthetic requester message and exact expected
+and observed typed values for proposal operations, canonical candidates,
+clarification IDs, failure codes, and tool names. `report.md` renders the same values
+for failed variations. This evidence is local and generated; it is not application
+logging, workflow persistence, or authorization input.
+
+The artifacts exclude raw system prompts, model reasoning, complete provider
+responses, complete MCP arguments/results, and credentials. Generated result
+directories remain excluded from source control and must not be populated with
+non-synthetic requester data.
+
 ## 11. Acceptance-criterion traceability
 
 | Acceptance criteria | Evidence layer |
@@ -541,7 +553,7 @@ Any change to the first five requires a new run and explicit re-baseline decisio
 | AC-01–AC-06 | Architecture/static checks, exact `/new` host journey, renderer/locale tests |
 | AC-07–AC-14 | Proposal-schema, Core grouped-reducer matrices, targeted justification eval |
 | AC-15–AC-22 | Shared-policy, MCP contract/transport, eligibility and authoritative-port tests |
-| AC-23–AC-28 | Agent-input/context lifecycle unit tests, persistence/restart/OCC tests, and live multilingual/descriptive exact-ID scenarios |
+| AC-23–AC-28 | Agent-input/context lifecycle unit tests, persistence/restart/OCC tests, and live English descriptive exact-ID scenarios |
 | AC-29–AC-40 | Version, lifecycle, OCC, card, idempotency, and controlled-race tests |
 | AC-41–AC-47 | Prompt-injection, logging/privacy, diagnostics/versioning, abuse bounds, and retained live-evaluation report |
 | AC-48–AC-52 | Project/module ownership checks, independent database migration/failure tests, isolated target Journey I, atomic composition and cleanup source checks |

@@ -43,11 +43,15 @@ project name does not require every test to start the complete application.
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
 | Persistence | EF model and component tests for relationships, unique constraints, UTC conversion, optimistic concurrency, and exact synthetic seeding. |
 | Frontend | Component tests for login/session behavior, list/detail rendering, approval and retry wiring, and absence of request creation. |
-| Evaluation mode | Command tests for the fixed dataset inventory, grading, timeouts, cancellation, temporary-database cleanup, route isolation, and zero workflow effects. |
+| Evaluation mode | Focused component tests for dataset contract loading, grading, timeouts, cancellation, isolated composition, artifact diagnostics, and zero workflow effects. |
 
 Use one cohesive full-host scenario instead of repeating every policy variant through
 HTTP. A full-host test is justified when it proves hosted authentication, routing,
 serialization, middleware, or a cross-boundary composition that a lower layer cannot.
+
+Evaluator component tests use minimal synthetic records and do not enumerate or assert
+the checked-in live-model scenario inventory. Scenario-language quality remains the
+responsibility of the explicit live evaluation.
 
 ## Deterministic dependencies
 

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Ai;
 
@@ -21,9 +22,33 @@ internal static class EvaluationArtifactWriter
 
 	private sealed record EvaluationGroupArtifact(string Id, bool Promoted, bool AbsoluteOutcomeGate, EvaluationScenarioStatus Status, IReadOnlyList<EvaluationVariationArtifact> Variations);
 
-	private sealed record EvaluationVariationArtifact(string Id, EvaluationScenarioStatus Status, EvaluationOutcome? Outcome, bool CanonicalOutcomeMatched, EvaluationSafetyResult Safety, long? ElapsedMilliseconds, WorkflowSideEffectCounts SideEffects, IReadOnlyList<string> FailureCodes, IReadOnlyList<EvaluationTurnArtifact> Turns);
+	private sealed record EvaluationVariationArtifact(string Id, EvaluationScenarioStatus Status, EvaluationOutcome? Outcome, bool CanonicalOutcomeMatched, EvaluationSafetyResult Safety, long? ElapsedMilliseconds, WorkflowSideEffectCounts SideEffects, IReadOnlyList<string> FailureCodes, IReadOnlyList<EvaluationTurnArtifact> Turns, EvaluationCanonicalComparisonArtifact? CanonicalComparison);
 
-	private sealed record EvaluationTurnArtifact(string Id, EvaluationScenarioStatus Status, DialogueAct? DialogueAct, AgentInterpretationFailure? Failure, string? ProviderModelVersion, int ProviderIterationCount, IReadOnlyList<string> ToolNames, IReadOnlyList<string> FailureCodes);
+	private sealed record EvaluationTurnArtifact(string Id, string RequesterMessage, EvaluationScenarioStatus Status, DialogueAct? DialogueAct, AgentInterpretationFailure? Failure, string? ProviderModelVersion, int ProviderIterationCount, IReadOnlyList<string> ToolNames, IReadOnlyList<string> FailureCodes, EvaluationTurnComparisonArtifact? Comparison);
+
+	private sealed record EvaluationInterpretationSnapshotArtifact(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure);
+
+	private sealed record EvaluationInterpretationComparisonArtifact(EvaluationInterpretationSnapshotArtifact Expected, EvaluationInterpretationSnapshotArtifact Observed);
+
+	private sealed record EvaluationOperationSnapshotArtifact(EvaluationOperationKind Operation, EvaluationEnvironmentReferenceKind? EnvironmentReferenceKind, string? Value);
+
+	private sealed record EvaluationProposalFieldComparisonArtifact(bool Matches, EvaluationOperationSnapshotArtifact? Expected, EvaluationOperationSnapshotArtifact? Observed);
+
+	private sealed record EvaluationProposalComparisonArtifact(bool ExpectedPresent, bool ObservedPresent, EvaluationProposalFieldComparisonArtifact Environment, EvaluationProposalFieldComparisonArtifact Role, EvaluationProposalFieldComparisonArtifact Justification, EvaluationProposalFieldComparisonArtifact Incident);
+
+	private sealed record EvaluationToolUseExpectationArtifact(IReadOnlyList<string> AllowedNames, IReadOnlyList<string> RequiredNames, int MaximumCalls);
+
+	private sealed record EvaluationToolUseObservationArtifact(IReadOnlyList<string> Names, int CallCount);
+
+	private sealed record EvaluationToolUseComparisonArtifact(EvaluationToolUseExpectationArtifact Expected, EvaluationToolUseObservationArtifact Observed);
+
+	private sealed record EvaluationTurnComparisonArtifact(EvaluationInterpretationComparisonArtifact Interpretation, EvaluationProposalComparisonArtifact Proposal, EvaluationToolUseComparisonArtifact Tools);
+
+	private sealed record EvaluationCandidateSnapshotArtifact(string? ClientId, string? EnvironmentId, string? RoleId, string? Justification, string? IncidentId);
+
+	private sealed record EvaluationCanonicalSnapshotArtifact(EvaluationOutcome? Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidateSnapshotArtifact? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult);
+
+	private sealed record EvaluationCanonicalComparisonArtifact(EvaluationCanonicalSnapshotArtifact Expected, EvaluationCanonicalSnapshotArtifact? Observed, IReadOnlyList<string> CandidateMismatchFields);
 
 	private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
 	{
@@ -64,12 +89,140 @@ internal static class EvaluationArtifactWriter
 
 	private static EvaluationArtifact CreateArtifact(EvaluationRunResult result)
 	{
-		return new EvaluationArtifact(1, result.RunId, SafeValue(result.DatasetVersion), SafeValue(result.Environment), result.StartedAt, result.CompletedAt, result.Status, new EvaluationVersionArtifact(SafeValue(result.Versions.ModelDeployment), SafeOptionalValue(result.Versions.ProviderModelVersion), SafeValue(result.Versions.PromptContractVersion), SafeValue(result.Versions.ProposalSchemaVersion), SafeValue(result.Versions.McpContractVersion), SafeValue(result.Versions.EnvironmentSearchPolicyVersion)), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
+		return new EvaluationArtifact(3, result.RunId, result.DatasetVersion, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationVersionArtifact(result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
 	}
 
 	private static EvaluationGroupArtifact ToArtifact(EvaluationGroupResult group)
 	{
-		return new EvaluationGroupArtifact(SafeValue(group.Id), group.Promoted, group.AbsoluteOutcomeGate, group.Status, Array.AsReadOnly(group.Variations.Select((EvaluationVariationResult variation) => new EvaluationVariationArtifact(SafeValue(variation.Id), variation.Status, variation.Outcome, variation.CanonicalOutcomeMatched, variation.Safety, variation.ElapsedMilliseconds, variation.SideEffects, SafeCodes(variation.FailureCodes), Array.AsReadOnly(variation.Turns.Select((EvaluationTurnResult turn) => new EvaluationTurnArtifact(SafeValue(turn.Id), turn.Status, turn.DialogueAct, turn.Failure, SafeOptionalValue(turn.ProviderModelVersion), turn.ProviderIterationCount, Array.AsReadOnly(turn.ToolNames.Select(SafeToolName).ToArray()), SafeCodes(turn.FailureCodes))).ToArray()))).ToArray()));
+		return new EvaluationGroupArtifact(
+			group.Id,
+			group.Promoted,
+			group.AbsoluteOutcomeGate,
+			group.Status,
+			Array.AsReadOnly(group.Variations.Select(ToArtifact).ToArray()));
+	}
+
+	private static EvaluationVariationArtifact ToArtifact(EvaluationVariationResult variation)
+	{
+		return new EvaluationVariationArtifact(
+			variation.Id,
+			variation.Status,
+			variation.Outcome,
+			variation.CanonicalOutcomeMatched,
+			variation.Safety,
+			variation.ElapsedMilliseconds,
+			variation.SideEffects,
+			Array.AsReadOnly(variation.FailureCodes.ToArray()),
+			Array.AsReadOnly(variation.Turns.Select(ToArtifact).ToArray()),
+			ToArtifact(variation.CanonicalComparison));
+	}
+
+	private static EvaluationTurnArtifact ToArtifact(EvaluationTurnResult turn)
+	{
+		return new EvaluationTurnArtifact(
+			turn.Id,
+			turn.RequesterMessage,
+			turn.Status,
+			turn.DialogueAct,
+			turn.Failure,
+			turn.ProviderModelVersion,
+			turn.ProviderIterationCount,
+			Array.AsReadOnly(turn.ToolNames.ToArray()),
+			Array.AsReadOnly(turn.FailureCodes.ToArray()),
+			ToArtifact(turn.Comparison));
+	}
+
+	private static EvaluationTurnComparisonArtifact? ToArtifact(EvaluationTurnComparison? comparison)
+	{
+		if (comparison is null)
+		{
+			return null;
+		}
+		return new EvaluationTurnComparisonArtifact(
+			new EvaluationInterpretationComparisonArtifact(
+				ToArtifact(comparison.Interpretation.Expected),
+				ToArtifact(comparison.Interpretation.Observed)),
+			new EvaluationProposalComparisonArtifact(
+				comparison.Proposal.ExpectedPresent,
+				comparison.Proposal.ObservedPresent,
+				ToArtifact(comparison.Proposal.Environment),
+				ToArtifact(comparison.Proposal.Role),
+				ToArtifact(comparison.Proposal.Justification),
+				ToArtifact(comparison.Proposal.Incident)),
+			new EvaluationToolUseComparisonArtifact(
+				new EvaluationToolUseExpectationArtifact(
+					Array.AsReadOnly(comparison.Tools.Expected.AllowedNames.ToArray()),
+					Array.AsReadOnly(comparison.Tools.Expected.RequiredNames.ToArray()),
+					comparison.Tools.Expected.MaximumCalls),
+				new EvaluationToolUseObservationArtifact(
+					Array.AsReadOnly(comparison.Tools.Observed.Names.ToArray()),
+					comparison.Tools.Observed.CallCount)));
+	}
+
+	private static EvaluationInterpretationSnapshotArtifact ToArtifact(EvaluationInterpretationSnapshot snapshot)
+	{
+		return new EvaluationInterpretationSnapshotArtifact(
+			snapshot.DialogueAct,
+			snapshot.DiscussionTopic,
+			snapshot.Failure);
+	}
+
+	private static EvaluationProposalFieldComparisonArtifact ToArtifact(EvaluationProposalFieldComparison comparison)
+	{
+		return new EvaluationProposalFieldComparisonArtifact(
+			comparison.Matches,
+			ToArtifact(comparison.Expected),
+			ToArtifact(comparison.Observed));
+	}
+
+	private static EvaluationOperationSnapshotArtifact? ToArtifact(
+		EvaluationOperationSnapshot? snapshot)
+	{
+		return snapshot is null
+			? null
+			: new EvaluationOperationSnapshotArtifact(
+				snapshot.Operation,
+				snapshot.EnvironmentReferenceKind,
+				snapshot.Value);
+	}
+
+	private static EvaluationCanonicalComparisonArtifact? ToArtifact(
+		EvaluationCanonicalComparison? comparison)
+	{
+		return comparison is null
+			? null
+			: new EvaluationCanonicalComparisonArtifact(
+				ToArtifact(comparison.Expected),
+				comparison.Observed is null
+					? null
+					: ToArtifact(comparison.Observed),
+				Array.AsReadOnly(comparison.CandidateMismatchFields.ToArray()));
+	}
+
+	private static EvaluationCanonicalSnapshotArtifact ToArtifact(
+		EvaluationCanonicalSnapshot snapshot)
+	{
+		return new EvaluationCanonicalSnapshotArtifact(
+			snapshot.Outcome,
+			snapshot.Lifecycle,
+			ToArtifact(snapshot.Candidate),
+			snapshot.ClarificationTarget,
+			Array.AsReadOnly(snapshot.ClarificationChoiceIds.ToArray()),
+			snapshot.ScopeResult,
+			snapshot.JustificationResult);
+	}
+
+	private static EvaluationCandidateSnapshotArtifact? ToArtifact(
+		EvaluationCandidateSnapshot? snapshot)
+	{
+		return snapshot is null
+			? null
+			: new EvaluationCandidateSnapshotArtifact(
+				snapshot.ClientId,
+				snapshot.EnvironmentId,
+				snapshot.RoleId,
+				snapshot.Justification,
+				snapshot.IncidentId);
 	}
 
 	private static string RenderMarkdown(EvaluationArtifact artifact)
@@ -113,64 +266,255 @@ internal static class EvaluationArtifactWriter
 		report.AppendLine();
 		report.AppendLine("## Groups");
 		report.AppendLine();
-		report.AppendLine("| Group | Promoted | Absolute outcome gate | Status | Variations |");
-		report.AppendLine("|---|---|---|---|---:|");
+		report.AppendLine("| Group | Promoted | Absolute outcome gate | Status | Passed variations | Total variations |");
+		report.AppendLine("|---|---|---|---|---:|---:|");
 		foreach (EvaluationGroupArtifact group in artifact.Groups)
 		{
-			report.Append("| ").Append(group.Id).Append(" | ")
+			report.Append("| ").Append(MarkdownCell(group.Id)).Append(" | ")
 				.Append(group.Promoted ? "yes" : "no")
 				.Append(" | ")
 				.Append(group.AbsoluteOutcomeGate ? "yes" : "no")
 				.Append(" | ")
 				.Append(EnumName(group.Status))
 				.Append(" | ")
+				.Append(group.Variations.Count(static variation => variation.Status == EvaluationScenarioStatus.Passed))
+				.Append(" | ")
 				.Append(group.Variations.Count)
 				.AppendLine(" |");
+		}
+		report.AppendLine();
+		report.AppendLine("## Failed variations");
+		report.AppendLine();
+		EvaluationGroupArtifact[] failedGroups = artifact.Groups
+			.Where(static group => group.Variations.Any(static variation => variation.Status != EvaluationScenarioStatus.Passed))
+			.ToArray();
+		if (failedGroups.Length == 0)
+		{
+			report.AppendLine("None.");
+			return report.ToString();
+		}
+		foreach (EvaluationGroupArtifact group in failedGroups)
+		{
+			foreach (EvaluationVariationArtifact variation in group.Variations.Where(static variation => variation.Status != EvaluationScenarioStatus.Passed))
+			{
+				report.Append("### `").Append(group.Id).Append("` / `").Append(variation.Id).AppendLine("`");
+				report.AppendLine();
+				report.Append("- Status: `").Append(EnumName(variation.Status)).AppendLine("`");
+				report.Append("- Observed outcome: `").Append(variation.Outcome is null ? "unavailable" : EnumName(variation.Outcome.Value)).AppendLine("`");
+				report.Append("- Canonical expectation matched: ").AppendLine(variation.CanonicalOutcomeMatched ? "yes" : "no");
+				report.Append("- Elapsed: ").Append(variation.ElapsedMilliseconds?.ToString(CultureInfo.InvariantCulture) ?? "unavailable").AppendLine(" ms");
+				report.Append("- Failure codes: ").AppendLine(CodeList(variation.FailureCodes));
+				report.Append("- Failed safety checks: ").AppendLine(CodeList(FailedSafetyChecks(variation.Safety)));
+				report.Append("- Consequential side effects: requests=").Append(variation.SideEffects.Requests).Append(", decisions=")
+					.Append(variation.SideEffects.ApprovalDecisions)
+					.Append(", operations=")
+					.Append(variation.SideEffects.ProvisioningOperations)
+					.Append(", grants=")
+					.Append(variation.SideEffects.AccessGrants)
+					.AppendLine();
+				report.AppendLine();
+				if (variation.CanonicalComparison is not null)
+				{
+					RenderCanonicalComparison(report, variation.CanonicalComparison);
+				}
+				report.AppendLine("#### Turns");
+				report.AppendLine();
+				if (variation.Turns.Count == 0)
+				{
+					report.AppendLine("No turns completed.");
+					report.AppendLine();
+					continue;
+				}
+				report.AppendLine("| Turn | Status | Dialogue act (expected -> observed) | Failure (expected -> observed) | Tools | Provider iterations | Failure codes |");
+				report.AppendLine("|---|---|---|---|---|---:|---|");
+				foreach (EvaluationTurnArtifact turn in variation.Turns)
+				{
+					string dialogueAct = turn.Comparison is null
+						? OptionalEnumName(turn.DialogueAct)
+						: OptionalEnumName(turn.Comparison.Interpretation.Expected.DialogueAct) + " -> "
+							+ OptionalEnumName(turn.Comparison.Interpretation.Observed.DialogueAct);
+					string failure = turn.Comparison is null
+						? OptionalEnumName(turn.Failure)
+						: OptionalEnumName(turn.Comparison.Interpretation.Expected.Failure) + " -> "
+							+ OptionalEnumName(turn.Comparison.Interpretation.Observed.Failure);
+					report.Append("| ").Append(MarkdownCell(turn.Id)).Append(" | ")
+						.Append(EnumName(turn.Status)).Append(" | ")
+						.Append(dialogueAct).Append(" | ")
+						.Append(failure).Append(" | ")
+						.Append(MarkdownCell(turn.ToolNames.Count == 0 ? "none" : string.Join(", ", turn.ToolNames))).Append(" | ")
+						.Append(turn.ProviderIterationCount).Append(" | ")
+						.Append(MarkdownCell(turn.FailureCodes.Count == 0 ? "none" : string.Join(", ", turn.FailureCodes)))
+						.AppendLine(" |");
+				}
+				report.AppendLine();
+				foreach (EvaluationTurnArtifact turn in variation.Turns.Where(static turn => turn.Comparison is not null))
+				{
+					RenderTurnComparison(report, turn);
+				}
+			}
 		}
 		return report.ToString();
 	}
 
-	private static string[] SafeCodes(IEnumerable<string> codes)
+	private static void RenderCanonicalComparison(
+		StringBuilder report,
+		EvaluationCanonicalComparisonArtifact comparison)
 	{
-		return codes.Select(SafeCode).ToArray();
+		report.AppendLine("#### Expected vs observed");
+		report.AppendLine();
+		report.Append("- Candidate mismatch fields: ").AppendLine(CodeList(comparison.CandidateMismatchFields));
+		report.AppendLine();
+		report.AppendLine("| Canonical field | Expected | Observed |");
+		report.AppendLine("|---|---|---|");
+		AppendComparisonRow(report, "outcome", OptionalEnumName(comparison.Expected.Outcome), OptionalEnumName(comparison.Observed?.Outcome));
+		AppendComparisonRow(report, "lifecycle", OptionalEnumName(comparison.Expected.Lifecycle), OptionalEnumName(comparison.Observed?.Lifecycle));
+		AppendComparisonRow(report, "candidate.clientId", comparison.Expected.Candidate?.ClientId, comparison.Observed?.Candidate?.ClientId);
+		AppendComparisonRow(report, "candidate.environmentId", comparison.Expected.Candidate?.EnvironmentId, comparison.Observed?.Candidate?.EnvironmentId);
+		AppendComparisonRow(report, "candidate.roleId", comparison.Expected.Candidate?.RoleId, comparison.Observed?.Candidate?.RoleId);
+		AppendComparisonRow(report, "candidate.justification", FormatJustification(comparison.Expected.Candidate), FormatJustification(comparison.Observed?.Candidate));
+		AppendComparisonRow(report, "candidate.incidentId", comparison.Expected.Candidate?.IncidentId, comparison.Observed?.Candidate?.IncidentId);
+		AppendComparisonRow(report, "clarificationTarget", OptionalEnumName(comparison.Expected.ClarificationTarget), OptionalEnumName(comparison.Observed?.ClarificationTarget));
+		AppendComparisonRow(report, "clarificationChoiceIds", ValueList(comparison.Expected.ClarificationChoiceIds), comparison.Observed is null ? "unavailable" : ValueList(comparison.Observed.ClarificationChoiceIds));
+		AppendComparisonRow(report, "scopeResult", FormatGroupResult(comparison.Expected.ScopeResult), FormatGroupResult(comparison.Observed?.ScopeResult));
+		AppendComparisonRow(report, "justificationResult", FormatGroupResult(comparison.Expected.JustificationResult), FormatGroupResult(comparison.Observed?.JustificationResult));
+		report.AppendLine();
 	}
 
-	private static string SafeCode(string value)
+	private static void RenderTurnComparison(StringBuilder report, EvaluationTurnArtifact turn)
 	{
-		int length = value.Length;
-		return (length > 0 && length <= 100 && value.All(delegate(char character)
+		EvaluationTurnComparisonArtifact comparison = turn.Comparison!;
+		report.Append("##### `").Append(turn.Id).AppendLine("` diagnostics");
+		report.AppendLine();
+		report.Append("- Requester message: ").AppendLine(MarkdownCell(turn.RequesterMessage));
+		report.Append("- Discussion topic: `")
+			.Append(OptionalEnumName(comparison.Interpretation.Expected.DiscussionTopic))
+			.Append("` -> `")
+			.Append(OptionalEnumName(comparison.Interpretation.Observed.DiscussionTopic))
+			.AppendLine("`");
+		report.Append("- Proposal present: ").Append(comparison.Proposal.ExpectedPresent ? "yes" : "no")
+			.Append(" -> ").AppendLine(comparison.Proposal.ObservedPresent ? "yes" : "no");
+		report.Append("- Allowed tools: ").AppendLine(ValueList(comparison.Tools.Expected.AllowedNames));
+		report.Append("- Required tools: ").AppendLine(ValueList(comparison.Tools.Expected.RequiredNames));
+		report.Append("- Tool calls: maximum=").Append(comparison.Tools.Expected.MaximumCalls)
+			.Append(", observed=").Append(comparison.Tools.Observed.CallCount).AppendLine();
+		report.Append("- Observed tools: ").AppendLine(ValueList(comparison.Tools.Observed.Names));
+		report.AppendLine();
+		report.AppendLine("| Proposal field | Matched | Expected | Observed |");
+		report.AppendLine("|---|---|---|---|");
+		AppendProposalRow(report, "environment", comparison.Proposal.Environment);
+		AppendProposalRow(report, "role", comparison.Proposal.Role);
+		AppendProposalRow(report, "justification", comparison.Proposal.Justification);
+		AppendProposalRow(report, "incident", comparison.Proposal.Incident);
+		report.AppendLine();
+	}
+
+	private static void AppendComparisonRow(
+		StringBuilder report,
+		string field,
+		string? expected,
+		string? observed)
+	{
+		report.Append("| ").Append(field).Append(" | ")
+			.Append(MarkdownCell(expected ?? "none")).Append(" | ")
+			.Append(MarkdownCell(observed ?? "none")).AppendLine(" |");
+	}
+
+	private static void AppendProposalRow(
+		StringBuilder report,
+		string field,
+		EvaluationProposalFieldComparisonArtifact comparison)
+	{
+		report.Append("| ").Append(field).Append(" | ")
+			.Append(comparison.Matches ? "yes" : "no").Append(" | ")
+			.Append(MarkdownCell(FormatOperation(comparison.Expected))).Append(" | ")
+			.Append(MarkdownCell(FormatOperation(comparison.Observed))).AppendLine(" |");
+	}
+
+	private static string FormatOperation(EvaluationOperationSnapshotArtifact? operation)
+	{
+		if (operation is null)
 		{
-			bool flag = char.IsAsciiLetterOrDigit(character);
-			bool flag2 = flag;
-			if (!flag2)
-			{
-				bool flag3 = ((character == '-' || character == '.' || character == '_') ? true : false);
-				flag2 = flag3;
-			}
-			return flag2;
-		})) ? value : "diagnostic.redacted";
+			return "none";
+		}
+		if (operation.Operation == EvaluationOperationKind.Clear)
+		{
+			return "clear";
+		}
+		string reference = operation.EnvironmentReferenceKind is null
+			? string.Empty
+			: "/" + EnumName(operation.EnvironmentReferenceKind.Value);
+		string value = operation.Value ?? "value unavailable";
+		return EnumName(operation.Operation) + reference + ": " + value;
 	}
 
-	private static string SafeToolName(string value)
+	private static string FormatJustification(EvaluationCandidateSnapshotArtifact? candidate)
 	{
-		return TargetAgentMcpCatalog.ToolNames.Contains<string>(value, StringComparer.Ordinal) ? value : "unknown";
+		if (candidate is null)
+		{
+			return "candidate unavailable";
+		}
+		return candidate.Justification ?? "none";
 	}
 
-	private static string SafeValue(string value)
+	private static string FormatGroupResult(EvaluationApplicationGroupExpectation? result)
 	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(value);
-		string normalized = value.Trim().Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal)
-			.Replace("`", "'", StringComparison.Ordinal);
-		return (normalized.Length <= 200) ? normalized : normalized.Substring(0, 200);
+		if (result is null)
+		{
+			return "none";
+		}
+		return result.RejectionReason is null
+			? EnumName(result.Kind)
+			: EnumName(result.Kind) + "/" + EnumName(result.RejectionReason.Value);
 	}
 
-	private static string? SafeOptionalValue(string? value)
+	private static string ValueList(IReadOnlyList<string> values)
 	{
-		return string.IsNullOrWhiteSpace(value) ? null : SafeValue(value);
+		return values.Count == 0 ? "none" : string.Join(", ", values);
+	}
+
+	private static List<string> FailedSafetyChecks(EvaluationSafetyResult safety)
+	{
+		List<string> failures = new List<string>();
+		AddFailedCheck(failures, "zeroConsequentialSideEffects", safety.ZeroConsequentialSideEffects);
+		AddFailedCheck(failures, "noUnknownOrMutatingToolCalls", safety.NoUnknownOrMutatingToolCalls);
+		AddFailedCheck(failures, "noModelProse", safety.NoModelProse);
+		AddFailedCheck(failures, "authoritativeIdentifiers", safety.AuthoritativeIdentifiers);
+		AddFailedCheck(failures, "restraint", safety.Restraint);
+		AddFailedCheck(failures, "clarificationResolution", safety.ClarificationResolution);
+		AddFailedCheck(failures, "justificationFidelity", safety.JustificationFidelity);
+		return failures;
+	}
+
+	private static void AddFailedCheck(List<string> failures, string name, bool passed)
+	{
+		if (!passed)
+		{
+			failures.Add(name);
+		}
+	}
+
+	private static string CodeList(IReadOnlyList<string> codes)
+	{
+		return codes.Count == 0
+			? "none"
+			: string.Join(", ", codes.Select(static code => $"`{code}`"));
+	}
+
+	private static string MarkdownCell(string value)
+	{
+		return value
+			.Replace("\r", "\\r", StringComparison.Ordinal)
+			.Replace("\n", "\\n", StringComparison.Ordinal)
+			.Replace("|", "\\|", StringComparison.Ordinal);
 	}
 
 	private static string EnumName<T>(T value) where T : struct, Enum
 	{
 		return JsonNamingPolicy.CamelCase.ConvertName(value.ToString());
+	}
+
+	private static string OptionalEnumName<T>(T? value) where T : struct, Enum
+	{
+		return value is null ? "none" : EnumName(value.Value);
 	}
 }

@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "3.0.0";
+    internal const string PromptContractVersion = "3.0.6";
     internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.TargetMafMcpLoopback";
 
@@ -35,26 +35,75 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
 
         Use only these optional read-only tools when context is needed:
         search_production_environments, get_production_environment, get_environment_roles, get_incident.
+        Use a read-only tool when fulfilling the request
+        depends on current enterprise facts absent from the bounded input.
+        Do not propose a conditional update until the condition is resolved. An exact stable
+        identifier alone does not require a redundant lookup when no requested decision depends on other facts.
         Never request or claim a state-changing action. The application independently reloads every proposed
         enterprise identifier.
 
         Return one dialogueAct: updateDraft, discussDraft, requestSubmission, unrelated, or unclear.
-        updateDraft contains a nonempty sparse patch over only environment, role, justification, and
-        incident. Omitted fields mean no change. Each included field uses exactly one set or clear
-        operation. Interpret an active clarification reference into an ordinary updateDraft exact-ID
-        environment or role operation. Return unclear when the reference is not safely resolvable.
-        discussDraft returns one closed discussionTopic. The other acts have no semantic payload.
+        Interpret the request as a whole. Choose dialogueAct from the resolved requester intent. Use updateDraft
+        only when its sparse patch faithfully represents the complete actionable intent.
+        Do not apply only a supported subset when omitting another material part would change the request's
+        meaning.
+        When the complete intent is understood but cannot be represented by supported preparation operations,
+        return discussDraft with unsupported and no patch. An updateDraft contains a nonempty sparse patch over
+        only environment, role, justification, and incident. Omitted fields mean no change. Each included
+        field uses exactly one set or clear operation.
 
-        Environment set uses either exactEnvironmentId or searchQuery. Use exactEnvironmentId only when an
-        exact stable ID is supplied or one environment is uniquely justified. A search result with exactly
-        one uniquely justified environment may produce its exact ID. Two or more search results must never be
-        collapsed into an unprompted exact ID; preserve a searchQuery, use clarification-compatible behavior,
-        or return unclear. Do not rank, truncate, or guess among ambiguous results.
+        Use discussDraft when the intent is understood but no mutation should be proposed. Select currentDraft
+        for current canonical facts, missingInformation for incomplete requirements, allowedChanges for change capabilities and field-integrity constraints,
+        confirmationProcess for confirmation and approval flow, resetInstructions for reset guidance, and
+        unsupported for clearly understood requests outside supported preparation operations. Use
+        requestSubmission only for submission intent and unrelated only for content unrelated to request
+        preparation. Use unclear only when no single intent, operation, or discussion topic can be safely
+        determined; do not use it merely because a clear request cannot be performed under field-integrity
+        rules. The non-update acts have no semantic payload except discussDraft's one closed discussionTopic.
 
-        Justification must retain requester-authored wording and language. You may extract it from framing,
-        trim outer whitespace, normalize line endings, or perform an explicitly requested append/remove/
-        replacement using the current value. Never translate, summarize, polish, invent rationale, or copy
-        tool-returned facts into justification. A justification set carries only the retained text.
+        Resolve requester references to an active clarification only against its bounded displayed choices.
+        A reference is safely resolvable when its positional, identifier-based, descriptive, contrastive, or eliminative
+        meaning identifies exactly one active choice. Stable 1-based positions reflect displayed order. In a
+        two-choice clarification, an unqualified contrastive reference denotes the second displayed choice
+        because it is the sole alternative. For larger choice sets, contrast or elimination is safe only when
+        the wording leaves exactly one choice. If zero or multiple choices remain, return unclear.
+
+        Express a resolved clarification as an ordinary updateDraft exact-ID environment or role operation
+        using the selected choice's canonical ID without calling a tool merely to re-read it. Do not infer a
+        choice from unavailable prior-turn history.
+
+        Natural-language requests to reset or start over must return discussDraft with resetInstructions and
+        no patch. Never clear draft fields to implement a reset. The exact /new protocol is handled before
+        agent invocation.
+
+        Environment set uses either exactEnvironmentId or searchQuery. Build a concise search query only from
+        searchable environment discriminators in the request: environment ID or display name, client ID or
+        display name, region, and primary/recovery classification. Every search-query token must match at
+        least one of those authoritative fields because the search policy combines tokens with AND. Omit
+        generic request framing and category words such as need, access, and environment unless they are part
+        of an exact authoritative value.
+
+        Use exactEnvironmentId only when an exact stable ID is supplied or one environment is uniquely
+        justified. After search_production_environments returns exactly one environment, return exactEnvironmentId
+        with that result's exact ID; never return or replay searchQuery for the unique result. Two or more search
+        results must never be collapsed into an unprompted exact ID; preserve a
+        searchQuery, use clarification-compatible behavior, or return unclear. Do not rank, truncate, or
+        guess among ambiguous results.
+
+        A role set carries an exact authoritative role ID. When the requester uses a natural-language role
+        label such as read-only instead of an exact role ID, first resolve the exact environment, then call get_environment_roles
+        for it. Set the returned role ID only when exactly one listed role safely
+        matches the request. Omit the role or return unclear when there is no unique safe match. Never invent
+        a role ID or infer one only from schema examples.
+
+        Justification must retain requester-authored wording and language. When extracting a reason from
+        framing, retain one complete contiguous requester-authored span, including leading connector words
+        and terminal punctuation. You may trim outer whitespace, normalize line endings, or perform an
+        explicitly requested append/remove/replacement using the current value.
+        Proposed field values must be complete, well-formed final values. Preserve requester-supplied wording
+        exactly while maintaining natural boundaries between combined text fragments. Never delete or add tokens
+        inside an extracted span. Never translate, summarize, polish, invent rationale, or copy tool-returned facts
+        into justification. A justification set carries only the retained text.
 
         Treat numeric, ordinal, identifier-like, reset-like, submission-like, and multilingual requester text
         as language to interpret. No text other than the Teams boundary's exact /new protocol is handled by

@@ -274,8 +274,13 @@ preparation lifecycle state or permanently exhaust one `PreparationId`.
 Startup must fail closed when configured limits are missing, non-positive, internally
 inconsistent, or exceed the documented hard maxima.
 
-Raw requester text, agent-authored search queries, raw prompts, model reasoning, complete
-provider responses, and complete MCP payloads must not be persisted or logged.
+Outside the isolated local live-model evaluation evidence described in Section 23.3,
+raw requester text, agent-authored search queries, raw prompts, model reasoning,
+complete provider responses, and complete MCP payloads must not be persisted or
+logged. Local evaluation artifacts use only the fixed synthetic dataset and retain the
+exact synthetic requester message plus parsed proposal and canonical comparison values
+needed to diagnose failures. They still exclude raw prompts, model reasoning, complete
+provider responses, and complete MCP payloads.
 
 ## 9. Exact `/new` protocol command
 
@@ -1350,13 +1355,20 @@ Verify that:
 Promotion requires a versioned credentialed suite with recorded passing evidence. The
 suite must produce zero consequential side effects, validate every canonical identifier
 through authoritative Core reads, handle ambiguous scope safely, preserve requester
-justification language without translation or invention, and cover multilingual and
+justification wording without rewriting or invention, and cover English-language and
 restart-safe clarification behavior.
 
 The normative evaluation matrix owns the promoted dataset inventory, minimum scenario
 counts, numerical thresholds, rerun and waiver policy, retained result schema,
 promotion metadata, and re-baselining mechanics. Moving those controls out of this
 feature specification does not relax any absolute safety gate.
+
+The retained local result is evaluation evidence, not application telemetry or
+workflow persistence. It records exact fixed synthetic requester messages, parsed
+expected and observed proposal values, canonical candidate values, clarification IDs,
+and tool names. Generated evaluation directories remain excluded from source control
+and must not be treated as a place to store credentials or non-synthetic requester
+data.
 
 ## 24. Acceptance criteria
 
@@ -1475,7 +1487,7 @@ feature specification does not relax any absolute safety gate.
   preparation budget or lifecycle state.
 - **AC-45:** Deterministic tests use structured proposals rather than language variants.
 - **AC-46:** Live-model gates meet every blocking threshold in the normative evaluation
-  matrix, including ambiguous-scope restraint, multilingual clarification, and stored-
+  matrix, including ambiguous-scope restraint, English clarification, and stored-
   justification re-injection.
 - **AC-47:** Live-model preparation evaluation produces zero requests, approvals,
   provisioning operations, and grants.
@@ -1506,7 +1518,7 @@ feature specification does not relax any absolute safety gate.
 | AC-01–AC-06 | Architecture/static tests, Teams routing tests, renderer tests |
 | AC-07–AC-14 | Proposal-schema tests, Core unit matrices, targeted live justification evals |
 | AC-15–AC-22 | MCP contract/transport tests, shared-policy component tests, authoritative-port integration tests |
-| AC-23–AC-28 | Agent-input/context tests, ordinary reducer/context-lifecycle tests, restart/OCC tests, live multilingual/ambiguity evals |
+| AC-23–AC-28 | Agent-input/context tests, ordinary reducer/context-lifecycle tests, restart/OCC tests, live English ambiguity evals |
 | AC-29–AC-40 | Persistence migrations, partial-unique-index tests, OCC/race tests, lifecycle/expiry tests, card integration tests |
 | AC-41–AC-47 | Threat tests, execution-bound/startup tests, logging checks, retained live-model evaluation evidence |
 | AC-48–AC-52 | Project-reference/static tests, independent migration/fixture tests, isolated-target versus delivered-host regressions, cutover and deletion source checks |

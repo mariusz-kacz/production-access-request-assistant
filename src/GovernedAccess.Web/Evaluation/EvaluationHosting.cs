@@ -175,7 +175,7 @@ internal sealed class EvaluationRecordingInterpreter(MafTurnProposalInterpreter 
 		if (failureControl.Mode == EvaluationFailureMode.ProviderUnavailable)
 		{
 			DateTimeOffset now = timeProvider.GetUtcNow();
-			result = new AgentInterpretationFailed(AgentInterpretationFailure.Unavailable, new AgentExecutionMetadata(modelMetadata.ProviderId, modelMetadata.ModelDeployment, modelMetadata.ProviderModelVersion, "3.0.0", "3.0.0", "3.0.0", "2.0.0", 0, 0, turn.CorrelationId, now, now, Array.Empty<string>()));
+			result = new AgentInterpretationFailed(AgentInterpretationFailure.Unavailable, new AgentExecutionMetadata(modelMetadata.ProviderId, modelMetadata.ModelDeployment, modelMetadata.ProviderModelVersion, MafTurnProposalInterpreter.PromptContractVersion, "3.0.0", "3.0.0", "2.0.0", 0, 0, turn.CorrelationId, now, now, Array.Empty<string>()));
 		}
 		else
 		{

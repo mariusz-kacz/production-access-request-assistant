@@ -175,7 +175,8 @@ promoted groups and every absolute safety gate, including zero requests, approva
 decisions, provisioning operations, and grants. The mode cannot confirm, approve,
 retry, or provision.
 
-The checked-in evaluation dataset is `deterministic-intake-1.0.0` (schema version `1`).
+The checked-in English-only evaluation dataset is `deterministic-intake-2.0.2`
+(schema version `1`).
 No reviewed current run is retained yet because a credentialed passing run is still
 pending. The repository retains the previous delivered evaluator's historical run:
 
