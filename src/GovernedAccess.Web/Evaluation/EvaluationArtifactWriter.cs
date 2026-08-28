@@ -16,9 +16,9 @@ namespace GovernedAccess.Web.Evaluation;
 
 internal static class EvaluationArtifactWriter
 {
-	private sealed record EvaluationArtifact(int SchemaVersion, Guid RunId, string DatasetVersion, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionArtifact Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupArtifact> Groups);
+	private sealed record EvaluationArtifact(int SchemaVersion, Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionArtifact Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupArtifact> Groups);
 
-	private sealed record EvaluationVersionArtifact(string ModelDeployment, string? ProviderModelVersion, string PromptContractVersion, string ProposalSchemaVersion, string McpContractVersion, string EnvironmentSearchPolicyVersion);
+	private sealed record EvaluationVersionArtifact(string ProviderId, string ModelDeployment, string? ProviderModelVersion, string PromptContractVersion, string ProposalSchemaVersion, string McpContractVersion, string EnvironmentSearchPolicyVersion);
 
 	private sealed record EvaluationGroupArtifact(string Id, bool Promoted, bool AbsoluteOutcomeGate, EvaluationScenarioStatus Status, IReadOnlyList<EvaluationVariationArtifact> Variations);
 
@@ -89,7 +89,7 @@ internal static class EvaluationArtifactWriter
 
 	private static EvaluationArtifact CreateArtifact(EvaluationRunResult result)
 	{
-		return new EvaluationArtifact(3, result.RunId, result.DatasetVersion, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationVersionArtifact(result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
+		return new EvaluationArtifact(4, result.RunId, result.SourceCommit, result.DatasetVersion, result.DatasetSha256, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationVersionArtifact(result.Versions.ProviderId, result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
 	}
 
 	private static EvaluationGroupArtifact ToArtifact(EvaluationGroupResult group)
@@ -232,10 +232,14 @@ internal static class EvaluationArtifactWriter
 		report.AppendLine();
 		report.AppendLine("## Run");
 		report.AppendLine();
-		report.Append("- Dataset: `").Append(artifact.DatasetVersion).AppendLine("`");
+		report.Append("- Source commit: `").Append(artifact.SourceCommit).AppendLine("`");
+		report.Append("- Dataset: `").Append(artifact.DatasetVersion).Append("` (`sha256:")
+			.Append(artifact.DatasetSha256)
+			.AppendLine("`)");
 		report.Append("- Environment: `").Append(artifact.Environment).AppendLine("`");
 		report.Append("- Completed: `").Append(artifact.CompletedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).AppendLine("`");
-		report.Append("- Model deployment/version: `").Append(artifact.Versions.ModelDeployment).Append("` / `")
+		report.Append("- Provider/model deployment/version: `").Append(artifact.Versions.ProviderId).Append("` / `")
+			.Append(artifact.Versions.ModelDeployment).Append("` / `")
 			.Append(artifact.Versions.ProviderModelVersion ?? "unreported")
 			.AppendLine("`");
 		report.Append("- Prompt/proposal/MCP/search versions: `").Append(artifact.Versions.PromptContractVersion).Append("` / `")

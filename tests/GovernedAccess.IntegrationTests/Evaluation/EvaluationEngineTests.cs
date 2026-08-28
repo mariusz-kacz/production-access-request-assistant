@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using GovernedAccess.Core.Domain.AccessRequests;
@@ -40,7 +41,7 @@ public sealed class EvaluationEngineTests
 	private const string CompleteProposalPayload = "{\n  \"schemaVersion\": 1,\n  \"dialogueAct\": \"updateDraft\",\n  \"patch\": {\n    \"environment\": { \"operation\": \"set\", \"reference\": { \"kind\": \"exactEnvironmentId\", \"id\": \"PROD-ALPHA-EU\" } },\n    \"role\": { \"operation\": \"set\", \"roleId\": \"ProductionReadOnly\" },\n    \"justification\": { \"operation\": \"set\", \"value\": { \"text\": \"Investigate production symptoms.\" } }\n  }\n}";
 
 	[Fact]
-	public async Task DatasetLoaderRejectsInputOutsideTheEvaluationContract()
+	public async Task DatasetLoaderValidatesContractInventoryAndContentHash()
 	{
 		await using MemoryStream stream = new("{}"u8.ToArray());
 
@@ -50,6 +51,17 @@ public sealed class EvaluationEngineTests
 				TestContext.Current.CancellationToken));
 
 		Assert.Contains("version 1 schema", exception.Message, StringComparison.Ordinal);
+
+		EvaluationDataset dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
+			TestContext.Current.CancellationToken);
+		byte[] datasetBytes = await File.ReadAllBytesAsync(
+			EvaluationDatasetLoader.DefaultDatasetPath,
+			TestContext.Current.CancellationToken);
+		Assert.Equal(
+			Convert.ToHexString(SHA256.HashData(datasetBytes)).ToLowerInvariant(),
+			dataset.Sha256);
+		Assert.Equal(EvaluationGrader.PromotedGroupCount, dataset.Groups.Count(static group => group.Promoted));
+		Assert.Equal(2, dataset.Groups.Count(static group => !group.Promoted));
 	}
 
 	[Fact]
@@ -481,7 +493,10 @@ public sealed class EvaluationEngineTests
 				"CANCELLATION",
 				Promoted: false,
 				AbsoluteOutcomeGate: false,
-				[Variation("A"), Variation("B")])]);
+				[Variation("A"), Variation("B")])])
+		{
+			Sha256 = "91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
+		};
 	}
 
 	private static EvaluationTurnResult CreatePolicyTurn(
@@ -595,7 +610,7 @@ public sealed class EvaluationEngineTests
 				failed ? EvaluationScenarioStatus.Failed : EvaluationScenarioStatus.Passed,
 				Array.AsReadOnly(variations));
 		}).ToArray();
-		return new EvaluationRunResult(Guid.Parse("9b88aec1-42c9-47da-8580-f30b16e07a1a"), dataset.DatasetVersion, dataset.Environment, new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 8, 26, 10, 1, 0, TimeSpan.Zero), EvaluationRunStatus.Failed, EvaluationVersionMetadata.TestDefault, new EvaluationSummary(0, 0, 0, 0, 0, AbsoluteSafetyPassed: false), sideEffects ?? WorkflowSideEffectCounts.None, Array.AsReadOnly(groups));
+		return new EvaluationRunResult(Guid.Parse("9b88aec1-42c9-47da-8580-f30b16e07a1a"), "1d7858e6f86d274e0f25a9696d15e0be1a0df649", dataset.DatasetVersion, "91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41", dataset.Environment, new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 8, 26, 10, 1, 0, TimeSpan.Zero), EvaluationRunStatus.Failed, EvaluationVersionMetadata.TestDefault, new EvaluationSummary(0, 0, 0, 0, 0, AbsoluteSafetyPassed: false), sideEffects ?? WorkflowSideEffectCounts.None, Array.AsReadOnly(groups));
 	}
 
 	private static async Task<McpClient> CreateMcpClientAsync(
@@ -642,7 +657,7 @@ public sealed class EvaluationEngineTests
 					"c",
 					CultureInfo.InvariantCulture)
 		}).Build();
-		return EvaluationHosting.StartAsync(configuration, temporaryRoot, delegate(IServiceCollection services)
+		return EvaluationHosting.StartAsync(configuration, temporaryRoot, new EvaluationSourceMetadata("1d7858e6f86d274e0f25a9696d15e0be1a0df649"), delegate(IServiceCollection services)
 		{
 			services.RemoveAll<IChatClient>();
 			services.AddSingleton(chatClient);

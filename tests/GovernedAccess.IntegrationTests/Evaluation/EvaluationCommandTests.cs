@@ -39,12 +39,17 @@ public sealed class EvaluationCommandTests
 	}
 
 	[Fact]
-	public void CommandDefaultsToSeparateArtifactDirectory()
+	public async Task CommandDefaultsToSeparateArtifactDirectoryAndResolvesSourceCommit()
 	{
 		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
 		ApplicationResult<LiveModelEvaluationArguments> result = LiveModelEvaluationCommand.ParseArguments(Array.Empty<string>(), workingDirectory);
 		Assert.True(result.IsSuccess);
 		Assert.Equal(Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"), result.Value.OutputParentPath);
+
+		string sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
+			Directory.GetCurrentDirectory(),
+			TestContext.Current.CancellationToken);
+		Assert.Matches("^[0-9a-f]{40}([0-9a-f]{24})?$", sourceCommit);
 	}
 
 	[Fact]
@@ -78,9 +83,16 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(
+				"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
+				root.GetProperty("sourceCommit").GetString());
 			Assert.Equal(result.DatasetVersion, root.GetProperty("datasetVersion").GetString());
+			Assert.Equal(
+				"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
+				root.GetProperty("datasetSha256").GetString());
 			Assert.Equal(result.Environment, root.GetProperty("environment").GetString());
+			Assert.Equal("FoundryResponses", root.GetProperty("versions").GetProperty("providerId").GetString());
 			Assert.Equal("evaluation-deployment", root.GetProperty("versions").GetProperty("modelDeployment").GetString());
 			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("promptContractVersion").GetString());
 			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("proposalSchemaVersion").GetString());
@@ -98,6 +110,9 @@ public sealed class EvaluationCommandTests
 			Assert.Contains("12/12", report, StringComparison.Ordinal);
 			Assert.Contains("11 required", report, StringComparison.Ordinal);
 			Assert.Contains("Absolute safety: PASS", report, StringComparison.Ordinal);
+			Assert.Contains("Source commit: `1d7858e6f86d274e0f25a9696d15e0be1a0df649`", report, StringComparison.Ordinal);
+			Assert.Contains("sha256:91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41", report, StringComparison.Ordinal);
+			Assert.Contains("FoundryResponses", report, StringComparison.Ordinal);
 		}
 		finally
 		{
@@ -119,7 +134,7 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(3, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
 			JsonElement variation = root.GetProperty("groups")[0].GetProperty("variations")[0];
 			Assert.Equal("draftUpdated", variation.GetProperty("outcome").GetString());
 			Assert.Contains("canonical.outcome", variation.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
@@ -222,12 +237,15 @@ public sealed class EvaluationCommandTests
 			.ToArray();
 		return new EvaluationRunResult(
 			Guid.Parse("2865611e-a1ac-4420-bf3c-122336ac30e3"),
+			"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
 			"test-dataset-1.0.0",
+			"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
 			"isolated-test",
 			new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero),
 			new DateTimeOffset(2026, 8, 26, 10, 2, 0, TimeSpan.Zero),
 			EvaluationRunStatus.Passed,
 			new EvaluationVersionMetadata(
+				"FoundryResponses",
 				"evaluation-deployment",
 				"model-2026-08",
 				"3.0.0",
@@ -347,12 +365,14 @@ public sealed class EvaluationCommandTests
 			[variation]);
 		return new EvaluationRunResult(
 			Guid.Parse("fde25625-a14c-4af4-8ba1-c74dec36a532"),
+			"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
 			"test-dataset-1.0.0",
+			"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
 			"isolated-test",
 			new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
 			new DateTimeOffset(2026, 8, 27, 10, 1, 0, TimeSpan.Zero),
 			EvaluationRunStatus.Failed,
-			new EvaluationVersionMetadata("evaluation-deployment", "model-2026-08", "3.0.1", "3.0.0", "3.0.0", "2.0.0"),
+			new EvaluationVersionMetadata("FoundryResponses", "evaluation-deployment", "model-2026-08", "3.0.1", "3.0.0", "3.0.0", "2.0.0"),
 			new EvaluationSummary(12, 8, 11, 0, 0, AbsoluteSafetyPassed: false),
 			WorkflowSideEffectCounts.None,
 			[group]);

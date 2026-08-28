@@ -664,11 +664,12 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 	}
 }
 
-internal sealed class EvaluationRunner(EvaluationScenarioExecutor executor, IClock clock, AgentModelMetadata modelMetadata)
+internal sealed class EvaluationRunner(EvaluationScenarioExecutor executor, IClock clock, AgentModelMetadata modelMetadata, EvaluationSourceMetadata sourceMetadata)
 {
 	internal async Task<EvaluationRunResult> RunAsync(EvaluationDataset dataset, CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(dataset);
+		ArgumentException.ThrowIfNullOrWhiteSpace(dataset.Sha256);
 		Guid runId = Guid.NewGuid();
 		DateTimeOffset startedAt = clock.UtcNow.ToUniversalTime();
 		WorkflowSideEffectCounts totalSideEffects = WorkflowSideEffectCounts.None;
@@ -690,7 +691,7 @@ internal sealed class EvaluationRunner(EvaluationScenarioExecutor executor, IClo
 			groups.Add(new EvaluationGroupResult(Status: (!variations.All((EvaluationVariationResult variationResult) => variationResult.Status == EvaluationScenarioStatus.Passed)) ? ((!variations.Any((EvaluationVariationResult variationResult) => variationResult.Status == EvaluationScenarioStatus.Cancelled)) ? EvaluationScenarioStatus.Failed : EvaluationScenarioStatus.Cancelled) : EvaluationScenarioStatus.Passed, Id: group.Id, Promoted: group.Promoted, AbsoluteOutcomeGate: group.AbsoluteOutcomeGate, Variations: Array.AsReadOnly(variations.ToArray())));
 		}
 		EvaluationRunResult executionResult = new EvaluationRunResult(Versions: new EvaluationVersionMetadata(ProviderModelVersion: (from turn in groups.SelectMany((EvaluationGroupResult groupResult) => groupResult.Variations).SelectMany((EvaluationVariationResult variationResult) => variationResult.Turns)
-		select turn.ProviderModelVersion).FirstOrDefault((string version) => version != null) ?? modelMetadata.ProviderModelVersion, ModelDeployment: modelMetadata.ModelDeployment, PromptContractVersion: MafTurnProposalInterpreter.PromptContractVersion, ProposalSchemaVersion: "3.0.0", McpContractVersion: "3.0.0", EnvironmentSearchPolicyVersion: "2.0.0"), RunId: runId, DatasetVersion: dataset.DatasetVersion, Environment: dataset.Environment, StartedAt: startedAt, CompletedAt: clock.UtcNow.ToUniversalTime(), Status: (!cancellationToken.IsCancellationRequested) ? EvaluationRunStatus.Failed : EvaluationRunStatus.Cancelled, Summary: new EvaluationSummary(0, 0, 0, 0, 0, AbsoluteSafetyPassed: false), SideEffects: totalSideEffects, Groups: Array.AsReadOnly(groups.ToArray()));
+		select turn.ProviderModelVersion).FirstOrDefault((string version) => version != null) ?? modelMetadata.ProviderModelVersion, ProviderId: modelMetadata.ProviderId, ModelDeployment: modelMetadata.ModelDeployment, PromptContractVersion: MafTurnProposalInterpreter.PromptContractVersion, ProposalSchemaVersion: "3.0.0", McpContractVersion: "3.0.0", EnvironmentSearchPolicyVersion: "2.0.0"), RunId: runId, SourceCommit: sourceMetadata.Commit, DatasetVersion: dataset.DatasetVersion, DatasetSha256: dataset.Sha256, Environment: dataset.Environment, StartedAt: startedAt, CompletedAt: clock.UtcNow.ToUniversalTime(), Status: (!cancellationToken.IsCancellationRequested) ? EvaluationRunStatus.Failed : EvaluationRunStatus.Cancelled, Summary: new EvaluationSummary(0, 0, 0, 0, 0, AbsoluteSafetyPassed: false), SideEffects: totalSideEffects, Groups: Array.AsReadOnly(groups.ToArray()));
 		return EvaluationGrader.GradeRun(dataset, executionResult);
 	}
 

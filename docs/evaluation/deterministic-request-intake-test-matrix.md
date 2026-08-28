@@ -523,6 +523,9 @@ Deterministic tests are blocking for every change. Credentialed live evaluation 
 
 Record:
 
+- source commit;
+- dataset version and SHA-256;
+- provider identifier;
 - model deployment/version;
 - prompt-contract version;
 - `TurnProposal` schema version;
@@ -535,11 +538,11 @@ Any change to the first five requires a new run and explicit re-baseline decisio
 
 ### 10.4 Retained local diagnostics
 
-`result.json` retains the exact fixed synthetic requester message and exact expected
-and observed typed values for proposal operations, canonical candidates,
-clarification IDs, failure codes, and tool names. `report.md` renders the same values
-for failed variations. This evidence is local and generated; it is not application
-logging, workflow persistence, or authorization input.
+`result.json` retains the source commit, dataset version and SHA-256, exact fixed
+synthetic requester message, and exact expected and observed typed values for proposal
+operations, canonical candidates, clarification IDs, failure codes, and tool names.
+`report.md` renders the same values for failed variations. This evidence is local and
+generated; it is not application logging, workflow persistence, or authorization input.
 
 The artifacts exclude raw system prompts, model reasoning, complete provider
 responses, complete MCP arguments/results, and credentials. Generated result

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -81,17 +82,23 @@ internal static class EvaluationDatasetLoader
 		}
 		try
 		{
-			using JsonDocument document = await JsonDocument.ParseAsync(stream, new JsonDocumentOptions
+			using MemoryStream buffer = new MemoryStream();
+			await stream.CopyToAsync(buffer, cancellationToken);
+			byte[] datasetBytes = buffer.ToArray();
+			using JsonDocument document = JsonDocument.Parse(datasetBytes, new JsonDocumentOptions
 			{
 				AllowTrailingCommas = false,
 				CommentHandling = JsonCommentHandling.Disallow,
 				MaxDepth = 48
-			}, cancellationToken);
+			});
 			if (!DatasetSchema.Value.Evaluate(document.RootElement).IsValid)
 			{
 				throw new EvaluationDatasetException("The evaluation dataset does not satisfy the version 1 schema.");
 			}
-			EvaluationDataset dataset = document.RootElement.Deserialize<EvaluationDataset>(SerializerOptions) ?? throw new EvaluationDatasetException("The evaluation dataset could not be deserialized.");
+			EvaluationDataset dataset = (document.RootElement.Deserialize<EvaluationDataset>(SerializerOptions) ?? throw new EvaluationDatasetException("The evaluation dataset could not be deserialized.")) with
+			{
+				Sha256 = Convert.ToHexString(SHA256.HashData(datasetBytes)).ToLowerInvariant()
+			};
 			ValidateSemantics(dataset);
 			return dataset;
 		}

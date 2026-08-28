@@ -835,16 +835,16 @@ the configured database intact for explicit operator reset.
 
 ### Task 16 - Promote deterministic and live evaluation evidence
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Replace baseline-shaped evaluation with the approved fixed suite
 and retain evidence only from the final post-deletion implementation.
 
 **Acceptance criteria:**
 
-- [ ] Deterministic tests construct structured proposals rather than language corpora and prove all negative paths create zero requests, decisions, operations, or grants.
-- [ ] The fixed 12-group promoted live suite enforces every absolute safety, justification-fidelity, ambiguity, and bounded-execution gate, uniquely resolved exact-ID behavior without Core search replay, and at least 11/12 outcome classes without selective reruns or waivers.
-- [ ] Evaluation artifacts retain commit, dataset/hash, provider/model and contract versions, normalized outcomes, latency, and side-effect counts but no raw messages, prompts, proposals, reasoning, or MCP payloads.
+- [x] Deterministic tests construct structured proposals rather than language corpora and prove all negative paths create zero requests, decisions, operations, or grants.
+- [x] The fixed 12-group promoted live suite enforces every absolute safety, justification-fidelity, ambiguity, and bounded-execution gate, uniquely resolved exact-ID behavior without Core search replay, and at least 11/12 outcome classes without selective reruns or waivers.
+- [x] Evaluation artifacts retain commit, dataset/hash, provider/model and contract versions, normalized outcomes, latency, and side-effect counts. Fixed synthetic requester messages and parsed proposal comparisons may be retained for diagnostics; raw system prompts, reasoning, complete provider responses, complete MCP payloads, credentials, and non-synthetic requester data are excluded.
 
 **Verification:** Architecture/source checks; standing backend sequence; frontend suite; one complete credentialed promoted live run; artifact/schema/link validation; `git diff --check`.
 
@@ -859,6 +859,22 @@ and retain evidence only from the final post-deletion implementation.
 **Estimated scope:** Large because evidence promotion is an indivisible gate.
 
 **Acceptance coverage:** AC-01-AC-52, primarily AC-45-AC-52.
+
+**Completion evidence (2026-08-28):** focused evaluation coverage passed (14 tests),
+followed by the warnings-as-errors solution build, 155 unit tests, 160 integration
+tests, and 6 frontend tests. Credentialed run
+`61e44fc4-9fae-43c2-825e-3b366199f712`, anchored at source commit
+`1d7858e6f86d274e0f25a9696d15e0be1a0df649`, used dataset
+`deterministic-intake-2.0.2` with SHA-256
+`bc9ca80e1a17895f13dcefb78a7f4cf3d611d5f6ffba90037a76cfba4501ba0c`,
+Foundry Responses deployment/model `production-access-request-model`, prompt contract
+`3.0.6`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`. All 12 promoted
+groups and both advisory groups passed without selective reruns or waivers; every
+absolute safety, ambiguity, justification-fidelity, authoritative-identifier, and
+bounded-execution gate passed, with zero requests, decisions, operations, or grants.
+The schema-version-4 JSON and Markdown artifacts remain in the gitignored local
+evaluation output identified by the run ID above and passed inventory, identity,
+privacy-field, schema, and link validation.
 
 ### Task 17 - Reconcile current documentation with verified runtime
 

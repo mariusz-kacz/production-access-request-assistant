@@ -111,9 +111,13 @@ static async Task<int> RunLiveModelEvaluationAsync(string[] arguments)
 
     try
     {
+        var sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
+            Directory.GetCurrentDirectory(),
+            cancellation.Token);
         await using var hosting = await EvaluationHosting.StartAsync(
             configuration,
             Path.GetTempPath(),
+            new EvaluationSourceMetadata(sourceCommit),
             static _ => { },
             cancellation.Token);
         var command = hosting.Services

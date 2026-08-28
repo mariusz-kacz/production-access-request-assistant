@@ -2,6 +2,7 @@ using GovernedAccess.Core.Preparations.Authority;
 using System.Collections.Generic;
 using GovernedAccess.Core.Preparations.Contracts;
 using System;
+using System.Text.Json.Serialization;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Core.Domain.Preparations;
 
@@ -100,7 +101,11 @@ internal sealed record EvaluationVariation(string Id, EvaluationStartingState? S
 
 internal sealed record EvaluationGroup(string Id, bool Promoted, bool AbsoluteOutcomeGate, IReadOnlyList<EvaluationVariation> Variations);
 
-internal sealed record EvaluationDataset(int SchemaVersion, string DatasetVersion, string Environment, IReadOnlyList<EvaluationGroup> Groups);
+internal sealed record EvaluationDataset(int SchemaVersion, string DatasetVersion, string Environment, IReadOnlyList<EvaluationGroup> Groups)
+{
+	[JsonIgnore]
+	internal string Sha256 { get; init; } = string.Empty;
+}
 
 internal sealed record EvaluationSafetyResult(bool ZeroConsequentialSideEffects, bool NoUnknownOrMutatingToolCalls, bool NoModelProse, bool AuthoritativeIdentifiers, bool Restraint, bool ClarificationResolution, bool JustificationFidelity)
 {
@@ -139,11 +144,13 @@ internal sealed record EvaluationVariationResult(string Id, EvaluationScenarioSt
 
 internal sealed record EvaluationGroupResult(string Id, bool Promoted, bool AbsoluteOutcomeGate, EvaluationScenarioStatus Status, IReadOnlyList<EvaluationVariationResult> Variations);
 
-internal sealed record EvaluationVersionMetadata(string ModelDeployment, string? ProviderModelVersion, string PromptContractVersion, string ProposalSchemaVersion, string McpContractVersion, string EnvironmentSearchPolicyVersion)
+internal sealed record EvaluationVersionMetadata(string ProviderId, string ModelDeployment, string? ProviderModelVersion, string PromptContractVersion, string ProposalSchemaVersion, string McpContractVersion, string EnvironmentSearchPolicyVersion)
 {
-	internal static EvaluationVersionMetadata TestDefault { get; } = new EvaluationVersionMetadata("test-deployment", "test-model", "test-prompt", "test-schema", "test-mcp", "test-search");
+	internal static EvaluationVersionMetadata TestDefault { get; } = new EvaluationVersionMetadata("test-provider", "test-deployment", "test-model", "test-prompt", "test-schema", "test-mcp", "test-search");
 }
 
 internal sealed record EvaluationSummary(int PromotedTotal, int PromotedPassed, int RequiredPasses, int AdvisoryTotal, int AdvisoryPassed, bool AbsoluteSafetyPassed);
 
-internal sealed record EvaluationRunResult(Guid RunId, string DatasetVersion, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionMetadata Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupResult> Groups);
+internal sealed record EvaluationRunResult(Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionMetadata Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupResult> Groups);
+
+internal sealed record EvaluationSourceMetadata(string Commit);

@@ -1364,7 +1364,8 @@ promotion metadata, and re-baselining mechanics. Moving those controls out of th
 feature specification does not relax any absolute safety gate.
 
 The retained local result is evaluation evidence, not application telemetry or
-workflow persistence. It records exact fixed synthetic requester messages, parsed
+workflow persistence. It records the source commit, dataset version and SHA-256,
+provider/model and contract versions, exact fixed synthetic requester messages, parsed
 expected and observed proposal values, canonical candidate values, clarification IDs,
 and tool names. Generated evaluation directories remain excluded from source control
 and must not be treated as a place to store credentials or non-synthetic requester

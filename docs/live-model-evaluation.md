@@ -8,6 +8,7 @@ provisioning, revocation, or grant operations.
 ## Prerequisites
 
 - .NET 10 SDK;
+- Git with a resolvable `HEAD` in the repository working tree;
 - an approved Azure AI Foundry Responses deployment;
 - a developer identity authorized to invoke that deployment; and
 - the credential-free build and test gate completed successfully.
@@ -75,17 +76,17 @@ Each completed run creates:
 - `result.json`, the machine-readable result; and
 - `report.md`, the concise human-readable summary.
 
-The artifacts record the model deployment/provider version when reported, prompt,
-proposal-schema, MCP-contract, search-policy and dataset versions, environment and
-timestamps, scenario outcomes, exact diagnostic values, and consequential side-effect
-counts. They contain the fixed synthetic requester messages used by the evaluation and
-the exact parsed values needed to diagnose mismatches. They contain no raw system
-prompts, model reasoning, complete provider responses, complete MCP payloads,
-credentials, or consequential workflow state.
+The artifacts record the source commit, dataset version and SHA-256, provider, model
+deployment/version when reported, prompt, proposal-schema, MCP-contract, search-policy
+versions, environment and timestamps, scenario outcomes, exact diagnostic values, and
+consequential side-effect counts. They contain the fixed synthetic requester messages
+used by the evaluation and the exact parsed proposal values needed to diagnose
+mismatches. They contain no raw system prompts, model reasoning, complete provider
+responses, complete MCP payloads, credentials, or consequential workflow state.
 
-`result.json` uses artifact schema version `3`. Run, version, summary, group,
-variation, turn, safety, side-effect, and failure-code fields remain available. In
-comparison snapshots, the exact `value` replaces the former
+`result.json` uses artifact schema version `4`. Run, source, dataset, version, summary,
+group, variation, turn, safety, side-effect, and failure-code fields remain available.
+In comparison snapshots, the exact `value` replaces the former
 `canonicalValue`/`textLength` pair, and exact candidate `justification` replaces the
 former presence/length pair. Each executed variation contains a
 `canonicalComparison`, and each executed turn contains a `comparison`, with:

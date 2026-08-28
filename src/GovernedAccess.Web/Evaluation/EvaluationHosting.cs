@@ -47,10 +47,11 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		WorkflowDatabasePath = workflowDatabasePath;
 	}
 
-	internal static async Task<EvaluationHosting> StartAsync(IConfiguration configuration, string temporaryRoot, Action<IServiceCollection> configureServices, CancellationToken cancellationToken)
+	internal static async Task<EvaluationHosting> StartAsync(IConfiguration configuration, string temporaryRoot, EvaluationSourceMetadata sourceMetadata, Action<IServiceCollection> configureServices, CancellationToken cancellationToken)
 	{
 		ArgumentNullException.ThrowIfNull(configuration);
 		ArgumentException.ThrowIfNullOrWhiteSpace(temporaryRoot);
+		ArgumentNullException.ThrowIfNull(sourceMetadata);
 		ArgumentNullException.ThrowIfNull(configureServices);
 		string resolvedTemporaryRoot = Path.GetFullPath(temporaryRoot);
 		Directory.CreateDirectory(resolvedTemporaryRoot);
@@ -85,6 +86,7 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		builder.Services.AddRequestPreparationChat(builder.Configuration);
 		builder.Services.AddSingleton<IClock, SystemClock>();
 		builder.Services.AddSingleton(TimeProvider.System);
+		builder.Services.AddSingleton(sourceMetadata);
 		builder.Services.AddSingleton(AgentExecutionLimits.Load(builder.Configuration));
 		builder.Services.AddSingleton(new AgentModelMetadata("FoundryResponses", modelResolution.DeploymentName, null));
 		builder.Services.AddSingleton((IServiceProvider _) => new AgentMcpEndpoint(() => evaluationMcpBaseAddress));
