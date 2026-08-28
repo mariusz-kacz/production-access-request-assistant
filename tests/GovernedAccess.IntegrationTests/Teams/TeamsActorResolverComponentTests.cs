@@ -8,43 +8,35 @@ namespace GovernedAccess.IntegrationTests.Teams;
 
 public sealed class TeamsActorResolverComponentTests
 {
-    [Theory]
-    [InlineData("wrong-channel")]
-    [InlineData("non-personal")]
-    [InlineData("disallowed-tenant")]
-    [InlineData("missing-actor")]
-    public void ResolverRejectsActivitiesOutsideTheTrustedPersonalTeamsBoundary(
-        string scenario)
+    [Fact]
+    public void ResolverRejectsActivitiesOutsideTheTrustedPersonalTeamsBoundary()
     {
-        var resolver = CreateResolver();
-        var builder = new FakeTeamsActivityBuilder();
+        (string Name, Action<FakeTeamsActivityBuilder> Configure)[] scenarios =
+        [
+            ("wrong-channel", builder => builder.WithChannel("webchat")),
+            ("non-personal", builder => builder.WithConversationType("channel")),
+            (
+                "disallowed-tenant",
+                builder => builder.WithTenant(
+                    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")),
+            ("missing-actor", builder => builder.WithActor(null)),
+        ];
 
-        switch (scenario)
+        foreach (var (name, configure) in scenarios)
         {
-            case "wrong-channel":
-                builder.WithChannel("webchat");
-                break;
-            case "non-personal":
-                builder.WithConversationType("channel");
-                break;
-            case "disallowed-tenant":
-                builder.WithTenant("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-                break;
-            case "missing-actor":
-                builder.WithActor(null);
-                break;
-            default:
-                throw new InvalidOperationException(
-                    $"Unsupported resolver scenario '{scenario}'.");
+            var resolver = CreateResolver();
+            var builder = new FakeTeamsActivityBuilder();
+            configure(builder);
+
+            var activity = builder.Build();
+
+            Assert.False(
+                resolver.TryResolve(
+                    activity.Activity,
+                    activity.Identity,
+                    out _),
+                $"Accepted invalid Teams boundary scenario '{name}'.");
         }
-
-        var activity = builder.Build();
-
-        Assert.False(
-            resolver.TryResolve(
-                activity.Activity,
-                activity.Identity,
-                out _));
     }
 
     [Fact]
@@ -102,26 +94,25 @@ public sealed class TeamsActorResolverComponentTests
         Assert.False(resolver.TryResolve(activity, unrelatedIdentity, out _));
     }
 
-    [Theory]
-    [InlineData("en-US", "en-US")]
-    [InlineData("EN-us", "en-US")]
-    [InlineData("pl-PL", "en-US")]
-    [InlineData(null, "en-US")]
-    public void ResolverUsesAuthenticatedClientLocaleWithEnglishFallback(
-        string? suppliedLocale,
-        string expectedLocale)
+    [Fact]
+    public void ResolverUsesAuthenticatedClientLocaleWithEnglishFallback()
     {
-        var resolver = CreateResolver();
-        var activity = new FakeTeamsActivityBuilder()
-            .WithLocale(suppliedLocale)
-            .Build();
+        string?[] suppliedLocales = ["en-US", "EN-us", "pl-PL", null];
 
-        Assert.True(
-            resolver.TryResolve(
-                activity.Activity,
-                activity.Identity,
-                out var context));
-        Assert.Equal(expectedLocale, context.Locale);
+        foreach (var suppliedLocale in suppliedLocales)
+        {
+            var resolver = CreateResolver();
+            var activity = new FakeTeamsActivityBuilder()
+                .WithLocale(suppliedLocale)
+                .Build();
+
+            Assert.True(
+                resolver.TryResolve(
+                    activity.Activity,
+                    activity.Identity,
+                    out var context));
+            Assert.Equal("en-US", context.Locale);
+        }
     }
 
     private static TeamsActorResolver CreateResolver() =>

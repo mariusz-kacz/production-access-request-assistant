@@ -125,6 +125,6 @@ retained exactly. These values remain untrusted diagnostic evidence and never be
 authorization input. Because the dataset is fixed and synthetic, generated artifacts
 must not be reused for non-synthetic requester data or committed to source control.
 
-Generated runs remain ignored by default. The repository's checked-in
-[historical evidence](evaluation/README.md) came from the removed delivered evaluator
-and must not be used as current promotion evidence.
+Generated runs remain ignored by default. Historical artifacts from the removed
+delivered evaluator are not retained and must not be used as current promotion
+evidence.

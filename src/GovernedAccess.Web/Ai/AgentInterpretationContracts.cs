@@ -9,7 +9,7 @@ namespace GovernedAccess.Web.Ai;
 internal sealed record AgentExecutionLimits
 {
     private const string ConfigurationSection =
-        "TargetRequestPreparationAgent:Limits";
+        "RequestPreparationAgent:Limits";
 
     internal const int HardMaximumMessageCharacters = 4000;
     internal const int HardMaximumCallsPerTool = 1;
@@ -125,7 +125,7 @@ internal sealed record AgentExecutionLimits
     private static InvalidOperationException InvalidConfiguration(
         Exception innerException) =>
         new(
-            "Target request-preparation agent execution limits are missing or invalid.",
+            "Request-preparation agent execution limits are missing or invalid.",
             innerException);
 }
 

@@ -53,9 +53,10 @@ tests, and surface any remaining mismatch before changing behavior.
   provision.
 - Submitted request scope is immutable. The role cannot be changed during approval,
   and every successful grant lasts exactly eight hours.
-- MCP exposes exactly `get_production_environment` and `get_incident`. Neither the
-  model nor MCP can submit, approve, provision, retry, revoke, or mutate workflow
-  state.
+- MCP exposes exactly `search_production_environments`,
+  `get_production_environment`, `get_environment_roles`, and `get_incident`.
+  Neither the model nor MCP can submit, approve, provision, retry, revoke, or mutate
+  workflow state.
 - The solution deliberately excludes real identity and access providers, mutable
   enterprise reference systems, generic workflow engines, large RAG, multi-agent
   orchestration, distributed infrastructure, and separate deployable services.
@@ -68,7 +69,7 @@ Detailed requirements and acceptance cases remain in the
 | Path | Responsibility | Start with |
 |---|---|---|
 | `src/GovernedAccess.Core` | Provider- and protocol-independent domain rules, application services, typed outcomes, and ports | `Domain/`, `Application/`, `Ports/` |
-| `src/GovernedAccess.Mcp` | Translation from the two typed read-only MCP tools to Core context ports | `McpRegistration.cs`, `RequestContextTools.cs` |
+| `src/GovernedAccess.Mcp` | Translation from the four typed read-only MCP tools to Core authority ports | `McpRegistration.cs`, `TargetMcpTools.cs` |
 | `src/GovernedAccess.Web` | Composition root, controllers, Teams and AI adapters, EF Core, authentication, observability, evaluation, and synthetic provisioning | `Program.cs`, `appsettings.json` |
 | `src/GovernedAccess.Web/ClientApp` | Thin React request register and decision UI built into Web `wwwroot` | `src/App.tsx`, `src/api/` |
 | `tests/GovernedAccess.UnitTests` | Deterministic domain and pure application behavior | Tests matching the Core type being changed |

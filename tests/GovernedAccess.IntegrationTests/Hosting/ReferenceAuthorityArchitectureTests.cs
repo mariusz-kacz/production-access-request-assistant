@@ -12,7 +12,21 @@ namespace GovernedAccess.IntegrationTests.Hosting;
 public sealed class ReferenceAuthorityArchitectureTests
 {
     [Fact]
-    public void ReferenceAuthorityProjectReferencesOnlyCoreProject()
+    public void ReferenceAuthoritySourceBoundariesAreClosed()
+    {
+        AssertProjectReferencesOnlyCore();
+        AssertDbContextIsAbsentFromOtherModules();
+        AssertMcpOmitsHiddenBusinessApprover();
+    }
+
+    [Fact]
+    public async Task ReferencePersistenceCompositionIsModuleOwned()
+    {
+        await AssertProductionHostCompositionAsync();
+        await AssertIsolatedCompositionAsync();
+    }
+
+    private static void AssertProjectReferencesOnlyCore()
     {
         var repositoryRoot = GetRepositoryRoot();
         var projectPath = Path.Combine(
@@ -33,8 +47,7 @@ public sealed class ReferenceAuthorityArchitectureTests
             projectReferences);
     }
 
-    [Fact]
-    public void ReferenceDbContextIsAbsentFromEveryOtherSourceModule()
+    private static void AssertDbContextIsAbsentFromOtherModules()
     {
         var repositoryRoot = GetRepositoryRoot();
         var sourceRoot = Path.Combine(repositoryRoot, "src");
@@ -57,8 +70,7 @@ public sealed class ReferenceAuthorityArchitectureTests
         }
     }
 
-    [Fact]
-    public void McpSourceDoesNotExposeTheHiddenBusinessApproverFact()
+    private static void AssertMcpOmitsHiddenBusinessApprover()
     {
         var repositoryRoot = GetRepositoryRoot();
         var mcpSourceRoot = Path.Combine(
@@ -84,8 +96,7 @@ public sealed class ReferenceAuthorityArchitectureTests
         }
     }
 
-    [Fact]
-    public async Task ProductionHostResolvesOnlyModuleOwnedReferencePersistence()
+    private static async Task AssertProductionHostCompositionAsync()
     {
         await using var fixture = new DefaultWebApplicationFixture();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
@@ -98,8 +109,7 @@ public sealed class ReferenceAuthorityArchitectureTests
         Assert.NotNull(scope.ServiceProvider.GetService<IIncidentAuthority>());
     }
 
-    [Fact]
-    public async Task IsolatedTargetFixtureResolvesOnlyItsReferenceDatabase()
+    private static async Task AssertIsolatedCompositionAsync()
     {
         await using var fixture = await ReferenceAuthorityFixture.CreateAsync();
         await using var scope = fixture.Services.CreateAsyncScope();

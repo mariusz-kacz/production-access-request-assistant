@@ -1,6 +1,6 @@
 namespace GovernedAccess.Web.Ai;
 
-internal sealed class TargetAgentMcpEndpoint(Func<Uri?> baseUriResolver)
+internal sealed class AgentMcpEndpoint(Func<Uri?> baseUriResolver)
 {
     private const string McpPath = "mcp";
 

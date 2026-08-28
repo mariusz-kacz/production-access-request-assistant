@@ -1,14 +1,15 @@
 # Constitution Amendment 3.0.0: Govern the MCP Catalog Without Hard-Coding One Product Increment
 
-- **Status:** Accepted for the `deterministic-request-intake` target; current two-tool runtime remains the product baseline until implementation promotion
+- **Status:** Promoted on 2026-08-27; the four-tool runtime is the current product baseline
 - **Date:** 2026-08-22
+- **Last reconciled:** 2026-08-28
 - **Target constitution version:** `3.0.0`
 - **Affected principle:** II. Untrusted AI, Bounded MCP
 - **Related artifacts:** `SPEC-deterministic-request-intake.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Motivation
 
-Constitution version 2.0.1 hard-codes the current two-tool product catalog and
+Constitution version 2.0.1 hard-coded the then-current two-tool product catalog and
 explicitly forbids a separate role capability. That was appropriate for the delivered
 baseline, but it makes a product-level capability change impossible without rewriting
 a core principle even when the security properties remain unchanged.
@@ -47,17 +48,21 @@ The ratified constitution text is recorded in `docs/constitution.md`.
 ## Compatibility impact
 
 This is a MAJOR constitutional change because it redefines where the exact tool names
-are governed. It does **not** immediately change the as-built runtime:
+are governed. At amendment acceptance it did **not** immediately change the as-built
+runtime:
 
-- until the feature is implemented, the active product baseline and current MCP
-  contract still define the exact two-tool catalog;
-- after implementation and evidence, those artifacts change together to the exact
+- before the feature was implemented, the active product baseline and MCP contract
+  defined the exact two-tool catalog;
+- after implementation and evidence, those artifacts changed together to the exact
   four-tool catalog;
 - any extra fifth tool remains prohibited unless another governed change updates the
   active catalog.
 
 The amendment therefore makes the constitution more stable while keeping the runtime
 catalog exact and reviewable.
+
+The implementation was promoted on 2026-08-27. The active product baseline and
+canonical machine-readable contract now define the exact four-tool catalog.
 
 ## Security impact
 
@@ -77,16 +82,14 @@ The specification and ADR 0008 mitigate these risks with an exact catalog, close
 schemas, one-call bounds, deterministic search, independent Core authority, and typed
 source failures.
 
-## Migration work
+## Migration record
 
-1. Treat this accepted amendment and ADR 0008 as the governance authority for the target four-tool catalog.
-2. Keep the current product baseline and machine-readable MCP contract unchanged until
-   the new implementation passes its deterministic gates.
-3. Implement the four-tool contract and Core revalidation boundaries.
-4. Update the product baseline, architecture, security model, current MCP contract,
-   request-intake orchestration, testing strategy, operator guidance, and README in
-   the evidence-backed reconciliation task.
-5. Record constitution version `3.0.0` in the final documentation set.
+1. The amendment and ADR 0008 governed the target four-tool catalog.
+2. The implementation passed its deterministic gates before production cutover.
+3. The four-tool contract and independent Core revalidation boundaries were promoted.
+4. Current product, architecture, security, testing, operator, and contract
+   documentation was reconciled with the promoted catalog.
+5. Constitution version `3.0.0` is recorded in the final documentation set.
 
 ## Rejected alternatives
 

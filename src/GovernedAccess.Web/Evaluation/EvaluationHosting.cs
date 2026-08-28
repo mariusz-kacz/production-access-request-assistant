@@ -87,10 +87,10 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		builder.Services.AddSingleton(TimeProvider.System);
 		builder.Services.AddSingleton(AgentExecutionLimits.Load(builder.Configuration));
 		builder.Services.AddSingleton(new AgentModelMetadata("FoundryResponses", modelResolution.DeploymentName, null));
-		builder.Services.AddSingleton((IServiceProvider _) => new TargetAgentMcpEndpoint(() => evaluationMcpBaseAddress));
+		builder.Services.AddSingleton((IServiceProvider _) => new AgentMcpEndpoint(() => evaluationMcpBaseAddress));
 		builder.Services.AddScoped<EvaluationFailureControl>();
 		builder.Services.AddScoped<IHttpClientFactory, EvaluationHttpClientFactory>();
-		builder.Services.AddScoped((IServiceProvider services) => new MafTurnProposalInterpreter(services.GetRequiredService<IChatClient>(), services.GetRequiredService<AgentExecutionLimits>(), services.GetRequiredService<AgentModelMetadata>(), services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<TargetAgentMcpEndpoint>(), services.GetRequiredService<IHttpClientFactory>(), services.GetRequiredService<TimeProvider>()));
+		builder.Services.AddScoped((IServiceProvider services) => new MafTurnProposalInterpreter(services.GetRequiredService<IChatClient>(), services.GetRequiredService<AgentExecutionLimits>(), services.GetRequiredService<AgentModelMetadata>(), services.GetRequiredService<ILoggerFactory>(), services.GetRequiredService<AgentMcpEndpoint>(), services.GetRequiredService<IHttpClientFactory>(), services.GetRequiredService<TimeProvider>()));
 		builder.Services.AddScoped<EvaluationRecordingInterpreter>();
 		builder.Services.AddScoped((Func<IServiceProvider, ITurnProposalInterpreter>)((IServiceProvider services) => services.GetRequiredService<EvaluationRecordingInterpreter>()));
 		builder.Services.AddScoped<RequestPreparationReducer>();
@@ -199,7 +199,7 @@ internal sealed class EvaluationHttpClientFactory(EvaluationFailureControl failu
 
 	public HttpClient CreateClient(string name)
 	{
-		if (!string.Equals(name, "GovernedAccess.TargetMafMcpLoopback", StringComparison.Ordinal))
+		if (!string.Equals(name, "GovernedAccess.MafMcpLoopback", StringComparison.Ordinal))
 		{
 			throw new InvalidOperationException("The evaluation host requested an unsupported HTTP client.");
 		}

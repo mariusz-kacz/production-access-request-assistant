@@ -78,20 +78,21 @@ does not fall back to the deterministic client.
 | Boundary | What this project uses it for |
 |---|---|
 | MAF | One bounded interpretation run, process-local conversation sessions keyed by server-generated intake ID, schema-constrained responses, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. |
-| MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact two-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
+| MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact four-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
 | Core | Provider- and protocol-independent validation, authorization, state transitions, confirmation, approval policy, provisioning eligibility, and fixed grant lifetime. |
 
 The MCP server exposes exactly:
 
-- `get_production_environment`: bounded discovery of at most 20 synthetic
-  environments or exact lookup by stable ID, including authoritative client and
-  assigned-role context; and
+- `search_production_environments`: deterministic bounded search returning at most
+  five eligible environment/client projections;
+- `get_production_environment`: exact lookup of one eligible environment and its
+  authoritative client;
+- `get_environment_roles`: current assignable roles for one exact environment; and
 - `get_incident`: exact lookup by a requester-supplied stable incident ID.
 
-There is no separate role-listing tool. The MCP project has no workflow store,
-decision service, or provisioning dependency. Identifier-like environment input uses
-exact lookup only; application-controlled gating prevents a later catalog-discovery
-call in the same model turn.
+The MCP project has no workflow store, decision service, or provisioning dependency.
+Every result remains untrusted interpretation context and is independently reproduced
+or exact-reloaded by Core.
 
 ## End-to-end flow
 
@@ -99,7 +100,7 @@ call in the same model turn.
 flowchart LR
     Teams[Personal Teams conversation] --> Draft[Request preparation]
     Draft --> AI[MAF interpretation]
-    AI <--> MCP[Two read-only MCP tools]
+    AI <--> MCP[Four read-only MCP tools]
     MCP --> Context[(Synthetic context in SQLite)]
     AI --> Proposal[Schema-bound proposal]
     Proposal --> Validation[Deterministic Core validation]
@@ -136,8 +137,8 @@ as its get-or-create idempotency key.
 - Browser identities are six fixed demo identities mapped to server-owned claims.
   Unsafe browser actions require authentication and antiforgery validation; command
   payloads do not accept acting identity, approved scope, role, or duration.
-- The interpreter rejects a missing, additional, or non-read-only MCP catalog. Neither
-  MCP tool can mutate workflow state.
+- The interpreter rejects a missing, additional, or non-read-only MCP catalog. No MCP
+  tool can mutate workflow state.
 - Model proposals use a closed JSON schema with unknown fields rejected. Core reloads
   candidate identifiers, structured options, client/environment relationships,
   assigned roles, and incident relationships before accepting them.
@@ -178,16 +179,8 @@ retry, or provision.
 The checked-in English-only evaluation dataset is `deterministic-intake-2.0.2`
 (schema version `1`).
 No reviewed current run is retained yet because a credentialed passing run is still
-pending. The repository retains the previous delivered evaluator's historical run:
-
-- run ID `e4943a61-16af-4e13-8edd-b735d28c48a0`, completed 2026-08-10;
-- deployment label `production-access-request-model`;
-- 20/20 scenarios passed; and
-- zero requests, approval decisions, provisioning operations, and grants.
-
-See its [human-readable report](docs/evaluation/report.md) and
-[machine-readable result](docs/evaluation/result.json). These historical artifacts are
-not promotion evidence for the current evaluator.
+pending. Artifacts from the removed delivered evaluator are not retained and cannot
+serve as promotion evidence for the current evaluator.
 
 ## Deliberate limitations
 
@@ -273,5 +266,5 @@ inventory, exit codes, artifact interpretation, and cleanup.
 - [Request-intake orchestration](docs/request-intake-orchestration.md) and the
   [current MCP contract](docs/contracts/mcp-tools.json)
 - [Testing strategy](docs/testing-strategy.md),
-  [live-model evaluation](docs/live-model-evaluation.md), and
-  [historical reviewed evidence](docs/evaluation/README.md)
+  [live-model evaluation](docs/live-model-evaluation.md), and the
+  [deterministic evaluation matrix](docs/evaluation/deterministic-request-intake-test-matrix.md)

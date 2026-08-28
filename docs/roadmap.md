@@ -190,15 +190,11 @@ Requester text and MCP display strings are untrusted prompt-injection inputs. Th
 
 ### Current branch position
 
-The isolated target composition has completed the original foundation through Task 10,
-the ordinary sparse-patch clarification protocol from Task 10A, and the automated
-implementation and cross-boundary verification in the focused simplification plan.
-Production still runs the delivered two-tool/full-candidate composition. The
-credentialed simplification evaluation report remains pending, so the simplification
-promotion gate is not complete. The target Teams renderer, target
-confirmation/idempotency flow, full isolated host, atomic production cutover, legacy
-deletion, promoted live-model gate, and as-built documentation reconciliation also
-remain pending.
+Production runs the promoted sparse-proposal composition with the exact four-tool MCP
+catalog and separate reference/workflow databases. The Teams renderer,
+confirmation/idempotency flow, full-host proof, atomic cutover, and legacy deletion are
+complete. The credentialed promoted live-model gate remains pending; current-state
+documentation now reflects the already-completed runtime cutover.
 
 The governing handoff is
 [`tasks/deterministic-request-intake-simplification.md`](../tasks/deterministic-request-intake-simplification.md).

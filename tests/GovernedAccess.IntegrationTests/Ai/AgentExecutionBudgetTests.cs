@@ -5,7 +5,14 @@ namespace GovernedAccess.IntegrationTests.Ai;
 public sealed class AgentExecutionBudgetTests
 {
     [Fact]
-    public void SeventhProviderIterationIsRejectedWithoutBeingCounted()
+    public void BudgetOverrunsAreRejectedWithoutCountingRejectedWork()
+    {
+        AssertProviderIterationLimit();
+        AssertTotalToolCallLimit();
+        AssertPerToolCallLimit();
+    }
+
+    private static void AssertProviderIterationLimit()
     {
         var budget = new AgentExecutionBudget(AgentExecutionLimits.Default);
         for (var iteration = 0; iteration < 6; iteration++)
@@ -19,8 +26,7 @@ public sealed class AgentExecutionBudgetTests
         Assert.True(budget.LimitExceeded);
     }
 
-    [Fact]
-    public void FifthTotalToolCallIsRejectedWithoutBeingCounted()
+    private static void AssertTotalToolCallLimit()
     {
         var budget = new AgentExecutionBudget(AgentExecutionLimits.Default);
         budget.BeginToolCall("tool-1");
@@ -34,8 +40,7 @@ public sealed class AgentExecutionBudgetTests
         Assert.True(budget.LimitExceeded);
     }
 
-    [Fact]
-    public void SecondCallToOneToolIsRejectedWithoutBeingCounted()
+    private static void AssertPerToolCallLimit()
     {
         var budget = new AgentExecutionBudget(AgentExecutionLimits.Default);
         budget.BeginToolCall("search_production_environments");

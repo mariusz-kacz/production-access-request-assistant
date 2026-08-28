@@ -55,7 +55,7 @@ flowchart LR
     Activity --> AI
     Activity --> App
     AI <--> Model
-    AI -->|two read-only tools| MCP
+    AI -->|four read-only tools| MCP
     MCP --> DB
     Web --> App
     App --> DB
@@ -121,8 +121,9 @@ settings.
 
 The model receives one closed response schema and exactly:
 
-- `get_production_environment` for bounded discovery or exact environment lookup,
-  including authoritative client and assigned-role context; and
+- `search_production_environments` for bounded deterministic discovery;
+- `get_production_environment` for exact environment and owning-client context;
+- `get_environment_roles` for current environment-scoped role assignments; and
 - `get_incident` for exact incident lookup.
 
 The client rejects any different tool catalog or non-read-only annotation. Function
@@ -236,7 +237,7 @@ complete MCP payloads.
 | Wrong-client approval or guessed request ID | Stored approver responsibility and participant filtering. | Direct database access is outside the application boundary. |
 | Prompt injection or invented identifiers | No state-changing model tools; closed schema; authoritative reload and validation. | The model can still produce unusable or confusing text. |
 | Silent substitution after lookup failure | Exact identifier policy, typed failures, and deterministic blocking of discovery after every exact outcome. | Natural-language shortlist quality on the separate readable-wording discovery path remains model-dependent. |
-| MCP capability expansion | Explicit two-tool server registration and exact client catalog check. | The unauthenticated local route can be enumerated or abused for resource consumption. |
+| MCP capability expansion | Explicit four-tool server registration and exact client catalog check. | The unauthenticated local route can be enumerated or abused for resource consumption. |
 | Request tampering after approval | Immutable request details and request-bound decisions and operations. | A compromised host process can bypass in-process controls. |
 | Duplicate or lost provisioning outcome | Request-keyed get-or-create, unique grant constraint, and scoped retry. | No automatic reconciliation or distributed provider guarantee. |
 | Conversation cross-talk or restart loss | Per-intake session key and gate; durable canonical candidate; safe re-clarification. | Process memory grows with intake count and has no compaction policy. |

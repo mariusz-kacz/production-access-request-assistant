@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 
 ## Principles
 
@@ -37,7 +37,7 @@ project name does not require every test to start the complete application.
 | Submission | Unit/component tests for actor binding, status, expiry, authoritative revalidation, one-save request creation, replay, and concurrency. |
 | Business and DevOps decisions | Unit policy tests plus SQLite component tests for authenticated authority, decision order, duplicate transitions, exact scope, and audit evidence. |
 | Provisioning and retry | Component tests for persisted-evidence reload, provider input, failed states, lost responses, idempotency, and one grant per request. |
-| MCP | Contract and transport tests for the exact two-tool catalog, closed schemas, bounded discovery, exact lookup, embedded roles, typed failures, overflow, and cancellation. |
+| MCP | Contract and transport tests for the exact four-tool catalog, closed schemas, bounded search, exact environment and incident lookup, environment-scoped roles, typed failures, overflow, and cancellation. |
 | MAF | Component tests for strict proposal parsing, discovery blocked after every exact environment outcome, session isolation, same-intake serialization, restart behavior, successful-save semantics, and provider failures. |
 | Browser security | Full-host tests for six demo identities, cookies, antiforgery, authorization, over-posting, participant filtering, and `/api`/`/mcp` SPA exclusion. |
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
@@ -116,7 +116,7 @@ The credential-free suite must cover:
    revision, stale card, and `/new` behavior;
 3. malformed model output, MCP/provider failure, timeout, cancellation, and unchanged
    last-good session state;
-4. exact two-tool MCP capability and contract boundaries;
+4. exact four-tool MCP capability and contract boundaries;
 5. authoritative client/environment/role/incident validation and structured option
    rendering;
 6. six authenticated demo identities, client isolation, antiforgery, and over-posting

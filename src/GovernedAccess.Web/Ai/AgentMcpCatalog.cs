@@ -4,7 +4,7 @@ using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.Web.Ai;
 
-internal static class TargetAgentMcpCatalog
+internal static class AgentMcpCatalog
 {
     internal static readonly string[] ToolNames =
     [

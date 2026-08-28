@@ -61,35 +61,35 @@ public sealed class ProtectedProvisioningTests
         Assert.Equal("devops-provisioning-correlation", providerRequest.CorrelationId);
     }
 
-    [Theory]
-    [InlineData(ApprovalStage.Business)]
-    [InlineData(ApprovalStage.DevOps)]
-    public async Task ProvisionAsyncRejectsMissingApprovalEvidence(
-        ApprovalStage omittedStage)
+    [Fact]
+    public async Task ProvisionAsyncRejectsMissingApprovalEvidence()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var fixture = await ProvisioningTestFixture.CreateAsync(
-            cancellationToken);
-        await SeedAwaitingProvisioningAsync(
-            fixture,
-            includeBusinessApproval: omittedStage != ApprovalStage.Business,
-            includeDevOpsApproval: omittedStage != ApprovalStage.DevOps,
-            cancellationToken: cancellationToken);
+        foreach (var omittedStage in new[] { ApprovalStage.Business, ApprovalStage.DevOps })
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            await using var fixture = await ProvisioningTestFixture.CreateAsync(
+                cancellationToken);
+            await SeedAwaitingProvisioningAsync(
+                fixture,
+                includeBusinessApproval: omittedStage != ApprovalStage.Business,
+                includeDevOpsApproval: omittedStage != ApprovalStage.DevOps,
+                cancellationToken: cancellationToken);
 
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
-        var service = new ProtectedProvisioningService(
-            scope.ServiceProvider.GetRequiredService<IWorkflowStore>(),
-            provisioner,
-            fixture.Clock);
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+            var provisioner = new RecordingAccessProvisioner(ActivatedAt);
+            var service = new ProtectedProvisioningService(
+                scope.ServiceProvider.GetRequiredService<IWorkflowStore>(),
+                provisioner,
+                fixture.Clock);
 
-        var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
+            var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        _ = Assert.IsType<ProtectedProvisioningFailed>(outcome);
-        Assert.Empty(provisioner.Requests);
-        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
-            cancellationToken));
+            _ = Assert.IsType<ProtectedProvisioningFailed>(outcome);
+            Assert.Empty(provisioner.Requests);
+            Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
+                cancellationToken));
+        }
     }
 
     [Fact]

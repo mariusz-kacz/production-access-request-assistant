@@ -13,7 +13,21 @@ namespace GovernedAccess.IntegrationTests.Hosting;
 public sealed class WorkflowPersistenceArchitectureTests
 {
     [Fact]
-    public void WorkflowPersistenceProjectReferencesOnlyCoreProject()
+    public void WorkflowPersistenceSourceBoundariesAreClosed()
+    {
+        AssertProjectReferencesOnlyCore();
+        AssertDbContextIsAbsentFromOtherModules();
+    }
+
+    [Fact]
+    public async Task WorkflowPersistenceCompositionIsModuleOwnedAndIsolated()
+    {
+        await AssertProductionHostCompositionAsync();
+        await AssertCombinedIsolatedCompositionAsync();
+        await AssertSeparateFixturesAsync();
+    }
+
+    private static void AssertProjectReferencesOnlyCore()
     {
         var repositoryRoot = GetRepositoryRoot();
         var projectPath = Path.Combine(
@@ -34,8 +48,7 @@ public sealed class WorkflowPersistenceArchitectureTests
             projectReferences);
     }
 
-    [Fact]
-    public void WorkflowDbContextIsAbsentFromEveryOtherSourceModule()
+    private static void AssertDbContextIsAbsentFromOtherModules()
     {
         var repositoryRoot = GetRepositoryRoot();
         var sourceRoot = Path.Combine(repositoryRoot, "src");
@@ -58,8 +71,7 @@ public sealed class WorkflowPersistenceArchitectureTests
         }
     }
 
-    [Fact]
-    public async Task ProductionHostResolvesOnlyModuleOwnedWorkflowPersistence()
+    private static async Task AssertProductionHostCompositionAsync()
     {
         await using var fixture = new DefaultWebApplicationFixture();
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
@@ -73,8 +85,7 @@ public sealed class WorkflowPersistenceArchitectureTests
             workflowStore.GetType().Assembly);
     }
 
-    [Fact]
-    public async Task IsolatedTargetCompositionUsesOnlyModuleOwnedPersistence()
+    private static async Task AssertCombinedIsolatedCompositionAsync()
     {
         await using var fixture = await TargetPersistenceFixture.CreateAsync();
         await using var scope = fixture.Services.CreateAsyncScope();
@@ -107,8 +118,7 @@ public sealed class WorkflowPersistenceArchitectureTests
             StringComparer.Ordinal));
     }
 
-    [Fact]
-    public async Task IsolatedWorkflowAndReferenceFixturesUseDifferentDatabaseFiles()
+    private static async Task AssertSeparateFixturesAsync()
     {
         await using var workflow = await WorkflowPersistenceFixture.CreateAsync();
         await using var reference = await ReferenceAuthorityFixture.CreateAsync();

@@ -633,11 +633,11 @@ public sealed class EvaluationEngineTests
 			["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
 			["RequestPreparationModel:FoundryResponses:Endpoint"] = "https://evaluation.services.ai.azure.com/openai/v1",
 			["RequestPreparationModel:FoundryResponses:DeploymentName"] = "evaluation-deployment",
-			["TargetRequestPreparationAgent:Limits:MaximumMessageCharacters"] = "4000",
-			["TargetRequestPreparationAgent:Limits:MaximumCallsPerTool"] = "1",
-			["TargetRequestPreparationAgent:Limits:MaximumToolCalls"] = "4",
-			["TargetRequestPreparationAgent:Limits:MaximumProviderIterations"] = "6",
-			["TargetRequestPreparationAgent:Limits:CumulativeTimeout"] =
+			["RequestPreparationAgent:Limits:MaximumMessageCharacters"] = "4000",
+			["RequestPreparationAgent:Limits:MaximumCallsPerTool"] = "1",
+			["RequestPreparationAgent:Limits:MaximumToolCalls"] = "4",
+			["RequestPreparationAgent:Limits:MaximumProviderIterations"] = "6",
+			["RequestPreparationAgent:Limits:CumulativeTimeout"] =
 				(cumulativeTimeout ?? TimeSpan.FromSeconds(30)).ToString(
 					"c",
 					CultureInfo.InvariantCulture)

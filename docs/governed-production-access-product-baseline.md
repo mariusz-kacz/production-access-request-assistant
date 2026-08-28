@@ -47,13 +47,16 @@ Model output is untrusted and must match the closed request-proposal schema. Eve
 proposed client, environment, role, and incident identifier is reloaded and validated
 against authoritative application data.
 
-The model receives exactly two MCP tools:
+The model receives exactly four MCP tools:
 
-- `get_production_environment` supports bounded catalog discovery with `{}` and exact
-  lookup with one `environmentId`. Each result includes its authoritative client and
-  assigned roles.
-- `get_incident` accepts one precise incident ID. It does not list, search, or infer
-  incidents.
+- `search_production_environments` searches the bounded eligible production catalog
+  with one structured query and returns at most five complete environment/client
+  projections;
+- `get_production_environment` exact-loads one eligible environment and its owning
+  client;
+- `get_environment_roles` lists roles currently assignable in one exact eligible
+  environment; and
+- `get_incident` exact-loads one precise incident ID without providing discovery.
 
 The MCP project has no workflow, approval, provisioning, revocation, arbitrary
 database, or generic-query dependency. Tool annotations and visibility are not
@@ -186,7 +189,7 @@ DevOps approver may retry a failed operation, and retry accepts no replacement s
 | ID | Requirement |
 |---|---|
 | FR-01 | Accept natural-language request preparation only through authenticated personal Teams conversations and fail safely on malformed model output. |
-| FR-02 | Expose exactly the two typed read-only MCP tools and no state-changing model capability. |
+| FR-02 | Expose exactly the four typed read-only MCP tools and no state-changing model capability. |
 | FR-03 | Validate all proposed identifiers, relationships, roles, and incident state against authoritative data. |
 | FR-04 | Derive acting identity and authority from authenticated server context. |
 | FR-05 | Resolve the business approver from the selected environment's owning client. |

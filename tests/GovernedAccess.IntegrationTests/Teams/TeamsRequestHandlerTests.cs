@@ -13,50 +13,60 @@ namespace GovernedAccess.IntegrationTests.Teams;
 
 public sealed class TeamsRequestHandlerTests
 {
-    [Theory]
-    [InlineData("/new please")]
-    [InlineData("1")]
-    [InlineData("PROD-ALPHA-EU")]
-    [InlineData("wybierz środowisko odzyskiwania")]
-    public async Task EveryNonblankNonCommandMessageGoesThroughPreparationOrchestration(
-        string message)
+    [Fact]
+    public async Task EveryNonblankNonCommandMessageGoesThroughPreparationOrchestration()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var orchestrator = new StubOrchestrator();
-        var confirmation = new StubConfirmation();
-        var handler = CreateHandler(orchestrator, confirmation);
+        string[] messages =
+        [
+            "/new please",
+            "1",
+            "PROD-ALPHA-EU",
+            "wybierz środowisko odzyskiwania",
+        ];
 
-        var result = await handler.HandleMessageAsync(
-            Context(),
-            $"  {message}  ",
-            "correlation",
-            cancellationToken);
+        foreach (var message in messages)
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var orchestrator = new StubOrchestrator();
+            var confirmation = new StubConfirmation();
+            var handler = CreateHandler(orchestrator, confirmation);
 
-        Assert.Equal([message], orchestrator.ProcessedMessages);
-        Assert.Equal(0, orchestrator.ResetCount);
-        Assert.Equal(0, confirmation.CallCount);
-        Assert.Equal(TeamsResponseKind.Text, result.Kind);
+            var result = await handler.HandleMessageAsync(
+                Context(),
+                $"  {message}  ",
+                "correlation",
+                cancellationToken);
+
+            Assert.Equal([message], orchestrator.ProcessedMessages);
+            Assert.Equal(0, orchestrator.ResetCount);
+            Assert.Equal(0, confirmation.CallCount);
+            Assert.Equal(TeamsResponseKind.Text, result.Kind);
+        }
     }
 
-    [Theory]
-    [InlineData("/new")]
-    [InlineData(" /NEW ")]
-    public async Task ExactNewCommandResetsWithoutCallingTheInterpreter(string message)
+    [Fact]
+    public async Task ExactNewCommandResetsWithoutCallingTheInterpreter()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var orchestrator = new StubOrchestrator();
-        var handler = CreateHandler(orchestrator, new StubConfirmation());
+        foreach (var message in new[] { "/new", " /NEW " })
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var orchestrator = new StubOrchestrator();
+            var handler = CreateHandler(orchestrator, new StubConfirmation());
 
-        var result = await handler.HandleMessageAsync(
-            Context(),
-            message,
-            "correlation",
-            cancellationToken);
+            var result = await handler.HandleMessageAsync(
+                Context(),
+                message,
+                "correlation",
+                cancellationToken);
 
-        Assert.Equal(1, orchestrator.ResetCount);
-        Assert.Empty(orchestrator.ProcessedMessages);
-        Assert.True(result.InvalidatesTrackedCard);
-        Assert.Contains("Started a new request", result.Message, StringComparison.Ordinal);
+            Assert.Equal(1, orchestrator.ResetCount);
+            Assert.Empty(orchestrator.ProcessedMessages);
+            Assert.True(result.InvalidatesTrackedCard);
+            Assert.Contains(
+                "Started a new request",
+                result.Message,
+                StringComparison.Ordinal);
+        }
     }
 
     [Fact]

@@ -6,7 +6,7 @@ using ModelContextProtocol.Protocol;
 
 namespace GovernedAccess.IntegrationTests.Mcp;
 
-public sealed class TargetMcpContractTests
+public sealed class McpContractTests
 {
     private static readonly string[] ExpectedToolNames =
     [
@@ -17,13 +17,13 @@ public sealed class TargetMcpContractTests
     ];
 
     [Fact]
-    public void PublishedTargetContractParsesAndMatchesTheBoundedCatalog()
+    public void PublishedContractParsesAndMatchesTheBoundedCatalog()
     {
         var contractPath = Path.Combine(
             GetRepositoryRoot(),
             "docs",
             "contracts",
-            "deterministic-request-intake-mcp-tools.json");
+            "mcp-tools.json");
         using var contract = JsonDocument.Parse(File.ReadAllText(contractPath));
         var root = contract.RootElement;
         var tools = root.GetProperty("tools").EnumerateArray().ToArray();
@@ -31,7 +31,7 @@ public sealed class TargetMcpContractTests
         Assert.Equal(
             "https://json-schema.org/draft/2020-12/schema",
             root.GetProperty("$schema").GetString());
-        Assert.Equal("approved-target", root.GetProperty("status").GetString());
+        Assert.Equal("current", root.GetProperty("status").GetString());
         Assert.Equal("3.0.0", root.GetProperty("contractVersion").GetString());
         Assert.Equal(5, root.GetProperty("maximumEnvironmentCandidates").GetInt32());
         Assert.Equal(4, root.GetProperty("maximumTotalToolCallsPerTurn").GetInt32());
@@ -53,7 +53,7 @@ public sealed class TargetMcpContractTests
     }
 
     [Fact]
-    public async Task TargetServerAdvertisesExactlyTheFourClosedReadOnlyTools()
+    public async Task ServerAdvertisesExactlyTheFourClosedReadOnlyTools()
     {
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
@@ -97,7 +97,7 @@ public sealed class TargetMcpContractTests
     }
 
     [Fact]
-    public async Task TargetToolsReturnOnlyTheirClosedBoundedWireProjections()
+    public async Task ToolsReturnOnlyTheirClosedBoundedWireProjections()
     {
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);

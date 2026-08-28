@@ -24,7 +24,7 @@ and one authoritative candidate assessment:
    conversation.
 2. Supply the latest requester message and complete accepted candidate to the
    interpreter.
-3. Run one MAF turn with the closed output schema and exact two-tool MCP catalog.
+3. Run one MAF turn with the closed output schema and exact four-tool MCP catalog.
 4. Translate the proposal into Core types.
 5. Validate every supplied identifier and relationship, derive authoritative values,
    clear rejected fields, and classify the candidate as rejected, incomplete, or
@@ -83,8 +83,10 @@ snapshot against authoritative context.
 
 The allowed tools are:
 
-- `get_production_environment`, called with `{}` for bounded discovery or one nonblank
-  `environmentId` for exact lookup; and
+- `search_production_environments`, called with one structured query for bounded
+  discovery;
+- `get_production_environment`, called with one exact nonblank `environmentId`;
+- `get_environment_roles`, called with one exact eligible `environmentId`; and
 - `get_incident`, called only with a precise requester-supplied incident ID.
 
 The interpreter rejects any different catalog or tool lacking the read-only
@@ -119,7 +121,7 @@ every successful model turn.
 ## Clarification rendering
 
 Environment clarification uses a structured `environmentOptionIds` list separate from
-the model-authored question. The list may contain at most 20 unique stable IDs and may
+the model-authored question. The list may contain at most five unique stable IDs and may
 be non-empty only for `environmentId` clarification.
 
 Core reloads the complete list and orders it by stable ID. Only then may the Teams

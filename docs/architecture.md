@@ -84,9 +84,9 @@ translated before entering Core.
 
 ### `GovernedAccess.Mcp`
 
-MCP registers the stateless Streamable HTTP server and exactly two typed read-only
-tools. It translates tool contracts to `IRequestContextReader`. The project has no
-workflow store, decision service, or provisioning dependency.
+MCP registers the stateless Streamable HTTP server and exactly four typed read-only
+tools. It translates tool contracts to focused Core authority ports. The project has
+no workflow store, decision service, or provisioning dependency.
 
 ### `GovernedAccess.Web`
 
@@ -197,20 +197,20 @@ requires a validated Foundry endpoint and deployment, uses `DefaultAzureCredenti
 and fails closed on configuration, credential, provider, or timeout failure. It never
 falls back to the deterministic client after live selection.
 
-Both profiles use the same closed response schema, two-tool MCP allowlist,
+Both profiles use the same closed response schema, four-tool MCP allowlist,
 authoritative assessment, confirmation, approval, and provisioning boundaries. The
 Teams activity has one configured deadline of at most 100 seconds covering model and
 MCP work. Function invocation allows at most six sequential iterations, disallows
 concurrent tool invocation, and terminates on unknown calls.
 
-The client requires the catalog to contain exactly `get_production_environment` and
-`get_incident`, both marked read-only. Environment discovery is bounded to 20 results.
-The interpreter blocks catalog discovery after every exact environment lookup
-outcome. It does not reinterpret an identifier-like exact `NotFound` as a discovery
-query.
+The client requires the catalog to contain exactly
+`search_production_environments`, `get_production_environment`,
+`get_environment_roles`, and `get_incident`, all marked read-only. Environment
+search is bounded to five complete results, each tool may be called at most once per
+turn, and a turn allows at most four tool calls.
 
 The same Web executable also supports `evaluate-live-model`. That mode starts an
-isolated loopback host exposing only the four read-only MCP tools, uses separate
+isolated loopback host exposing the same four read-only MCP tools, uses separate
 temporary reference and workflow SQLite databases, runs the fixed evaluation
 evaluation inventory through the grouped preparation path, records only sanitized
 outcomes and safety evidence, and removes temporary database files on disposal. It

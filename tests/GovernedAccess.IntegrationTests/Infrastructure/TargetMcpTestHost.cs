@@ -127,7 +127,7 @@ internal sealed class TargetMcpTestHost : IAsyncDisposable
     {
         public HttpClient CreateClient(string name)
         {
-            Assert.Equal(MafTurnProposalInterpreter.McpHttpClientName, name);
+            Assert.Equal("GovernedAccess.MafMcpLoopback", name);
             return application.GetTestClient();
         }
     }

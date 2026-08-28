@@ -22,7 +22,7 @@ internal static class RequestPreparationChatRegistration
         return AddRequestPreparationChat(
             services,
             resolution,
-            CreateMetadata(options, resolution),
+            CreateMetadata(resolution),
             () => CreateFoundryResponsesClient(resolution));
     }
 
@@ -41,7 +41,7 @@ internal static class RequestPreparationChatRegistration
         return AddRequestPreparationChat(
             services,
             resolution,
-            CreateMetadata(options, resolution),
+            CreateMetadata(resolution),
             foundryResponsesClientFactory);
     }
 
@@ -69,17 +69,9 @@ internal static class RequestPreparationChatRegistration
     }
 
     private static RequestPreparationModelMetadata CreateMetadata(
-        RequestPreparationModelOptions options,
         RequestPreparationModelResolution resolution)
     {
-        var profileId = options.ExecutionProfile switch
-        {
-            nameof(RequestPreparationModelProfile.Deterministic) =>
-                nameof(RequestPreparationModelProfile.Deterministic),
-            nameof(RequestPreparationModelProfile.FoundryResponses) =>
-                nameof(RequestPreparationModelProfile.FoundryResponses),
-            _ => "Unavailable",
-        };
+        var profileId = resolution.Profile?.ToString() ?? "Unavailable";
         var deploymentName =
             resolution.Profile == RequestPreparationModelProfile.FoundryResponses
                 ? resolution.DeploymentName

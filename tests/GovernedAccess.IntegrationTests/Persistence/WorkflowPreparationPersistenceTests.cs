@@ -294,30 +294,35 @@ public sealed class WorkflowPreparationPersistenceTests
         Assert.Equal("request_preparation_malformed_state", result.Failure!.Code);
     }
 
-    [Theory]
-    [InlineData("{")]
-    [InlineData("[null]")]
-    public async Task MalformedPersistedJsonReturnsTypedFailure(string malformedJson)
+    [Fact]
+    public async Task MalformedPersistedJsonReturnsTypedFailure()
     {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        var preparation = CreateCollectingPreparation();
-        await PersistAsync(fixture, preparation);
-        await using (var corruptScope = fixture.Services.CreateAsyncScope())
+        foreach (var malformedJson in new[] { "{", "[null]" })
         {
-            var context = corruptScope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-            await context.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE RequestPreparations SET MaterialChangeAttributionsJson = {malformedJson}",
+            await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
+            var preparation = CreateCollectingPreparation();
+            await PersistAsync(fixture, preparation);
+            await using (var corruptScope = fixture.Services.CreateAsyncScope())
+            {
+                var context = corruptScope.ServiceProvider
+                    .GetRequiredService<WorkflowDbContext>();
+                await context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE RequestPreparations SET MaterialChangeAttributionsJson = {malformedJson}",
+                    TestContext.Current.CancellationToken);
+            }
+
+            await using var loadScope = fixture.Services.CreateAsyncScope();
+            var store = loadScope.ServiceProvider
+                .GetRequiredService<IRequestPreparationStore>();
+            var result = await store.GetAsync(
+                preparation.PreparationId,
                 TestContext.Current.CancellationToken);
+
+            Assert.True(result.IsFailure);
+            Assert.Equal(
+                "request_preparation_malformed_state",
+                result.Failure!.Code);
         }
-
-        await using var loadScope = fixture.Services.CreateAsyncScope();
-        var store = loadScope.ServiceProvider.GetRequiredService<IRequestPreparationStore>();
-        var result = await store.GetAsync(
-            preparation.PreparationId,
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("request_preparation_malformed_state", result.Failure!.Code);
     }
 
     [Fact]

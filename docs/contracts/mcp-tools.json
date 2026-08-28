@@ -1,13 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Governed Access MCP Tool Contract",
+  "status": "current",
+  "contractVersion": "3.0.0",
+  "environmentSearchPolicyVersion": "2.0.0",
   "endpoint": "/mcp",
   "transport": "streamable-http",
-  "maximumEnvironmentCandidates": 20,
+  "maximumEnvironmentCandidates": 5,
+  "maximumCallsPerToolPerTurn": 1,
+  "maximumTotalToolCallsPerTurn": 4,
+  "maximumProviderIterationsPerTurn": 6,
+  "maximumStructuredOutputRepairAttempts": 0,
+  "maximumTurnDurationSeconds": 30,
+  "sharedPolicies": {
+    "environmentSearch": "one protocol-neutral deterministic policy instance is reused by MCP and Core",
+    "turnTimeout": "one 30-second timeout/cancellation budget covers model and MCP work",
+    "rawArgumentLogging": false,
+    "rawResultLogging": false,
+    "toolResultTextTrust": "untrusted-data-never-instruction-or-authority"
+  },
   "tools": [
     {
-      "name": "get_production_environment",
-      "description": "Discovers the bounded production-environment catalog or gets one environment by stable identifier, including authoritative client and assigned role context.",
+      "name": "search_production_environments",
+      "description": "Searches the bounded projection of active production environments eligible for access-request intake using one structured agent-proposed query.",
+      "authority": "service-catalog-or-cmdb-search-projection",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -17,11 +33,14 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "query"
+        ],
         "properties": {
-          "environmentId": {
+          "query": {
             "type": "string",
             "minLength": 1,
-            "description": "Optional stable production-environment identifier. Omit for bounded discovery."
+            "maxLength": 200
           }
         }
       },
@@ -34,80 +53,114 @@
         "properties": {
           "environments": {
             "type": "array",
-            "maxItems": 20,
+            "maxItems": 5,
             "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "environmentId",
-                "clientId",
-                "clientDisplayName",
-                "displayName",
-                "roles"
-              ],
-              "properties": {
-                "environmentId": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "clientId": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "clientDisplayName": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "displayName": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "roles": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [
-                      "roleId",
-                      "displayName"
-                    ],
-                    "properties": {
-                      "roleId": {
-                        "type": "string",
-                        "enum": [
-                          "ProductionReadOnly",
-                          "ProductionSupport",
-                          "ProductionDeployment"
-                        ]
-                      },
-                      "displayName": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    }
-                  }
-                }
-              }
+              "$ref": "#/$defs/environmentProjection"
             }
           }
         }
       },
       "behavior": {
-        "discoveryInput": {},
-        "discoverySuccess": "Returns the complete authoritative catalog ordered by environmentId, or an empty array when no environments exist.",
-        "exactInput": {
-          "environmentId": "PROD-ALPHA-EU"
-        },
-        "exactSuccess": "Returns exactly one environment in environments[].",
-        "exactNotFound": "Returns the shared typed failure envelope with outcome NotFound. The request-preparation consumer keeps scope unresolved and must not call discovery later in the same turn.",
-        "invalidInput": "JSON null, blank environmentId, or unknown properties return the shared typed InvalidInput failure.",
-        "overflow": "More than 20 authoritative environments returns Unavailable with code environment-candidate-limit-exceeded and no partial list.",
-        "ordering": "Environment IDs and role IDs use ordinal ascending ordering."
+        "queryPolicy": "unicode-nfc-trim-collapse-token-and-match-all-against-approved-fields",
+        "sharedImplementation": "same protocol-neutral policy used by MCP and Core",
+        "scope": "active production environments eligible for request intake only",
+        "ordering": "environmentId ordinal ascending",
+        "zeroMatches": "success with environments empty",
+        "selectableRange": "two through five complete results may become clarification choices",
+        "overflow": "more than five results return Unavailable with code environment_query_too_broad; never expose a larger hidden set, truncate, or rank",
+        "applicationAuthority": "Core independently invokes the shared policy and exact-reloads accepted identity",
+        "rawQueryLogging": false
+      }
+    },
+    {
+      "name": "get_production_environment",
+      "description": "Gets one exact active production environment eligible for request intake and its authoritative owning client.",
+      "authority": "environment-registry-or-cmdb",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environmentId"
+        ],
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "outputSchema": {
+        "$ref": "#/$defs/environmentProjection"
+      },
+      "behavior": {
+        "exactOnly": true,
+        "eligibleProductionOnly": true,
+        "rolesIncluded": false,
+        "notFound": "unknown, inactive, non-production, or intake-ineligible identifiers use shared typed NotFound failure"
+      }
+    },
+    {
+      "name": "get_environment_roles",
+      "description": "Gets roles currently assignable in one exact eligible production environment; it does not determine requester eligibility.",
+      "authority": "iam-or-entitlement-catalog",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environmentId"
+        ],
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environmentId",
+          "roles"
+        ],
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/roleProjection"
+            }
+          }
+        }
+      },
+      "behavior": {
+        "exactEnvironmentOnly": true,
+        "crossEnvironmentSearch": false,
+        "requesterEligibilityAuthority": false,
+        "knownEnvironmentWithoutAssignments": "success with roles empty",
+        "unknownOrIneligibleEnvironment": "shared typed NotFound failure",
+        "ordering": "roleId ordinal ascending"
       }
     },
     {
       "name": "get_incident",
-      "description": "Gets one incident using the precise stable identifier supplied by the requester.",
+      "description": "Gets one incident using an exact stable identifier proposed by the agent; no incident discovery is provided.",
+      "authority": "itsm-incident-system",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -123,8 +176,7 @@
         "properties": {
           "incidentId": {
             "type": "string",
-            "minLength": 1,
-            "description": "Precise stable incident identifier; titles, descriptions, and partial IDs are not accepted."
+            "minLength": 1
           }
         }
       },
@@ -154,7 +206,10 @@
             ]
           },
           "environmentId": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "minLength": 1
           }
         }
@@ -162,10 +217,64 @@
       "behavior": {
         "exactOnly": true,
         "discovery": false,
-        "inference": false
+        "inference": false,
+        "environmentCardinality": "zero or one authoritative environment; null is ineligible for request scope",
+        "titleTrust": "untrusted data"
       }
     }
   ],
+  "$defs": {
+    "environmentProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environmentId",
+        "displayName",
+        "clientId",
+        "clientDisplayName"
+      ],
+      "properties": {
+        "environmentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientDisplayName": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "roleProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roleId",
+        "displayName"
+      ],
+      "properties": {
+        "roleId": {
+          "type": "string",
+          "enum": [
+            "ProductionReadOnly",
+            "ProductionSupport",
+            "ProductionDeployment"
+          ]
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
   "failureEnvelope": {
     "type": "object",
     "additionalProperties": false,
@@ -199,6 +308,5 @@
         "minLength": 1
       }
     }
-  },
-  "allowlistInvariant": "The initialized server advertises exactly get_production_environment and get_incident, both read-only, and advertises no resources, prompts, role-listing, approval, provisioning, revocation, transition, database, or generic-query tools."
+  }
 }

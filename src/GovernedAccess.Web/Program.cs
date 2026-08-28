@@ -45,7 +45,6 @@ builder.Services.AddSingleton<SyntheticAccessProvisioner>();
 builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
     serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
-builder.Services.AddRequestPreparationChat(builder.Configuration);
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();

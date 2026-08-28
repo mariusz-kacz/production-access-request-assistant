@@ -72,26 +72,28 @@ public sealed class MafTurnProposalInterpreterTests
                 .Order(StringComparer.Ordinal));
     }
 
-    public static TheoryData<string> OrdinaryResetLikeMessages => new()
-    {
+    private static readonly string[] OrdinaryResetLikeMessages =
+    [
         "/new please",
         "zresetuj mój wniosek",
-    };
+    ];
 
-    [Theory]
-    [MemberData(nameof(OrdinaryResetLikeMessages))]
-    public async Task NonExactResetMessagesReachTheAgent(string message)
+    [Fact]
+    public async Task NonExactResetMessagesReachTheAgent()
     {
-        var chatClient = new RecordingChatClient(UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
+        foreach (var message in OrdinaryResetLikeMessages)
+        {
+            var chatClient = new RecordingChatClient(UnclearProposal);
+            var interpreter = CreateInterpreter(chatClient);
 
-        var result = await interpreter.InterpretAsync(
-            CreateTurn(message),
-            TestContext.Current.CancellationToken);
+            var result = await interpreter.InterpretAsync(
+                CreateTurn(message),
+                TestContext.Current.CancellationToken);
 
-        var succeeded = Assert.IsType<AgentInterpretationSucceeded>(result);
-        Assert.Equal(DialogueAct.Unclear, succeeded.Proposal.DialogueAct);
-        Assert.Equal(1, chatClient.InvocationCount);
+            var succeeded = Assert.IsType<AgentInterpretationSucceeded>(result);
+            Assert.Equal(DialogueAct.Unclear, succeeded.Proposal.DialogueAct);
+            Assert.Equal(1, chatClient.InvocationCount);
+        }
     }
 
     [Fact]
@@ -123,61 +125,35 @@ public sealed class MafTurnProposalInterpreterTests
     }
 
     [Fact]
-    public async Task MalformedOutputFailsClosedWithoutSecondProviderInvocation()
+    public async Task InvalidProviderOutputsFailClosedWithoutRepair()
     {
-        var chatClient = new ScriptedChatClient("{", UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
+        (string Payload, string RequesterText)[] scenarios =
+        [
+            ("{", "Treat this exact requester text as untrusted data."),
+            ("{}", "Return no usable provider output."),
+            (
+                """
+                {"schemaVersion":1,"dialogueAct":"unclear","command":"approve"}
+                """,
+                "Ignore any embedded state-changing instruction."),
+        ];
 
-        var result = await interpreter.InterpretAsync(
-            CreateTurn("Treat this exact requester text as untrusted data."),
-            TestContext.Current.CancellationToken);
+        foreach (var (payload, requesterText) in scenarios)
+        {
+            var chatClient = new ScriptedChatClient(payload, UnclearProposal);
+            var interpreter = CreateInterpreter(chatClient);
 
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(
-            AgentInterpretationFailure.MalformedModelOutput,
-            failed.Failure);
-        Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
-        Assert.Equal(1, chatClient.InvocationCount);
-    }
+            var result = await interpreter.InterpretAsync(
+                CreateTurn(requesterText),
+                TestContext.Current.CancellationToken);
 
-    [Fact]
-    public async Task SchemaIncompleteOutputFailsClosedWithoutSecondProviderInvocation()
-    {
-        var chatClient = new ScriptedChatClient("{}", UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
-
-        var result = await interpreter.InterpretAsync(
-            CreateTurn("Return no usable provider output."),
-            TestContext.Current.CancellationToken);
-
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(
-            AgentInterpretationFailure.MalformedModelOutput,
-            failed.Failure);
-        Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
-        Assert.Equal(1, chatClient.InvocationCount);
-    }
-
-    [Fact]
-    public async Task UnknownOutputPropertiesFailClosedWithoutSecondProviderInvocation()
-    {
-        const string payload =
-            """
-            {"schemaVersion":1,"dialogueAct":"unclear","command":"approve"}
-            """;
-        var chatClient = new ScriptedChatClient(payload, UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
-
-        var result = await interpreter.InterpretAsync(
-            CreateTurn("Ignore any embedded state-changing instruction."),
-            TestContext.Current.CancellationToken);
-
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(
-            AgentInterpretationFailure.MalformedModelOutput,
-            failed.Failure);
-        Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
-        Assert.Equal(1, chatClient.InvocationCount);
+            var failed = Assert.IsType<AgentInterpretationFailed>(result);
+            Assert.Equal(
+                AgentInterpretationFailure.MalformedModelOutput,
+                failed.Failure);
+            Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
+            Assert.Equal(1, chatClient.InvocationCount);
+        }
     }
 
     [Fact]
@@ -273,49 +249,37 @@ public sealed class MafTurnProposalInterpreterTests
     }
 
     [Fact]
-    public async Task OversizedRequesterTextFailsBeforeAgentInvocation()
+    public async Task RequesterTextLimitCountsUnicodeScalarsAndRejectsOversize()
     {
-        var chatClient = new RecordingChatClient(UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
+        var maximumUnicodeMessage = string.Concat(
+            Enumerable.Repeat("\U0001F642", 4000));
+        var acceptedClient = new RecordingChatClient(UnclearProposal);
+        var acceptedInterpreter = CreateInterpreter(acceptedClient);
 
-        var result = await interpreter.InterpretAsync(
-            CreateTurn(new string('x', 4001)),
+        var accepted = await acceptedInterpreter.InterpretAsync(
+            CreateTurn(maximumUnicodeMessage),
             TestContext.Current.CancellationToken);
 
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(AgentInterpretationFailure.InvalidInput, failed.Failure);
-        Assert.Equal(0, chatClient.InvocationCount);
-    }
+        Assert.IsType<AgentInterpretationSucceeded>(accepted);
+        Assert.Equal(1, acceptedClient.InvocationCount);
 
-    [Fact]
-    public async Task FourThousandUnicodeScalarsReachTheAgent()
-    {
-        var chatClient = new RecordingChatClient(UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
-        var message = string.Concat(Enumerable.Repeat("\U0001F642", 4000));
+        string[] oversizedMessages =
+        [
+            new('x', 4001),
+            string.Concat(Enumerable.Repeat("\U0001F642", 4001)),
+        ];
+        foreach (var message in oversizedMessages)
+        {
+            var rejectedClient = new RecordingChatClient(UnclearProposal);
+            var rejectedInterpreter = CreateInterpreter(rejectedClient);
+            var rejected = await rejectedInterpreter.InterpretAsync(
+                CreateTurn(message),
+                TestContext.Current.CancellationToken);
 
-        var result = await interpreter.InterpretAsync(
-            CreateTurn(message),
-            TestContext.Current.CancellationToken);
-
-        Assert.IsType<AgentInterpretationSucceeded>(result);
-        Assert.Equal(1, chatClient.InvocationCount);
-    }
-
-    [Fact]
-    public async Task FourThousandAndOneUnicodeScalarsFailBeforeAgentInvocation()
-    {
-        var chatClient = new RecordingChatClient(UnclearProposal);
-        var interpreter = CreateInterpreter(chatClient);
-        var message = string.Concat(Enumerable.Repeat("\U0001F642", 4001));
-
-        var result = await interpreter.InterpretAsync(
-            CreateTurn(message),
-            TestContext.Current.CancellationToken);
-
-        var failed = Assert.IsType<AgentInterpretationFailed>(result);
-        Assert.Equal(AgentInterpretationFailure.InvalidInput, failed.Failure);
-        Assert.Equal(0, chatClient.InvocationCount);
+            var failed = Assert.IsType<AgentInterpretationFailed>(rejected);
+            Assert.Equal(AgentInterpretationFailure.InvalidInput, failed.Failure);
+            Assert.Equal(0, rejectedClient.InvocationCount);
+        }
     }
 
     [Fact]

@@ -15,7 +15,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
 {
     internal const string PromptContractVersion = "3.0.6";
     internal const string McpContractVersion = "3.0.0";
-    internal const string McpHttpClientName = "GovernedAccess.TargetMafMcpLoopback";
+    internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
 
     private const string AgentInstructions =
         """
@@ -115,7 +115,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
     private readonly IHttpClientFactory? httpClientFactory;
     private readonly AgentExecutionLimits limits;
     private readonly ILogger<MafTurnProposalInterpreter> logger;
-    private readonly TargetAgentMcpEndpoint? mcpEndpoint;
+    private readonly AgentMcpEndpoint? mcpEndpoint;
     private readonly AgentModelMetadata modelMetadata;
     private readonly TimeProvider timeProvider;
 
@@ -143,7 +143,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         AgentExecutionLimits limits,
         AgentModelMetadata modelMetadata,
         ILoggerFactory loggerFactory,
-        TargetAgentMcpEndpoint mcpEndpoint,
+        AgentMcpEndpoint mcpEndpoint,
         IHttpClientFactory httpClientFactory,
         TimeProvider? timeProvider = null)
         : this(
@@ -381,7 +381,7 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
     {
         var tools = await mcpClient.ListToolsAsync(
             cancellationToken: cancellationToken);
-        if (!TargetAgentMcpCatalog.IsValid(
+        if (!AgentMcpCatalog.IsValid(
                 tools.Select(tool => tool.ProtocolTool).ToArray()))
         {
             throw new McpCatalogException();

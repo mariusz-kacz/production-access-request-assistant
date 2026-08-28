@@ -54,7 +54,7 @@ public sealed class MafTurnProposalToolBoundaryTests
             cancellationToken: TestContext.Current.CancellationToken);
         var protocols = tools.Select(tool => tool.ProtocolTool).ToArray();
         Assert.True(
-            TargetAgentMcpCatalog.IsValid(protocols),
+            AgentMcpCatalog.IsValid(protocols),
             string.Join(
                 Environment.NewLine,
                 protocols.Select(tool =>
@@ -70,7 +70,7 @@ public sealed class MafTurnProposalToolBoundaryTests
         drifted["inputSchema"]!["properties"]!["query"]!["maxLength"] = 201;
         protocols[searchIndex] = drifted.Deserialize<ModelContextProtocol.Protocol.Tool>()!;
 
-        Assert.False(TargetAgentMcpCatalog.IsValid(protocols));
+        Assert.False(AgentMcpCatalog.IsValid(protocols));
     }
 
     [Fact]
@@ -285,7 +285,7 @@ public sealed class MafTurnProposalToolBoundaryTests
             AgentExecutionLimits.Default,
             new AgentModelMetadata("test-provider", "test-deployment", null),
             loggerFactory ?? NullLoggerFactory.Instance,
-            new TargetAgentMcpEndpoint(() => new Uri("http://localhost/")),
+            new AgentMcpEndpoint(() => new Uri("http://localhost/")),
             host.HttpClientFactory);
 
     private static ChatResponse ToolCalls(params FunctionCallContent[] calls) =>

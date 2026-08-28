@@ -160,7 +160,7 @@ internal static class EvaluationDatasetLoader
 			bool flag3 = ((maximumToolCalls < 0 || maximumToolCalls > 4) ? true : false);
 			flag2 = flag3;
 		}
-		if (flag2 || expectation.AllowedTools.Except<string>(TargetAgentMcpCatalog.ToolNames, StringComparer.Ordinal).Any() || expectation.RequiredTools.Except<string>(expectation.AllowedTools, StringComparer.Ordinal).Any() || HasDuplicates(expectation.AllowedTools) || HasDuplicates(expectation.RequiredTools))
+		if (flag2 || expectation.AllowedTools.Except<string>(AgentMcpCatalog.ToolNames, StringComparer.Ordinal).Any() || expectation.RequiredTools.Except<string>(expectation.AllowedTools, StringComparer.Ordinal).Any() || HasDuplicates(expectation.AllowedTools) || HasDuplicates(expectation.RequiredTools))
 		{
 			throw new EvaluationDatasetException("A evaluation turn has an invalid interpretation or tool expectation.");
 		}

@@ -6,36 +6,37 @@ namespace GovernedAccess.IntegrationTests.Ai;
 
 public sealed class TurnProposalJsonTranslatorTests
 {
-    public static TheoryData<string, DialogueAct> SupportedPayloads => new()
-    {
-        {
+    private static readonly (string Payload, DialogueAct ExpectedAct)[]
+        SupportedPayloads =
+        [
+            (
             """
             {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"role":{"operation":"clear"}}}
             """,
             DialogueAct.UpdateDraft
-        },
-        {
+            ),
+            (
             """
             {"schemaVersion":1,"dialogueAct":"discussDraft","discussionTopic":"currentDraft"}
             """,
             DialogueAct.DiscussDraft
-        },
-        {
+            ),
+            (
             """{"schemaVersion":1,"dialogueAct":"requestSubmission"}""",
             DialogueAct.RequestSubmission
-        },
-        {
+            ),
+            (
             """{"schemaVersion":1,"dialogueAct":"unrelated"}""",
             DialogueAct.Unrelated
-        },
-        {
+            ),
+            (
             """{"schemaVersion":1,"dialogueAct":"unclear"}""",
             DialogueAct.Unclear
-        },
-    };
+            ),
+        ];
 
-    public static TheoryData<string> StructurallyInvalidPayloads => new()
-    {
+    private static readonly string[] StructurallyInvalidPayloads =
+    [
         """{"schemaVersion":2,"dialogueAct":"unclear"}""",
         """{"schemaVersion":1,"dialogueAct":"unknown"}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft"}""",
@@ -48,28 +49,34 @@ public sealed class TurnProposalJsonTranslatorTests
         """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"role":{"operation":"set"}}}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"searchQuery","id":"PROD-ALPHA-EU","query":"alpha"}}}}""",
         """{"schemaVersion":1,"dialogueAct":"unclear","modelProse":"approved"}""",
-    };
+    ];
 
-    [Theory]
-    [MemberData(nameof(SupportedPayloads))]
-    public void TranslatesEveryClosedDialogueAct(
-        string payload,
-        DialogueAct expectedAct)
+    [Fact]
+    public void TranslatesEveryClosedDialogueAct()
     {
-        var translated = TurnProposalJsonTranslator.TryTranslate(
-            payload,
-            out var proposal);
+        foreach (var (payload, expectedAct) in SupportedPayloads)
+        {
+            var translated = TurnProposalJsonTranslator.TryTranslate(
+                payload,
+                out var proposal);
 
-        Assert.True(translated);
-        Assert.Equal(expectedAct, Assert.IsType<TurnProposal>(proposal).DialogueAct);
+            Assert.True(translated, $"Rejected supported payload: {payload}");
+            Assert.Equal(
+                expectedAct,
+                Assert.IsType<TurnProposal>(proposal).DialogueAct);
+        }
     }
 
-    [Theory]
-    [MemberData(nameof(StructurallyInvalidPayloads))]
-    public void RejectsStructuralContractViolations(string payload)
+    [Fact]
+    public void RejectsStructuralContractViolations()
     {
-        Assert.False(TurnProposalJsonTranslator.TryTranslate(payload, out var proposal));
-        Assert.Null(proposal);
+        foreach (var payload in StructurallyInvalidPayloads)
+        {
+            Assert.False(
+                TurnProposalJsonTranslator.TryTranslate(payload, out var proposal),
+                $"Accepted invalid payload: {payload}");
+            Assert.Null(proposal);
+        }
     }
 
     [Fact]

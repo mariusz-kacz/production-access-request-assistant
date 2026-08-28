@@ -112,7 +112,7 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 			static turn => turn.Status == EvaluationScenarioStatus.Passed);
 		var noUnknownOrMutatingToolCalls = turnResults
 			.SelectMany(static turn => turn.ToolNames)
-			.All(TargetAgentMcpCatalog.ToolNames.Contains);
+			.All(AgentMcpCatalog.ToolNames.Contains);
 		var restraint = group.Id is not ("EVAL-09" or "EVAL-10" or "EVAL-11")
 			|| HasExpectedMutationRestraint(canonicalGrade.Comparison, turnResults);
 		var clarificationResolution = group.Id is not ("EVAL-05" or "EVAL-06")

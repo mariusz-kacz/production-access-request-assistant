@@ -128,45 +128,51 @@ public sealed class AccessRequestWorkflowServiceTests
             item => item.EventType == AuditEventType.InvalidTransitionRejected);
     }
 
-    [Theory]
-    [InlineData(DemoDataIds.RequesterPrincipalId)]
-    [InlineData(DemoDataIds.ClientAlphaApproverPrincipalId)]
-    public async Task NonDevOpsPrincipalCannotDecideBusinessApprovedRequest(
-        string principalId)
+    [Fact]
+    public async Task NonDevOpsPrincipalCannotDecideBusinessApprovedRequest()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var fixture = await ProvisioningTestFixture.CreateAsync(
-            cancellationToken);
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var (request, _) = await SeedBusinessApprovedRequestAsync(
-            dbContext,
-            fixture.Clock.UtcNow,
-            cancellationToken);
-        var service = CreateService(
-            scope.ServiceProvider,
-            new PersistenceInspectingProvisioner(dbContext),
-            fixture.Clock);
+        string[] principalIds =
+        [
+            DemoDataIds.RequesterPrincipalId,
+            DemoDataIds.ClientAlphaApproverPrincipalId,
+        ];
 
-        var outcome = await service.DecideAsync(
-            ApprovalStage.DevOps,
-            request.Id,
-            principalId,
-            ApprovalOutcome.Approved,
-            null,
-            "non-devops-correlation",
-            cancellationToken);
+        foreach (var principalId in principalIds)
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            await using var fixture = await ProvisioningTestFixture.CreateAsync(
+                cancellationToken);
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+            var (request, _) = await SeedBusinessApprovedRequestAsync(
+                dbContext,
+                fixture.Clock.UtcNow,
+                cancellationToken);
+            var service = CreateService(
+                scope.ServiceProvider,
+                new PersistenceInspectingProvisioner(dbContext),
+                fixture.Clock);
 
-        Assert.True(outcome.IsFailure);
-        Assert.Equal(
-            AccessRequestWorkflowService.DevOpsApproverNotAuthorizedCode,
-            outcome.Failure!.Code);
-        Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
-        Assert.DoesNotContain(
-            await dbContext.Set<ApprovalDecision>().ToListAsync(cancellationToken),
-            item => item.Stage == ApprovalStage.DevOps);
-        Assert.Empty(await dbContext.Set<ProvisioningOperation>().ToListAsync(
-            cancellationToken));
+            var outcome = await service.DecideAsync(
+                ApprovalStage.DevOps,
+                request.Id,
+                principalId,
+                ApprovalOutcome.Approved,
+                null,
+                "non-devops-correlation",
+                cancellationToken);
+
+            Assert.True(outcome.IsFailure);
+            Assert.Equal(
+                AccessRequestWorkflowService.DevOpsApproverNotAuthorizedCode,
+                outcome.Failure!.Code);
+            Assert.Equal(RequestStatus.AwaitingDevOpsApproval, request.Status);
+            Assert.DoesNotContain(
+                await dbContext.Set<ApprovalDecision>().ToListAsync(cancellationToken),
+                item => item.Stage == ApprovalStage.DevOps);
+            Assert.Empty(await dbContext.Set<ProvisioningOperation>().ToListAsync(
+                cancellationToken));
+        }
     }
 
     [Fact]

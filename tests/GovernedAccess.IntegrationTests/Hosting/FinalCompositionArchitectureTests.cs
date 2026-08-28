@@ -26,7 +26,13 @@ public sealed class FinalCompositionArchitectureTests
     ];
 
     [Fact]
-    public void DeliveredGraphAndUnifiedPersistenceFilesAreDeleted()
+    public void DeliveredImplementationIsFullyRemoved()
+    {
+        AssertDeliveredFilesAreDeleted();
+        AssertSourceContainsNoDeliveredConcepts();
+    }
+
+    private static void AssertDeliveredFilesAreDeleted()
     {
         var repositoryRoot = GetRepositoryRoot();
 
@@ -39,8 +45,7 @@ public sealed class FinalCompositionArchitectureTests
                 $"Delivered file remains: {relativePath}"));
     }
 
-    [Fact]
-    public void SourceContainsNoDeliveredIntakeOrUnifiedPersistenceConcepts()
+    private static void AssertSourceContainsNoDeliveredConcepts()
     {
         var repositoryRoot = GetRepositoryRoot();
         var currentSource = GetCurrentSourcePath();

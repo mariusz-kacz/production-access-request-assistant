@@ -14,19 +14,19 @@ internal static class PreparationApplicationRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var modelResolution = RequestPreparationModelOptions
-            .Bind(configuration)
-            .Validate();
-        var providerId = modelResolution.Profile?.ToString() ?? "Unavailable";
-        var modelDeployment = modelResolution.DeploymentName
-            ?? modelResolution.Profile?.ToString()
-            ?? "Unavailable";
-
+        services.AddRequestPreparationChat(configuration);
         services.AddSingleton(AgentExecutionLimits.Load(configuration));
-        services.AddSingleton(
-            new AgentModelMetadata(providerId, modelDeployment, null));
         services.AddSingleton(static serviceProvider =>
-            new TargetAgentMcpEndpoint(
+        {
+            var metadata = serviceProvider
+                .GetRequiredService<RequestPreparationModelMetadata>();
+            return new AgentModelMetadata(
+                metadata.ProfileId,
+                metadata.DeploymentName ?? metadata.ProfileId,
+                providerModelVersion: null);
+        });
+        services.AddSingleton(static serviceProvider =>
+            new AgentMcpEndpoint(
                 () => serviceProvider.GetRequiredService<
                         IOptions<TeamsAccessRequestOptions>>()
                     .Value
@@ -37,7 +37,7 @@ internal static class PreparationApplicationRegistration
                 serviceProvider.GetRequiredService<AgentExecutionLimits>(),
                 serviceProvider.GetRequiredService<AgentModelMetadata>(),
                 serviceProvider.GetRequiredService<ILoggerFactory>(),
-                serviceProvider.GetRequiredService<TargetAgentMcpEndpoint>(),
+                serviceProvider.GetRequiredService<AgentMcpEndpoint>(),
                 serviceProvider.GetRequiredService<IHttpClientFactory>()));
         services.AddScoped<RequestPreparationReducer>();
         services.AddScoped<PreparationTurnService>();

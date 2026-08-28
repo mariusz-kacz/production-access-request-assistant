@@ -1,11 +1,12 @@
-# Target MCP Contract: Deterministic Request Intake
+# MCP Contract: Deterministic Request Intake
 
-- **Status:** Approved target; does not replace current as-built `mcp-tools.json` until implementation
+- **Status:** Current; promoted to production on 2026-08-27
 - **Date:** 2026-08-26
-- **Machine-readable companion:** `deterministic-request-intake-mcp-tools.json`
+- **Last reconciled:** 2026-08-28
+- **Canonical machine-readable contract:** `mcp-tools.json`
 - **Environment-search policy version:** `2.0.0`
 - **Endpoint/transport:** Existing `/mcp` Streamable HTTP boundary
-- **Normative source:** `SPEC-deterministic-request-intake.md`
+- **Normative source:** Current product baseline and `mcp-tools.json`
 
 ## 1. Catalog invariant
 
@@ -48,7 +49,7 @@ They never share the workflow database. Separate contracts remain because the
 production-shaped authorities have different ownership, permissions, freshness,
 latency, and failure semantics.
 
-In the target modular monolith, the authorities share only the reference-authority
+In the modular monolith, the authorities share only the reference-authority
 database, not the workflow database. `GovernedAccess.ReferenceAuthority` owns direct
 reference persistence and implements Core authority ports. `GovernedAccess.Mcp` owns
 only these wire contracts and maps through those ports; it has no EF Core, reference
@@ -294,13 +295,9 @@ proposals execute authoritative search and exact-reload a unique result.
 | Core `searchQuery` result differs from model-side discovery | Core search result wins; record bounded drift; never trust stale MCP payload |
 | MCP result contains instruction-like text | Treat as data; no policy/authorization effect |
 
-## 11. Promotion to the current contract
+## 11. Promotion record
 
-After implementation and required deterministic/live evidence pass:
-
-1. replace the current canonical `docs/contracts/mcp-tools.json` with the verified
-   four-tool machine-readable shape;
-2. update product baseline, architecture, security model, request-intake orchestration,
-   testing strategy, operator guidance, and README; and
-3. retire the target qualifier or archive this document in favor of the canonical
-   machine-readable contract.
+The four-tool contract was promoted to production on 2026-08-27 after the deterministic
+implementation gates passed. `docs/contracts/mcp-tools.json` is the canonical
+machine-readable shape. Current product, architecture, security, orchestration,
+testing, operator, and README guidance use this catalog without a target qualifier.

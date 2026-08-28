@@ -8,11 +8,11 @@ public sealed class AgentExecutionLimitsTests
     private static readonly IReadOnlyDictionary<string, string?> ValidConfiguration =
         new Dictionary<string, string?>
         {
-            ["TargetRequestPreparationAgent:Limits:MaximumMessageCharacters"] = "4000",
-            ["TargetRequestPreparationAgent:Limits:MaximumCallsPerTool"] = "1",
-            ["TargetRequestPreparationAgent:Limits:MaximumToolCalls"] = "4",
-            ["TargetRequestPreparationAgent:Limits:MaximumProviderIterations"] = "6",
-            ["TargetRequestPreparationAgent:Limits:CumulativeTimeout"] = "00:00:30",
+            ["RequestPreparationAgent:Limits:MaximumMessageCharacters"] = "4000",
+            ["RequestPreparationAgent:Limits:MaximumCallsPerTool"] = "1",
+            ["RequestPreparationAgent:Limits:MaximumToolCalls"] = "4",
+            ["RequestPreparationAgent:Limits:MaximumProviderIterations"] = "6",
+            ["RequestPreparationAgent:Limits:CumulativeTimeout"] = "00:00:30",
         };
 
     [Fact]
@@ -29,45 +29,59 @@ public sealed class AgentExecutionLimitsTests
         Assert.Equal(TimeSpan.FromSeconds(30), limits.CumulativeTimeout);
     }
 
-    [Theory]
-    [InlineData("MaximumMessageCharacters")]
-    [InlineData("MaximumCallsPerTool")]
-    [InlineData("MaximumToolCalls")]
-    [InlineData("MaximumProviderIterations")]
-    [InlineData("CumulativeTimeout")]
-    public void MissingLimitsFailClosed(string missingName)
+    [Fact]
+    public void MissingLimitsFailClosed()
     {
-        var values = ValidConfiguration
-            .Where(pair => !pair.Key.EndsWith(missingName, StringComparison.Ordinal))
-            .ToDictionary();
+        string[] requiredNames =
+        [
+            "MaximumMessageCharacters",
+            "MaximumCallsPerTool",
+            "MaximumToolCalls",
+            "MaximumProviderIterations",
+            "CumulativeTimeout",
+        ];
 
-        Assert.Throws<InvalidOperationException>(
-            () => AgentExecutionLimits.Load(Configuration(values)));
+        foreach (var missingName in requiredNames)
+        {
+            var values = ValidConfiguration
+                .Where(pair => !pair.Key.EndsWith(
+                    missingName,
+                    StringComparison.Ordinal))
+                .ToDictionary();
+
+            Assert.Throws<InvalidOperationException>(
+                () => AgentExecutionLimits.Load(Configuration(values)));
+        }
     }
 
-    [Theory]
-    [InlineData("MaximumMessageCharacters", "4001")]
-    [InlineData("MaximumCallsPerTool", "2")]
-    [InlineData("MaximumToolCalls", "5")]
-    [InlineData("MaximumProviderIterations", "7")]
-    [InlineData("CumulativeTimeout", "00:00:31")]
-    [InlineData("MaximumMessageCharacters", "0")]
-    public void NonpositiveOrAboveHardMaximumLimitsFailClosed(
-        string name,
-        string value)
+    [Fact]
+    public void NonpositiveOrAboveHardMaximumLimitsFailClosed()
     {
-        var values = ValidConfiguration.ToDictionary();
-        values[$"TargetRequestPreparationAgent:Limits:{name}"] = value;
+        (string Name, string Value)[] invalidLimits =
+        [
+            ("MaximumMessageCharacters", "4001"),
+            ("MaximumCallsPerTool", "2"),
+            ("MaximumToolCalls", "5"),
+            ("MaximumProviderIterations", "7"),
+            ("CumulativeTimeout", "00:00:31"),
+            ("MaximumMessageCharacters", "0"),
+        ];
 
-        Assert.Throws<InvalidOperationException>(
-            () => AgentExecutionLimits.Load(Configuration(values)));
+        foreach (var (name, value) in invalidLimits)
+        {
+            var values = ValidConfiguration.ToDictionary();
+            values[$"RequestPreparationAgent:Limits:{name}"] = value;
+
+            Assert.Throws<InvalidOperationException>(
+                () => AgentExecutionLimits.Load(Configuration(values)));
+        }
     }
 
     [Fact]
     public void OneProviderIterationIsValidWithoutARepairPolicy()
     {
         var values = ValidConfiguration.ToDictionary();
-        values["TargetRequestPreparationAgent:Limits:MaximumProviderIterations"] = "1";
+        values["RequestPreparationAgent:Limits:MaximumProviderIterations"] = "1";
 
         var limits = AgentExecutionLimits.Load(Configuration(values));
 

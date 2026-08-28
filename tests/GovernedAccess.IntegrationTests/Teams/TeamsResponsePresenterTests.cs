@@ -93,26 +93,33 @@ public sealed class TeamsResponsePresenterTests
         Assert.DoesNotContain("Role result", presentation.Message, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData(typeof(SubmissionGuidance), "complete the missing details")]
-    [InlineData(typeof(UnrelatedGuidance), "temporary production access")]
-    [InlineData(typeof(UnclearGuidance), "rephrase")]
-    [InlineData(typeof(ResetGuidance), "Started a new request")]
-    [InlineData(typeof(TerminalPreparationGuidance), "/new")]
-    [InlineData(typeof(ConfirmationSourceUnavailable), "try confirmation again")]
-    public async Task GuidanceOutcomesRenderFixedApplicationProse(
-        Type outcomeType,
-        string expected)
+    [Fact]
+    public async Task GuidanceOutcomesRenderFixedApplicationProse()
     {
-        var outcome = (ApplicationOutcome)Activator.CreateInstance(outcomeType)!;
+        (Type OutcomeType, string Expected)[] scenarios =
+        [
+            (typeof(SubmissionGuidance), "complete the missing details"),
+            (typeof(UnrelatedGuidance), "temporary production access"),
+            (typeof(UnclearGuidance), "rephrase"),
+            (typeof(ResetGuidance), "Started a new request"),
+            (typeof(TerminalPreparationGuidance), "/new"),
+            (typeof(ConfirmationSourceUnavailable), "try confirmation again"),
+        ];
 
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            Result(outcome),
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
+        foreach (var (outcomeType, expected) in scenarios)
+        {
+            var outcome = (ApplicationOutcome)Activator.CreateInstance(outcomeType)!;
+            var presentation = await CreatePresenter().PresentTurnAsync(
+                Result(outcome),
+                TeamsLocale.Default,
+                invalidatesTrackedCard: false,
+                TestContext.Current.CancellationToken);
 
-        Assert.Contains(expected, presentation.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                expected,
+                presentation.Message,
+                StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
