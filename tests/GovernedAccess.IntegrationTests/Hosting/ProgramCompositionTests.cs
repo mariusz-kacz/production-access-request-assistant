@@ -196,7 +196,7 @@ public sealed class ProgramCompositionTests(
             new RecordingChatClient(CompleteProposal));
         await factory.ResetDatabaseAsync(cancellationToken);
 
-        TeamsAdapterResult prepared;
+        TeamsResponse prepared;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             prepared = await scope.ServiceProvider
@@ -208,7 +208,7 @@ public sealed class ProgramCompositionTests(
                     cancellationToken);
         }
 
-        Assert.Equal(TeamsAdapterResultKind.Card, prepared.Kind);
+        Assert.Equal(TeamsResponseKind.Card, prepared.Kind);
         var preparationId = Assert.IsType<Guid>(prepared.PreparationId);
 
         Guid requestId;
@@ -226,7 +226,7 @@ public sealed class ProgramCompositionTests(
                     "production-confirmation",
                     cancellationToken);
 
-            Assert.Equal(TeamsAdapterResultKind.Card, submitted.Kind);
+            Assert.Equal(TeamsResponseKind.Card, submitted.Kind);
             requestId = await scope.ServiceProvider
                 .GetRequiredService<WorkflowDbContext>()
                 .Set<AccessRequest>()

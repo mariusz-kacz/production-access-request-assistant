@@ -47,9 +47,8 @@ internal static class RequestPreparationRegistration
                 serviceProvider.GetRequiredService<ITurnProposalInterpreter>()));
         services.AddScoped<IPreparationConfirmationService,
             PreparationConfirmationService>();
-        services.AddScoped<IPreparedRequestCardFactory,
-            PreparedRequestCardFactory>();
-        services.AddScoped<TeamsAccessRequestAdapter>();
+        services.AddScoped<IPreparationReviewService,
+            PreparationReviewService>();
 
         return services;
     }

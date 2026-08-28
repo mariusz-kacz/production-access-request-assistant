@@ -81,7 +81,7 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
             data,
             CreateCorrelationId(),
             cancellationToken);
-        if (result.Kind == TeamsAdapterResultKind.InvalidAction)
+        if (result.Kind == TeamsResponseKind.InvalidAction)
         {
             return AdaptiveCardInvokeResponseFactory.BadRequest(result.Message!);
         }
@@ -99,10 +99,10 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
 
         return result.Kind switch
         {
-            TeamsAdapterResultKind.Card =>
+            TeamsResponseKind.Card =>
                 AdaptiveCardInvokeResponseFactory.AdaptiveCard(
                     GetCardJson(result.Card!)),
-            TeamsAdapterResultKind.Text =>
+            TeamsResponseKind.Text =>
                 AdaptiveCardInvokeResponseFactory.Message(result.Message!),
             _ => throw new InvalidOperationException(
                 "The Teams confirmation result is unsupported."),
@@ -112,10 +112,10 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
     private async Task PresentAsync(
         ITurnContext turnContext,
         TeamsAuthenticatedContext context,
-        TeamsAdapterResult result,
+        TeamsResponse result,
         CancellationToken cancellationToken)
     {
-        if (result.Kind == TeamsAdapterResultKind.Text)
+        if (result.Kind == TeamsResponseKind.Text)
         {
             if (result.InvalidatesTrackedCard)
             {
@@ -133,7 +133,7 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        if (result.Kind != TeamsAdapterResultKind.Card
+        if (result.Kind != TeamsResponseKind.Card
             || result.Card is null
             || result.PreparationId is not Guid preparationId)
         {

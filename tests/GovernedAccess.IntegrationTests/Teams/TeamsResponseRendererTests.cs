@@ -8,10 +8,10 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TeamsResponseRendererTests
+public sealed class TeamsResponsePresenterTests
 {
     [Fact]
-    public void ClarificationUsesOnlyAuthoritativeChoicesAndBoundsTheList()
+    public async Task ClarificationUsesOnlyAuthoritativeChoicesAndBoundsTheList()
     {
         ClarificationChoice[] choices =
         [
@@ -39,13 +39,14 @@ public sealed class TeamsResponseRendererTests
                 new ApplicationGroupResult(
                     ApplicationGroupResultKind.Applied)));
 
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             result,
-            "pl-PL");
+            "pl-PL",
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(TeamsResponseKind.Text, presentation.Kind);
         Assert.Equal(InputHints.ExpectingInput, presentation.InputHint);
-        Assert.Equal(TeamsLocale.Default, presentation.Locale);
         Assert.Contains("Choose one environment", presentation.Message, StringComparison.Ordinal);
         Assert.Contains(
             "1. Client & One (CLIENT-1) — <b>Primary</b> (PROD-1), westeurope, primary",
@@ -57,7 +58,7 @@ public sealed class TeamsResponseRendererTests
     }
 
     [Fact]
-    public void DraftProgressUsesOnlyCompactGroupResultsAndCanonicalMissingFields()
+    public async Task DraftProgressUsesOnlyCompactGroupResultsAndCanonicalMissingFields()
     {
         var candidate = new PreparationCandidate(
             "CLIENT-1",
@@ -73,9 +74,11 @@ public sealed class TeamsResponseRendererTests
                     ApplicationGroupRejectionReason.Invalid)),
             candidate);
 
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             result,
-            TeamsLocale.Default);
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
         Assert.Contains("Scope: updated.", presentation.Message, StringComparison.Ordinal);
         Assert.Contains(
@@ -97,21 +100,23 @@ public sealed class TeamsResponseRendererTests
     [InlineData(typeof(ResetGuidance), "Started a new request")]
     [InlineData(typeof(TerminalPreparationGuidance), "/new")]
     [InlineData(typeof(ConfirmationSourceUnavailable), "try confirmation again")]
-    public void GuidanceOutcomesRenderFixedApplicationProse(
+    public async Task GuidanceOutcomesRenderFixedApplicationProse(
         Type outcomeType,
         string expected)
     {
         var outcome = (ApplicationOutcome)Activator.CreateInstance(outcomeType)!;
 
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             Result(outcome),
-            TeamsLocale.Default);
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
         Assert.Contains(expected, presentation.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ReadyOutcomeCarriesOnlyTheAuthoritativeSnapshotToCardAssembly()
+    public async Task ReadyOutcomeUsesTheAuthoritativeSnapshotForCardAssembly()
     {
         var preparation = CreatePreparation(
             new PreparationCandidate(
@@ -122,20 +127,23 @@ public sealed class TeamsResponseRendererTests
                 incidentId: null));
         var snapshot = new PreparationSnapshot(preparation);
 
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             new PreparationTurnResult(
                 snapshot,
                 new PreparationResponse(
                     new ReadyForConfirmation(preparation.PreparationId))),
-            TeamsLocale.Default);
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsResponseKind.ReadyCard, presentation.Kind);
-        Assert.Same(snapshot, presentation.Preparation);
+        Assert.Equal(TeamsResponseKind.Card, presentation.Kind);
+        Assert.NotNull(presentation.Card);
+        Assert.Equal(snapshot.PreparationId, presentation.PreparationId);
         Assert.Null(presentation.Message);
     }
 
     [Fact]
-    public void CurrentDraftDiscussionRendersCanonicalFactsWithoutModelProse()
+    public async Task CurrentDraftDiscussionRendersCanonicalFactsWithoutModelProse()
     {
         var candidate = new PreparationCandidate(
             "CLIENT-1",
@@ -144,9 +152,11 @@ public sealed class TeamsResponseRendererTests
             "Investigate </TextBlock> exactly",
             "INC-1");
 
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             Result(new DraftDiscussion(DiscussionTopic.CurrentDraft), candidate),
-            TeamsLocale.Default);
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
         Assert.Contains("Client: CLIENT-1", presentation.Message, StringComparison.Ordinal);
         Assert.Contains("Environment: PROD-1", presentation.Message, StringComparison.Ordinal);
@@ -159,16 +169,18 @@ public sealed class TeamsResponseRendererTests
     }
 
     [Fact]
-    public void ConcurrencyFailureRendersRetryWithoutClaimingMutation()
+    public async Task ConcurrencyFailureRendersRetryWithoutClaimingMutation()
     {
-        var presentation = TeamsResponseRenderer.Render(
+        var presentation = await CreatePresenter().PresentTurnAsync(
             Result(
                 new Failed(
                     new ApplicationFailure(
                         ApplicationFailureKind.ConcurrencyConflict,
                         "preparation-stale",
                         "internal details"))),
-            TeamsLocale.Default);
+            TeamsLocale.Default,
+            invalidatesTrackedCard: false,
+            TestContext.Current.CancellationToken);
 
         Assert.Contains("changed while this message was processed", presentation.Message, StringComparison.Ordinal);
         Assert.Contains("try again", presentation.Message, StringComparison.OrdinalIgnoreCase);
@@ -186,6 +198,9 @@ public sealed class TeamsResponseRendererTests
             preparation,
             new PreparationResponse(outcome));
     }
+
+    private static TeamsResponsePresenter CreatePresenter() =>
+        new(new StubReviewService());
 
     private static RequestPreparation CreatePreparation(
         PreparationCandidate candidate) =>
@@ -223,4 +238,30 @@ public sealed class TeamsResponseRendererTests
                     "test-correlation"),
             new DateTimeOffset(2026, 8, 26, 12, 0, 0, TimeSpan.Zero),
             "test-correlation");
+
+    private sealed class StubReviewService : IPreparationReviewService
+    {
+        public Task<ApplicationResult<PreparationReview>> LoadAsync(
+            PreparationSnapshot preparation,
+            CancellationToken cancellationToken)
+        {
+            var candidate = preparation.Candidate;
+            return Task.FromResult(
+                ApplicationResult.Succeeded(
+                    new PreparationReview(
+                        preparation.PreparationId,
+                        "Demo Requester",
+                        preparation.Binding.RequesterId,
+                        "Client One",
+                        candidate.ClientId!,
+                        "Primary Production",
+                        candidate.EnvironmentId!,
+                        "Read only",
+                        candidate.RoleId!,
+                        IncidentDisplayName: null,
+                        IncidentId: null,
+                        candidate.Justification!,
+                        preparation.ReadyDeadline!.Value)));
+        }
+    }
 }

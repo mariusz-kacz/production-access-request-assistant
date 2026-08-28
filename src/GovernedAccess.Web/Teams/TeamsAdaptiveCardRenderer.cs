@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using GovernedAccess.Core.Preparations;
 using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
@@ -15,45 +16,46 @@ internal static class TeamsAdaptiveCardRenderer
     internal const int ContractSchemaVersion = 1;
 
     internal static Attachment CreateReadyCard(
-        TeamsReadyCardPresentation presentation)
+        PreparationReview review,
+        string? locale)
     {
-        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(review);
 
         var facts = new JsonArray
         {
             CreateFact(
                 "Requester",
                 FormatDisplayValue(
-                    presentation.RequesterDisplayName,
-                    presentation.RequesterId)),
+                    review.RequesterDisplayName,
+                    review.RequesterId)),
             CreateFact(
                 "Client",
                 FormatDisplayValue(
-                    presentation.ClientDisplayName,
-                    presentation.ClientId)),
+                    review.ClientDisplayName,
+                    review.ClientId)),
             CreateFact(
                 "Environment",
                 FormatDisplayValue(
-                    presentation.EnvironmentDisplayName,
-                    presentation.EnvironmentId)),
+                    review.EnvironmentDisplayName,
+                    review.EnvironmentId)),
             CreateFact(
                 "Requested role",
                 FormatDisplayValue(
-                    presentation.RoleDisplayName,
-                    presentation.RoleId)),
+                    review.RoleDisplayName,
+                    review.RoleId)),
             CreateFact(
                 "Incident",
-                presentation.IncidentId is null
+                review.IncidentId is null
                     ? "No incident"
                     : FormatDisplayValue(
-                        presentation.IncidentDisplayName!,
-                        presentation.IncidentId)),
+                        review.IncidentDisplayName!,
+                        review.IncidentId)),
             CreateFact("Requested access duration", "8 hours"),
             CreateFact(
                 "Confirm before",
                 FormatDeadline(
-                    presentation.ReadyDeadline,
-                    presentation.Locale)),
+                    review.ReadyDeadline,
+                    locale)),
         };
 
         var card = CreateCard(
@@ -68,7 +70,7 @@ internal static class TeamsAdaptiveCardRenderer
                     ["facts"] = facts,
                 },
                 CreateTitle("Justification", size: null),
-                CreateText(presentation.Justification),
+                CreateText(review.Justification),
             });
         card["actions"] = new JsonArray
         {
@@ -81,7 +83,7 @@ internal static class TeamsAdaptiveCardRenderer
                 ["data"] = new JsonObject
                 {
                     ["schemaVersion"] = ContractSchemaVersion,
-                    ["preparationId"] = presentation.PreparationId.ToString("D"),
+                    ["preparationId"] = review.PreparationId.ToString("D"),
                 },
             },
         };
@@ -102,7 +104,7 @@ internal static class TeamsAdaptiveCardRenderer
 
     private static string FormatDeadline(
         DateTimeOffset deadline,
-        string locale)
+        string? locale)
     {
         var culture = CultureInfo.GetCultureInfo(TeamsLocale.Resolve(locale));
         var localDate = deadline.ToString(

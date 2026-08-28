@@ -235,12 +235,9 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
                 services.GetRequiredService<ITurnProposalInterpreter>()));
         builder.Services.AddScoped<IPreparationConfirmationService,
             PreparationConfirmationService>();
-        builder.Services.AddScoped<IPreparedRequestCardFactory>(services =>
-            new PreparedRequestCardFactory(
-                services.GetRequiredService<IAuthenticatedPrincipalReader>(),
-                services.GetRequiredService<IProductionEnvironmentAuthority>(),
-                services.GetRequiredService<IEnvironmentRoleAuthority>(),
-                services.GetRequiredService<IIncidentAuthority>()));
+        builder.Services.AddScoped<IPreparationReviewService,
+            PreparationReviewService>();
+        builder.Services.AddScoped<TeamsResponsePresenter>();
         builder.Services.AddScoped<TeamsAccessRequestAdapter>();
 
         builder.Services.AddScoped<AccessRequestValidator>();

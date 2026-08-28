@@ -1,39 +1,22 @@
 using System.Diagnostics;
 using System.Text.Json;
 using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
-using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Ai;
 using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal enum TeamsAdapterResultKind
-{
-    Text,
-    Card,
-    InvalidAction,
-}
-
-internal sealed record TeamsAdapterResult(
-    TeamsAdapterResultKind Kind,
-    string? Message,
-    Attachment? Card,
-    string InputHint,
-    bool InvalidatesTrackedCard,
-    Guid? PreparationId);
-
 internal sealed partial class TeamsAccessRequestAdapter(
     IRequestPreparationOrchestrator orchestrator,
-    IPreparedRequestCardFactory cardFactory,
+    TeamsResponsePresenter presenter,
     IPreparationConfirmationService confirmationService,
     ILogger<TeamsAccessRequestAdapter> logger)
 {
     private const string NewRequestCommand = "/new";
 
-    internal async Task<TeamsAdapterResult> HandleMessageAsync(
+    internal async Task<TeamsResponse> HandleMessageAsync(
         TeamsAuthenticatedContext context,
         string? message,
         string correlationId,
@@ -44,7 +27,7 @@ internal sealed partial class TeamsAccessRequestAdapter(
         var latestMessage = message?.Trim();
         if (string.IsNullOrEmpty(latestMessage))
         {
-            return Text(
+            return TeamsResponse.CreateText(
                 "Describe the temporary production access you need, including the production environment, requested role, and operational justification.",
                 InputHints.ExpectingInput);
         }
@@ -65,10 +48,10 @@ internal sealed partial class TeamsAccessRequestAdapter(
                 latestMessage,
                 correlationId,
                 cancellationToken);
-        var response = await CreateResultAsync(
+        var response = await presenter.PresentTurnAsync(
             result,
             context.Locale,
-            isReset,
+            invalidatesTrackedCard: isReset,
             cancellationToken);
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -91,7 +74,7 @@ internal sealed partial class TeamsAccessRequestAdapter(
         return response;
     }
 
-    internal async Task<TeamsAdapterResult> HandleConfirmationAsync(
+    internal async Task<TeamsResponse> HandleConfirmationAsync(
         TeamsAuthenticatedContext context,
         object? data,
         string correlationId,
@@ -101,13 +84,8 @@ internal sealed partial class TeamsAccessRequestAdapter(
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
         if (!TryReadConfirmationData(data, out var preparationId))
         {
-            return new TeamsAdapterResult(
-                TeamsAdapterResultKind.InvalidAction,
-                "The confirmation action is invalid. No request was submitted.",
-                Card: null,
-                InputHints.IgnoringInput,
-                InvalidatesTrackedCard: false,
-                PreparationId: null);
+            return TeamsResponse.CreateInvalidAction(
+                "The confirmation action is invalid. No request was submitted.");
         }
 
         var startedAt = Stopwatch.GetTimestamp();
@@ -117,7 +95,7 @@ internal sealed partial class TeamsAccessRequestAdapter(
                 preparationId,
                 correlationId),
             cancellationToken);
-        var response = await RenderConfirmationAsync(
+        var response = await presenter.PresentConfirmationAsync(
             result,
             context.Locale,
             preparationId,
@@ -148,105 +126,6 @@ internal sealed partial class TeamsAccessRequestAdapter(
         return response;
     }
 
-    private async Task<TeamsAdapterResult> CreateResultAsync(
-        PreparationTurnResult result,
-        string locale,
-        bool invalidatesTrackedCard,
-        CancellationToken cancellationToken)
-    {
-        var presentation = TeamsResponseRenderer.Render(result, locale);
-        invalidatesTrackedCard |=
-            result.Preparation?.PredecessorPreparationId is not null;
-        if (presentation.Kind == TeamsResponseKind.Text)
-        {
-            return Text(
-                presentation.Message!,
-                presentation.InputHint,
-                invalidatesTrackedCard,
-                result.Preparation?.PreparationId);
-        }
-
-        var cardResult = await cardFactory.CreateAsync(
-            presentation.Preparation!,
-            presentation.Locale,
-            cancellationToken);
-        if (cardResult.IsFailure)
-        {
-            var failurePresentation = TeamsResponseRenderer.Render(
-                new PreparationTurnResult(
-                    presentation.Preparation,
-                    new PreparationResponse(
-                        new Failed(cardResult.Failure!))),
-                locale);
-            return Text(
-                failurePresentation.Message!,
-                failurePresentation.InputHint,
-                invalidatesTrackedCard,
-                presentation.Preparation!.PreparationId);
-        }
-
-        return new TeamsAdapterResult(
-            TeamsAdapterResultKind.Card,
-            presentation.Message,
-            cardResult.Value,
-            presentation.InputHint,
-            invalidatesTrackedCard,
-            presentation.Preparation!.PreparationId);
-    }
-
-    private async Task<TeamsAdapterResult> RenderConfirmationAsync(
-        PreparationConfirmationResult result,
-        string locale,
-        Guid preparationId,
-        CancellationToken cancellationToken) =>
-        result switch
-        {
-            PreparationConfirmationSubmitted submitted =>
-                Submitted(submitted, preparationId),
-            PreparationConfirmationRevalidationFailed revalidationFailed =>
-                await CreateResultAsync(
-                    revalidationFailed.Revalidation,
-                    locale,
-                    invalidatesTrackedCard: true,
-                    cancellationToken),
-            PreparationConfirmationSourceUnavailable =>
-                Text(
-                    TeamsResponseRenderer.Render(
-                        new PreparationTurnResult(
-                            preparation: null,
-                            new PreparationResponse(
-                                new ConfirmationSourceUnavailable())),
-                        locale).Message!,
-                    InputHints.AcceptingInput),
-            PreparationConfirmationFailed failed => Text(
-                TeamsResponseRenderer.Render(
-                    new PreparationTurnResult(
-                        preparation: null,
-                        new PreparationResponse(new Failed(failed.Failure))),
-                    locale).Message!,
-                InputHints.AcceptingInput),
-            _ => throw new InvalidOperationException(
-                "The preparation-confirmation result is unsupported."),
-        };
-
-    private static TeamsAdapterResult Submitted(
-        PreparationConfirmationSubmitted result,
-        Guid preparationId)
-    {
-        var title = result.WasAlreadySubmitted
-            ? "Request already submitted"
-            : "Request submitted";
-        return new TeamsAdapterResult(
-            TeamsAdapterResultKind.Card,
-            Message: null,
-            TeamsAdaptiveCardRenderer.CreateStatusCard(
-                title,
-                $"Request {result.Request.Id:D} is {StatusText(result.Request.Status)}."),
-            InputHints.IgnoringInput,
-            InvalidatesTrackedCard: true,
-            preparationId);
-    }
-
     private static string ConfirmationOutcome(
         PreparationConfirmationResult result) =>
         result switch
@@ -260,34 +139,6 @@ internal sealed partial class TeamsAccessRequestAdapter(
             _ => throw new InvalidOperationException(
                 "The preparation-confirmation result is unsupported."),
         };
-
-    private static string StatusText(RequestStatus status) =>
-        status switch
-        {
-            RequestStatus.AwaitingBusinessApproval =>
-                "awaiting business approval; access is not yet approved or granted",
-            RequestStatus.AwaitingDevOpsApproval =>
-                "awaiting DevOps approval; access is not yet granted",
-            RequestStatus.Rejected => "rejected; access was not granted",
-            RequestStatus.ProvisioningFailed =>
-                "in provisioning-failed state; access was not granted",
-            RequestStatus.Active => "active",
-            _ => throw new InvalidOperationException(
-                "The request status is unsupported."),
-        };
-
-    private static TeamsAdapterResult Text(
-        string message,
-        string inputHint,
-        bool invalidatesTrackedCard = false,
-        Guid? preparationId = null) =>
-        new(
-            TeamsAdapterResultKind.Text,
-            message,
-            Card: null,
-            inputHint,
-            invalidatesTrackedCard,
-            preparationId);
 
     private static PreparationBinding CreateBinding(
         TeamsConversationReference conversation) =>

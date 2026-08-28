@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GovernedAccess.Core.Preparations;
 using GovernedAccess.Web.Teams;
 
 namespace GovernedAccess.IntegrationTests.Teams;
@@ -9,7 +10,8 @@ public sealed class TeamsAdaptiveCardRendererTests
     public void ReadyCardUsesTheFinalDeterministicIntakeContract()
     {
         var preparationId = Guid.NewGuid();
-        var presentation = new TeamsReadyCardPresentation(
+        var review = new PreparationReview(
+            preparationId,
             "Demo Requester",
             "requester",
             "Client <Alpha>",
@@ -18,14 +20,12 @@ public sealed class TeamsAdaptiveCardRendererTests
             "PROD-ALPHA-EU",
             "Production read-only",
             "ProductionReadOnly",
-            incidentDisplayName: null,
-            incidentId: null,
+            IncidentDisplayName: null,
+            IncidentId: null,
             "Investigate </TextBlock><script>alert('x')</script>",
-            new DateTimeOffset(2026, 8, 26, 12, 30, 0, TimeSpan.Zero),
-            "en-US",
-            preparationId);
+            new DateTimeOffset(2026, 8, 26, 12, 30, 0, TimeSpan.Zero));
 
-        var attachment = TeamsAdaptiveCardRenderer.CreateReadyCard(presentation);
+        var attachment = TeamsAdaptiveCardRenderer.CreateReadyCard(review, "en-US");
 
         Assert.Equal(
             TeamsAdaptiveCardRenderer.AdaptiveCardContentType,

@@ -1,5 +1,6 @@
 using System.Text;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Contracts;
@@ -10,102 +11,164 @@ namespace GovernedAccess.Web.Teams;
 internal enum TeamsResponseKind
 {
     Text,
-    ReadyCard,
+    Card,
+    InvalidAction,
 }
 
-internal sealed record TeamsResponsePresentation(
+internal sealed record TeamsResponse(
     TeamsResponseKind Kind,
     string? Message,
+    Attachment? Card,
     string InputHint,
-    string Locale,
-    PreparationSnapshot? Preparation);
-
-internal static class TeamsResponseRenderer
+    bool InvalidatesTrackedCard,
+    Guid? PreparationId)
 {
-    internal static TeamsResponsePresentation Render(
+    internal static TeamsResponse CreateText(
+        string message,
+        string inputHint,
+        bool invalidatesTrackedCard = false,
+        Guid? preparationId = null) =>
+        new(
+            TeamsResponseKind.Text,
+            message,
+            Card: null,
+            inputHint,
+            invalidatesTrackedCard,
+            preparationId);
+
+    internal static TeamsResponse CreateInvalidAction(string message) =>
+        new(
+            TeamsResponseKind.InvalidAction,
+            message,
+            Card: null,
+            InputHints.IgnoringInput,
+            InvalidatesTrackedCard: false,
+            PreparationId: null);
+}
+
+internal sealed class TeamsResponsePresenter(
+    IPreparationReviewService reviewService)
+{
+    internal async Task<TeamsResponse> PresentTurnAsync(
         PreparationTurnResult result,
-        string? locale)
+        string? locale,
+        bool invalidatesTrackedCard,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(result);
-        var normalizedLocale = TeamsLocale.Resolve(locale);
+        invalidatesTrackedCard |=
+            result.Preparation?.PredecessorPreparationId is not null;
+        var preparationId = result.Preparation?.PreparationId;
+
         return result.Response.Outcome switch
         {
             DraftUpdated updated => Text(
-                RenderDraftResult("Draft updated.", updated.ScopeResult, updated.JustificationResult, result.Preparation),
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                RenderDraftResult(
+                    "Draft updated.",
+                    updated.ScopeResult,
+                    updated.JustificationResult,
+                    result.Preparation),
+                InputHints.AcceptingInput),
             ClarificationRequired clarification => Text(
                 RenderClarification(clarification),
-                InputHints.ExpectingInput,
-                normalizedLocale),
+                InputHints.ExpectingInput),
             DraftUnchanged unchanged => Text(
-                RenderDraftResult("The draft was not changed.", unchanged.ScopeResult, unchanged.JustificationResult, result.Preparation),
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                RenderDraftResult(
+                    "The draft was not changed.",
+                    unchanged.ScopeResult,
+                    unchanged.JustificationResult,
+                    result.Preparation),
+                InputHints.AcceptingInput),
             DraftDiscussion discussion => Text(
                 RenderDiscussion(discussion.Topic, result.Preparation),
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                InputHints.AcceptingInput),
             SubmissionGuidance when IsReady(result.Preparation) =>
-                Ready(result.Preparation!, normalizedLocale),
+                await PresentReadyAsync(
+                    result.Preparation!,
+                    locale,
+                    message: null,
+                    invalidatesTrackedCard,
+                    cancellationToken),
             SubmissionGuidance => Text(
                 $"Complete the missing details before submitting. {RenderMissing(result.Preparation)}",
-                InputHints.ExpectingInput,
-                normalizedLocale),
+                InputHints.ExpectingInput),
             UnrelatedGuidance => Text(
                 "I can help prepare a temporary production access request. Describe the environment, requested role, and operational justification.",
-                InputHints.ExpectingInput,
-                normalizedLocale),
+                InputHints.ExpectingInput),
             UnclearGuidance => Text(
                 "I could not safely determine the requested change. Please rephrase it with the production environment, role, or justification you want to set or discuss.",
-                InputHints.ExpectingInput,
-                normalizedLocale),
+                InputHints.ExpectingInput),
             ResetGuidance => Text(
                 "Started a new request. Send a production environment, requested role, and operational justification when you are ready.",
-                InputHints.ExpectingInput,
-                normalizedLocale),
-            ReadyForConfirmation ready => RenderReady(
-                ready,
-                result.Preparation,
-                normalizedLocale),
+                InputHints.ExpectingInput),
+            ReadyForConfirmation ready => await PresentReadyAsync(
+                GetReadyPreparation(ready, result.Preparation),
+                locale,
+                message: null,
+                invalidatesTrackedCard,
+                cancellationToken),
             ConfirmationRevalidationFailed revalidation =>
-                RenderRevalidation(revalidation, result.Preparation, normalizedLocale),
+                await PresentRevalidationAsync(
+                    revalidation,
+                    result.Preparation,
+                    locale,
+                    invalidatesTrackedCard,
+                    cancellationToken),
             ConfirmationSourceUnavailable => Text(
                 "Authoritative production context is temporarily unavailable. No request was submitted; try confirmation again before the current deadline.",
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                InputHints.AcceptingInput),
             TerminalPreparationGuidance => Text(
                 "This preparation can no longer be changed or submitted. Send /new to start a new request.",
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                InputHints.AcceptingInput),
             Failed failed => Text(
                 RenderFailure(failed.Failure),
-                InputHints.AcceptingInput,
-                normalizedLocale),
+                InputHints.AcceptingInput),
             _ => throw new InvalidOperationException(
                 "The preparation outcome is unsupported."),
         };
+
+        TeamsResponse Text(string message, string inputHint) =>
+            TeamsResponse.CreateText(
+                message,
+                inputHint,
+                invalidatesTrackedCard,
+                preparationId);
     }
 
-    private static TeamsResponsePresentation RenderReady(
-        ReadyForConfirmation outcome,
-        PreparationSnapshot? preparation,
-        string locale)
+    internal async Task<TeamsResponse> PresentConfirmationAsync(
+        PreparationConfirmationResult result,
+        string? locale,
+        Guid preparationId,
+        CancellationToken cancellationToken)
     {
-        if (!IsReady(preparation)
-            || preparation!.PreparationId != outcome.PreparationId)
+        ArgumentNullException.ThrowIfNull(result);
+        return result switch
         {
-            throw new InvalidOperationException(
-                "A ready outcome must reference its exact ready preparation snapshot.");
-        }
-
-        return Ready(preparation, locale);
+            PreparationConfirmationSubmitted submitted =>
+                PresentSubmitted(submitted, preparationId),
+            PreparationConfirmationRevalidationFailed revalidationFailed =>
+                await PresentTurnAsync(
+                    revalidationFailed.Revalidation,
+                    locale,
+                    invalidatesTrackedCard: true,
+                    cancellationToken),
+            PreparationConfirmationSourceUnavailable => TeamsResponse.CreateText(
+                "Authoritative production context is temporarily unavailable. No request was submitted; try confirmation again before the current deadline.",
+                InputHints.AcceptingInput),
+            PreparationConfirmationFailed failed => TeamsResponse.CreateText(
+                RenderFailure(failed.Failure),
+                InputHints.AcceptingInput),
+            _ => throw new InvalidOperationException(
+                "The preparation-confirmation result is unsupported."),
+        };
     }
 
-    private static TeamsResponsePresentation RenderRevalidation(
+    private async Task<TeamsResponse> PresentRevalidationAsync(
         ConfirmationRevalidationFailed outcome,
         PreparationSnapshot? preparation,
-        string locale)
+        string? locale,
+        bool invalidatesTrackedCard,
+        CancellationToken cancellationToken)
     {
         if (preparation is null
             || preparation.PreparationId != outcome.SuccessorPreparationId)
@@ -115,14 +178,79 @@ internal static class TeamsResponseRenderer
         }
 
         return outcome.SuccessorStatus == RevalidatedPreparationStatus.Ready
-            ? Ready(
+            ? await PresentReadyAsync(
                 preparation,
                 locale,
-                "Authoritative production context changed. Review the corrected replacement card before confirming again.")
-            : Text(
+                "Authoritative production context changed. Review the corrected replacement card before confirming again.",
+                invalidatesTrackedCard,
+                cancellationToken)
+            : TeamsResponse.CreateText(
                 $"Authoritative production context changed, so no request was submitted. {RenderMissing(preparation)}",
                 InputHints.ExpectingInput,
-                locale);
+                invalidatesTrackedCard,
+                preparation.PreparationId);
+    }
+
+    private async Task<TeamsResponse> PresentReadyAsync(
+        PreparationSnapshot preparation,
+        string? locale,
+        string? message,
+        bool invalidatesTrackedCard,
+        CancellationToken cancellationToken)
+    {
+        var review = await reviewService.LoadAsync(
+            preparation,
+            cancellationToken);
+        if (review.IsFailure)
+        {
+            return TeamsResponse.CreateText(
+                RenderFailure(review.Failure!),
+                InputHints.AcceptingInput,
+                invalidatesTrackedCard,
+                preparation.PreparationId);
+        }
+
+        return new TeamsResponse(
+            TeamsResponseKind.Card,
+            message,
+            TeamsAdaptiveCardRenderer.CreateReadyCard(
+                review.Value,
+                TeamsLocale.Resolve(locale)),
+            InputHints.AcceptingInput,
+            invalidatesTrackedCard,
+            preparation.PreparationId);
+    }
+
+    private static TeamsResponse PresentSubmitted(
+        PreparationConfirmationSubmitted result,
+        Guid preparationId)
+    {
+        var title = result.WasAlreadySubmitted
+            ? "Request already submitted"
+            : "Request submitted";
+        return new TeamsResponse(
+            TeamsResponseKind.Card,
+            Message: null,
+            TeamsAdaptiveCardRenderer.CreateStatusCard(
+                title,
+                $"Request {result.Request.Id:D} is {StatusText(result.Request.Status)}."),
+            InputHints.IgnoringInput,
+            InvalidatesTrackedCard: true,
+            preparationId);
+    }
+
+    private static PreparationSnapshot GetReadyPreparation(
+        ReadyForConfirmation outcome,
+        PreparationSnapshot? preparation)
+    {
+        if (!IsReady(preparation)
+            || preparation!.PreparationId != outcome.PreparationId)
+        {
+            throw new InvalidOperationException(
+                "A ready outcome must reference its exact ready preparation snapshot.");
+        }
+
+        return preparation;
     }
 
     private static string RenderDraftResult(
@@ -153,6 +281,7 @@ internal static class TeamsResponseRenderer
         {
             message.Append(' ');
         }
+
         message.Append(group);
         message.Append(": ");
         message.Append(result.Kind switch
@@ -187,7 +316,8 @@ internal static class TeamsResponseRenderer
                 "The application-group rejection reason is unsupported."),
         };
 
-    private static string RenderClarification(ClarificationRequired clarification)
+    private static string RenderClarification(
+        ClarificationRequired clarification)
     {
         var message = new StringBuilder();
         AppendGroup(message, "Scope", clarification.ScopeResult);
@@ -220,7 +350,7 @@ internal static class TeamsResponseRenderer
         choice switch
         {
             EnvironmentClarificationChoice environment =>
-                $"{environment.ClientDisplayName} ({environment.ClientId}) — {environment.DisplayName} ({environment.CanonicalId}), {environment.Region}, {environment.Classification.ToString().ToLowerInvariant()}",
+                $"{environment.ClientDisplayName} ({environment.ClientId}) \u2014 {environment.DisplayName} ({environment.CanonicalId}), {environment.Region}, {environment.Classification.ToString().ToLowerInvariant()}",
             RoleClarificationChoice role =>
                 $"{role.DisplayName} ({role.CanonicalId})",
             _ => throw new InvalidOperationException(
@@ -232,8 +362,7 @@ internal static class TeamsResponseRenderer
         PreparationSnapshot? preparation) =>
         topic switch
         {
-            DiscussionTopic.CurrentDraft =>
-                RenderCurrentDraft(preparation),
+            DiscussionTopic.CurrentDraft => RenderCurrentDraft(preparation),
             DiscussionTopic.MissingInformation => RenderMissing(preparation),
             DiscussionTopic.AllowedChanges =>
                 "You can change the production environment, optional incident, requested role, or operational justification before confirmation.",
@@ -316,32 +445,25 @@ internal static class TeamsResponseRenderer
                 "The request could not be prepared safely. No request was submitted.",
         };
 
+    private static string StatusText(RequestStatus status) =>
+        status switch
+        {
+            RequestStatus.AwaitingBusinessApproval =>
+                "awaiting business approval; access is not yet approved or granted",
+            RequestStatus.AwaitingDevOpsApproval =>
+                "awaiting DevOps approval; access is not yet granted",
+            RequestStatus.Rejected => "rejected; access was not granted",
+            RequestStatus.ProvisioningFailed =>
+                "in provisioning-failed state; access was not granted",
+            RequestStatus.Active => "active",
+            _ => throw new InvalidOperationException(
+                "The request status is unsupported."),
+        };
+
     private static bool IsReady(PreparationSnapshot? preparation) =>
         preparation is
         {
             Lifecycle: PreparationLifecycle.Ready,
             ReadyDeadline: not null,
         } && preparation.Candidate.IsComplete;
-
-    private static TeamsResponsePresentation Text(
-        string message,
-        string inputHint,
-        string locale) =>
-        new(
-            TeamsResponseKind.Text,
-            message,
-            inputHint,
-            locale,
-            Preparation: null);
-
-    private static TeamsResponsePresentation Ready(
-        PreparationSnapshot preparation,
-        string locale,
-        string? message = null) =>
-        new(
-            TeamsResponseKind.ReadyCard,
-            message,
-            InputHints.AcceptingInput,
-            locale,
-            preparation);
 }

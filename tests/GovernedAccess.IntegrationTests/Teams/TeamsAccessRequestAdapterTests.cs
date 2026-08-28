@@ -35,7 +35,7 @@ public sealed class TeamsAccessRequestAdapterTests
         Assert.Equal([message], orchestrator.ProcessedMessages);
         Assert.Equal(0, orchestrator.ResetCount);
         Assert.Equal(0, confirmation.CallCount);
-        Assert.Equal(TeamsAdapterResultKind.Text, result.Kind);
+        Assert.Equal(TeamsResponseKind.Text, result.Kind);
     }
 
     [Theory]
@@ -90,11 +90,11 @@ public sealed class TeamsAccessRequestAdapterTests
                 new PreparationSnapshot(ready),
                 new ReadyForConfirmation(ready.PreparationId)),
         };
-        var cardFactory = new StubCardFactory();
+        var reviewService = new StubReviewService();
         var adapter = CreateAdapter(
             orchestrator,
             new StubConfirmation(),
-            cardFactory);
+            reviewService);
 
         var result = await adapter.HandleMessageAsync(
             Context(),
@@ -102,10 +102,10 @@ public sealed class TeamsAccessRequestAdapterTests
             "correlation",
             cancellationToken);
 
-        Assert.Equal(TeamsAdapterResultKind.Card, result.Kind);
+        Assert.Equal(TeamsResponseKind.Card, result.Kind);
         Assert.NotNull(result.Card);
         Assert.Equal(ready.PreparationId, result.PreparationId);
-        Assert.Equal([ready.PreparationId], cardFactory.PreparationIds);
+        Assert.Equal([ready.PreparationId], reviewService.PreparationIds);
     }
 
     [Fact]
@@ -181,9 +181,9 @@ public sealed class TeamsAccessRequestAdapterTests
 
         Assert.Equal(1, confirmation.CallCount);
         Assert.Equal(preparationId, confirmation.LastPreparationId);
-        Assert.Equal(TeamsAdapterResultKind.Card, accepted.Kind);
+        Assert.Equal(TeamsResponseKind.Card, accepted.Kind);
         Assert.Contains(requestId.ToString("D"), CardJson(accepted), StringComparison.Ordinal);
-        Assert.Equal(TeamsAdapterResultKind.InvalidAction, rejectedLegacy.Kind);
+        Assert.Equal(TeamsResponseKind.InvalidAction, rejectedLegacy.Kind);
     }
 
     [Fact]
@@ -213,7 +213,7 @@ public sealed class TeamsAccessRequestAdapterTests
             "replay",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsAdapterResultKind.Card, result.Kind);
+        Assert.Equal(TeamsResponseKind.Card, result.Kind);
         Assert.Contains(
             request.Id.ToString("D"),
             CardJson(result),
@@ -224,10 +224,11 @@ public sealed class TeamsAccessRequestAdapterTests
     private static TeamsAccessRequestAdapter CreateAdapter(
         IRequestPreparationOrchestrator orchestrator,
         IPreparationConfirmationService confirmationService,
-        IPreparedRequestCardFactory? cardFactory = null) =>
+        IPreparationReviewService? reviewService = null) =>
         new(
             orchestrator,
-            cardFactory ?? new StubCardFactory(),
+            new TeamsResponsePresenter(
+                reviewService ?? new StubReviewService()),
             confirmationService,
             NullLogger<TeamsAccessRequestAdapter>.Instance);
 
@@ -303,7 +304,7 @@ public sealed class TeamsAccessRequestAdapterTests
             new DateTimeOffset(2026, 8, 26, 12, 0, 0, TimeSpan.Zero),
             "attribution");
 
-    private static string CardJson(TeamsAdapterResult result) =>
+    private static string CardJson(TeamsResponse result) =>
         ((System.Text.Json.JsonElement)result.Card!.Content!).GetRawText();
 
     private sealed class StubOrchestrator : IRequestPreparationOrchestrator
@@ -336,21 +337,32 @@ public sealed class TeamsAccessRequestAdapterTests
         }
     }
 
-    private sealed class StubCardFactory : IPreparedRequestCardFactory
+    private sealed class StubReviewService : IPreparationReviewService
     {
         internal List<Guid> PreparationIds { get; } = [];
 
-        public Task<ApplicationResult<Attachment>> CreateAsync(
+        public Task<ApplicationResult<PreparationReview>> LoadAsync(
             PreparationSnapshot preparation,
-            string locale,
             CancellationToken cancellationToken)
         {
             PreparationIds.Add(preparation.PreparationId);
+            var candidate = preparation.Candidate;
             return Task.FromResult(
                 ApplicationResult.Succeeded(
-                    TeamsAdaptiveCardRenderer.CreateStatusCard(
-                        "Ready",
-                        preparation.PreparationId.ToString("D"))));
+                    new PreparationReview(
+                        preparation.PreparationId,
+                        "Demo Requester",
+                        preparation.Binding.RequesterId,
+                        "Client One",
+                        candidate.ClientId!,
+                        "Production One",
+                        candidate.EnvironmentId!,
+                        "Read only",
+                        candidate.RoleId!,
+                        IncidentDisplayName: null,
+                        IncidentId: null,
+                        candidate.Justification!,
+                        preparation.ReadyDeadline!.Value)));
         }
     }
 
