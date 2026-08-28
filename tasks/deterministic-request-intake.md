@@ -878,16 +878,16 @@ privacy-field, schema, and link validation.
 
 ### Task 17 - Reconcile current documentation with verified runtime
 
-- [ ] Planned
+- [x] Complete
 
 **Description:** Promote only Task 16-observed behavior into current-state documents
 and remove obsolete contradictions. This task changes no implementation behavior.
 
 **Acceptance criteria:**
 
-- [ ] Product, architecture, security, orchestration, testing, MCP, local-development, operator, roadmap, and ADR-index documentation consistently describe the final sparse-proposal/four-tool, one-host, two-database modular runtime.
-- [ ] Destructive ambiguity, optional predecessor, complete-candidate, process-local choice, `Invalidated`, reserved-request-ID, and two-tool current-state claims are removed or historically clarified without rewriting decision history.
-- [ ] Documentation states the separate reference/workflow ownership and extraction seam, explicit fresh-two-database/reset policy, and contains no parallel-build, unified-schema, compatibility, or upgrade-path claims as supported runtime behavior.
+- [x] Product, architecture, security, orchestration, testing, MCP, local-development, operator, roadmap, and ADR-index documentation consistently describe the final sparse-proposal/four-tool, one-host, two-database modular runtime.
+- [x] Destructive ambiguity, optional predecessor, complete-candidate, process-local choice, `Invalidated`, reserved-request-ID, and two-tool current-state claims are removed or historically clarified without rewriting decision history.
+- [x] Documentation states the separate reference/workflow ownership and extraction seam, explicit fresh-two-database/reset policy, and contains no parallel-build, unified-schema, compatibility, or upgrade-path claims as supported runtime behavior.
 
 **Verification:** Validate links, JSON contracts, commands, terminology, and evaluation references; run `git diff --check`; run code suites only if executable examples/contracts change or validation exposes a mismatch.
 
@@ -902,6 +902,16 @@ and remove obsolete contradictions. This task changes no implementation behavior
 **Estimated scope:** Large documentation-only reconciliation.
 
 **Acceptance coverage:** Final traceability closure for AC-01-AC-52.
+
+**Completion evidence (2026-08-28):** all relative targets across 34 tracked Markdown
+files resolved; MCP/evaluation JSON parsed; the exact four-tool inventory, contract and
+search-policy versions, dataset version/SHA-256, prompt/proposal versions, and promoted
+source commit resolved against source and retained Task 16 evidence. Terminology and
+current-state source checks found no obsolete supported-runtime claim. Focused
+preparation-contract coverage passed (13 tests), followed by focused MCP/composition/
+schema coverage (15 tests), the warnings-as-errors solution build with zero warnings,
+155 unit tests, and 160 integration tests. `git diff --check` passed. The frontend
+suite was not run because no frontend behavior or contract changed.
 
 ## Mandatory self-check for every implementation task
 

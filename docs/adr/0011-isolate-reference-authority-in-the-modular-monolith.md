@@ -1,9 +1,21 @@
 # ADR 0011: Isolate reference authority inside the modular monolith
 
-- **Status**: Accepted target architecture
+- **Status**: Accepted
 - **Date**: 2026-08-25
+- **Promoted**: 2026-08-27
+- **Clarified**: 2026-08-28
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `tasks/deterministic-request-intake.md`, ADR 0008, ADR 0010
+
+## 2026-08-28 promotion clarification
+
+The two-module, two-database architecture is now the sole production composition.
+The temporary parallel-replacement sequence described below is completed history:
+the delivered unified context, schema, registrations, and compatibility seams were
+deleted immediately after atomic cutover. The supported runtime has one executable,
+one reference-authority database, and one workflow database; it has no parallel graph,
+unified-schema fallback, row synchronization, compatibility adapter, or in-place
+upgrade path for disposable local data.
 
 ## Context
 

@@ -1,7 +1,7 @@
 # Common Project Specification
 
 - **Status**: Current context index
-- **Last verified**: 2026-08-20
+- **Last verified**: 2026-08-28
 - **Scope**: Repository-wide, as-built local synthetic implementation
 
 ## Purpose
@@ -45,7 +45,8 @@ tests, and surface any remaining mismatch before changing behavior.
 - This is a portfolio-grade local implementation using only synthetic identity, data,
   provisioning, and grants. It grants no real production access.
 - One executable `GovernedAccess.Web` host serves the Teams endpoint, same-origin API,
-  React assets, read-only MCP endpoint, SQLite persistence, and synthetic provisioner.
+  React assets, read-only MCP endpoint, two independently owned SQLite databases, and
+  synthetic provisioner.
 - Teams card confirmation is the only request-creation path. The browser is a request
   register and authenticated business/DevOps decision surface.
 - The model prepares an untrusted proposal. Core validates authoritative context and
@@ -70,14 +71,18 @@ Detailed requirements and acceptance cases remain in the
 |---|---|---|
 | `src/GovernedAccess.Core` | Provider- and protocol-independent domain rules, application services, typed outcomes, and ports | `Domain/`, `Application/`, `Ports/` |
 | `src/GovernedAccess.Mcp` | Translation from the four typed read-only MCP tools to Core authority ports | `McpRegistration.cs`, `TargetMcpTools.cs` |
-| `src/GovernedAccess.Web` | Composition root, controllers, Teams and AI adapters, EF Core, authentication, observability, evaluation, and synthetic provisioning | `Program.cs`, `appsettings.json` |
+| `src/GovernedAccess.ReferenceAuthority` | Reference-only EF Core context, migration, synthetic seeding, search policy integration, and Core authority-port adapters | `ReferenceAuthorityRegistration.cs`, `Persistence/` |
+| `src/GovernedAccess.Workflow.Persistence` | Workflow-only EF Core context, migration, principal seeding, preparation store, and downstream workflow-store adapters | `WorkflowPersistenceRegistration.cs`, `Persistence/` |
+| `src/GovernedAccess.Web` | Composition root, controllers, Teams and AI adapters, authentication, observability, evaluation, and synthetic provisioning | `Program.cs`, `appsettings.json` |
 | `src/GovernedAccess.Web/ClientApp` | Thin React request register and decision UI built into Web `wwwroot` | `src/App.tsx`, `src/api/` |
 | `tests/GovernedAccess.UnitTests` | Deterministic domain and pure application behavior | Tests matching the Core type being changed |
 | `tests/GovernedAccess.IntegrationTests` | SQLite, MCP, MAF, Teams, HTTP, security, concurrency, and provisioning boundaries | Concern-named subdirectory plus `Infrastructure/` |
 | `docs/` | Current product, architecture, security, operations, testing, and ADR guidance | The authority table above |
 
-Project references enforce `Web -> Core + Mcp` and `Mcp -> Core`; Core has no project
-reference to either outer layer. Shared .NET settings are in
+Project references enforce `Web -> Core + Mcp + ReferenceAuthority + Workflow.Persistence`
+and `Mcp + ReferenceAuthority + Workflow.Persistence -> Core`; Core has no project
+reference to an outer layer. The two persistence modules share neither entities nor a
+database file. Shared .NET settings are in
 [`Directory.Build.props`](Directory.Build.props). Frontend scripts and the supported
 Node range are in [`package.json`](src/GovernedAccess.Web/ClientApp/package.json).
 

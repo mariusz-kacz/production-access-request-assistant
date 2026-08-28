@@ -1,7 +1,7 @@
 # Governed Production Access Request Assistant: Product Baseline
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 - **Scope**: Local synthetic MVP
 
 ## Purpose
@@ -25,7 +25,8 @@ provision, retry, revoke, or change workflow state.
 
 - One modular ASP.NET Core host contains the Teams endpoint, React application,
   same-origin browser API, AI adapter, MCP endpoint, application services, SQLite
-  persistence, and synthetic provisioner.
+  persistence, and synthetic provisioner. Separate reference-authority and workflow
+  SQLite databases remain independently owned inside that one host.
 - Teams confirmation is the only request-creation path. The browser is a request
   register and human-decision surface.
 - Submitted request scope is immutable. A correction requires a new intake, request ID,
@@ -124,38 +125,39 @@ channel, tenant, actor, conversation, and fixed synthetic requester.
 
 For every normal message:
 
-1. The application loads or creates the active intake and supplies its accepted
-   candidate to the interpreter.
-2. The interpreter returns one schema-valid complete nullable candidate plus either a
-   candidate outcome or one focused clarification.
-3. Core validates supplied values, derives canonical ownership, clears rejected
-   fields, and decides whether the candidate is rejected, incomplete, or ready.
-4. Core persists only the sanitized candidate and intake lifecycle. Model prose,
-   option lists, and conversation transcripts are not durable authority.
+1. The application loads or creates the active preparation and supplies the latest
+   requester message, canonical candidate, lifecycle, and any persisted bounded
+   environment/role clarification choices to the interpreter.
+2. One fresh bounded MAF turn returns a closed dialogue act plus either a nonempty
+   sparse `set`/`clear` patch, one closed discussion topic, or no semantic payload.
+3. Core validates the proposal structure, evaluates environment/incident/role as one
+   atomic scope group and justification independently, reloads authoritative facts,
+   applies dependency cascades, and determines readiness.
+4. The workflow database persists only canonical preparation state, one optimistic
+   concurrency version, bounded clarification context, lifecycle evidence, and
+   bounded model-version attribution. It stores no raw requester transcript, prompt,
+   provider session, model reasoning, raw proposal, or complete MCP payload.
 
-MAF conversation history is process-local and keyed by the server-generated intake ID.
-It remains in memory until the host stops. Restart loses history but retains the
-accepted candidate; relative replies that no longer have sufficient context are
-clarified again rather than guessed. Confirmation and downstream workflow actions
-never read model history.
+Every turn creates a new provider session; there is no process-local conversation
+history or choice store. Restart preserves the canonical candidate and bounded
+clarification choices, so references to an active displayed choice can be interpreted
+again without treating a transcript as authority. General coreference outside that
+state is answered conservatively.
 
 An exact trimmed, case-insensitive `/new` command supersedes an active unsubmitted
-intake without calling the model or MCP. The next normal message receives a new intake
-ID and separate process-local history. Submitted requests are unaffected.
+preparation without calling the model or MCP and atomically creates a clean collecting
+preparation. Submitted requests are unaffected.
 
 ### Ready-draft discussion and revision
 
-A ready intake is an immutable confirmation snapshot. Another natural-language message
-can still discuss or revise it:
-
-- discussion or a value-equal proposal leaves the same card, reserved request ID, and
-  deadline active;
-- a revision that needs a valid focused clarification also preserves the existing
-  ready snapshot while the requester decides;
-- a different ready candidate supersedes the old intake and produces a replacement
-  card; and
-- a rejected candidate, or an incomplete proposal without an applicable clarification,
-  supersedes the old intake and leaves the replacement collecting corrected details.
+A ready preparation is an immutable confirmation snapshot. Discussion, submission
+guidance, unrelated or unclear input, value-equal proposals, wholly rejected
+proposals, and transient failures leave that preparation and its deadline unchanged.
+An accepted material revision or clarification-producing revision atomically
+supersedes the ready preparation and creates a predecessor-linked collecting or ready
+replacement with a new preparation ID. Ambiguity preserves canonical scope in that
+replacement while persisting the complete bounded choice set; it never clears scope
+merely because the requester must choose.
 
 Every card carries its own preparation ID. Confirmation reloads that exact intake, so
 a stale or superseded card cannot submit replacement scope even if Teams could not
@@ -163,8 +165,8 @@ update the old activity visually.
 
 ### Submission and approval
 
-Confirmation reloads the owned, unexpired ready intake and revalidates its canonical
-scope. One SQLite save records the submitted intake, immutable
+Confirmation reloads the owned, unexpired ready preparation and revalidates its
+canonical scope. One workflow-database save records the submitted preparation, immutable
 `AwaitingBusinessApproval` request, and request-created audit event.
 
 The workflow is:

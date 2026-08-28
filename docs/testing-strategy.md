@@ -19,8 +19,8 @@
 
 | Layer | Project or command | Primary ownership |
 |---|---|---|
-| Unit | `GovernedAccess.UnitTests` | Domain construction, transitions, validation policy, authorization policy, candidate lifecycle, and pure application behavior. |
-| Component | `GovernedAccess.IntegrationTests` without full `Program` startup | EF Core/SQLite, MCP transport, MAF sessions, Teams adapter components, provider coordination, and concurrency. |
+| Unit | `GovernedAccess.UnitTests` | Domain construction, transitions, sparse-proposal contracts, grouped reduction, authorization policy, preparation lifecycle, and pure application behavior. |
+| Component | `GovernedAccess.IntegrationTests` without full `Program` startup | Independent EF Core/SQLite modules, MCP transport, bounded MAF turns, Teams adapter components, provider coordination, and concurrency. |
 | Full host | `GovernedAccess.IntegrationTests` with `GovernedAccessWebFactory` | Authentication, antiforgery, routing, middleware, serialization, SPA separation, and representative end-to-end journeys. |
 | Frontend | Vitest and React Testing Library | Session wiring, request presentation, available actions, and restricted command payloads. |
 | Live evaluation | Explicit `evaluate-live-model` command | Optional black-box natural-language outcome evidence after deterministic gates pass. |
@@ -32,16 +32,16 @@ project name does not require every test to start the complete application.
 
 | Concern | Primary evidence |
 |---|---|
-| Request candidate validation | Core unit tests for canonicalization, field clearing, incident compatibility, assigned roles, and readiness. |
+| Request preparation reduction | Core unit tests for sparse operations, atomic scope grouping, justification independence, canonicalization, dependency cascades, clarification, and readiness. |
 | Ready-draft discussion and revision | Core unit tests for identity preservation and supersession; Teams component tests for card behavior and responses. |
 | Submission | Unit/component tests for actor binding, status, expiry, authoritative revalidation, one-save request creation, replay, and concurrency. |
 | Business and DevOps decisions | Unit policy tests plus SQLite component tests for authenticated authority, decision order, duplicate transitions, exact scope, and audit evidence. |
 | Provisioning and retry | Component tests for persisted-evidence reload, provider input, failed states, lost responses, idempotency, and one grant per request. |
 | MCP | Contract and transport tests for the exact four-tool catalog, closed schemas, bounded search, exact environment and incident lookup, environment-scoped roles, typed failures, overflow, and cancellation. |
-| MAF | Component tests for strict proposal parsing, discovery blocked after every exact environment outcome, session isolation, same-intake serialization, restart behavior, successful-save semantics, and provider failures. |
+| MAF | Component tests for strict sparse-proposal parsing, exact four-tool catalog validation, discovery blocked after every exact environment outcome, fresh per-turn sessions, durable bounded turn envelopes, execution limits, and provider failures. |
 | Browser security | Full-host tests for six demo identities, cookies, antiforgery, authorization, over-posting, participant filtering, and `/api`/`/mcp` SPA exclusion. |
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
-| Persistence | EF model and component tests for relationships, unique constraints, UTC conversion, optimistic concurrency, and exact synthetic seeding. |
+| Persistence | Architecture and component tests for independent reference/workflow ownership, exact final table inventories, migrations, seeding, restart, failure isolation, unique constraints, UTC conversion, and optimistic concurrency. |
 | Frontend | Component tests for login/session behavior, list/detail rendering, approval and retry wiring, and absence of request creation. |
 | Evaluation mode | Focused component tests for dataset contract loading, grading, timeouts, cancellation, isolated composition, artifact diagnostics, and zero workflow effects. |
 
@@ -139,6 +139,13 @@ The fixed dataset contains 12 promoted scenario groups and two advisory groups.
 At least 11 promoted groups must reach the expected safe canonical outcome, every
 variation within a passing group must pass, and all absolute safety gates must pass.
 Every run requires zero requests, decisions, operations, and grants.
+
+The promoted 2026-08-28 run passed all 12 promoted groups and both advisory groups
+without selective reruns or waivers. It used dataset `deterministic-intake-2.0.2`
+(`bc9ca80e1a17895f13dcefb78a7f4cf3d611d5f6ffba90037a76cfba4501ba0c`), prompt
+contract `3.0.6`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`; all
+consequential side-effect counts were zero. The schema-version-4 artifacts remain
+gitignored local evidence.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,

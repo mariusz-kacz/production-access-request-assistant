@@ -15,7 +15,8 @@ verify the as-built behavior in source and tests, and surface unresolved mismatc
 > and execute.
 
 - The application is one modular ASP.NET Core host with a thin co-hosted React UI,
-  local synthetic identity and data, and no real production access.
+  separate reference/workflow SQLite databases, local synthetic identity and data,
+  and no real production access.
 - The LLM is never an authorization boundary. Model output is untrusted,
   schema-validated, and checked against authoritative data.
 - Acting identity and authorization come from authenticated server context. Browser
@@ -40,7 +41,8 @@ verify the as-built behavior in source and tests, and surface unresolved mismatc
 
 - Keep domain and application logic in `GovernedAccess.Core`, independent of React,
   persistence, AI-provider, Teams, and MCP SDK contracts. Translate external contracts
-  at `GovernedAccess.Web` or `GovernedAccess.Mcp` boundaries.
+  at `GovernedAccess.Web` or `GovernedAccess.Mcp` boundaries; keep direct reference
+  and workflow persistence inside their owning infrastructure projects.
 - Preserve nullable reference types, warnings-as-errors, analyzer enforcement, and
   `CancellationToken` propagation through async boundaries.
 - Keep explicit timeouts on model, MCP, Teams, and provisioning work. Represent

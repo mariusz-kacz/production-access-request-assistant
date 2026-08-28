@@ -1,7 +1,7 @@
 # Architecture
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 - **Scope**: Governed Production Access Request Assistant MVP
 
 ## Architectural shape
@@ -35,7 +35,8 @@ flowchart LR
         AI[MAF interpretation]
         MCP[/mcp]
         App[Core application rules]
-        DB[(SQLite)]
+        ReferenceDB[(Reference SQLite)]
+        WorkflowDB[(Workflow SQLite)]
         Provider[Synthetic provisioner]
     end
 
@@ -50,8 +51,9 @@ flowchart LR
     Activity --> App
     API --> App
     AI -->|Streamable HTTP| MCP
-    MCP --> DB
-    App --> DB
+    MCP --> ReferenceDB
+    App --> ReferenceDB
+    App --> WorkflowDB
     App --> Provider
 ```
 
@@ -65,11 +67,17 @@ instead of `index.html`.
 flowchart TB
     Web[GovernedAccess.Web]
     Mcp[GovernedAccess.Mcp]
+    Reference[GovernedAccess.ReferenceAuthority]
+    Workflow[GovernedAccess.Workflow.Persistence]
     Core[GovernedAccess.Core]
 
     Web --> Core
     Web --> Mcp
+    Web --> Reference
+    Web --> Workflow
     Mcp --> Core
+    Reference --> Core
+    Workflow --> Core
 ```
 
 ### `GovernedAccess.Core`
@@ -88,11 +96,31 @@ MCP registers the stateless Streamable HTTP server and exactly four typed read-o
 tools. It translates tool contracts to focused Core authority ports. The project has
 no workflow store, decision service, or provisioning dependency.
 
+### `GovernedAccess.ReferenceAuthority`
+
+Reference Authority exclusively owns its EF Core context, migration, synthetic
+reference seeding, and direct reads of clients, eligible production environments,
+environment-role assignments, and incidents. It implements Core's focused search,
+exact environment, entitlement, and incident authority ports. Neither MCP nor Web
+adapters receive its `DbContext`.
+
+### `GovernedAccess.Workflow.Persistence`
+
+Workflow Persistence exclusively owns its EF Core context, migration, synthetic
+principal snapshots, preparation storage, and downstream workflow storage. It
+implements Core persistence ports and shares no entity, transaction, or database file
+with Reference Authority.
+
+Those focused Core ports are the extraction seam: a future approved remote authority
+can replace the in-process reference adapters without moving workflow persistence or
+using the model-facing MCP endpoint as an application authority API. The present
+runtime deliberately keeps both modules in process.
+
 ### `GovernedAccess.Web`
 
 Web is the composition and infrastructure layer. It contains controllers, browser and
 Teams authentication, antiforgery, the Teams adapter, MAF interpreter and session
-store, model-client selection, EF Core adapters, SQLite seeding, the synthetic
+creation, model-client selection, module composition, the synthetic
 provisioner, correlation middleware, and React source and assets.
 
 Controllers translate HTTP contracts and derive actors from authenticated context;
@@ -104,14 +132,15 @@ application services make authorization and transition decisions.
 |---|---|
 | React UI | Participant-visible request list/detail, human-decision forms, retry action, and audit presentation. |
 | Teams adapter | Authenticated personal-activity routing, `/new`, preparation responses, card confirmation, and presentation updates. |
-| MAF interpreter | MCP tool discovery, one bounded agent turn, strict proposal parsing, and provider-failure translation. |
-| MAF session store and coordinator | Process-local conversation history and one serialized load/run/save gate per intake. |
-| `RequestDraftService` | Intake lifecycle, interpretation coordination, candidate assessment, clarification, revision, and reset. |
-| `RequestSubmissionService` | Owned ready-draft confirmation, revalidation, immutable request creation, and audit staging. |
+| MAF interpreter | Exact MCP catalog validation, one fresh bounded agent turn, strict sparse-proposal parsing, and provider-failure translation. |
+| `RequestPreparationOrchestrator` | Builds the provider-neutral turn envelope from the durable candidate and clarification context, invokes the interpreter, and passes the proposal to Core. |
+| `PreparationTurnService` and `RequestPreparationReducer` | Preparation lifecycle, grouped canonical reduction, authoritative validation, clarification, revision, optimistic commit, and reset. |
+| `PreparationConfirmationService` | Owned ready-preparation confirmation, authoritative revalidation, immutable request creation, and audit staging. |
 | `AccessRequestWorkflowService` | Business decision, DevOps decision, and failed-operation retry. |
 | `ProtectedProvisioningService` | Persisted-evidence reload, provider input construction, provider call, and operation finalization. |
 | Query and visibility services | Participant filtering and server-computed presentation actions. |
-| EF Core adapters | Translation between Core ports and SQLite. |
+| Reference Authority | Reference-only migrations, seeding, authoritative reads, and search policy integration. |
+| Workflow Persistence | Workflow-only migrations, principal seeding, preparation OCC, and downstream workflow persistence. |
 | Synthetic provisioner | Request-keyed local grant get-or-create. |
 
 Core remains the authority for readiness, scope, approver responsibility, legal
@@ -128,31 +157,35 @@ sequenceDiagram
     actor User
     participant Teams
     participant Agent as Teams adapter
-    participant Draft as RequestDraftService
+    participant Prepare as Preparation services
     participant Model as MAF / IChatClient
     participant MCP as /mcp
-    participant DB as SQLite
-    participant Submit as RequestSubmissionService
+    participant Reference as Reference DB
+    participant Workflow as Workflow DB
+    participant Submit as PreparationConfirmationService
 
     User->>Teams: Describe or revise request
     Teams->>Agent: Authenticated personal activity
-    Agent->>Draft: Prepare(actor, message)
-    Draft->>Model: Intake ID, accepted candidate, latest message
+    Agent->>Prepare: Begin(actor binding)
+    Prepare->>Workflow: Load candidate, lifecycle, choices, OCC version
+    Prepare->>Model: Latest message and durable bounded context
     opt Read-only context needed
         Model->>MCP: Allowed typed tool
-        MCP->>DB: Authoritative lookup
-        DB-->>MCP: Stored context
+        MCP->>Reference: Authoritative lookup
+        Reference-->>MCP: Typed projection
         MCP-->>Model: Typed result
     end
-    Model-->>Draft: Closed proposal
-    Draft->>Draft: Validate identifiers and relationships
-    Draft->>DB: Persist sanitized intake outcome
-    Draft-->>Agent: Discussion, clarification, rejection, ready card, or safe failure
+    Model-->>Prepare: Closed sparse proposal
+    Prepare->>Reference: Search/exact reload authoritative facts
+    Prepare->>Prepare: Deterministic grouped reduction
+    Prepare->>Workflow: Short OCC commit of canonical outcome
+    Prepare-->>Agent: Application-owned guidance or ready card
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated card action
     Agent->>Submit: Confirm(preparation ID, actor)
-    Submit->>DB: Reload ownership, status, expiry, and scope
-    Submit->>DB: Commit request and audit evidence
+    Submit->>Workflow: Reload ownership, status, expiry, and scope
+    Submit->>Reference: Revalidate authoritative scope
+    Submit->>Workflow: Commit request and audit evidence
     Agent-->>Teams: Stable request ID and Web link
 ```
 
@@ -161,33 +194,32 @@ identifier and every structured environment option before accepting it. Only an 
 unexpired ready intake can be confirmed; the model and MCP receive no submit
 capability.
 
-An existing ready card remains active for discussion, an identical candidate, or a
-valid unresolved revision clarification. A different ready candidate replaces it. A
-rejected or improperly incomplete revision supersedes it and returns the replacement
-intake to collecting. Durable intake status rejects stale cards regardless of whether
-Teams presentation metadata survived restart or activity update.
+Discussion, value-equal and wholly rejected proposals, unrelated or unclear input, and
+transient failures preserve an existing ready preparation. An accepted material or
+clarification-producing revision atomically supersedes it and creates a new
+predecessor-linked preparation. Durable lifecycle state rejects stale cards regardless
+of whether Teams presentation metadata survived restart or activity update.
 
 An exact trimmed, case-insensitive `/new` command bypasses the model and MCP,
-terminally clears the active unsubmitted intake, and creates no replacement until the
-next normal message.
+terminally clears the active unsubmitted preparation, and atomically creates a clean
+collecting replacement.
 
 The complete turn algorithm, tool policy, and clarification rules are maintained in
 [request-intake orchestration](request-intake-orchestration.md).
 
-## Conversation memory
+## Durable turn context
 
-The singleton native MAF store keys sessions by server-generated intake ID. The
-singleton coordinator retains one `SemaphoreSlim` per intake and serializes session
-load, agent execution, and successful save.
+Every normal message creates a fresh MAF session for one bounded turn; the application
+does not retain provider conversation sessions or a process-local choice store. The
+turn envelope contains only the latest requester message, canonical candidate,
+lifecycle, and at most one persisted ordered environment/role clarification context.
 
-Sessions and gates remain for the host process lifetime. SQLite stores the sanitized
-candidate and intake lifecycle, not transcripts or serialized MAF state. Restart loses
-conversation history without losing accepted candidate data; ambiguous relative text
-is clarified again. Confirmation and all downstream actions ignore this memory.
-
-The unbounded process-lifetime gate dictionary is accepted for the current local,
-low-volume baseline. Higher volume requires safe keyed-lock retirement that accounts
-for active holders and waiters.
+The workflow database stores that provider-neutral state plus one optimistic
+concurrency version. Restart therefore preserves accepted candidate values and active
+displayed choices without retaining transcripts. General references that cannot be
+resolved from canonical state and the active bounded choices return conservative
+guidance. Confirmation and all downstream actions use persisted state and authority
+ports, never model memory.
 
 ## Model and MCP profiles
 
@@ -247,22 +279,26 @@ and operation states.
 
 ## Persistence and consistency
 
-One EF Core `GovernedAccessDbContext` uses SQLite and stores:
+Two independently owned EF Core SQLite databases remain inside the one executable:
 
-- fixed clients, environments, assigned roles, incidents, and principals;
-- intake binding, sanitized candidate, lifecycle, immutable ready scope, reserved
-  request ID, and confirmation deadline; and
-- access requests, approval decisions, provisioning operations, grants, and audit
-  events.
+- Reference Authority stores fixed clients, eligible production environments,
+  assigned roles, and incidents in its own context and migration history.
+- Workflow Persistence stores authenticated principal snapshots, preparations,
+  access requests, approval decisions, provisioning operations, grants, and audit
+  events in its own context and migration history.
 
-Startup creates missing fixed reference records and fails when existing or unexpected
-records conflict with the exact synthetic dataset. There is no runtime reference-data
-mutation surface.
+Stable identifiers cross the module boundary; there are no shared entities, EF
+relationships, database files, cross-database queries, or transactions. Startup
+accepts only a fresh database or the exact final migration/table inventory, applies
+the owning migration, and seeds its owned synthetic records. Any old, transitional,
+or otherwise incompatible schema fails with bounded explicit-reset guidance and is
+never deleted automatically. There is no supported in-place upgrade or compatibility
+path for disposable local data.
 
-Database guarantees include foreign keys, one active intake per actor/conversation,
-unique reserved request IDs, one decision per request/stage, one request-keyed
-operation, at most one grant per request, restricted deletes, and optimistic
-concurrency on mutable aggregates.
+Database guarantees include reference-owned foreign keys, one active preparation per
+actor/conversation, predecessor linkage for revisions, one optimistic concurrency
+token per preparation, unique request `PreparationId`, one decision per request/stage,
+one request-keyed operation, at most one grant per request, and restricted deletes.
 
 One `SaveChangesAsync` atomically commits tracked local state and staged audit evidence.
 That guarantee does not cross the provider call:
@@ -322,7 +358,8 @@ Vite builds React assets into `GovernedAccess.Web/wwwroot`; ASP.NET Core serves 
 and owns the SPA fallback. React Router owns the request list and detail routes. The
 browser never calls MCP or the provisioner directly.
 
-Core rules use unit tests. SQLite, MAF, MCP, authentication, HTTP, concurrency, and
+Core rules use unit tests. Independent SQLite modules, bounded MAF turns, MCP,
+authentication, HTTP, concurrency, and
 provider coordination use component or full-host tests. Frontend tests cover session
 and workflow wiring. No automated suite requires a live model or external production
 system. Test ownership and the required command sequence are in the
@@ -332,7 +369,7 @@ system. Test ownership and the required command sequence are in the
 
 The architecture excludes real production access and identity federation, mutable
 enterprise reference integrations, automated revocation, a public provisioning API,
-background reconciliation, message brokers, distributed transactions, generic
+background reconciliation, cross-database transactions, message brokers, generic
 workflow engines, large retrieval systems, multiple executable services, and a
 separately deployed frontend.
 

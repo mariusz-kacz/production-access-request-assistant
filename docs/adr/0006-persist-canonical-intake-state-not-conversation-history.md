@@ -3,8 +3,15 @@
 - **Status**: Superseded
 - **Superseded by**: ADR 0009
 - **Date**: 2026-08-10
+- **Historical clarification**: 2026-08-28
 - **Decision owners**: Project maintainer
 - **Related artifacts**: `docs/adr/0005-retain-terminal-request-intake-tombstones.md`, `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`
+
+The process-local MAF history, unpersisted choice lists, delivered lifecycle, and
+reserved-request fields described below are not part of the current runtime. ADR 0009
+superseded them with fresh per-message sessions plus one persisted bounded
+environment/role clarification context, immutable preparation identity, and unique
+request `PreparationId`. The remaining text is preserved as decision history.
 
 ## Context
 

@@ -1,5 +1,8 @@
 # Live-Model Evaluation
 
+- **Status**: Current operator guidance
+- **Last reviewed**: 2026-08-28
+
 The evaluation command runs the isolated deterministic-request-intake composition against
 an explicitly configured live model. It exercises the grouped preparation path and
 exactly four typed read-only MCP tools. It cannot confirm requests or invoke approval,
@@ -13,7 +16,7 @@ provisioning, revocation, or grant operations.
 - a developer identity authorized to invoke that deployment; and
 - the credential-free build and test gate completed successfully.
 
-Authenticate and set process-local configuration from the repository root:
+Authenticate and set shell-scoped configuration from the repository root:
 
 ```powershell
 az login
@@ -68,6 +71,23 @@ The detailed inventory and governance rules remain authoritative in the
 [deterministic intake evaluation matrix](evaluation/deterministic-request-intake-test-matrix.md).
 The executable dataset is
 [`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json).
+
+## Promoted evidence
+
+The complete credentialed run `61e44fc4-9fae-43c2-825e-3b366199f712`, executed on
+2026-08-28 against source commit
+`1d7858e6f86d274e0f25a9696d15e0be1a0df649`, passed all 12 promoted groups and both
+advisory groups without selective reruns or waivers. It used Foundry Responses
+deployment/model `production-access-request-model`, dataset
+`deterministic-intake-2.0.2` with SHA-256
+`bc9ca80e1a17895f13dcefb78a7f4cf3d611d5f6ffba90037a76cfba4501ba0c`, prompt
+contract `3.0.6`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
+
+Every absolute safety, ambiguity, authoritative-identifier,
+justification-fidelity, and bounded-execution gate passed. The run created zero
+requests, decisions, operations, or grants. Its schema-version-4 JSON and Markdown
+artifacts remain in the gitignored local output identified by the run ID; generated
+artifacts are intentionally not a source-controlled product contract.
 
 ## Artifacts
 

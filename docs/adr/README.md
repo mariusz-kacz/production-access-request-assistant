@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 - **Status**: Current decision index
-- **Last reviewed**: 2026-08-26
+- **Last reviewed**: 2026-08-28
 
 The [architecture](../architecture.md) describes the system now. An ADR records why a
 durable architectural choice was made, its trade-offs, and when it should be
@@ -23,7 +23,7 @@ accepted.
 | [0008: Context capabilities follow authoritative sources](0008-separate-read-only-context-capabilities-by-authoritative-source.md) | Accepted | Expose four narrow read-only tools and reuse one deterministic environment-search policy with the same complete five-result bound behind MCP and Core. | Enterprise authority/failure boundaries remain visible; tool text stays untrusted and search results cannot drift or expose a larger hidden set. |
 | [0009: Persist canonical intake and bounded clarification context](0009-persist-canonical-intake-and-bounded-clarification-context.md) | Accepted | Persist one candidate, one OCC version, one ordered exact-ID clarification context supplied to the agent, and immutable ready preparation identities. | Restart-safe multilingual references use ordinary sparse patches; stale candidate/context snapshots are rejected without raw transcripts, a candidate-progress counter, or dual revision state. |
 | [0010: Exact-reload agent-resolved environments](0010-exact-reload-agent-resolved-environments.md) | Accepted | Treat exact environment IDs and search queries as mutually exclusive resolution paths; exact IDs receive exact reload without search replay. | Unique model-side discovery can support one-turn preparation while Core still verifies current enterprise facts. |
-| [0011: Isolate reference authority inside the modular monolith](0011-isolate-reference-authority-in-the-modular-monolith.md) | Accepted target architecture | Use separate reference-authority and workflow-persistence projects and databases behind Core ports while retaining one executable host. | Module ownership is explicit and later service extraction is localized without adding distributed infrastructure now. |
+| [0011: Isolate reference authority inside the modular monolith](0011-isolate-reference-authority-in-the-modular-monolith.md) | Accepted | Use separate reference-authority and workflow-persistence projects and databases behind Core ports while retaining one executable host. | Module ownership is explicit and later service extraction is localized without adding distributed infrastructure now. |
 
 Each ADR contains its authoritative alternatives, consequences, and revisit criteria.
 

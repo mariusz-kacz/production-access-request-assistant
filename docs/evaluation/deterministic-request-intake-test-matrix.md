@@ -1,8 +1,9 @@
 # Deterministic Request Intake: Test and Evaluation Matrix
 
-- **Status:** Accepted test and evaluation authority
+- **Status:** Current test and evaluation authority
 - **Date:** 2026-08-26
-- **Normative source:** `SPEC-deterministic-request-intake.md`
+- **Last reconciled:** 2026-08-28
+- **Normative sources:** Current product baseline, request-intake orchestration, and MCP contract
 - **Purpose:** Assign each risk to the narrowest credible test layer and define promotion thresholds
 
 ## 1. Principles
@@ -37,7 +38,7 @@ Only deterministic full-host tests that explicitly invoke authenticated card con
 | Architecture/static | Exact `/new` boundary, no requester-text dependency in Core, no parser/phrase dictionary/identifier extractor, provider-neutral type dependency, project-reference graph, module/`DbContext` ownership |
 | Core unit | Closed proposal validation, canonicalization, grouped reduction, authoritative validity, cascades, and lifecycle decisions |
 | Component | Independent reference/workflow SQLite persistence, migrations, clarification context, authoritative source ports, shared search policy, MCP transport/contracts, concurrency, and confirmation service |
-| Full host | Delivered-versus-target composition isolation, Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, two-database restart journeys, confirmation and replay |
+| Full host | Sole production composition, Teams authentication/transport, exact `/new`, agent routing, application rendering inputs, two-database restart journeys, confirmation, approvals, provisioning, and replay |
 | Frontend | Ready-card content/prominence, distinct duration/deadline labels, stale/expired outcomes, downstream regression |
 | Live model | English semantic interpretation and descriptive clarification references, justification fidelity, restraint, prompt injection, read-only tool use |
 
@@ -62,7 +63,12 @@ Required focused source or architecture tests:
 12. Only `GovernedAccess.ReferenceAuthority` references the reference `DbContext`; only `GovernedAccess.Workflow.Persistence` references the workflow `DbContext`.
 13. Core and MCP have no EF Core reference, and MCP owns distinct wire DTOs rather than serializing Core authority or EF types.
 14. Web controllers, Teams/AI adapters, and renderers do not inject either `DbContext` or query module tables.
-15. Before cutover, production composition resolves only the delivered graph and unified database while the isolated target composition resolves only the target graph and two target databases.
+15. Production composition resolves only the sparse-proposal graph, exact four-tool
+    catalog, reference-authority module/database, and workflow-persistence
+    module/database; no delivered or transitional registration remains.
+16. Startup accepts only fresh databases or the exact final migration/table
+    inventories, retains incompatible files, and returns bounded explicit-reset
+    guidance without a compatibility or upgrade path.
 
 These checks verify AC-01 through AC-06, AC-16, AC-22, AC-48 through AC-52, and the implementation boundary.
 
@@ -328,7 +334,7 @@ Use deterministic agent-adapter tests to prove:
 - Commit with stale version fails atomically and renders retry guidance.
 - A candidate-only or context-only concurrent write changes `ConcurrencyVersion`.
 - A stale proposal is not automatically reapplied to the new candidate/context.
-- Optional in-process conversation gate does not replace database uniqueness/OCC.
+- Fresh per-message provider sessions do not replace database uniqueness/OCC.
 
 ### 7.3 Active preparation uniqueness
 
@@ -351,8 +357,8 @@ Use deterministic agent-adapter tests to prove:
   mutating reference state.
 - Restart independently recreates both clients and preserves workflow state without
   relying on one shared database file.
-- Delivered production and isolated target fixtures use distinct database files and do
-  not copy or synchronize rows.
+- Production and evaluation fixtures initialize only the final two-database graph and
+  never copy or synchronize rows across those databases.
 
 ## 8. Full-host acceptance journeys
 
@@ -429,18 +435,19 @@ not require requester selection.
 3. Advance clock past deadline.
 4. Confirmation lazily expires preparation and creates no request.
 
-### Journey I: isolated modular persistence
+### Journey I: modular persistence
 
-1. Start the ordinary production host with only its delivered unified database and
-   assert all delivered regressions remain unchanged.
-2. Start the isolated target host with separate fresh reference and workflow databases.
+1. Start the production host with separate fresh reference and workflow databases.
+2. Assert only the final four reference tables and seven workflow tables exist under
+   their independent migration histories.
 3. Prepare, confirm, business-approve, DevOps-approve, and provision one synthetic
-   request through the target graph.
-4. Assert reference facts were read only from the reference database and every lifecycle
-   row was written only to the workflow database.
-5. Stop/restart the target host and assert both independent migration histories and the
+   request through the sole production graph.
+4. Assert reference facts were read only from the reference database and every
+   preparation/workflow row was written only to the workflow database.
+5. Stop/restart the host and assert both independent migration histories and the
    workflow result remain valid.
-6. Assert neither composition shares a database file, registration, entity, or row.
+6. Start with an old or transitional schema and assert startup fails with bounded reset
+   guidance while retaining the configured file unchanged.
 
 ## 9. Frontend regression scope
 
@@ -452,7 +459,7 @@ Verify:
 - confirmation deadline includes local formatting and UTC;
 - stale, expired, foreign, duplicate, and already-submitted outcomes are distinguishable;
 - no model prose or raw tool display payload is rendered directly;
-- downstream request register, approval, provisioning, and grant views remain compatible with immutable requests.
+- downstream request register, approval, provisioning, and grant views preserve immutable-request behavior.
 
 ## 10. Live-model evaluation
 
@@ -559,11 +566,11 @@ non-synthetic requester data.
 | AC-23–AC-28 | Agent-input/context lifecycle unit tests, persistence/restart/OCC tests, and live English descriptive exact-ID scenarios |
 | AC-29–AC-40 | Version, lifecycle, OCC, card, idempotency, and controlled-race tests |
 | AC-41–AC-47 | Prompt-injection, logging/privacy, diagnostics/versioning, abuse bounds, and retained live-evaluation report |
-| AC-48–AC-52 | Project/module ownership checks, independent database migration/failure tests, isolated target Journey I, atomic composition and cleanup source checks |
+| AC-48–AC-52 | Project/module ownership checks, independent database migration/failure tests, modular Journey I, sole-composition and cleanup source checks |
 
 ## 12. Required command/evidence sequence
 
-The implementation plan should preserve this gate order:
+Changes to the implementation should preserve this gate order:
 
 1. architecture/source checks;
 2. Core unit tests;

@@ -30,7 +30,8 @@ choices and gathers the role and operational justification before producing a dr
 ![Ambiguous production environment resolved through a Microsoft Teams conversation](docs/img/Case2.png)
 
 A requester can refine an ambiguous environment choice and revise the proposed role;
-the earlier draft is invalidated and replaced instead of being silently changed.
+the earlier ready preparation is superseded and replaced instead of being silently
+changed.
 
 ![Production access request refined and revised in Microsoft Teams](docs/img/Case3.png)
 
@@ -41,14 +42,14 @@ the earlier draft is invalidated and replaced instead of being silently changed.
 With the live model profile selected, the MAF-based interpreter:
 
 - interprets a server-owned envelope containing the latest natural-language message
-  and the currently accepted candidate;
-- extracts, preserves, or revises client, environment, role, justification, and
-  optional incident information;
+  plus the canonical candidate and any persisted bounded clarification choices;
+- expresses supported changes as a sparse `set`/`clear` patch over environment, role,
+  justification, and incident;
 - uses approved read-only MCP tools when authoritative context is needed;
-- resolves unambiguous readable environment descriptions and asks a focused question
-  when information is missing, ambiguous, or conflicting; and
-- returns one closed, schema-bound result: either a complete nullable candidate or a
-  clarification with a typed target and structured environment option IDs.
+- resolves unambiguous readable environment descriptions and active displayed-choice
+  references while returning `unclear` when they cannot be resolved safely; and
+- returns one closed dialogue act with either a compatible sparse patch, one closed
+  discussion topic, or no semantic payload. It returns no requester-visible prose.
 
 The model does **not** decide whether a candidate is valid or ready. It has no
 capability to:
@@ -77,7 +78,7 @@ does not fall back to the deterministic client.
 
 | Boundary | What this project uses it for |
 |---|---|
-| MAF | One bounded interpretation run, process-local conversation sessions keyed by server-generated intake ID, schema-constrained responses, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. |
+| MAF | One fresh bounded interpretation session per message, a schema-constrained sparse proposal, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. Provider sessions are not retained. |
 | MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact four-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
 | Core | Provider- and protocol-independent validation, authorization, state transitions, confirmation, approval policy, provisioning eligibility, and fixed grant lifetime. |
 
@@ -101,7 +102,7 @@ flowchart LR
     Teams[Personal Teams conversation] --> Draft[Request preparation]
     Draft --> AI[MAF interpretation]
     AI <--> MCP[Four read-only MCP tools]
-    MCP --> Context[(Synthetic context in SQLite)]
+    MCP --> Context[(Reference-authority SQLite)]
     AI --> Proposal[Schema-bound proposal]
     Proposal --> Validation[Deterministic Core validation]
     Validation --> Ready[Persisted ready intake]
@@ -109,17 +110,18 @@ flowchart LR
     Request --> Business[Business approval]
     Business --> DevOps[DevOps approval]
     DevOps --> Provisioning[Protected synthetic provisioning]
-    Provisioning --> Evidence[(Grant and audit evidence)]
+    Provisioning --> Evidence[(Workflow SQLite evidence)]
     Web[React register] --> Business
     Web --> DevOps
 ```
 
-The AI path ends at the proposal. SQLite stores the sanitized candidate and intake
-lifecycle, immutable requests, approvals, provisioning operations, grants, and audit
-events. It does not store prompts, transcripts, or serialized MAF history.
-Conversation history and per-intake serialization gates are process-local; a restart
-loses conversational context but preserves the accepted candidate. Relative replies
-that can no longer be grounded are clarified again rather than guessed.
+The AI path ends at the proposal. The independently owned reference database stores
+synthetic clients, eligible environments, assignments, and incidents. The workflow
+database stores canonical preparations and bounded clarification context, immutable
+requests, approvals, provisioning operations, grants, and audit events. Neither stores
+raw prompts, requester transcripts, provider sessions, model reasoning, raw proposals,
+or complete MCP payloads. Restart preserves the canonical candidate and active ordered
+choices; no process-local conversation history is required.
 
 Confirmation reloads the owned, unexpired ready intake and revalidates its scope.
 Business approval is restricted to the approver configured for the authoritative
@@ -160,8 +162,8 @@ Deterministic automated tests and live-model evaluation answer different questio
 
 The credential-free backend suites use deterministic chat clients, while the
 frontend suite is isolated from a live model. Together they cover domain policy,
-candidate validation, SQLite persistence,
-MAF session behavior, the real MCP transport and contract, Teams and browser
+candidate validation, independent SQLite persistence and migrations,
+bounded MAF turn behavior, the real MCP transport and contract, Teams and browser
 authentication boundaries, antiforgery, confirmation, approvals, concurrency,
 provisioning failure/retry/idempotency, audit evidence, and representative UI wiring.
 They do not require a live LLM, Teams tenant, Azure subscription, or production
@@ -177,22 +179,24 @@ decisions, provisioning operations, and grants. The mode cannot confirm, approve
 retry, or provision.
 
 The checked-in English-only evaluation dataset is `deterministic-intake-2.0.2`
-(schema version `1`).
-No reviewed current run is retained yet because a credentialed passing run is still
-pending. Artifacts from the removed delivered evaluator are not retained and cannot
-serve as promotion evidence for the current evaluator.
+(schema version `1`). The promoted 2026-08-28 run exercised all 12 promoted groups and
+both advisory groups without selective reruns or waivers; every group and absolute
+safety gate passed with zero consequential workflow side effects. Generated
+schema-version-4 artifacts remain local and gitignored rather than being committed.
 
 ## Deliberate limitations
 
 - All clients, environments, roles, incidents, identities, requests, and grants are
   synthetic. Teams actors map to one fixed synthetic requester, browser authentication
   is a demo identity selector, and no production credential or access provider exists.
-- The application is one process and one deployment unit. SQLite is created with
-  `EnsureCreated`; there are no production migrations, high availability, database
-  encryption, row-level security, or protected backup/recovery controls.
-- MAF conversation sessions and keyed concurrency gates are in memory. They are lost
-  on restart, retained for the process lifetime, and are not designed for distributed
-  replicas or high-volume workloads.
+- The application is one process and one deployment unit. Reference and workflow
+  SQLite files have separate EF Core contexts, migrations, and seeders, but no high
+  availability, encryption, row-level security, or protected backup/recovery controls.
+  Disposable local schemas must be fresh or exactly current; there is no supported
+  in-place upgrade path.
+- Each message uses a fresh MAF session. Only provider-neutral canonical state and one
+  bounded clarification context survive a restart; general transcript-based
+  coreference is intentionally unsupported.
 - The synthetic provider keeps its external grant simulation in process memory.
   Grant expiry is recorded and evaluated logically, but there is no automatic
   revocation or background reconciliation.

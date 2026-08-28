@@ -3,9 +3,16 @@
 - **Status**: Accepted
 - **Date**: 2026-08-22
 - **Clarified**: 2026-08-26
+- **Runtime reconciliation**: 2026-08-28
 - **Decision owners**: Project maintainer
 - **Supersedes**: ADR 0006 for request-intake preparation state
 - **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0005-retain-terminal-request-intake-tombstones.md`, `docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md`
+
+The opening references to the then-current complete-candidate/process-local flow are
+historical context. The accepted replacement is now the sole runtime: every message
+uses a fresh provider session over the persisted canonical candidate and bounded
+clarification context. No process-local conversation gate or choice store is
+registered.
 
 ## Context
 
