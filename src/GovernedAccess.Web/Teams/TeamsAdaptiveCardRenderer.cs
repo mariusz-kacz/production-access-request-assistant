@@ -89,16 +89,14 @@ internal static class TeamsAdaptiveCardRenderer
         return CreateAttachment(card);
     }
 
-    internal static Attachment CreateStatusCard(
-        TeamsStatusCardPresentation presentation)
+    internal static Attachment CreateStatusCard(string title, string message)
     {
-        ArgumentNullException.ThrowIfNull(presentation);
         return CreateAttachment(
             CreateCard(
                 new JsonArray
                 {
-                    CreateTitle(presentation.Title, "Medium"),
-                    CreateText(presentation.Message),
+                    CreateTitle(Normalize(title, nameof(title)), "Medium"),
+                    CreateText(Normalize(message, nameof(message))),
                 }));
     }
 
@@ -124,6 +122,12 @@ internal static class TeamsAdaptiveCardRenderer
         string.Create(
             CultureInfo.InvariantCulture,
             $"{displayName} ({identifier})");
+
+    private static string Normalize(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        return value.Trim();
+    }
 
     private static JsonObject CreateCard(JsonArray body) =>
         new()

@@ -26,11 +26,11 @@ public sealed class TargetFullHostCompositionTests
         Assert.IsType<MafTurnProposalInterpreter>(
             services.GetRequiredService<ITurnProposalInterpreter>());
         Assert.IsType<TargetRequestPreparationOrchestrator>(
-            services.GetRequiredService<ITargetRequestPreparationOrchestrator>());
+            services.GetRequiredService<IRequestPreparationOrchestrator>());
         Assert.IsType<PreparationConfirmationService>(
             services.GetRequiredService<IPreparationConfirmationService>());
-        Assert.IsType<TargetTeamsAccessRequestAdapter>(
-            services.GetRequiredService<TargetTeamsAccessRequestAdapter>());
+        Assert.IsType<TeamsAccessRequestAdapter>(
+            services.GetRequiredService<TeamsAccessRequestAdapter>());
         Assert.Equal(
             typeof(WorkflowDbContext).Assembly,
             services.GetRequiredService<IWorkflowStore>().GetType().Assembly);

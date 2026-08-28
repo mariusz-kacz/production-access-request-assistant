@@ -8,7 +8,7 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TargetTeamsResponseRendererTests
+public sealed class TeamsResponseRendererTests
 {
     [Fact]
     public void ClarificationUsesOnlyAuthoritativeChoicesAndBoundsTheList()
@@ -39,11 +39,11 @@ public sealed class TargetTeamsResponseRendererTests
                 new ApplicationGroupResult(
                     ApplicationGroupResultKind.Applied)));
 
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             result,
             "pl-PL");
 
-        Assert.Equal(TargetTeamsResponseKind.Text, presentation.Kind);
+        Assert.Equal(TeamsResponseKind.Text, presentation.Kind);
         Assert.Equal(InputHints.ExpectingInput, presentation.InputHint);
         Assert.Equal(TeamsLocale.Default, presentation.Locale);
         Assert.Contains("Choose one environment", presentation.Message, StringComparison.Ordinal);
@@ -73,7 +73,7 @@ public sealed class TargetTeamsResponseRendererTests
                     ApplicationGroupRejectionReason.Invalid)),
             candidate);
 
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             result,
             TeamsLocale.Default);
 
@@ -103,7 +103,7 @@ public sealed class TargetTeamsResponseRendererTests
     {
         var outcome = (ApplicationOutcome)Activator.CreateInstance(outcomeType)!;
 
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             Result(outcome),
             TeamsLocale.Default);
 
@@ -122,14 +122,14 @@ public sealed class TargetTeamsResponseRendererTests
                 incidentId: null));
         var snapshot = new PreparationSnapshot(preparation);
 
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             new PreparationTurnResult(
                 snapshot,
                 new PreparationResponse(
                     new ReadyForConfirmation(preparation.PreparationId))),
             TeamsLocale.Default);
 
-        Assert.Equal(TargetTeamsResponseKind.ReadyCard, presentation.Kind);
+        Assert.Equal(TeamsResponseKind.ReadyCard, presentation.Kind);
         Assert.Same(snapshot, presentation.Preparation);
         Assert.Null(presentation.Message);
     }
@@ -144,7 +144,7 @@ public sealed class TargetTeamsResponseRendererTests
             "Investigate </TextBlock> exactly",
             "INC-1");
 
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             Result(new DraftDiscussion(DiscussionTopic.CurrentDraft), candidate),
             TeamsLocale.Default);
 
@@ -161,7 +161,7 @@ public sealed class TargetTeamsResponseRendererTests
     [Fact]
     public void ConcurrencyFailureRendersRetryWithoutClaimingMutation()
     {
-        var presentation = TargetTeamsResponseRenderer.Render(
+        var presentation = TeamsResponseRenderer.Render(
             Result(
                 new Failed(
                     new ApplicationFailure(

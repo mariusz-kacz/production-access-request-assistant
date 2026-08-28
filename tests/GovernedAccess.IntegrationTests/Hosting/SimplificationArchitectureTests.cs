@@ -1,8 +1,9 @@
 using System.Runtime.CompilerServices;
+using GovernedAccess.Web.Teams;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
-public sealed class TargetSimplificationArchitectureTests
+public sealed class SimplificationArchitectureTests
 {
     private static readonly string[] RetiredMechanismNames =
     [
@@ -62,6 +63,32 @@ public sealed class TargetSimplificationArchitectureTests
         }
 
         Assert.Empty(findings);
+    }
+
+    [Fact]
+    public void TeamsNamespaceContainsNoMigrationTargetNames()
+    {
+        var migrationTypeNames = typeof(TeamsAgentRegistration)
+            .Assembly
+            .GetTypes()
+            .Where(type => type.Namespace == typeof(TeamsAgentRegistration).Namespace)
+            .Select(type => type.Name)
+            .Where(name => name.StartsWith("Target", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal);
+
+        Assert.Empty(migrationTypeNames);
+
+        var teamsSourceDirectory = Path.Combine(
+            GetRepositoryRoot(),
+            "src",
+            "GovernedAccess.Web",
+            "Teams");
+        var migrationFileNames = Directory
+            .EnumerateFiles(teamsSourceDirectory, "Target*.cs")
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Empty(migrationFileNames);
     }
 
     private static bool IsScannableSource(string path)

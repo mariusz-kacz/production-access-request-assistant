@@ -41,17 +41,15 @@ internal static class RequestPreparationRegistration
                 serviceProvider.GetRequiredService<IHttpClientFactory>()));
         services.AddScoped<RequestPreparationReducer>();
         services.AddScoped<PreparationTurnService>();
-        services.AddScoped<ITargetRequestPreparationOrchestrator>(serviceProvider =>
+        services.AddScoped<IRequestPreparationOrchestrator>(serviceProvider =>
             new TargetRequestPreparationOrchestrator(
                 serviceProvider.GetRequiredService<PreparationTurnService>(),
                 serviceProvider.GetRequiredService<ITurnProposalInterpreter>()));
         services.AddScoped<IPreparationConfirmationService,
             PreparationConfirmationService>();
-        services.AddScoped<ITargetPreparedRequestCardFactory,
-            TargetPreparedRequestCardFactory>();
-        services.AddScoped<ITargetRequestConfirmation,
-            TargetRequestConfirmationAdapter>();
-        services.AddScoped<TargetTeamsAccessRequestAdapter>();
+        services.AddScoped<IPreparedRequestCardFactory,
+            PreparedRequestCardFactory>();
+        services.AddScoped<TeamsAccessRequestAdapter>();
 
         return services;
     }

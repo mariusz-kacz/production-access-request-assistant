@@ -7,22 +7,22 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal enum TargetTeamsResponseKind
+internal enum TeamsResponseKind
 {
     Text,
     ReadyCard,
 }
 
-internal sealed record TargetTeamsResponsePresentation(
-    TargetTeamsResponseKind Kind,
+internal sealed record TeamsResponsePresentation(
+    TeamsResponseKind Kind,
     string? Message,
     string InputHint,
     string Locale,
     PreparationSnapshot? Preparation);
 
-internal static class TargetTeamsResponseRenderer
+internal static class TeamsResponseRenderer
 {
-    internal static TargetTeamsResponsePresentation Render(
+    internal static TeamsResponsePresentation Render(
         PreparationTurnResult result,
         string? locale)
     {
@@ -83,11 +83,11 @@ internal static class TargetTeamsResponseRenderer
                 InputHints.AcceptingInput,
                 normalizedLocale),
             _ => throw new InvalidOperationException(
-                "The target preparation outcome is unsupported."),
+                "The preparation outcome is unsupported."),
         };
     }
 
-    private static TargetTeamsResponsePresentation RenderReady(
+    private static TeamsResponsePresentation RenderReady(
         ReadyForConfirmation outcome,
         PreparationSnapshot? preparation,
         string locale)
@@ -102,7 +102,7 @@ internal static class TargetTeamsResponseRenderer
         return Ready(preparation, locale);
     }
 
-    private static TargetTeamsResponsePresentation RenderRevalidation(
+    private static TeamsResponsePresentation RenderRevalidation(
         ConfirmationRevalidationFailed outcome,
         PreparationSnapshot? preparation,
         string locale)
@@ -323,23 +323,23 @@ internal static class TargetTeamsResponseRenderer
             ReadyDeadline: not null,
         } && preparation.Candidate.IsComplete;
 
-    private static TargetTeamsResponsePresentation Text(
+    private static TeamsResponsePresentation Text(
         string message,
         string inputHint,
         string locale) =>
         new(
-            TargetTeamsResponseKind.Text,
+            TeamsResponseKind.Text,
             message,
             inputHint,
             locale,
             Preparation: null);
 
-    private static TargetTeamsResponsePresentation Ready(
+    private static TeamsResponsePresentation Ready(
         PreparationSnapshot preparation,
         string locale,
         string? message = null) =>
         new(
-            TargetTeamsResponseKind.ReadyCard,
+            TeamsResponseKind.ReadyCard,
             message,
             InputHints.AcceptingInput,
             locale,

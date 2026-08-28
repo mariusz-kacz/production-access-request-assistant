@@ -72,9 +72,8 @@ public sealed class TeamsAdaptiveCardRendererTests
     public void StatusCardHasNoActionSurface()
     {
         var attachment = TeamsAdaptiveCardRenderer.CreateStatusCard(
-            new TeamsStatusCardPresentation(
-                "Draft replaced",
-                "Use the latest request draft card."));
+            "Draft replaced",
+            "Use the latest request draft card.");
 
         var card = Assert.IsType<JsonElement>(attachment.Content);
         Assert.False(card.TryGetProperty("actions", out _));

@@ -5,7 +5,7 @@ using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Web.Ai;
 
-internal interface ITargetRequestPreparationOrchestrator
+internal interface IRequestPreparationOrchestrator
 {
     Task<PreparationTurnResult> ProcessTurnAsync(
         PreparationBinding binding,
@@ -20,7 +20,7 @@ internal interface ITargetRequestPreparationOrchestrator
 }
 
 internal sealed class TargetRequestPreparationOrchestrator :
-    ITargetRequestPreparationOrchestrator
+    IRequestPreparationOrchestrator
 {
     private readonly ITurnProposalInterpreter interpreter;
     private readonly PreparationTurnService turnService;

@@ -229,22 +229,19 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
                 services.GetRequiredService<IHttpClientFactory>()));
         builder.Services.AddScoped<RequestPreparationReducer>();
         builder.Services.AddScoped<PreparationTurnService>();
-        builder.Services.AddScoped<ITargetRequestPreparationOrchestrator>(services =>
+        builder.Services.AddScoped<IRequestPreparationOrchestrator>(services =>
             new TargetRequestPreparationOrchestrator(
                 services.GetRequiredService<PreparationTurnService>(),
                 services.GetRequiredService<ITurnProposalInterpreter>()));
         builder.Services.AddScoped<IPreparationConfirmationService,
             PreparationConfirmationService>();
-        builder.Services.AddScoped<ITargetPreparedRequestCardFactory>(services =>
-            new TargetPreparedRequestCardFactory(
+        builder.Services.AddScoped<IPreparedRequestCardFactory>(services =>
+            new PreparedRequestCardFactory(
                 services.GetRequiredService<IAuthenticatedPrincipalReader>(),
                 services.GetRequiredService<IProductionEnvironmentAuthority>(),
                 services.GetRequiredService<IEnvironmentRoleAuthority>(),
                 services.GetRequiredService<IIncidentAuthority>()));
-        builder.Services.AddScoped<ITargetRequestConfirmation>(services =>
-            new TargetRequestConfirmationAdapter(
-                services.GetRequiredService<IPreparationConfirmationService>()));
-        builder.Services.AddScoped<TargetTeamsAccessRequestAdapter>();
+        builder.Services.AddScoped<TeamsAccessRequestAdapter>();
 
         builder.Services.AddScoped<AccessRequestValidator>();
         builder.Services.AddScoped<AccessRequestCommandContextLoader>();

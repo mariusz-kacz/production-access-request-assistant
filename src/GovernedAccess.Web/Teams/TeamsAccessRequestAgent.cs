@@ -7,23 +7,23 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal sealed class TeamsAccessRequestAgent : AgentApplication
+internal sealed partial class TeamsAccessRequestAgent : AgentApplication
 {
     private const string ConfirmAndSubmitVerb = "confirmAndSubmit";
     private const string RejectedActivityMessage =
         "This assistant accepts production-access requests only from an authenticated personal Microsoft Teams chat.";
 
     private readonly TeamsActorResolver actorResolver;
-    private readonly TargetTeamsAccessRequestAdapter adapter;
+    private readonly TeamsAccessRequestAdapter adapter;
     private readonly TeamsDraftCardTracker cardTracker;
-    private readonly TeamsActivityPresenter presenter;
+    private readonly ILogger<TeamsAccessRequestAgent> logger;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
-        TargetTeamsAccessRequestAdapter adapter,
+        TeamsAccessRequestAdapter adapter,
         TeamsDraftCardTracker cardTracker,
-        TeamsActivityPresenter presenter)
+        ILogger<TeamsAccessRequestAgent> logger)
         : base(options)
     {
         this.actorResolver = actorResolver
@@ -31,7 +31,7 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
         this.adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
         this.cardTracker = cardTracker
             ?? throw new ArgumentNullException(nameof(cardTracker));
-        this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         AdaptiveCards.OnActionExecute(
             ConfirmAndSubmitVerb,
@@ -47,7 +47,7 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
         ArgumentNullException.ThrowIfNull(turnContext);
         if (!TryResolve(turnContext, out var context))
         {
-            await TeamsActivityPresenter.SendTextAsync(
+            await SendTextAsync(
                 turnContext,
                 RejectedActivityMessage,
                 InputHints.IgnoringInput,
@@ -81,7 +81,7 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
             data,
             CreateCorrelationId(),
             cancellationToken);
-        if (result.Kind == TargetTeamsAdapterResultKind.InvalidAction)
+        if (result.Kind == TeamsAdapterResultKind.InvalidAction)
         {
             return AdaptiveCardInvokeResponseFactory.BadRequest(result.Message!);
         }
@@ -99,23 +99,23 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
 
         return result.Kind switch
         {
-            TargetTeamsAdapterResultKind.Card =>
+            TeamsAdapterResultKind.Card =>
                 AdaptiveCardInvokeResponseFactory.AdaptiveCard(
                     GetCardJson(result.Card!)),
-            TargetTeamsAdapterResultKind.Text =>
+            TeamsAdapterResultKind.Text =>
                 AdaptiveCardInvokeResponseFactory.Message(result.Message!),
             _ => throw new InvalidOperationException(
-                "The target Teams confirmation result is unsupported."),
+                "The Teams confirmation result is unsupported."),
         };
     }
 
     private async Task PresentAsync(
         ITurnContext turnContext,
         TeamsAuthenticatedContext context,
-        TargetTeamsAdapterResult result,
+        TeamsAdapterResult result,
         CancellationToken cancellationToken)
     {
-        if (result.Kind == TargetTeamsAdapterResultKind.Text)
+        if (result.Kind == TeamsAdapterResultKind.Text)
         {
             if (result.InvalidatesTrackedCard)
             {
@@ -125,7 +125,7 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
                     cancellationToken);
             }
 
-            await TeamsActivityPresenter.SendTextAsync(
+            await SendTextAsync(
                 turnContext,
                 result.Message!,
                 result.InputHint,
@@ -133,18 +133,18 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        if (result.Kind != TargetTeamsAdapterResultKind.Card
+        if (result.Kind != TeamsAdapterResultKind.Card
             || result.Card is null
             || result.PreparationId is not Guid preparationId)
         {
             throw new InvalidOperationException(
-                "The target Teams preparation result is unsupported.");
+                "The Teams preparation result is unsupported.");
         }
 
         if (cardTracker.TryGet(context.Conversation, out var current))
         {
             if (current.PreparationId == preparationId
-                && await presenter.TryUpdateAttachmentAsync(
+                && await TryUpdateAttachmentAsync(
                     turnContext,
                     current.ActivityId,
                     result.Card,
@@ -159,7 +159,7 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
                 cancellationToken);
         }
 
-        var activityId = await TeamsActivityPresenter.SendAttachmentAsync(
+        var activityId = await SendAttachmentAsync(
             turnContext,
             result.Card,
             result.InputHint,
@@ -180,14 +180,79 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        _ = await presenter.TryUpdateAttachmentAsync(
+        _ = await TryUpdateAttachmentAsync(
             turnContext,
             current.ActivityId,
             TeamsAdaptiveCardRenderer.CreateStatusCard(
-                new TeamsStatusCardPresentation(
-                    "Draft replaced",
-                    "This draft can no longer be submitted. Use the latest request draft card.")),
+                "Draft replaced",
+                "This draft can no longer be submitted. Use the latest request draft card."),
             cancellationToken);
+    }
+
+    private static async Task SendTextAsync(
+        ITurnContext turnContext,
+        string message,
+        string inputHint,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(turnContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+        await turnContext.SendActivityAsync(
+            MessageFactory.Text(message, inputHint: inputHint),
+            cancellationToken);
+    }
+
+    private static async Task<string?> SendAttachmentAsync(
+        ITurnContext turnContext,
+        Attachment attachment,
+        string inputHint,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(turnContext);
+        ArgumentNullException.ThrowIfNull(attachment);
+        var response = await turnContext.SendActivityAsync(
+            MessageFactory.Attachment(attachment, inputHint: inputHint),
+            cancellationToken);
+        return string.IsNullOrWhiteSpace(response.Id)
+            ? null
+            : response.Id.Trim();
+    }
+
+    private async Task<bool> TryUpdateAttachmentAsync(
+        ITurnContext turnContext,
+        string activityId,
+        Attachment attachment,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(turnContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityId);
+        ArgumentNullException.ThrowIfNull(attachment);
+
+        var replacement = turnContext.Activity.CreateReply();
+        replacement.Id = activityId.Trim();
+        replacement.InputHint = InputHints.IgnoringInput;
+        replacement.Attachments = [attachment];
+
+        try
+        {
+            await turnContext.UpdateActivityAsync(replacement, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            LogCardUpdateFailed(
+                logger,
+                turnContext.Activity.ChannelId.ToString(),
+                turnContext.Activity.Conversation.Id is { Length: > 0 } conversationId
+                    ? conversationId
+                    : "unknown",
+                exception.GetType().Name);
+            return false;
+        }
     }
 
     private bool TryResolve(
@@ -215,4 +280,15 @@ internal sealed class TeamsAccessRequestAgent : AgentApplication
             ? traceId.ToString()
             : Guid.NewGuid().ToString("N");
     }
+
+    [LoggerMessage(
+        EventId = 1010,
+        EventName = "TeamsCardUpdateFailed",
+        Level = LogLevel.Warning,
+        Message = "Teams card presentation update failed for channel {Channel} and conversation {ConversationId}. Failure type {FailureType}; durable workflow state remains authoritative.")]
+    private static partial void LogCardUpdateFailed(
+        ILogger logger,
+        string channel,
+        string conversationId,
+        string failureType);
 }

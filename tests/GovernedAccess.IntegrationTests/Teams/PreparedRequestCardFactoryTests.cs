@@ -10,7 +10,7 @@ using GovernedAccess.Web.Teams;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TargetPreparedRequestCardFactoryTests
+public sealed class PreparedRequestCardFactoryTests
 {
     [Fact]
     public async Task ReloadsEveryDisplayedFactAndRendersTheExactReadyScope()
@@ -18,7 +18,7 @@ public sealed class TargetPreparedRequestCardFactoryTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var preparation = CreateReadyPreparation(incidentId: "INC-1");
         var authority = new StubAuthority();
-        var factory = new TargetPreparedRequestCardFactory(
+        var factory = new PreparedRequestCardFactory(
             authority,
             authority,
             authority,
@@ -65,7 +65,7 @@ public sealed class TargetPreparedRequestCardFactoryTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var authority = new StubAuthority();
-        var factory = new TargetPreparedRequestCardFactory(
+        var factory = new PreparedRequestCardFactory(
             authority,
             authority,
             authority,
@@ -94,7 +94,7 @@ public sealed class TargetPreparedRequestCardFactoryTests
                 "Read only",
                 isCurrentlyAssignable: false),
         };
-        var factory = new TargetPreparedRequestCardFactory(
+        var factory = new PreparedRequestCardFactory(
             authority,
             authority,
             authority,
@@ -107,7 +107,7 @@ public sealed class TargetPreparedRequestCardFactoryTests
 
         Assert.True(result.IsFailure);
         Assert.Equal(
-            "target_prepared_card_context_mismatch",
+            "prepared_card_context_mismatch",
             result.Failure!.Code);
     }
 
@@ -123,7 +123,7 @@ public sealed class TargetPreparedRequestCardFactoryTests
         {
             EnvironmentFailure = failure,
         };
-        var factory = new TargetPreparedRequestCardFactory(
+        var factory = new PreparedRequestCardFactory(
             authority,
             authority,
             authority,

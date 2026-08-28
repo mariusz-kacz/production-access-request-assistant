@@ -8,7 +8,7 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal interface ITargetPreparedRequestCardFactory
+internal interface IPreparedRequestCardFactory
 {
     Task<ApplicationResult<Attachment>> CreateAsync(
         PreparationSnapshot preparation,
@@ -16,11 +16,11 @@ internal interface ITargetPreparedRequestCardFactory
         CancellationToken cancellationToken);
 }
 
-internal sealed class TargetPreparedRequestCardFactory(
+internal sealed class PreparedRequestCardFactory(
     IAuthenticatedPrincipalReader principalReader,
     IProductionEnvironmentAuthority environmentAuthority,
     IEnvironmentRoleAuthority roleAuthority,
-    IIncidentAuthority incidentAuthority) : ITargetPreparedRequestCardFactory
+    IIncidentAuthority incidentAuthority) : IPreparedRequestCardFactory
 {
     public async Task<ApplicationResult<Attachment>> CreateAsync(
         PreparationSnapshot preparation,
@@ -35,7 +35,7 @@ internal sealed class TargetPreparedRequestCardFactory(
         {
             return Failed(
                 ApplicationFailureKind.InvalidTransition,
-                "target_prepared_request_not_ready",
+                "prepared_request_not_ready",
                 "Only an immutable ready preparation can be rendered for confirmation.");
         }
 
@@ -135,7 +135,7 @@ internal sealed class TargetPreparedRequestCardFactory(
     private static ApplicationResult<Attachment> ContextMismatch() =>
         Failed(
             ApplicationFailureKind.DependencyFailure,
-            "target_prepared_card_context_mismatch",
+            "prepared_card_context_mismatch",
             "The ready preparation could not be rendered from current authoritative context.");
 
     private static ApplicationResult<Attachment> Failed(

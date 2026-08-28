@@ -10,141 +10,30 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal enum TargetTeamsAdapterResultKind
+internal enum TeamsAdapterResultKind
 {
     Text,
     Card,
     InvalidAction,
 }
 
-internal sealed record TargetTeamsAdapterResult(
-    TargetTeamsAdapterResultKind Kind,
+internal sealed record TeamsAdapterResult(
+    TeamsAdapterResultKind Kind,
     string? Message,
     Attachment? Card,
     string InputHint,
     bool InvalidatesTrackedCard,
     Guid? PreparationId);
 
-internal interface ITargetRequestConfirmation
-{
-    Task<TargetConfirmationResult> ConfirmAsync(
-        PreparationBinding binding,
-        Guid preparationId,
-        string correlationId,
-        CancellationToken cancellationToken);
-}
-
-internal enum TargetConfirmationResultKind
-{
-    Submitted,
-    AlreadySubmitted,
-    RevalidationFailed,
-    SourceUnavailable,
-    Failed,
-}
-
-internal sealed record TargetConfirmationResult
-{
-    private TargetConfirmationResult(
-        TargetConfirmationResultKind kind,
-        Guid requestId,
-        RequestStatus? requestStatus,
-        PreparationTurnResult? revalidation,
-        ApplicationFailure? failure)
-    {
-        Kind = kind;
-        RequestId = requestId;
-        RequestStatus = requestStatus;
-        Revalidation = revalidation;
-        Failure = failure;
-    }
-
-    internal TargetConfirmationResultKind Kind { get; }
-
-    internal Guid RequestId { get; }
-
-    internal RequestStatus? RequestStatus { get; }
-
-    internal PreparationTurnResult? Revalidation { get; }
-
-    internal ApplicationFailure? Failure { get; }
-
-    internal static TargetConfirmationResult Submitted(
-        Guid requestId,
-        RequestStatus requestStatus,
-        bool wasAlreadySubmitted)
-    {
-        if (requestId == Guid.Empty)
-        {
-            throw new ArgumentException(
-                "A submitted target confirmation requires a request identifier.",
-                nameof(requestId));
-        }
-
-        if (!Enum.IsDefined(requestStatus))
-        {
-            throw new ArgumentOutOfRangeException(nameof(requestStatus));
-        }
-
-        return new(
-            wasAlreadySubmitted
-                ? TargetConfirmationResultKind.AlreadySubmitted
-                : TargetConfirmationResultKind.Submitted,
-            requestId,
-            requestStatus,
-            revalidation: null,
-            failure: null);
-    }
-
-    internal static TargetConfirmationResult RevalidationFailed(
-        PreparationTurnResult result)
-    {
-        ArgumentNullException.ThrowIfNull(result);
-        if (result.Response.Outcome is not ConfirmationRevalidationFailed)
-        {
-            throw new ArgumentException(
-                "A target confirmation revalidation result requires the matching typed outcome.",
-                nameof(result));
-        }
-
-        return new(
-            TargetConfirmationResultKind.RevalidationFailed,
-            Guid.Empty,
-            requestStatus: null,
-            result,
-            failure: null);
-    }
-
-    internal static TargetConfirmationResult SourceUnavailable() =>
-        new(
-            TargetConfirmationResultKind.SourceUnavailable,
-            Guid.Empty,
-            requestStatus: null,
-            revalidation: null,
-            failure: null);
-
-    internal static TargetConfirmationResult Failed(
-        ApplicationFailure failure)
-    {
-        ArgumentNullException.ThrowIfNull(failure);
-        return new(
-            TargetConfirmationResultKind.Failed,
-            Guid.Empty,
-            requestStatus: null,
-            revalidation: null,
-            failure);
-    }
-}
-
-internal sealed partial class TargetTeamsAccessRequestAdapter(
-    ITargetRequestPreparationOrchestrator orchestrator,
-    ITargetPreparedRequestCardFactory cardFactory,
-    ITargetRequestConfirmation confirmation,
-    ILogger<TargetTeamsAccessRequestAdapter> logger)
+internal sealed partial class TeamsAccessRequestAdapter(
+    IRequestPreparationOrchestrator orchestrator,
+    IPreparedRequestCardFactory cardFactory,
+    IPreparationConfirmationService confirmationService,
+    ILogger<TeamsAccessRequestAdapter> logger)
 {
     private const string NewRequestCommand = "/new";
 
-    internal async Task<TargetTeamsAdapterResult> HandleMessageAsync(
+    internal async Task<TeamsAdapterResult> HandleMessageAsync(
         TeamsAuthenticatedContext context,
         string? message,
         string correlationId,
@@ -202,7 +91,7 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
         return response;
     }
 
-    internal async Task<TargetTeamsAdapterResult> HandleConfirmationAsync(
+    internal async Task<TeamsAdapterResult> HandleConfirmationAsync(
         TeamsAuthenticatedContext context,
         object? data,
         string correlationId,
@@ -212,8 +101,8 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
         if (!TryReadConfirmationData(data, out var preparationId))
         {
-            return new TargetTeamsAdapterResult(
-                TargetTeamsAdapterResultKind.InvalidAction,
+            return new TeamsAdapterResult(
+                TeamsAdapterResultKind.InvalidAction,
                 "The confirmation action is invalid. No request was submitted.",
                 Card: null,
                 InputHints.IgnoringInput,
@@ -222,10 +111,11 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
         }
 
         var startedAt = Stopwatch.GetTimestamp();
-        var result = await confirmation.ConfirmAsync(
-            CreateBinding(context.Conversation),
-            preparationId,
-            correlationId,
+        var result = await confirmationService.ConfirmAsync(
+            new PreparationConfirmationCommand(
+                CreateBinding(context.Conversation),
+                preparationId,
+                correlationId),
             cancellationToken);
         var response = await RenderConfirmationAsync(
             result,
@@ -236,9 +126,12 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
         {
             var durationMs =
                 Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            var outcome = ConfirmationOutcome(result);
+            var submittedRequest = result as PreparationConfirmationSubmitted;
+            var failure = (result as PreparationConfirmationFailed)?.Failure;
             LogConfirmationCompleted(
                 logger,
-                result.Kind,
+                outcome,
                 durationMs,
                 correlationId,
                 context.Channel,
@@ -247,24 +140,24 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
                 context.ConversationId,
                 context.RequesterId,
                 preparationId,
-                result.RequestId == Guid.Empty ? null : result.RequestId,
-                result.Failure?.Kind,
-                result.Failure?.Code);
+                submittedRequest?.Request.Id,
+                failure?.Kind,
+                failure?.Code);
         }
 
         return response;
     }
 
-    private async Task<TargetTeamsAdapterResult> CreateResultAsync(
+    private async Task<TeamsAdapterResult> CreateResultAsync(
         PreparationTurnResult result,
         string locale,
         bool invalidatesTrackedCard,
         CancellationToken cancellationToken)
     {
-        var presentation = TargetTeamsResponseRenderer.Render(result, locale);
+        var presentation = TeamsResponseRenderer.Render(result, locale);
         invalidatesTrackedCard |=
             result.Preparation?.PredecessorPreparationId is not null;
-        if (presentation.Kind == TargetTeamsResponseKind.Text)
+        if (presentation.Kind == TeamsResponseKind.Text)
         {
             return Text(
                 presentation.Message!,
@@ -279,7 +172,7 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
             cancellationToken);
         if (cardResult.IsFailure)
         {
-            var failurePresentation = TargetTeamsResponseRenderer.Render(
+            var failurePresentation = TeamsResponseRenderer.Render(
                 new PreparationTurnResult(
                     presentation.Preparation,
                     new PreparationResponse(
@@ -292,8 +185,8 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
                 presentation.Preparation!.PreparationId);
         }
 
-        return new TargetTeamsAdapterResult(
-            TargetTeamsAdapterResultKind.Card,
+        return new TeamsAdapterResult(
+            TeamsAdapterResultKind.Card,
             presentation.Message,
             cardResult.Value,
             presentation.InputHint,
@@ -301,60 +194,72 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
             presentation.Preparation!.PreparationId);
     }
 
-    private async Task<TargetTeamsAdapterResult> RenderConfirmationAsync(
-        TargetConfirmationResult result,
+    private async Task<TeamsAdapterResult> RenderConfirmationAsync(
+        PreparationConfirmationResult result,
         string locale,
         Guid preparationId,
         CancellationToken cancellationToken) =>
-        result.Kind switch
+        result switch
         {
-            TargetConfirmationResultKind.Submitted
-                or TargetConfirmationResultKind.AlreadySubmitted =>
-                Submitted(result, preparationId),
-            TargetConfirmationResultKind.RevalidationFailed =>
+            PreparationConfirmationSubmitted submitted =>
+                Submitted(submitted, preparationId),
+            PreparationConfirmationRevalidationFailed revalidationFailed =>
                 await CreateResultAsync(
-                    result.Revalidation!,
+                    revalidationFailed.Revalidation,
                     locale,
                     invalidatesTrackedCard: true,
                     cancellationToken),
-            TargetConfirmationResultKind.SourceUnavailable =>
+            PreparationConfirmationSourceUnavailable =>
                 Text(
-                    TargetTeamsResponseRenderer.Render(
+                    TeamsResponseRenderer.Render(
                         new PreparationTurnResult(
                             preparation: null,
                             new PreparationResponse(
                                 new ConfirmationSourceUnavailable())),
                         locale).Message!,
                     InputHints.AcceptingInput),
-            TargetConfirmationResultKind.Failed => Text(
-                TargetTeamsResponseRenderer.Render(
+            PreparationConfirmationFailed failed => Text(
+                TeamsResponseRenderer.Render(
                     new PreparationTurnResult(
                         preparation: null,
-                        new PreparationResponse(new Failed(result.Failure!))),
+                        new PreparationResponse(new Failed(failed.Failure))),
                     locale).Message!,
                 InputHints.AcceptingInput),
             _ => throw new InvalidOperationException(
-                "The target confirmation result is unsupported."),
+                "The preparation-confirmation result is unsupported."),
         };
 
-    private static TargetTeamsAdapterResult Submitted(
-        TargetConfirmationResult result,
+    private static TeamsAdapterResult Submitted(
+        PreparationConfirmationSubmitted result,
         Guid preparationId)
     {
-        var title = result.Kind == TargetConfirmationResultKind.AlreadySubmitted
+        var title = result.WasAlreadySubmitted
             ? "Request already submitted"
             : "Request submitted";
-        return new TargetTeamsAdapterResult(
-            TargetTeamsAdapterResultKind.Card,
+        return new TeamsAdapterResult(
+            TeamsAdapterResultKind.Card,
             Message: null,
             TeamsAdaptiveCardRenderer.CreateStatusCard(
-                new TeamsStatusCardPresentation(
-                    title,
-                    $"Request {result.RequestId:D} is {StatusText(result.RequestStatus!.Value)}.")),
+                title,
+                $"Request {result.Request.Id:D} is {StatusText(result.Request.Status)}."),
             InputHints.IgnoringInput,
             InvalidatesTrackedCard: true,
             preparationId);
     }
+
+    private static string ConfirmationOutcome(
+        PreparationConfirmationResult result) =>
+        result switch
+        {
+            PreparationConfirmationSubmitted { WasAlreadySubmitted: true } =>
+                "AlreadySubmitted",
+            PreparationConfirmationSubmitted => "Submitted",
+            PreparationConfirmationRevalidationFailed => "RevalidationFailed",
+            PreparationConfirmationSourceUnavailable => "SourceUnavailable",
+            PreparationConfirmationFailed => "Failed",
+            _ => throw new InvalidOperationException(
+                "The preparation-confirmation result is unsupported."),
+        };
 
     private static string StatusText(RequestStatus status) =>
         status switch
@@ -371,13 +276,13 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
                 "The request status is unsupported."),
         };
 
-    private static TargetTeamsAdapterResult Text(
+    private static TeamsAdapterResult Text(
         string message,
         string inputHint,
         bool invalidatesTrackedCard = false,
         Guid? preparationId = null) =>
         new(
-            TargetTeamsAdapterResultKind.Text,
+            TeamsAdapterResultKind.Text,
             message,
             Card: null,
             inputHint,
@@ -440,9 +345,9 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
 
     [LoggerMessage(
         EventId = 1101,
-        EventName = "TargetTeamsPreparationCompleted",
+        EventName = "TeamsPreparationCompleted",
         Level = LogLevel.Information,
-        Message = "Target Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; preparation {PreparationId}.")]
+        Message = "Teams intake {Transition} completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; preparation {PreparationId}.")]
     private static partial void LogTurnCompleted(
         ILogger logger,
         string transition,
@@ -458,12 +363,12 @@ internal sealed partial class TargetTeamsAccessRequestAdapter(
 
     [LoggerMessage(
         EventId = 1102,
-        EventName = "TargetTeamsConfirmationCompleted",
+        EventName = "TeamsConfirmationCompleted",
         Level = LogLevel.Information,
-        Message = "Target Teams confirmation completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; preparation {PreparationId}; request {RequestId}; failure kind {FailureKind}; failure code {FailureCode}.")]
+        Message = "Teams confirmation completed with {Outcome} in {DurationMs} ms. CorrelationId {CorrelationId}; channel {Channel}; tenant {TenantId}; actor {ChannelActorId}; conversation {ConversationId}; requester {RequesterId}; preparation {PreparationId}; request {RequestId}; failure kind {FailureKind}; failure code {FailureCode}.")]
     private static partial void LogConfirmationCompleted(
         ILogger logger,
-        TargetConfirmationResultKind outcome,
+        string outcome,
         double durationMs,
         string correlationId,
         string channel,

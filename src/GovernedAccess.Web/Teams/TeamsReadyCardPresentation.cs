@@ -90,22 +90,3 @@ internal sealed record TeamsReadyCardPresentation
         return value.Trim();
     }
 }
-
-internal sealed record TeamsStatusCardPresentation
-{
-    internal TeamsStatusCardPresentation(string title, string message)
-    {
-        Title = Normalize(title, nameof(title));
-        Message = Normalize(message, nameof(message));
-    }
-
-    internal string Title { get; }
-
-    internal string Message { get; }
-
-    private static string Normalize(string value, string parameterName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
-        return value.Trim();
-    }
-}

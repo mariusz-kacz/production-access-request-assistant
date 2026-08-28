@@ -23,8 +23,6 @@ public sealed class FinalCompositionArchitectureTests
         "src/GovernedAccess.Web/Persistence/EfWorkflowStore.cs",
         "src/GovernedAccess.Web/Persistence/GovernedAccessDbContext.cs",
         "src/GovernedAccess.Web/Persistence/SyntheticDataSeeder.cs",
-        "src/GovernedAccess.Web/Teams/PreparedRequestCardFactory.cs",
-        "src/GovernedAccess.Web/Teams/TeamsAccessRequestAgent.cs",
     ];
 
     [Fact]

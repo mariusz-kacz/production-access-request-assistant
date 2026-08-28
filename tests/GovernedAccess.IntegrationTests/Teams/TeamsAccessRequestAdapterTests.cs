@@ -11,14 +11,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TargetTeamsAccessRequestAdapterTests
+public sealed class TeamsAccessRequestAdapterTests
 {
     [Theory]
     [InlineData("/new please")]
     [InlineData("1")]
     [InlineData("PROD-ALPHA-EU")]
     [InlineData("wybierz środowisko odzyskiwania")]
-    public async Task EveryNonblankNonCommandMessageGoesThroughTargetOrchestration(
+    public async Task EveryNonblankNonCommandMessageGoesThroughPreparationOrchestration(
         string message)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -35,7 +35,7 @@ public sealed class TargetTeamsAccessRequestAdapterTests
         Assert.Equal([message], orchestrator.ProcessedMessages);
         Assert.Equal(0, orchestrator.ResetCount);
         Assert.Equal(0, confirmation.CallCount);
-        Assert.Equal(TargetTeamsAdapterResultKind.Text, result.Kind);
+        Assert.Equal(TeamsAdapterResultKind.Text, result.Kind);
     }
 
     [Theory]
@@ -80,7 +80,7 @@ public sealed class TargetTeamsAccessRequestAdapterTests
     }
 
     [Fact]
-    public async Task ReadyOutcomeUsesTargetAuthoritativeCardAssembly()
+    public async Task ReadyOutcomeUsesAuthoritativeCardAssembly()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var ready = CreateReadyPreparation("Original justification");
@@ -102,7 +102,7 @@ public sealed class TargetTeamsAccessRequestAdapterTests
             "correlation",
             cancellationToken);
 
-        Assert.Equal(TargetTeamsAdapterResultKind.Card, result.Kind);
+        Assert.Equal(TeamsAdapterResultKind.Card, result.Kind);
         Assert.NotNull(result.Card);
         Assert.Equal(ready.PreparationId, result.PreparationId);
         Assert.Equal([ready.PreparationId], cardFactory.PreparationIds);
@@ -151,10 +151,12 @@ public sealed class TargetTeamsAccessRequestAdapterTests
         var requestId = Guid.NewGuid();
         var confirmation = new StubConfirmation
         {
-            Result = TargetConfirmationResult.Submitted(
-                requestId,
-                RequestStatus.AwaitingBusinessApproval,
-                wasAlreadySubmitted: false),
+            Result = new PreparationConfirmationSubmitted(
+                CreateRequest(
+                    requestId,
+                    preparationId,
+                    RequestStatus.AwaitingBusinessApproval),
+                WasAlreadySubmitted: false),
         };
         var adapter = CreateAdapter(new StubOrchestrator(), confirmation);
 
@@ -179,54 +181,55 @@ public sealed class TargetTeamsAccessRequestAdapterTests
 
         Assert.Equal(1, confirmation.CallCount);
         Assert.Equal(preparationId, confirmation.LastPreparationId);
-        Assert.Equal(TargetTeamsAdapterResultKind.Card, accepted.Kind);
+        Assert.Equal(TeamsAdapterResultKind.Card, accepted.Kind);
         Assert.Contains(requestId.ToString("D"), CardJson(accepted), StringComparison.Ordinal);
-        Assert.Equal(TargetTeamsAdapterResultKind.InvalidAction, rejectedLegacy.Kind);
+        Assert.Equal(TeamsAdapterResultKind.InvalidAction, rejectedLegacy.Kind);
     }
 
     [Fact]
-    public async Task TargetConfirmationAdapterPreservesReplayStatusFromCore()
+    public async Task ConfirmationReplayPreservesPersistedRequestStatus()
     {
         var preparationId = Guid.NewGuid();
-        var request = new AccessRequest(
+        var request = CreateRequest(
             Guid.NewGuid(),
             preparationId,
-            "requester",
-            new ValidatedRequestDetails(
-                "client-alpha",
-                "PROD-ALPHA-EU",
-                ProductionRoleIds.ReadOnly,
-                "Investigate the active production incident.",
-                "INC-1042"),
-            new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
-            "confirmation");
-        request.Status = RequestStatus.Active;
-        var adapter = new TargetRequestConfirmationAdapter(
-            new StubCoreConfirmation(
-                new PreparationConfirmationSubmitted(
+            RequestStatus.Active);
+        var adapter = CreateAdapter(
+            new StubOrchestrator(),
+            new StubConfirmation
+            {
+                Result = new PreparationConfirmationSubmitted(
                     request,
-                    WasAlreadySubmitted: true)));
+                    WasAlreadySubmitted: true),
+            });
 
-        var result = await adapter.ConfirmAsync(
-            Binding(),
-            preparationId,
+        var result = await adapter.HandleConfirmationAsync(
+            Context(),
+            new
+            {
+                schemaVersion = 1,
+                preparationId = preparationId.ToString("D"),
+            },
             "replay",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TargetConfirmationResultKind.AlreadySubmitted, result.Kind);
-        Assert.Equal(request.Id, result.RequestId);
-        Assert.Equal(RequestStatus.Active, result.RequestStatus);
+        Assert.Equal(TeamsAdapterResultKind.Card, result.Kind);
+        Assert.Contains(
+            request.Id.ToString("D"),
+            CardJson(result),
+            StringComparison.Ordinal);
+        Assert.Contains("active", CardJson(result), StringComparison.Ordinal);
     }
 
-    private static TargetTeamsAccessRequestAdapter CreateAdapter(
-        ITargetRequestPreparationOrchestrator orchestrator,
-        ITargetRequestConfirmation confirmation,
-        ITargetPreparedRequestCardFactory? cardFactory = null) =>
+    private static TeamsAccessRequestAdapter CreateAdapter(
+        IRequestPreparationOrchestrator orchestrator,
+        IPreparationConfirmationService confirmationService,
+        IPreparedRequestCardFactory? cardFactory = null) =>
         new(
             orchestrator,
             cardFactory ?? new StubCardFactory(),
-            confirmation,
-            NullLogger<TargetTeamsAccessRequestAdapter>.Instance);
+            confirmationService,
+            NullLogger<TeamsAccessRequestAdapter>.Instance);
 
     private static TeamsAuthenticatedContext Context() =>
         new(
@@ -237,14 +240,6 @@ public sealed class TargetTeamsAccessRequestAdapterTests
                 FakeTeamsActivityBuilder.DefaultConversationId,
                 "requester"),
             "en-US");
-
-    private static PreparationBinding Binding() =>
-        new(
-            PreparationBinding.TeamsChannel,
-            FakeTeamsActivityBuilder.DefaultTenantId,
-            FakeTeamsActivityBuilder.DefaultActorId,
-            FakeTeamsActivityBuilder.DefaultConversationId,
-            "requester");
 
     private static PreparationTurnResult Result(
         PreparationSnapshot? preparation,
@@ -276,6 +271,27 @@ public sealed class TargetTeamsAccessRequestAdapterTests
             new DateTimeOffset(2026, 8, 26, 12, 0, 0, TimeSpan.Zero),
             "root");
 
+    private static AccessRequest CreateRequest(
+        Guid requestId,
+        Guid preparationId,
+        RequestStatus status)
+    {
+        var request = new AccessRequest(
+            requestId,
+            preparationId,
+            "requester",
+            new ValidatedRequestDetails(
+                "client-alpha",
+                "PROD-ALPHA-EU",
+                ProductionRoleIds.ReadOnly,
+                "Investigate the active production incident.",
+                "INC-1042"),
+            new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
+            "confirmation");
+        request.Status = status;
+        return request;
+    }
+
     private static MaterialChangeAttribution Attribution(
         IEnumerable<ProposalField> fields) =>
         new(
@@ -287,10 +303,10 @@ public sealed class TargetTeamsAccessRequestAdapterTests
             new DateTimeOffset(2026, 8, 26, 12, 0, 0, TimeSpan.Zero),
             "attribution");
 
-    private static string CardJson(TargetTeamsAdapterResult result) =>
+    private static string CardJson(TeamsAdapterResult result) =>
         ((System.Text.Json.JsonElement)result.Card!.Content!).GetRawText();
 
-    private sealed class StubOrchestrator : ITargetRequestPreparationOrchestrator
+    private sealed class StubOrchestrator : IRequestPreparationOrchestrator
     {
         internal List<string> ProcessedMessages { get; } = [];
 
@@ -320,7 +336,7 @@ public sealed class TargetTeamsAccessRequestAdapterTests
         }
     }
 
-    private sealed class StubCardFactory : ITargetPreparedRequestCardFactory
+    private sealed class StubCardFactory : IPreparedRequestCardFactory
     {
         internal List<Guid> PreparationIds { get; } = [];
 
@@ -333,43 +349,31 @@ public sealed class TargetTeamsAccessRequestAdapterTests
             return Task.FromResult(
                 ApplicationResult.Succeeded(
                     TeamsAdaptiveCardRenderer.CreateStatusCard(
-                        new TeamsStatusCardPresentation(
-                            "Ready",
-                            preparation.PreparationId.ToString("D")))));
+                        "Ready",
+                        preparation.PreparationId.ToString("D"))));
         }
     }
 
-    private sealed class StubConfirmation : ITargetRequestConfirmation
+    private sealed class StubConfirmation : IPreparationConfirmationService
     {
         internal int CallCount { get; private set; }
 
         internal Guid LastPreparationId { get; private set; }
 
-        internal TargetConfirmationResult Result { get; init; } =
-            TargetConfirmationResult.Failed(
+        internal PreparationConfirmationResult Result { get; init; } =
+            new PreparationConfirmationFailed(
                 new ApplicationFailure(
                     ApplicationFailureKind.DependencyFailure,
                     "not-configured",
                     "Not configured."));
 
-        public Task<TargetConfirmationResult> ConfirmAsync(
-            PreparationBinding binding,
-            Guid preparationId,
-            string correlationId,
+        public Task<PreparationConfirmationResult> ConfirmAsync(
+            PreparationConfirmationCommand command,
             CancellationToken cancellationToken)
         {
             CallCount++;
-            LastPreparationId = preparationId;
+            LastPreparationId = command.PreparationId;
             return Task.FromResult(Result);
         }
-    }
-
-    private sealed class StubCoreConfirmation(PreparationConfirmationResult result) :
-        IPreparationConfirmationService
-    {
-        public Task<PreparationConfirmationResult> ConfirmAsync(
-            PreparationConfirmationCommand command,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(result);
     }
 }

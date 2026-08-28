@@ -41,7 +41,6 @@ public static class TeamsAgentRegistration
         AddActivityAuthentication(builder.Services, builder.Configuration);
         builder.Services.AddRequestPreparation(builder.Configuration);
         builder.Services.AddSingleton<TeamsDraftCardTracker>();
-        builder.Services.AddScoped<TeamsActivityPresenter>();
         builder.Services.AddScoped<TeamsActorResolver>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();
 
