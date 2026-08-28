@@ -95,7 +95,7 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		builder.Services.AddScoped((Func<IServiceProvider, ITurnProposalInterpreter>)((IServiceProvider services) => services.GetRequiredService<EvaluationRecordingInterpreter>()));
 		builder.Services.AddScoped<RequestPreparationReducer>();
 		builder.Services.AddScoped<PreparationTurnService>();
-		builder.Services.AddScoped((IServiceProvider services) => new TargetRequestPreparationOrchestrator(services.GetRequiredService<PreparationTurnService>(), services.GetRequiredService<ITurnProposalInterpreter>()));
+		builder.Services.AddScoped((IServiceProvider services) => new RequestPreparationOrchestrator(services.GetRequiredService<PreparationTurnService>(), services.GetRequiredService<ITurnProposalInterpreter>()));
 		builder.Services.AddSingleton<EvaluationScenarioExecutor>();
 		builder.Services.AddSingleton<EvaluationRunner>();
 		builder.Services.AddSingleton<LiveModelEvaluationCommand>();

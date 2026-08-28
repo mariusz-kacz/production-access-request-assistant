@@ -72,7 +72,7 @@ public sealed class TargetFullHostJourneyTests
         await using (var scope = fixture.Services.CreateAsyncScope())
         {
             prepared = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleMessageAsync(
                     TeamsContext(),
                     "Use Client Alpha primary production in EU.",
@@ -98,7 +98,7 @@ public sealed class TargetFullHostJourneyTests
         await using (var scope = fixture.Services.CreateAsyncScope())
         {
             var submitted = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleConfirmationAsync(
                     TeamsContext(),
                     Confirmation(preparationId),
@@ -121,7 +121,7 @@ public sealed class TargetFullHostJourneyTests
         await using (var scope = fixture.Services.CreateAsyncScope())
         {
             var replay = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleConfirmationAsync(
                     TeamsContext(),
                     Confirmation(preparationId),
@@ -466,7 +466,7 @@ public sealed class TargetFullHostJourneyTests
         await using (var scope = fixture.Services.CreateAsyncScope())
         {
             forgedConfirmation = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleConfirmationAsync(
                     TeamsContext(),
                     new
@@ -546,7 +546,7 @@ public sealed class TargetFullHostJourneyTests
     {
         await using var scope = fixture.Services.CreateAsyncScope();
         return await scope.ServiceProvider
-            .GetRequiredService<TeamsAccessRequestAdapter>()
+            .GetRequiredService<TeamsRequestHandler>()
             .HandleMessageAsync(
                 TeamsContext(),
                 message,
@@ -562,7 +562,7 @@ public sealed class TargetFullHostJourneyTests
     {
         await using var scope = fixture.Services.CreateAsyncScope();
         return await scope.ServiceProvider
-            .GetRequiredService<TeamsAccessRequestAdapter>()
+            .GetRequiredService<TeamsRequestHandler>()
             .HandleConfirmationAsync(
                 TeamsContext(),
                 Confirmation(preparationId),

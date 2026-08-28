@@ -8,11 +8,11 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal sealed partial class TeamsAccessRequestAdapter(
+internal sealed partial class TeamsRequestHandler(
     IRequestPreparationOrchestrator orchestrator,
     TeamsResponsePresenter presenter,
     IPreparationConfirmationService confirmationService,
-    ILogger<TeamsAccessRequestAdapter> logger)
+    ILogger<TeamsRequestHandler> logger)
 {
     private const string NewRequestCommand = "/new";
 

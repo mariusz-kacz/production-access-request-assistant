@@ -230,7 +230,7 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
         builder.Services.AddScoped<RequestPreparationReducer>();
         builder.Services.AddScoped<PreparationTurnService>();
         builder.Services.AddScoped<IRequestPreparationOrchestrator>(services =>
-            new TargetRequestPreparationOrchestrator(
+            new RequestPreparationOrchestrator(
                 services.GetRequiredService<PreparationTurnService>(),
                 services.GetRequiredService<ITurnProposalInterpreter>()));
         builder.Services.AddScoped<IPreparationConfirmationService,
@@ -238,7 +238,7 @@ internal sealed class TargetFullHostFixture : IAsyncDisposable
         builder.Services.AddScoped<IPreparationReviewService,
             PreparationReviewService>();
         builder.Services.AddScoped<TeamsResponsePresenter>();
-        builder.Services.AddScoped<TeamsAccessRequestAdapter>();
+        builder.Services.AddScoped<TeamsRequestHandler>();
 
         builder.Services.AddScoped<AccessRequestValidator>();
         builder.Services.AddScoped<AccessRequestCommandContextLoader>();

@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
-public sealed class TeamsAccessRequestAdapterTests
+public sealed class TeamsRequestHandlerTests
 {
     [Theory]
     [InlineData("/new please")]
@@ -24,9 +24,9 @@ public sealed class TeamsAccessRequestAdapterTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var orchestrator = new StubOrchestrator();
         var confirmation = new StubConfirmation();
-        var adapter = CreateAdapter(orchestrator, confirmation);
+        var handler = CreateHandler(orchestrator, confirmation);
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             Context(),
             $"  {message}  ",
             "correlation",
@@ -45,9 +45,9 @@ public sealed class TeamsAccessRequestAdapterTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var orchestrator = new StubOrchestrator();
-        var adapter = CreateAdapter(orchestrator, new StubConfirmation());
+        var handler = CreateHandler(orchestrator, new StubConfirmation());
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             Context(),
             message,
             "correlation",
@@ -65,9 +65,9 @@ public sealed class TeamsAccessRequestAdapterTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var orchestrator = new StubOrchestrator();
         var confirmation = new StubConfirmation();
-        var adapter = CreateAdapter(orchestrator, confirmation);
+        var handler = CreateHandler(orchestrator, confirmation);
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             Context(),
             "  ",
             "correlation",
@@ -91,12 +91,12 @@ public sealed class TeamsAccessRequestAdapterTests
                 new ReadyForConfirmation(ready.PreparationId)),
         };
         var reviewService = new StubReviewService();
-        var adapter = CreateAdapter(
+        var handler = CreateHandler(
             orchestrator,
             new StubConfirmation(),
             reviewService);
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             Context(),
             "prepare access",
             "correlation",
@@ -132,9 +132,9 @@ public sealed class TeamsAccessRequestAdapterTests
                 new PreparationSnapshot(revised),
                 new ReadyForConfirmation(revised.PreparationId)),
         };
-        var adapter = CreateAdapter(orchestrator, new StubConfirmation());
+        var handler = CreateHandler(orchestrator, new StubConfirmation());
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             Context(),
             "change the justification",
             "correlation",
@@ -158,9 +158,9 @@ public sealed class TeamsAccessRequestAdapterTests
                     RequestStatus.AwaitingBusinessApproval),
                 WasAlreadySubmitted: false),
         };
-        var adapter = CreateAdapter(new StubOrchestrator(), confirmation);
+        var handler = CreateHandler(new StubOrchestrator(), confirmation);
 
-        var accepted = await adapter.HandleConfirmationAsync(
+        var accepted = await handler.HandleConfirmationAsync(
             Context(),
             new
             {
@@ -169,7 +169,7 @@ public sealed class TeamsAccessRequestAdapterTests
             },
             "correlation",
             cancellationToken);
-        var rejectedLegacy = await adapter.HandleConfirmationAsync(
+        var rejectedLegacy = await handler.HandleConfirmationAsync(
             Context(),
             new
             {
@@ -194,7 +194,7 @@ public sealed class TeamsAccessRequestAdapterTests
             Guid.NewGuid(),
             preparationId,
             RequestStatus.Active);
-        var adapter = CreateAdapter(
+        var handler = CreateHandler(
             new StubOrchestrator(),
             new StubConfirmation
             {
@@ -203,7 +203,7 @@ public sealed class TeamsAccessRequestAdapterTests
                     WasAlreadySubmitted: true),
             });
 
-        var result = await adapter.HandleConfirmationAsync(
+        var result = await handler.HandleConfirmationAsync(
             Context(),
             new
             {
@@ -221,7 +221,7 @@ public sealed class TeamsAccessRequestAdapterTests
         Assert.Contains("active", CardJson(result), StringComparison.Ordinal);
     }
 
-    private static TeamsAccessRequestAdapter CreateAdapter(
+    private static TeamsRequestHandler CreateHandler(
         IRequestPreparationOrchestrator orchestrator,
         IPreparationConfirmationService confirmationService,
         IPreparationReviewService? reviewService = null) =>
@@ -230,7 +230,7 @@ public sealed class TeamsAccessRequestAdapterTests
             new TeamsResponsePresenter(
                 reviewService ?? new StubReviewService()),
             confirmationService,
-            NullLogger<TeamsAccessRequestAdapter>.Instance);
+            NullLogger<TeamsRequestHandler>.Instance);
 
     private static TeamsAuthenticatedContext Context() =>
         new(

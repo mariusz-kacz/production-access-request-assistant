@@ -72,12 +72,12 @@ public sealed class ProgramCompositionTests(
         Assert.NotNull(services.GetService<WorkflowDbContext>());
         Assert.IsType<MafTurnProposalInterpreter>(
             services.GetRequiredService<ITurnProposalInterpreter>());
-        Assert.IsType<TargetRequestPreparationOrchestrator>(
+        Assert.IsType<RequestPreparationOrchestrator>(
             services.GetRequiredService<IRequestPreparationOrchestrator>());
         Assert.IsType<PreparationConfirmationService>(
             services.GetRequiredService<IPreparationConfirmationService>());
-        Assert.IsType<TeamsAccessRequestAdapter>(
-            services.GetRequiredService<TeamsAccessRequestAdapter>());
+        Assert.IsType<TeamsRequestHandler>(
+            services.GetRequiredService<TeamsRequestHandler>());
         Assert.Equal(
             typeof(WorkflowDbContext).Assembly,
             services.GetRequiredService<IWorkflowStore>().GetType().Assembly);
@@ -93,19 +93,19 @@ public sealed class ProgramCompositionTests(
 
         await using var firstScope = services.CreateAsyncScope();
         await using var secondScope = services.CreateAsyncScope();
-        var firstAdapter = firstScope.ServiceProvider
-            .GetRequiredService<TeamsAccessRequestAdapter>();
+        var firstHandler = firstScope.ServiceProvider
+            .GetRequiredService<TeamsRequestHandler>();
         var firstAgent = firstScope.ServiceProvider
             .GetRequiredService<TeamsAccessRequestAgent>();
 
         Assert.Same(
-            firstAdapter,
+            firstHandler,
             firstScope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>());
+                .GetRequiredService<TeamsRequestHandler>());
         Assert.NotSame(
-            firstAdapter,
+            firstHandler,
             secondScope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>());
+                .GetRequiredService<TeamsRequestHandler>());
         Assert.NotSame(
             firstAgent,
             secondScope.ServiceProvider.GetRequiredService<TeamsAccessRequestAgent>());
@@ -200,7 +200,7 @@ public sealed class ProgramCompositionTests(
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             prepared = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleMessageAsync(
                     TeamsContext(),
                     "Prepare the incident investigation request.",
@@ -215,7 +215,7 @@ public sealed class ProgramCompositionTests(
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var submitted = await scope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAdapter>()
+                .GetRequiredService<TeamsRequestHandler>()
                 .HandleConfirmationAsync(
                     TeamsContext(),
                     new

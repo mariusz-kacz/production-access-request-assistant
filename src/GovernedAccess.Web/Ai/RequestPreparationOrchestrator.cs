@@ -19,13 +19,13 @@ internal interface IRequestPreparationOrchestrator
         CancellationToken cancellationToken);
 }
 
-internal sealed class TargetRequestPreparationOrchestrator :
+internal sealed class RequestPreparationOrchestrator :
     IRequestPreparationOrchestrator
 {
     private readonly ITurnProposalInterpreter interpreter;
     private readonly PreparationTurnService turnService;
 
-    internal TargetRequestPreparationOrchestrator(
+    internal RequestPreparationOrchestrator(
         PreparationTurnService turnService,
         ITurnProposalInterpreter interpreter)
     {
@@ -67,7 +67,7 @@ internal sealed class TargetRequestPreparationOrchestrator :
                 turn,
                 ToApplicationFailure(failed.Failure)),
             _ => throw new InvalidOperationException(
-                "The target interpretation result is unsupported."),
+                "The interpretation result is unsupported."),
         };
     }
 
@@ -161,7 +161,7 @@ internal sealed class TargetRequestPreparationOrchestrator :
                 "request-preparation-agent-unavailable",
                 "The request-preparation agent is unavailable."),
             _ => throw new InvalidOperationException(
-                "The target interpretation failure is unsupported."),
+                "The interpretation failure is unsupported."),
         };
 
     private static PreparationTurnResult Failed(ApplicationFailure failure) =>

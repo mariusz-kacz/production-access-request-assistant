@@ -252,7 +252,7 @@ public sealed class PreparationTurnConcurrencyTests
                     patch: new DraftPatch(
                         environment: new SetEnvironmentOperation(
                             new ExactEnvironmentId("PROD-BETA-UK")))));
-            var orchestrator = new TargetRequestPreparationOrchestrator(
+            var orchestrator = new RequestPreparationOrchestrator(
                 Service(restartedScope, authority, CreatedAt.AddMinutes(1)),
                 interpreter);
 
@@ -318,10 +318,10 @@ public sealed class PreparationTurnConcurrencyTests
         await using var fastScope = fixture.Services.CreateAsyncScope();
         var slowInterpreter = new BlockingInterpreter(
             JustificationUpdate("stale slow justification"));
-        var slowOrchestrator = new TargetRequestPreparationOrchestrator(
+        var slowOrchestrator = new RequestPreparationOrchestrator(
             Service(slowScope, authority, CreatedAt.AddMinutes(1)),
             slowInterpreter);
-        var fastOrchestrator = new TargetRequestPreparationOrchestrator(
+        var fastOrchestrator = new RequestPreparationOrchestrator(
             Service(fastScope, authority, CreatedAt.AddMinutes(1)),
             new RecordingInterpreter(
                 JustificationUpdate("committed fast justification")));
@@ -405,7 +405,7 @@ public sealed class PreparationTurnConcurrencyTests
                 new TurnProposal(
                     TurnProposal.CurrentSchemaVersion,
                     DialogueAct.Unclear));
-            var orchestrator = new TargetRequestPreparationOrchestrator(
+            var orchestrator = new RequestPreparationOrchestrator(
                 Service(scope, new FakeAuthority(), CreatedAt.AddMinutes(2)),
                 interpreter);
 

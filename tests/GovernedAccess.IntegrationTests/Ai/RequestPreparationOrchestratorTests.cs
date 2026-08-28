@@ -8,7 +8,7 @@ using GovernedAccess.Web.Ai;
 
 namespace GovernedAccess.IntegrationTests.Ai;
 
-public sealed class TargetRequestPreparationOrchestratorTests
+public sealed class RequestPreparationOrchestratorTests
 {
     [Fact]
     public async Task EveryOrdinaryTextIncludingResetLikeTextReachesInterpreterUnchanged()
@@ -22,7 +22,7 @@ public sealed class TargetRequestPreparationOrchestratorTests
             store,
             new RequestPreparationReducer(authority, authority, authority, authority),
             new FixedClock());
-        var orchestrator = new TargetRequestPreparationOrchestrator(
+        var orchestrator = new RequestPreparationOrchestrator(
             service,
             interpreter);
 

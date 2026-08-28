@@ -42,7 +42,7 @@ internal static class RequestPreparationRegistration
         services.AddScoped<RequestPreparationReducer>();
         services.AddScoped<PreparationTurnService>();
         services.AddScoped<IRequestPreparationOrchestrator>(serviceProvider =>
-            new TargetRequestPreparationOrchestrator(
+            new RequestPreparationOrchestrator(
                 serviceProvider.GetRequiredService<PreparationTurnService>(),
                 serviceProvider.GetRequiredService<ITurnProposalInterpreter>()));
         services.AddScoped<IPreparationConfirmationService,

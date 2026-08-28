@@ -14,21 +14,21 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
         "This assistant accepts production-access requests only from an authenticated personal Microsoft Teams chat.";
 
     private readonly TeamsActorResolver actorResolver;
-    private readonly TeamsAccessRequestAdapter adapter;
+    private readonly TeamsRequestHandler handler;
     private readonly TeamsDraftCardTracker cardTracker;
     private readonly ILogger<TeamsAccessRequestAgent> logger;
 
     public TeamsAccessRequestAgent(
         AgentApplicationOptions options,
         TeamsActorResolver actorResolver,
-        TeamsAccessRequestAdapter adapter,
+        TeamsRequestHandler handler,
         TeamsDraftCardTracker cardTracker,
         ILogger<TeamsAccessRequestAgent> logger)
         : base(options)
     {
         this.actorResolver = actorResolver
             ?? throw new ArgumentNullException(nameof(actorResolver));
-        this.adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+        this.handler = handler ?? throw new ArgumentNullException(nameof(handler));
         this.cardTracker = cardTracker
             ?? throw new ArgumentNullException(nameof(cardTracker));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,7 +55,7 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
             return;
         }
 
-        var result = await adapter.HandleMessageAsync(
+        var result = await handler.HandleMessageAsync(
             context,
             turnContext.Activity.Text,
             CreateCorrelationId(),
@@ -76,7 +76,7 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
                 RejectedActivityMessage);
         }
 
-        var result = await adapter.HandleConfirmationAsync(
+        var result = await handler.HandleConfirmationAsync(
             context,
             data,
             CreateCorrelationId(),

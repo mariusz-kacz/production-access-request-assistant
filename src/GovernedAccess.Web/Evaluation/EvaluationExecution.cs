@@ -39,7 +39,7 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 		var control = scope.ServiceProvider.GetRequiredService<EvaluationFailureControl>();
 		var recorder = scope.ServiceProvider.GetRequiredService<EvaluationRecordingInterpreter>();
 		var orchestrator = scope.ServiceProvider
-			.GetRequiredService<TargetRequestPreparationOrchestrator>();
+			.GetRequiredService<RequestPreparationOrchestrator>();
 		var turnResults = new List<EvaluationTurnResult>(variation.Turns.Count);
 		PreparationTurnResult? finalResult = null;
 
