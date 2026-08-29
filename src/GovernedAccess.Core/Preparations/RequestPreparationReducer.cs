@@ -5,7 +5,7 @@ using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Core.Preparations;
 
-public sealed partial class RequestPreparationReducer
+public sealed class RequestPreparationReducer
 {
     private readonly PreparationScopeEvaluator scopeEvaluator;
 
@@ -35,11 +35,6 @@ public sealed partial class RequestPreparationReducer
         ArgumentNullException.ThrowIfNull(preparation);
         ArgumentNullException.ThrowIfNull(proposal);
         cancellationToken.ThrowIfCancellationRequested();
-
-        if (!IsStructurallyValid(proposal))
-        {
-            return Unchanged(preparation, StructuralFailure());
-        }
 
         if (preparation.Lifecycle is not PreparationLifecycle.Collecting
             and not PreparationLifecycle.Ready)
@@ -71,7 +66,8 @@ public sealed partial class RequestPreparationReducer
             DialogueAct.Unclear => Unchanged(
                 preparation,
                 new UnclearGuidance()),
-            _ => Unchanged(preparation, StructuralFailure()),
+            _ => throw new InvalidOperationException(
+                "A constructed proposal must contain a supported dialogue act."),
         };
     }
 
@@ -298,13 +294,6 @@ public sealed partial class RequestPreparationReducer
             changedFields: [],
             outcome,
             soleRoleSelection: null);
-
-    private static Failed StructuralFailure() =>
-        new(
-            new ApplicationFailure(
-                ApplicationFailureKind.InvalidInput,
-                "request-preparation-proposal-structural-invalid",
-                "The structured request proposal is invalid."));
 
     private static Failed ReadyClearAllFailure() =>
         new(

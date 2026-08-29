@@ -46,23 +46,23 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsResponseKind.Text, presentation.Kind);
-        Assert.Equal(InputHints.ExpectingInput, presentation.InputHint);
+        var text = Assert.IsType<TeamsTextResponse>(presentation);
+        Assert.Equal(InputHints.ExpectingInput, text.InputHint);
         Assert.Contains(
             "Choose one by replying with its number, name, or exact ID:",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
         Assert.Contains(
             "1. Client & One (CLIENT-1) — <b>Primary</b> (PROD-1), westeurope, primary",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
-        Assert.Contains("2. Client & One", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains("2. Client & One", Message(presentation), StringComparison.Ordinal);
         Assert.StartsWith(
             $"I updated the operational justification.{Environment.NewLine}I found more than one matching production environment.",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
-        Assert.DoesNotContain("Scope:", presentation.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("model", presentation.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Scope:", Message(presentation), StringComparison.Ordinal);
+        Assert.DoesNotContain("model", Message(presentation), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -90,10 +90,10 @@ public sealed class TeamsResponsePresenterTests
         Assert.StartsWith(
             "This environment has more than one available role. "
             + "Choose one by replying with its number, name, or exact ID:",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
-        Assert.Contains("1. Read only (ROLE-1)", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("2. Support (ROLE-2)", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains("1. Read only (ROLE-1)", Message(presentation), StringComparison.Ordinal);
+        Assert.Contains("2. Support (ROLE-2)", Message(presentation), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,9 +123,9 @@ public sealed class TeamsResponsePresenterTests
             "I updated the request scope. "
             + "I couldn't update the operational justification because some of the information wasn't valid. "
             + "I still need the requested role and operational justification.",
-            presentation.Message);
-        Assert.DoesNotContain("Environment result", presentation.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("Role result", presentation.Message, StringComparison.Ordinal);
+            Message(presentation));
+        Assert.DoesNotContain("Environment result", Message(presentation), StringComparison.Ordinal);
+        Assert.DoesNotContain("Role result", Message(presentation), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class TeamsResponsePresenterTests
         Assert.Equal(
             "The request scope already matches the draft. "
             + "I still need the requested role and operational justification.",
-            presentation.Message);
+            Message(presentation));
     }
 
     [Theory]
@@ -183,7 +183,7 @@ public sealed class TeamsResponsePresenterTests
         Assert.Equal(
             $"I couldn't update the request scope because {explanation}. "
             + "I still need the production environment, requested role, and operational justification.",
-            presentation.Message);
+            Message(presentation));
     }
 
     [Fact]
@@ -210,11 +210,11 @@ public sealed class TeamsResponsePresenterTests
 
         Assert.Contains(
             "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
         Assert.DoesNotContain(
             "I still need the requested role",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
     }
 
@@ -242,7 +242,7 @@ public sealed class TeamsResponsePresenterTests
 
             Assert.Contains(
                 expected,
-                presentation.Message,
+                Message(presentation),
                 StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -268,11 +268,8 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsResponseKind.Card, presentation.Kind);
-        Assert.NotNull(presentation.Card);
-        Assert.Equal(snapshot.PreparationId, presentation.PreparationId);
-        Assert.Null(presentation.Message);
-        Assert.True(presentation.TrackAsActiveDraft);
+        var card = Assert.IsType<TeamsDraftCardResponse>(presentation);
+        Assert.Equal(snapshot.PreparationId, card.PreparationId);
     }
 
     [Fact]
@@ -299,11 +296,8 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsResponseKind.Card, presentation.Kind);
-        Assert.NotNull(presentation.Card);
-        Assert.Null(presentation.Message);
-        Assert.True(presentation.TrackAsActiveDraft);
-        var card = Assert.IsType<JsonElement>(presentation.Card.Content);
+        var presentationCard = Assert.IsType<TeamsDraftCardResponse>(presentation);
+        var card = Assert.IsType<JsonElement>(presentationCard.Card.Content);
         Assert.Contains(
             "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
             card.GetRawText(),
@@ -326,13 +320,13 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Contains("Client: CLIENT-1", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("Environment: PROD-1", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("Requested role: ROLE-1", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("Incident: INC-1", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains("Client: CLIENT-1", Message(presentation), StringComparison.Ordinal);
+        Assert.Contains("Environment: PROD-1", Message(presentation), StringComparison.Ordinal);
+        Assert.Contains("Requested role: ROLE-1", Message(presentation), StringComparison.Ordinal);
+        Assert.Contains("Incident: INC-1", Message(presentation), StringComparison.Ordinal);
         Assert.Contains(
             "Justification: Investigate </TextBlock> exactly",
-            presentation.Message,
+            Message(presentation),
             StringComparison.Ordinal);
     }
 
@@ -350,9 +344,9 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Contains("changed while this message was processed", presentation.Message, StringComparison.Ordinal);
-        Assert.Contains("try again", presentation.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("internal details", presentation.Message, StringComparison.Ordinal);
+        Assert.Contains("changed while this message was processed", Message(presentation), StringComparison.Ordinal);
+        Assert.Contains("try again", Message(presentation), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("internal details", Message(presentation), StringComparison.Ordinal);
     }
 
     private static PreparationTurnResult Result(
@@ -370,6 +364,9 @@ public sealed class TeamsResponsePresenterTests
 
     private static TeamsResponsePresenter CreatePresenter() =>
         new(new StubReviewService());
+
+    private static string Message(TeamsResponse response) =>
+        Assert.IsAssignableFrom<TeamsMessageResponse>(response).Message;
 
     private static RequestPreparation CreatePreparation(
         PreparationCandidate candidate) =>

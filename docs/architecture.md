@@ -250,9 +250,10 @@ turn, and a turn allows at most four tool calls.
 The same Web executable also supports `evaluate-live-model`. That mode starts an
 isolated loopback host exposing the same four read-only MCP tools, uses separate
 temporary reference and workflow SQLite databases, runs the fixed evaluation
-evaluation inventory through the grouped preparation path, records only sanitized
-outcomes and safety evidence, and removes temporary database files on disposal. It
-cannot confirm, approve, provision, retry, or revoke. Operator instructions live in
+inventory through the grouped preparation path, optionally selects one variation for
+a non-promotable diagnostic run, records only sanitized outcomes and safety evidence,
+and removes temporary database files on disposal. It cannot confirm, approve,
+provision, retry, or revoke. Operator instructions live in
 the [live-model evaluation guide](live-model-evaluation.md).
 
 ## Governed workflow

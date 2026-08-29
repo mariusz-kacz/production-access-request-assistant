@@ -16,7 +16,9 @@ namespace GovernedAccess.Web.Evaluation;
 
 internal static class EvaluationArtifactWriter
 {
-	private sealed record EvaluationArtifact(int SchemaVersion, Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionArtifact Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupArtifact> Groups);
+	private sealed record EvaluationArtifact(int SchemaVersion, Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationScopeArtifact Scope, EvaluationVersionArtifact Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupArtifact> Groups);
+
+	private sealed record EvaluationScopeArtifact(string Kind, bool PromotionEligible, string? VariationId);
 
 	private sealed record EvaluationVersionArtifact(string ProviderId, string ModelDeployment, string? ProviderModelVersion, string PromptContractVersion, string ProposalSchemaVersion, string McpContractVersion, string EnvironmentSearchPolicyVersion);
 
@@ -89,7 +91,8 @@ internal static class EvaluationArtifactWriter
 
 	private static EvaluationArtifact CreateArtifact(EvaluationRunResult result)
 	{
-		return new EvaluationArtifact(4, result.RunId, result.SourceCommit, result.DatasetVersion, result.DatasetSha256, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationVersionArtifact(result.Versions.ProviderId, result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
+		bool promotionEligible = result.DiagnosticVariationId is null;
+		return new EvaluationArtifact(5, result.RunId, result.SourceCommit, result.DatasetVersion, result.DatasetSha256, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationScopeArtifact(promotionEligible ? "fullInventory" : "diagnosticVariation", promotionEligible, result.DiagnosticVariationId), new EvaluationVersionArtifact(result.Versions.ProviderId, result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
 	}
 
 	private static EvaluationGroupArtifact ToArtifact(EvaluationGroupResult group)
@@ -230,6 +233,13 @@ internal static class EvaluationArtifactWriter
 		StringBuilder report = new StringBuilder();
 		report.AppendLine("# Live-Model Evaluation");
 		report.AppendLine();
+		if (!artifact.Scope.PromotionEligible)
+		{
+			report.AppendLine("**DIAGNOSTIC ONLY - NOT PROMOTION EVIDENCE**");
+			report.AppendLine();
+			report.Append("Selected variation: `").Append(artifact.Scope.VariationId).AppendLine("`");
+			report.AppendLine();
+		}
 		report.AppendLine("## Run");
 		report.AppendLine();
 		report.Append("- Source commit: `").Append(artifact.SourceCommit).AppendLine("`");

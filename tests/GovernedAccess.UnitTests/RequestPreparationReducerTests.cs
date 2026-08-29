@@ -4,7 +4,6 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
-using System.Reflection;
 
 namespace GovernedAccess.UnitTests;
 
@@ -748,52 +747,6 @@ public sealed class RequestPreparationReducerTests : RequestPreparationReducerTe
             result,
             ApplicationGroupResultKind.Rejected,
             ApplicationGroupRejectionReason.Unavailable);
-    }
-
-    [Fact]
-    public async Task UnsupportedRuntimeDialogueActFailsClosedWithoutAuthorityOrCandidateChange()
-    {
-        var authority = new FakePreparationAuthority();
-        var preparation = EmptyPreparation();
-        var proposal = new TurnProposal(
-            TurnProposal.CurrentSchemaVersion,
-            DialogueAct.Unclear);
-        SetPrivateProperty(proposal, nameof(TurnProposal.DialogueAct), (DialogueAct)999);
-
-        var result = await Reducer(authority).ReduceAsync(
-            preparation,
-            proposal,
-            CancellationToken.None);
-
-        var failed = Assert.IsType<Failed>(result.Outcome);
-        Assert.Equal(
-            "request-preparation-proposal-structural-invalid",
-            failed.Failure.Code);
-        Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Equal(0, authority.SearchCallCount);
-        Assert.Empty(authority.EnvironmentGetCalls);
-        Assert.Equal(0, authority.RoleGetCallCount);
-        AssertSnapshotUnchanged(preparation, PreparationCandidate.Empty);
-    }
-
-    [Fact]
-    public async Task MalformedRuntimePayloadCombinationFailsClosedBeforeAuthorityReads()
-    {
-        var authority = new FakePreparationAuthority();
-        var preparation = EmptyPreparation();
-        var proposal = Update(environment: new SetEnvironmentOperation(
-            new ExactEnvironmentId("PROD-ALPHA-EU")));
-        SetPrivateProperty<DraftPatch?>(proposal, nameof(TurnProposal.Patch), null);
-
-        var result = await Reducer(authority).ReduceAsync(
-            preparation,
-            proposal,
-            CancellationToken.None);
-
-        Assert.IsType<Failed>(result.Outcome);
-        Assert.Same(preparation.Candidate, result.Candidate);
-        Assert.Empty(authority.EnvironmentGetCalls);
-        AssertSnapshotUnchanged(preparation, PreparationCandidate.Empty);
     }
 
     [Fact]

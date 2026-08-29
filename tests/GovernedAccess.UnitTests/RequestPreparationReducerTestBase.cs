@@ -1,4 +1,3 @@
-using System.Reflection;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Ports;
@@ -190,18 +189,6 @@ public abstract class RequestPreparationReducerTestBase
         Assert.Equal(PreparationLifecycle.Collecting, preparation.Lifecycle);
         Assert.NotNull(preparation.Clarification);
         Assert.Equal(1, preparation.ConcurrencyVersion);
-    }
-
-    protected static void SetPrivateProperty<T>(
-        object target,
-        string propertyName,
-        T value)
-    {
-        var field = target.GetType().GetField(
-            $"<{propertyName}>k__BackingField",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(field);
-        field.SetValue(target, value);
     }
 
     protected sealed class FakePreparationAuthority :

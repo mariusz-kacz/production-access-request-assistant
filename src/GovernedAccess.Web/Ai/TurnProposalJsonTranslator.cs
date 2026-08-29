@@ -99,7 +99,7 @@ internal static class TurnProposalJsonTranslator
                   "required": ["kind", "id"],
                   "properties": {
                     "kind": { "type": "string", "const": "exactEnvironmentId" },
-                    "id": { "type": "string", "minLength": 1 }
+                    "id": { "type": "string", "minLength": 1, "maxLength": 200 }
                   }
                 },
                 {
@@ -127,7 +127,7 @@ internal static class TurnProposalJsonTranslator
                   "required": ["operation", "roleId"],
                   "properties": {
                     "operation": { "type": "string", "const": "set" },
-                    "roleId": { "type": "string", "minLength": 1 }
+                    "roleId": { "type": "string", "minLength": 1, "maxLength": 200 }
                   }
                 }
               ]
@@ -172,7 +172,7 @@ internal static class TurnProposalJsonTranslator
                   "required": ["operation", "incidentId"],
                   "properties": {
                     "operation": { "type": "string", "const": "set" },
-                    "incidentId": { "type": "string", "minLength": 1 }
+                    "incidentId": { "type": "string", "minLength": 1, "maxLength": 200 }
                   }
                 }
               ]
@@ -210,8 +210,10 @@ internal static class TurnProposalJsonTranslator
         [JsonRequired]
         public string? DialogueAct { get; init; }
 
+        [JsonRequired]
         public PatchPayload? Patch { get; init; }
 
+        [JsonRequired]
         public string? DiscussionTopic { get; init; }
 
         public TurnProposal ToProposal() => new(
@@ -223,9 +225,16 @@ internal static class TurnProposalJsonTranslator
 
     private sealed class PatchPayload
     {
+        [JsonRequired]
         public EnvironmentOperationPayload? Environment { get; init; }
+
+        [JsonRequired]
         public RoleOperationPayload? Role { get; init; }
+
+        [JsonRequired]
         public JustificationOperationPayload? Justification { get; init; }
+
+        [JsonRequired]
         public IncidentOperationPayload? Incident { get; init; }
 
         public DraftPatch ToPatch() => new(

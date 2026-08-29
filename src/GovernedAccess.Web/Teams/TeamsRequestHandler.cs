@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
@@ -27,7 +26,7 @@ internal sealed partial class TeamsRequestHandler(
         var latestMessage = message?.Trim();
         if (string.IsNullOrEmpty(latestMessage))
         {
-            return TeamsResponse.CreateText(
+            return new TeamsTextResponse(
                 "Describe the temporary production access you need, including the production environment, requested role, and operational justification.",
                 InputHints.ExpectingInput);
         }
@@ -76,18 +75,12 @@ internal sealed partial class TeamsRequestHandler(
 
     internal async Task<TeamsResponse> HandleConfirmationAsync(
         TeamsAuthenticatedContext context,
-        object? data,
+        Guid preparationId,
         string correlationId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(correlationId);
-        if (!TryReadConfirmationData(data, out var preparationId))
-        {
-            return TeamsResponse.CreateInvalidAction(
-                "The confirmation action is invalid. No request was submitted.");
-        }
-
         var startedAt = Stopwatch.GetTimestamp();
         var result = await confirmationService.ConfirmAsync(
             new PreparationConfirmationCommand(
@@ -98,7 +91,6 @@ internal sealed partial class TeamsRequestHandler(
         var response = await presenter.PresentConfirmationAsync(
             result,
             context.Locale,
-            preparationId,
             cancellationToken);
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -148,51 +140,6 @@ internal sealed partial class TeamsRequestHandler(
             conversation.ChannelActorId,
             conversation.ConversationId,
             conversation.RequesterId);
-
-    internal static bool TryReadConfirmationData(
-        object? data,
-        out Guid preparationId)
-    {
-        preparationId = Guid.Empty;
-        try
-        {
-            var element = data switch
-            {
-                JsonElement jsonElement => jsonElement,
-                JsonDocument jsonDocument => jsonDocument.RootElement,
-                not null => JsonSerializer.SerializeToElement(data),
-                _ => default,
-            };
-            if (element.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            var properties = element.EnumerateObject().ToArray();
-            return properties.Length == 2
-                && element.TryGetProperty("schemaVersion", out var schemaVersion)
-                && schemaVersion.ValueKind == JsonValueKind.Number
-                && schemaVersion.TryGetInt32(out var version)
-                && version == TeamsAdaptiveCardRenderer.ContractSchemaVersion
-                && element.TryGetProperty(
-                    "preparationId",
-                    out var preparationIdProperty)
-                && preparationIdProperty.ValueKind == JsonValueKind.String
-                && Guid.TryParseExact(
-                    preparationIdProperty.GetString(),
-                    "D",
-                    out preparationId)
-                && preparationId != Guid.Empty;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-        catch (NotSupportedException)
-        {
-            return false;
-        }
-    }
 
     [LoggerMessage(
         EventId = 1101,

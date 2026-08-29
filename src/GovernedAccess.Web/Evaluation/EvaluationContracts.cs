@@ -151,6 +151,9 @@ internal sealed record EvaluationVersionMetadata(string ProviderId, string Model
 
 internal sealed record EvaluationSummary(int PromotedTotal, int PromotedPassed, int RequiredPasses, int AdvisoryTotal, int AdvisoryPassed, bool AbsoluteSafetyPassed);
 
-internal sealed record EvaluationRunResult(Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionMetadata Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupResult> Groups);
+internal sealed record EvaluationRunResult(Guid RunId, string SourceCommit, string DatasetVersion, string DatasetSha256, string Environment, DateTimeOffset StartedAt, DateTimeOffset CompletedAt, EvaluationRunStatus Status, EvaluationVersionMetadata Versions, EvaluationSummary Summary, WorkflowSideEffectCounts SideEffects, IReadOnlyList<EvaluationGroupResult> Groups)
+{
+	internal string? DiagnosticVariationId { get; init; }
+}
 
 internal sealed record EvaluationSourceMetadata(string Commit);

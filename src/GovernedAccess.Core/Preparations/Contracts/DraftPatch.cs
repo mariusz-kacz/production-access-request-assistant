@@ -1,3 +1,5 @@
+using GovernedAccess.Core.Domain.Preparations;
+
 namespace GovernedAccess.Core.Preparations.Contracts;
 
 public sealed record DraftPatch
@@ -63,8 +65,7 @@ public sealed record ExactEnvironmentId : EnvironmentReference
 {
     public ExactEnvironmentId(string id)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        Id = id.Trim();
+        Id = ProposalContractValue.NormalizeIdentifier(id, nameof(id));
     }
 
     public string Id { get; }
@@ -103,8 +104,7 @@ public sealed record SetRoleOperation : RoleOperation
 {
     public SetRoleOperation(string roleId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(roleId);
-        RoleId = roleId.Trim();
+        RoleId = ProposalContractValue.NormalizeIdentifier(roleId, nameof(roleId));
     }
 
     public string RoleId { get; }
@@ -156,11 +156,30 @@ public sealed record SetIncidentOperation : IncidentOperation
 {
     public SetIncidentOperation(string incidentId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(incidentId);
-        IncidentId = incidentId.Trim();
+        IncidentId = ProposalContractValue.NormalizeIdentifier(
+            incidentId,
+            nameof(incidentId));
     }
 
     public string IncidentId { get; }
 }
 
 public sealed record ClearIncidentOperation : IncidentOperation;
+
+internal static class ProposalContractValue
+{
+    internal static string NormalizeIdentifier(string value, string parameterName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
+        value = value.Trim();
+        if (value.Length > PreparationCandidate.MaximumIdentifierLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                value.Length,
+                $"An identifier cannot exceed {PreparationCandidate.MaximumIdentifierLength} characters.");
+        }
+
+        return value;
+    }
+}

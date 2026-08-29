@@ -30,7 +30,7 @@ public sealed class MafTurnProposalToolBoundaryTests
             TestContext.Current.CancellationToken);
         var chatClient = new SearchToolChatClient(
             query: null,
-            """{"schemaVersion":1,"dialogueAct":"unclear"}""");
+            """{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""");
         var interpreter = CreateInterpreter(chatClient, host);
 
         var result = await interpreter.InterpretAsync(
@@ -78,7 +78,7 @@ public sealed class MafTurnProposalToolBoundaryTests
     {
         const string proposal =
             """
-            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}}}}
+            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}},"role":null,"justification":null,"incident":null},"discussionTopic":null}
             """;
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
@@ -103,7 +103,7 @@ public sealed class MafTurnProposalToolBoundaryTests
     {
         const string exactProposal =
             """
-            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}}}}
+            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}},"role":null,"justification":null,"incident":null},"discussionTopic":null}
             """;
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
@@ -133,7 +133,7 @@ public sealed class MafTurnProposalToolBoundaryTests
             TestContext.Current.CancellationToken);
         var chatClient = new SearchToolChatClient(
             "alpha EU primary",
-            """{"schemaVersion":1,"dialogueAct":"unclear"}""",
+            """{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""",
             repeatSearch: true);
         var interpreter = CreateInterpreter(chatClient, host);
 
@@ -183,7 +183,7 @@ public sealed class MafTurnProposalToolBoundaryTests
                         {
                             ["incidentId"] = "INC-1042",
                         }))
-                : TextResponse("""{"schemaVersion":1,"dialogueAct":"unclear"}""")));
+                : TextResponse("""{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""")));
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
         var interpreter = CreateInterpreter(chatClient, host);
@@ -209,7 +209,7 @@ public sealed class MafTurnProposalToolBoundaryTests
                         "unknown-call",
                         "approve_request",
                         new Dictionary<string, object?>()))
-                : TextResponse("""{"schemaVersion":1,"dialogueAct":"unclear"}""")));
+                : TextResponse("""{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""")));
         await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
         var interpreter = CreateInterpreter(chatClient, host);

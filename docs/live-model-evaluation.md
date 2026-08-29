@@ -35,16 +35,26 @@ Run the complete fixed inventory:
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
 ```
 
-The only option is `--output <directory>`. It selects the parent directory for one
-run-specific result directory and defaults to
-`artifacts/live-model-evaluation`. Partial scenario or group selection is not
-supported because promotion evidence must cover the complete fixed inventory.
+`--output <directory>` selects the parent directory for one run-specific result
+directory and defaults to `artifacts/live-model-evaluation`.
+
+To rerun one variation while diagnosing a failure, pass its exact, case-sensitive ID:
+
+```powershell
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --variation EVAL-01-ONE-SHOT --output artifacts/live-model-evaluation
+```
+
+`--variation <id>` accepts one variation from the fixed dataset. An unknown ID,
+missing value, or repeated option exits with code `2`. Scenario and group selection
+remain unsupported. A selected-variation run is diagnostic only even when it passes:
+its console output and artifacts state that it is not promotion evidence. Only an
+unfiltered run covers the complete inventory and is promotion eligible.
 
 The process exit codes are:
 
 | Code | Meaning |
 |---:|---|
-| `0` | Every promoted group and every universal safety gate passed. |
+| `0` | Every evaluated group and safety gate passed. Check `scope.promotionEligible`; a diagnostic pass is not promotion evidence. |
 | `1` | Evaluation completed but a quality or safety gate failed. |
 | `2` | Arguments, configuration, dataset, output, or startup prerequisites were invalid. |
 | `130` | The run was cancelled. |
@@ -124,8 +134,11 @@ exact dataset bytes. `runId` is a GUID, not a hash.
 and the command does not enforce a clean working tree. Do not present a run from
 uncommitted source as promotion evidence.
 
-`result.json` uses artifact schema version `4`. Run, source, dataset, version, summary,
-group, variation, turn, safety, side-effect, and failure-code fields remain available.
+`result.json` uses artifact schema version `5`. Its `scope` records `fullInventory`
+with `promotionEligible: true` for an unfiltered run, or `diagnosticVariation` with
+`promotionEligible: false` and the selected `variationId`. Run, source, dataset,
+version, summary, group, variation, turn, safety, side-effect, and failure-code fields
+remain available.
 In comparison snapshots, the exact `value` replaces the former
 `canonicalValue`/`textLength` pair, and exact candidate `justification` replaces the
 former presence/length pair. Each executed variation contains a
@@ -159,6 +172,11 @@ failure codes, failed safety checks, expected-versus-observed canonical fields,
 proposal differences, tool-use differences, elapsed time, and side-effect counts.
 Start there for a failed run; use the corresponding group, variation, and turn in
 `result.json` when machine-readable detail is needed.
+
+For an executed variation, `elapsedMilliseconds` is monotonic elapsed time from the
+start of variation scope/setup through turn execution, side-effect evidence,
+authoritative identifier verification, and canonical and safety grading. It excludes
+artifact serialization and run-level host startup or disposal.
 
 Environment search queries, justifications, mismatching model-proposed identifiers,
 canonical candidate values, clarification IDs, diagnostic codes, and tool names are

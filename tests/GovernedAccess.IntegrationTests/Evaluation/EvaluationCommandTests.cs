@@ -23,6 +23,8 @@ public sealed class EvaluationCommandTests
 			["--unknown"],
 			["--output"],
 			["--output", "first", "--output", "second"],
+			["--variation"],
+			["--variation", "EVAL-01-ONE-SHOT", "--variation", "EVAL-02-INCREMENTAL"],
 			["--scenario", "unsupported-selection"],
 			["--group", "unsupported-selection"],
 		];
@@ -39,12 +41,63 @@ public sealed class EvaluationCommandTests
 	}
 
 	[Fact]
+	public void CommandAcceptsOneDiagnosticVariationWithOptionalOutput()
+	{
+		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
+		ApplicationResult<LiveModelEvaluationArguments> defaultOutput =
+			LiveModelEvaluationCommand.ParseArguments(
+				["--variation", "EVAL-01-ONE-SHOT"],
+				workingDirectory);
+		ApplicationResult<LiveModelEvaluationArguments> explicitOutput =
+			LiveModelEvaluationCommand.ParseArguments(
+				["--output", "diagnostics", "--variation", "EVAL-02-INCREMENTAL"],
+				workingDirectory);
+
+		Assert.True(defaultOutput.IsSuccess);
+		Assert.Equal("EVAL-01-ONE-SHOT", defaultOutput.Value.VariationId);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"),
+			defaultOutput.Value.OutputParentPath);
+		Assert.True(explicitOutput.IsSuccess);
+		Assert.Equal("EVAL-02-INCREMENTAL", explicitOutput.Value.VariationId);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "diagnostics"),
+			explicitOutput.Value.OutputParentPath);
+	}
+
+	[Fact]
+	public async Task DiagnosticSelectionKeepsOnlyTheExactVariationAndDatasetIdentity()
+	{
+		EvaluationDataset dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
+			TestContext.Current.CancellationToken);
+
+		ApplicationResult<EvaluationDataset> selected =
+			LiveModelEvaluationCommand.SelectVariation(
+				dataset,
+				"EVAL-01-OPTIONAL-INCIDENT-OMITTED");
+		ApplicationResult<EvaluationDataset> missing =
+			LiveModelEvaluationCommand.SelectVariation(dataset, "EVAL-NOT-PRESENT");
+
+		Assert.True(selected.IsSuccess);
+		EvaluationGroup group = Assert.Single(selected.Value.Groups);
+		Assert.Equal("EVAL-01", group.Id);
+		Assert.Equal(
+			"EVAL-01-OPTIONAL-INCIDENT-OMITTED",
+			Assert.Single(group.Variations).Id);
+		Assert.Equal(dataset.DatasetVersion, selected.Value.DatasetVersion);
+		Assert.Equal(dataset.Sha256, selected.Value.Sha256);
+		Assert.True(missing.IsFailure);
+		Assert.Equal(ApplicationFailureKind.InvalidInput, missing.Failure!.Kind);
+	}
+
+	[Fact]
 	public async Task CommandDefaultsToSeparateArtifactDirectoryAndResolvesSourceCommit()
 	{
 		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
 		ApplicationResult<LiveModelEvaluationArguments> result = LiveModelEvaluationCommand.ParseArguments(Array.Empty<string>(), workingDirectory);
 		Assert.True(result.IsSuccess);
 		Assert.Equal(Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"), result.Value.OutputParentPath);
+		Assert.Null(result.Value.VariationId);
 
 		string sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
 			Directory.GetCurrentDirectory(),
@@ -83,7 +136,10 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal("fullInventory", root.GetProperty("scope").GetProperty("kind").GetString());
+			Assert.True(root.GetProperty("scope").GetProperty("promotionEligible").GetBoolean());
+			Assert.Equal(JsonValueKind.Null, root.GetProperty("scope").GetProperty("variationId").ValueKind);
 			Assert.Equal(
 				"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
 				root.GetProperty("sourceCommit").GetString());
@@ -134,7 +190,7 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(4, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
 			JsonElement variation = root.GetProperty("groups")[0].GetProperty("variations")[0];
 			Assert.Equal("draftUpdated", variation.GetProperty("outcome").GetString());
 			Assert.Contains("canonical.outcome", variation.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
@@ -191,6 +247,48 @@ public sealed class EvaluationCommandTests
 			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", report, StringComparison.Ordinal);
 			Assert.Contains("UNREDACTED_CANONICAL_VALUE", report, StringComparison.Ordinal);
 			Assert.DoesNotContain("diagnostic.redacted", report, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(outputRoot))
+			{
+				Directory.Delete(outputRoot, recursive: true);
+			}
+		}
+	}
+
+	[Fact]
+	public async Task ArtifactMarksSelectedVariationAsDiagnosticOnly()
+	{
+		string outputRoot = Path.Combine(
+			Path.GetTempPath(),
+			$"evaluation-artifact-diagnostic-tests-{Guid.NewGuid():N}");
+		try
+		{
+			EvaluationRunResult result = CreatePassingRun() with
+			{
+				DiagnosticVariationId = "EVAL-01-ONE-SHOT",
+			};
+
+			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(
+				result,
+				outputRoot,
+				TestContext.Current.CancellationToken);
+			string json = await File.ReadAllTextAsync(
+				paths.JsonPath,
+				TestContext.Current.CancellationToken);
+			using JsonDocument document = JsonDocument.Parse(json);
+			JsonElement scope = document.RootElement.GetProperty("scope");
+			Assert.Equal("diagnosticVariation", scope.GetProperty("kind").GetString());
+			Assert.False(scope.GetProperty("promotionEligible").GetBoolean());
+			Assert.Equal("EVAL-01-ONE-SHOT", scope.GetProperty("variationId").GetString());
+
+			string report = await File.ReadAllTextAsync(
+				paths.MarkdownPath,
+				TestContext.Current.CancellationToken);
+			Assert.Contains("DIAGNOSTIC ONLY", report, StringComparison.Ordinal);
+			Assert.Contains("NOT PROMOTION EVIDENCE", report, StringComparison.Ordinal);
+			Assert.Contains("EVAL-01-ONE-SHOT", report, StringComparison.Ordinal);
 		}
 		finally
 		{

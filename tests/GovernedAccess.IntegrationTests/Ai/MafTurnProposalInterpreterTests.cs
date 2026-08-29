@@ -13,7 +13,7 @@ public sealed class MafTurnProposalInterpreterTests
 {
     private const string UnclearProposal =
         """
-        {"schemaVersion":1,"dialogueAct":"unclear"}
+        {"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}
         """;
 
     private const string CompletePatchProposal =
@@ -43,7 +43,8 @@ public sealed class MafTurnProposalInterpreterTests
               "operation": "set",
               "incidentId": "INC-1042"
             }
-          }
+          },
+          "discussionTopic": null
         }
         """;
 

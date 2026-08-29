@@ -8,74 +8,44 @@ using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.Web.Teams;
 
-internal enum TeamsResponseKind
-{
-    Text,
-    Card,
-    InvalidAction,
-}
+internal abstract record TeamsResponse(string InputHint);
 
-internal sealed record TeamsResponse(
-    TeamsResponseKind Kind,
-    string? Message,
-    Attachment? Card,
+internal abstract record TeamsMessageResponse(
+    string Message,
+    string InputHint) : TeamsResponse(InputHint);
+
+internal sealed record TeamsTextResponse(
+    string Message,
+    string InputHint) : TeamsMessageResponse(Message, InputHint);
+
+internal sealed record TeamsRetiringTextResponse(
+    string Message,
+    string InputHint) : TeamsMessageResponse(Message, InputHint);
+
+internal abstract record TeamsCardResponse(
+    Attachment Card,
+    string InputHint) : TeamsResponse(InputHint);
+
+internal abstract record TeamsActionableCardResponse(
+    Attachment Card,
     string InputHint,
-    bool InvalidatesTrackedCard,
-    Guid? PreparationId,
-    bool TrackAsActiveDraft)
-{
-    internal static TeamsResponse CreateText(
-        string message,
-        string inputHint,
-        bool invalidatesTrackedCard = false,
-        Guid? preparationId = null) =>
-        new(
-            TeamsResponseKind.Text,
-            message,
-            Card: null,
-            inputHint,
-            invalidatesTrackedCard,
-            preparationId,
-            TrackAsActiveDraft: false);
+    Guid PreparationId) : TeamsCardResponse(Card, InputHint);
 
-    internal static TeamsResponse CreateInvalidAction(string message) =>
-        new(
-            TeamsResponseKind.InvalidAction,
-            message,
-            Card: null,
-            InputHints.IgnoringInput,
-            InvalidatesTrackedCard: false,
-            PreparationId: null,
-            TrackAsActiveDraft: false);
+internal sealed record TeamsDraftCardResponse(
+    Attachment Card,
+    string InputHint,
+    Guid PreparationId) :
+    TeamsActionableCardResponse(Card, InputHint, PreparationId);
 
-    internal static TeamsResponse CreateActionableDraft(
-        Attachment card,
-        string inputHint,
-        bool invalidatesTrackedCard,
-        Guid preparationId) =>
-        new(
-            TeamsResponseKind.Card,
-            Message: null,
-            card,
-            inputHint,
-            invalidatesTrackedCard,
-            preparationId,
-            TrackAsActiveDraft: true);
+internal sealed record TeamsReplacementDraftCardResponse(
+    Attachment Card,
+    string InputHint,
+    Guid PreparationId) :
+    TeamsActionableCardResponse(Card, InputHint, PreparationId);
 
-    internal static TeamsResponse CreateTerminalCard(
-        Attachment card,
-        string inputHint,
-        bool invalidatesTrackedCard,
-        Guid preparationId) =>
-        new(
-            TeamsResponseKind.Card,
-            Message: null,
-            card,
-            inputHint,
-            invalidatesTrackedCard,
-            preparationId,
-            TrackAsActiveDraft: false);
-}
+internal sealed record TeamsTerminalCardResponse(
+    Attachment Card,
+    string InputHint) : TeamsCardResponse(Card, InputHint);
 
 internal sealed class TeamsResponsePresenter(
     IPreparationReviewService reviewService)
@@ -89,7 +59,6 @@ internal sealed class TeamsResponsePresenter(
         ArgumentNullException.ThrowIfNull(result);
         invalidatesTrackedCard |=
             result.Preparation?.PredecessorPreparationId is not null;
-        var preparationId = result.Preparation?.PreparationId;
         var soleRoleSelection = RenderSoleRoleSelection(
             result.Response.SoleRoleSelection);
 
@@ -160,34 +129,29 @@ internal sealed class TeamsResponsePresenter(
         };
 
         TeamsResponse Text(string message, string inputHint) =>
-            TeamsResponse.CreateText(
-                message,
-                inputHint,
-                invalidatesTrackedCard,
-                preparationId);
+            CreateText(message, inputHint, invalidatesTrackedCard);
     }
 
     internal async Task<TeamsResponse> PresentConfirmationAsync(
         PreparationConfirmationResult result,
         string? locale,
-        Guid preparationId,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(result);
         return result switch
         {
             PreparationConfirmationSubmitted submitted =>
-                PresentSubmitted(submitted, preparationId),
+                PresentSubmitted(submitted),
             PreparationConfirmationRevalidationFailed revalidationFailed =>
                 await PresentTurnAsync(
                     revalidationFailed.Revalidation,
                     locale,
                     invalidatesTrackedCard: true,
                     cancellationToken),
-            PreparationConfirmationSourceUnavailable => TeamsResponse.CreateText(
+            PreparationConfirmationSourceUnavailable => new TeamsTextResponse(
                 "Authoritative production context is temporarily unavailable. No request was submitted; try confirmation again before the current deadline.",
                 InputHints.AcceptingInput),
-            PreparationConfirmationFailed failed => TeamsResponse.CreateText(
+            PreparationConfirmationFailed failed => new TeamsTextResponse(
                 RenderFailure(failed.Failure),
                 InputHints.AcceptingInput),
             _ => throw new InvalidOperationException(
@@ -216,11 +180,10 @@ internal sealed class TeamsResponsePresenter(
                 "Authoritative production context changed. Review the corrected replacement card before confirming again.",
                 invalidatesTrackedCard,
                 cancellationToken)
-            : TeamsResponse.CreateText(
+            : CreateText(
                 $"Authoritative production context changed, so no request was submitted. {RenderMissing(preparation)}",
                 InputHints.ExpectingInput,
-                invalidatesTrackedCard,
-                preparation.PreparationId);
+                invalidatesTrackedCard);
     }
 
     private async Task<TeamsResponse> PresentReadyAsync(
@@ -235,38 +198,47 @@ internal sealed class TeamsResponsePresenter(
             cancellationToken);
         if (review.IsFailure)
         {
-            return TeamsResponse.CreateText(
+            return CreateText(
                 RenderFailure(review.Failure!),
                 InputHints.AcceptingInput,
-                invalidatesTrackedCard,
-                preparation.PreparationId);
+                invalidatesTrackedCard);
         }
 
-        return TeamsResponse.CreateActionableDraft(
-            TeamsAdaptiveCardRenderer.CreateReadyCard(
-                review.Value,
-                TeamsLocale.Resolve(locale),
-                message),
-            InputHints.AcceptingInput,
-            invalidatesTrackedCard,
-            preparation.PreparationId);
+        var card = TeamsAdaptiveCardRenderer.CreateReadyCard(
+            review.Value,
+            TeamsLocale.Resolve(locale),
+            message);
+        return invalidatesTrackedCard
+            ? new TeamsReplacementDraftCardResponse(
+                card,
+                InputHints.AcceptingInput,
+                preparation.PreparationId)
+            : new TeamsDraftCardResponse(
+                card,
+                InputHints.AcceptingInput,
+                preparation.PreparationId);
     }
 
-    private static TeamsResponse PresentSubmitted(
-        PreparationConfirmationSubmitted result,
-        Guid preparationId)
+    private static TeamsTerminalCardResponse PresentSubmitted(
+        PreparationConfirmationSubmitted result)
     {
         var title = result.WasAlreadySubmitted
             ? "Request already submitted"
             : "Request submitted";
-        return TeamsResponse.CreateTerminalCard(
+        return new TeamsTerminalCardResponse(
             TeamsAdaptiveCardRenderer.CreateStatusCard(
                 title,
                 $"Request {result.Request.Id:D} is {StatusText(result.Request.Status)}."),
-            InputHints.IgnoringInput,
-            invalidatesTrackedCard: true,
-            preparationId);
+            InputHints.IgnoringInput);
     }
+
+    private static TeamsMessageResponse CreateText(
+        string message,
+        string inputHint,
+        bool invalidatesTrackedCard) =>
+        invalidatesTrackedCard
+            ? new TeamsRetiringTextResponse(message, inputHint)
+            : new TeamsTextResponse(message, inputHint);
 
     private static PreparationSnapshot GetReadyPreparation(
         ReadyForConfirmation outcome,

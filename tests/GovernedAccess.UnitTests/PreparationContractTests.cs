@@ -189,8 +189,17 @@ public sealed class PreparationContractTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new EnvironmentSearchQuery(
                 new string('q', EnvironmentSearchQuery.MaximumLength + 1)));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new ExactEnvironmentId(
+                new string('e', PreparationCandidate.MaximumIdentifierLength + 1)));
         Assert.Throws<ArgumentException>(() => new SetRoleOperation("   "));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SetRoleOperation(
+                new string('r', PreparationCandidate.MaximumIdentifierLength + 1)));
         Assert.Throws<ArgumentException>(() => new SetIncidentOperation("   "));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new SetIncidentOperation(
+                new string('i', PreparationCandidate.MaximumIdentifierLength + 1)));
         Assert.Throws<ArgumentException>(
             () => new JustificationProposal("   "));
 
@@ -202,23 +211,8 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void StructuralFailuresAndApplicationGroupResultsAreClosed()
+    public void ApplicationGroupResultsAreClosed()
     {
-        Assert.Equal(
-            [
-                nameof(ProposalStructuralFailure.UnknownDialogueAct),
-                nameof(ProposalStructuralFailure.InvalidActPayloadCombination),
-                nameof(ProposalStructuralFailure.UnknownProperty),
-                nameof(ProposalStructuralFailure.UnknownField),
-                nameof(ProposalStructuralFailure.UnknownOperation),
-                nameof(ProposalStructuralFailure.UnknownReferenceForm),
-                nameof(ProposalStructuralFailure.UnknownDiscussionTopic),
-                nameof(ProposalStructuralFailure.MissingRequiredValue),
-                nameof(ProposalStructuralFailure.ForbiddenValue),
-                nameof(ProposalStructuralFailure.ValueOutOfBounds),
-                nameof(ProposalStructuralFailure.UntranslatableProviderOutput),
-            ],
-            Enum.GetNames<ProposalStructuralFailure>());
         Assert.Equal(
             [
                 nameof(ProposalField.Environment),

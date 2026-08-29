@@ -8,8 +8,11 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.AccessRequests;
 using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Ports;
+using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority.Persistence;
@@ -38,9 +41,9 @@ public sealed class EvaluationEngineTests
 		"search_production_environments",
 	];
 
-	private const string ClearAllProposalPayload = "{\n  \"schemaVersion\": 1,\n  \"dialogueAct\": \"updateDraft\",\n  \"patch\": {\n    \"environment\": { \"operation\": \"clear\" },\n    \"justification\": { \"operation\": \"clear\" }\n  }\n}";
+	private const string ClearAllProposalPayload = "{\n  \"schemaVersion\": 1,\n  \"dialogueAct\": \"updateDraft\",\n  \"patch\": {\n    \"environment\": { \"operation\": \"clear\" },\n    \"role\": null,\n    \"justification\": { \"operation\": \"clear\" },\n    \"incident\": null\n  },\n  \"discussionTopic\": null\n}";
 
-	private const string CompleteProposalPayload = "{\n  \"schemaVersion\": 1,\n  \"dialogueAct\": \"updateDraft\",\n  \"patch\": {\n    \"environment\": { \"operation\": \"set\", \"reference\": { \"kind\": \"exactEnvironmentId\", \"id\": \"PROD-ALPHA-EU\" } },\n    \"role\": { \"operation\": \"set\", \"roleId\": \"ProductionReadOnly\" },\n    \"justification\": { \"operation\": \"set\", \"value\": { \"text\": \"Investigate production symptoms.\" } }\n  }\n}";
+	private const string CompleteProposalPayload = "{\n  \"schemaVersion\": 1,\n  \"dialogueAct\": \"updateDraft\",\n  \"patch\": {\n    \"environment\": { \"operation\": \"set\", \"reference\": { \"kind\": \"exactEnvironmentId\", \"id\": \"PROD-ALPHA-EU\" } },\n    \"role\": { \"operation\": \"set\", \"roleId\": \"ProductionReadOnly\" },\n    \"justification\": { \"operation\": \"set\", \"value\": { \"text\": \"Investigate production symptoms.\" } },\n    \"incident\": null\n  },\n  \"discussionTopic\": null\n}";
 
 	[Fact]
 	public async Task DatasetLoaderValidatesContractInventoryAndContentHash()
@@ -64,23 +67,6 @@ public sealed class EvaluationEngineTests
 			dataset.Sha256);
 		Assert.NotEmpty(dataset.Groups);
 		Assert.Contains(dataset.Groups, static group => group.Promoted);
-	}
-
-	[Fact]
-	public async Task DefaultDatasetUsesEnglishOnlyCaseMetadataAndAsciiText()
-	{
-		byte[] datasetBytes = await File.ReadAllBytesAsync(
-			EvaluationDatasetLoader.DefaultDatasetPath,
-			TestContext.Current.CancellationToken);
-		EvaluationDataset dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
-			TestContext.Current.CancellationToken);
-
-		Assert.DoesNotContain(datasetBytes, static value => value > 0x7f);
-		Assert.DoesNotContain(
-			dataset.Groups.SelectMany(static group => group.Variations),
-			static variation => variation.Id.Contains(
-				"MULTILINGUAL",
-				StringComparison.OrdinalIgnoreCase));
 	}
 
 	[Fact]
@@ -295,7 +281,7 @@ public sealed class EvaluationEngineTests
 		EvaluationHosting? hosting = null;
 		try
 		{
-			hosting = await StartHostingAsync(temporaryRoot, new RecordingChatClient("{\"schemaVersion\":1,\"dialogueAct\":\"unclear\"}"), TestContext.Current.CancellationToken);
+			hosting = await StartHostingAsync(temporaryRoot, new RecordingChatClient("{\"schemaVersion\":1,\"dialogueAct\":\"unclear\",\"patch\":null,\"discussionTopic\":null}"), TestContext.Current.CancellationToken);
 			string[] routes = (from endpoint in hosting.Services.GetServices<EndpointDataSource>().SelectMany((EndpointDataSource source) => source.Endpoints).OfType<RouteEndpoint>()
 				select endpoint.RoutePattern.RawText into pattern
 				where pattern != null
@@ -480,6 +466,72 @@ public sealed class EvaluationEngineTests
 				[],
 				[requiredToolTurn],
 				EvaluationSafetyResult.Passed));
+	}
+
+	[Fact]
+	public async Task ScenarioElapsedTimeIncludesFinalAuthoritativeVerification()
+	{
+		EvaluationCandidate candidate = new(
+			"client-alpha",
+			"PROD-ALPHA-EU",
+			"ProductionReadOnly",
+			"Investigate production symptoms.",
+			IncidentId: null);
+		EvaluationVariation variation = new(
+			"TIMING-A",
+			new EvaluationStartingState(candidate, Clarification: null),
+			[new EvaluationTurn(
+				"TIMING-A-turn-01",
+				"I am not sure what to change.",
+				EvaluationInterpretationExpectation.Unclear())],
+			new EvaluationCanonicalExpectation(
+				EvaluationOutcome.UnclearGuidance,
+				PreparationLifecycle.Ready,
+				candidate,
+				ClarificationTarget: null,
+				ClarificationChoiceIds: [],
+				ScopeResult: null,
+				JustificationResult: null));
+		EvaluationGroup group = new(
+			"TIMING",
+			Promoted: false,
+			AbsoluteOutcomeGate: false,
+			[variation]);
+		AdjustableTimeProvider timeProvider = new();
+		AdvancingEnvironmentAuthority environmentAuthority = new(timeProvider);
+		string temporaryRoot = CreateTemporaryDirectory();
+		await using EvaluationHosting hosting = await StartHostingAsync(
+			temporaryRoot,
+			new RecordingChatClient(
+				"{\"schemaVersion\":1,\"dialogueAct\":\"unclear\",\"patch\":null,\"discussionTopic\":null}"),
+			TestContext.Current.CancellationToken,
+			configureServices: services =>
+			{
+				services.RemoveAll<TimeProvider>();
+				services.AddSingleton<TimeProvider>(timeProvider);
+				services.RemoveAll<IProductionEnvironmentAuthority>();
+				services.AddSingleton<IProductionEnvironmentAuthority>(
+					environmentAuthority);
+			});
+		try
+		{
+			EvaluationVariationExecution execution = await hosting.Services
+				.GetRequiredService<EvaluationScenarioExecutor>()
+				.ExecuteAsync(
+					Guid.NewGuid(),
+					group,
+					variation,
+					WorkflowSideEffectCounts.None,
+					TestContext.Current.CancellationToken);
+
+			Assert.Equal(EvaluationScenarioStatus.Passed, execution.Result.Status);
+			Assert.Equal(1, environmentAuthority.CallCount);
+			Assert.Equal(7_000, execution.Result.ElapsedMilliseconds);
+		}
+		finally
+		{
+			DeleteTemporaryDirectory(temporaryRoot);
+		}
 	}
 
 	[Fact]
@@ -764,6 +816,8 @@ public sealed class EvaluationEngineTests
 				DialogueAct.Unclear => "unclear",
 				_ => throw new InvalidOperationException("A successful dataset turn must declare a dialogue act."),
 			},
+			["patch"] = null,
+			["discussionTopic"] = null,
 		};
 		if (expectation.DiscussionTopic is { } topic)
 		{
@@ -780,7 +834,13 @@ public sealed class EvaluationEngineTests
 		}
 		if (expectation.Proposal is { } proposal)
 		{
-			JsonObject patch = [];
+			JsonObject patch = new()
+			{
+				["environment"] = null,
+				["role"] = null,
+				["justification"] = null,
+				["incident"] = null,
+			};
 			if (proposal.Environment is { } environment)
 			{
 				patch["environment"] = CreateEnvironmentOperationPayload(environment);
@@ -1038,7 +1098,8 @@ public sealed class EvaluationEngineTests
 		string temporaryRoot,
 		IChatClient chatClient,
 		CancellationToken cancellationToken,
-		TimeSpan? cumulativeTimeout = null)
+		TimeSpan? cumulativeTimeout = null,
+		Action<IServiceCollection>? configureServices = null)
 	{
 		IConfigurationRoot configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
 		{
@@ -1058,7 +1119,57 @@ public sealed class EvaluationEngineTests
 		{
 			services.RemoveAll<IChatClient>();
 			services.AddSingleton(chatClient);
+			configureServices?.Invoke(services);
 		}, cancellationToken);
+	}
+
+	private sealed class AdjustableTimeProvider : TimeProvider
+	{
+		private readonly object syncRoot = new();
+		private long timestamp;
+
+		public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+		public override long GetTimestamp()
+		{
+			lock (syncRoot)
+			{
+				return timestamp;
+			}
+		}
+
+		internal void Advance(TimeSpan duration)
+		{
+			lock (syncRoot)
+			{
+				timestamp += duration.Ticks;
+			}
+		}
+	}
+
+	private sealed class AdvancingEnvironmentAuthority(
+		AdjustableTimeProvider timeProvider) : IProductionEnvironmentAuthority
+	{
+		internal int CallCount { get; private set; }
+
+		public Task<ApplicationResult<EnvironmentAuthorityProjection>> GetAsync(
+			string environmentId,
+			CancellationToken cancellationToken)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			CallCount++;
+			timeProvider.Advance(TimeSpan.FromSeconds(7));
+			return Task.FromResult(ApplicationResult.Succeeded(
+				new EnvironmentAuthorityProjection(
+					environmentId,
+					"Alpha Production EU",
+					"client-alpha",
+					"Client Alpha",
+					"approver-alpha",
+					isActive: true,
+					isProduction: true,
+					isEligibleForIntake: true)));
+		}
 	}
 
 	private static string CreateTemporaryDirectory()

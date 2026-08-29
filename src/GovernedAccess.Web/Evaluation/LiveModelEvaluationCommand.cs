@@ -7,13 +7,16 @@ using GovernedAccess.Web.Ai;
 
 namespace GovernedAccess.Web.Evaluation;
 
-internal sealed record LiveModelEvaluationArguments(string OutputParentPath);
+internal sealed record LiveModelEvaluationArguments(
+	string OutputParentPath,
+	string? VariationId);
 
 internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 {
 	internal const string CommandName = "evaluate-live-model";
 
 	private const string OutputOption = "--output";
+	private const string VariationOption = "--variation";
 
 	private const string InvalidArgumentsCode = "live_model_evaluation_arguments_invalid";
 
@@ -48,14 +51,29 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 		ArgumentNullException.ThrowIfNull(arguments);
 		ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 		string? outputPath = null;
+		string? variationId = null;
 		int index;
 		for (index = 0; index < arguments.Length; index++)
 		{
-			if (!string.Equals(arguments[index], "--output", StringComparison.Ordinal) || outputPath != null || index + 1 >= arguments.Length || arguments[index + 1].StartsWith("--", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(arguments[index + 1]))
+			bool hasValue = index + 1 < arguments.Length
+				&& !arguments[index + 1].StartsWith("--", StringComparison.Ordinal)
+				&& !string.IsNullOrWhiteSpace(arguments[index + 1]);
+			if (string.Equals(arguments[index], OutputOption, StringComparison.Ordinal)
+				&& outputPath is null
+				&& hasValue)
+			{
+				outputPath = arguments[++index];
+			}
+			else if (string.Equals(arguments[index], VariationOption, StringComparison.Ordinal)
+				&& variationId is null
+				&& hasValue)
+			{
+				variationId = arguments[++index];
+			}
+			else
 			{
 				return InvalidArguments();
 			}
-			outputPath = arguments[++index];
 		}
 		if (outputPath == null)
 		{
@@ -64,7 +82,10 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 		try
 		{
 			string trustedWorkingDirectory = Path.GetFullPath(workingDirectory);
-			return ApplicationResult.Succeeded(new LiveModelEvaluationArguments(Path.GetFullPath(outputPath, trustedWorkingDirectory)));
+			return ApplicationResult.Succeeded(
+				new LiveModelEvaluationArguments(
+					Path.GetFullPath(outputPath, trustedWorkingDirectory),
+					variationId));
 		}
 		catch (Exception ex) when (((ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException) ? 1 : 0) != 0)
 		{
@@ -78,7 +99,22 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 		try
 		{
 			EvaluationDataset dataset = await EvaluationDatasetLoader.LoadDefaultAsync(cancellationToken);
+			if (arguments.VariationId is not null)
+			{
+				ApplicationResult<EvaluationDataset> selection =
+					SelectVariation(dataset, arguments.VariationId);
+				if (selection.IsFailure)
+				{
+					Console.Error.WriteLine(selection.Failure!.Message);
+					return GetExitCode(EvaluationRunStatus.PrerequisiteFailed);
+				}
+				dataset = selection.Value;
+			}
 			EvaluationRunResult result = await runner.RunAsync(dataset, cancellationToken);
+			result = result with
+			{
+				DiagnosticVariationId = arguments.VariationId,
+			};
 			EvaluationRunStatus status = result.Status;
 			if ((uint)status <= 1u)
 			{
@@ -96,8 +132,39 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 		}
 	}
 
+	internal static ApplicationResult<EvaluationDataset> SelectVariation(
+		EvaluationDataset dataset,
+		string variationId)
+	{
+		ArgumentNullException.ThrowIfNull(dataset);
+		foreach (EvaluationGroup group in dataset.Groups)
+		{
+			foreach (EvaluationVariation variation in group.Variations)
+			{
+				if (string.Equals(variation.Id, variationId, StringComparison.Ordinal))
+				{
+					return ApplicationResult.Succeeded(dataset with
+					{
+						Groups = [group with { Variations = [variation] }],
+					});
+				}
+			}
+		}
+
+		return ApplicationResult.Failed<EvaluationDataset>(
+			new ApplicationFailure(
+				ApplicationFailureKind.InvalidInput,
+				"live_model_evaluation_variation_not_found",
+				$"Evaluation variation '{variationId}' was not found in the fixed dataset."));
+	}
+
 	private static void WriteCompletion(EvaluationRunResult result, EvaluationArtifactPaths artifacts)
 	{
+		if (result.DiagnosticVariationId is not null)
+		{
+			Console.WriteLine(
+				$"Diagnostic variation '{result.DiagnosticVariationId}'; this run is not promotion evidence.");
+		}
 		Console.WriteLine($"Evaluation {((result.Status == EvaluationRunStatus.Passed) ? "PASS" : "FAIL")}: {result.Summary.PromotedPassed}/{result.Summary.PromotedTotal} promoted groups passed ({result.Summary.RequiredPasses} required); absolute safety: {(result.Summary.AbsoluteSafetyPassed ? "PASS" : "FAIL")}.");
 		Console.WriteLine("JSON result: " + artifacts.JsonPath);
 		Console.WriteLine("Markdown report: " + artifacts.MarkdownPath);
@@ -105,6 +172,6 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 
 	private static ApplicationResult<LiveModelEvaluationArguments> InvalidArguments()
 	{
-		return ApplicationResult.Failed<LiveModelEvaluationArguments>(new ApplicationFailure(ApplicationFailureKind.InvalidInput, "live_model_evaluation_arguments_invalid", "Evaluation arguments are invalid. The only supported option is '--output <directory>'."));
+		return ApplicationResult.Failed<LiveModelEvaluationArguments>(new ApplicationFailure(ApplicationFailureKind.InvalidInput, "live_model_evaluation_arguments_invalid", "Evaluation arguments are invalid. Supported options are '--output <directory>' and '--variation <id>'."));
 	}
 }

@@ -3,21 +3,6 @@ using GovernedAccess.Core.Domain.Preparations;
 
 namespace GovernedAccess.Core.Preparations.Contracts;
 
-public enum ProposalStructuralFailure
-{
-    UnknownDialogueAct,
-    InvalidActPayloadCombination,
-    UnknownProperty,
-    UnknownField,
-    UnknownOperation,
-    UnknownReferenceForm,
-    UnknownDiscussionTopic,
-    MissingRequiredValue,
-    ForbiddenValue,
-    ValueOutOfBounds,
-    UntranslatableProviderOutput,
-}
-
 public enum ProposalField
 {
     Environment,

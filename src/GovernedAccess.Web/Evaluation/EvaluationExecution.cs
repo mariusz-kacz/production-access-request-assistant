@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,7 +17,10 @@ namespace GovernedAccess.Web.Evaluation;
 
 internal sealed record EvaluationVariationExecution(EvaluationVariationResult Result, WorkflowSideEffectCounts TotalSideEffects);
 
-internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFactory, IClock clock)
+internal sealed class EvaluationScenarioExecutor(
+	IServiceScopeFactory scopeFactory,
+	IClock clock,
+	TimeProvider timeProvider)
 {
 	private sealed record CanonicalGrade(IReadOnlyList<string> FailureCodes, EvaluationCanonicalComparison Comparison);
 
@@ -33,8 +35,8 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 		ArgumentNullException.ThrowIfNull(variation);
 		ArgumentNullException.ThrowIfNull(previousTotalSideEffects);
 
+		long startedTimestamp = timeProvider.GetTimestamp();
 		await using var scope = scopeFactory.CreateAsyncScope();
-		var stopwatch = Stopwatch.StartNew();
 		var binding = CreateBinding(runId, variation.Id);
 		var control = scope.ServiceProvider.GetRequiredService<EvaluationFailureControl>();
 		var recorder = scope.ServiceProvider.GetRequiredService<EvaluationRecordingInterpreter>();
@@ -67,13 +69,16 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
-				stopwatch.Stop();
 				var cancelledTotals = await CountSideEffectsAsync(
 					scope.ServiceProvider,
 					CancellationToken.None);
 				var cancelledSideEffects = Subtract(
 					cancelledTotals,
 					previousTotalSideEffects);
+				EvaluationCanonicalComparison canonicalComparison =
+					CreateCanonicalComparison(variation.ExpectedFinal, finalResult);
+				long cancelledElapsedMilliseconds =
+					GetElapsedMilliseconds(startedTimestamp);
 				return new EvaluationVariationExecution(
 					new EvaluationVariationResult(
 						variation.Id,
@@ -83,12 +88,12 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 						{
 							ZeroConsequentialSideEffects = !cancelledSideEffects.HasAny,
 						},
-						stopwatch.ElapsedMilliseconds,
+						cancelledElapsedMilliseconds,
 						cancelledSideEffects,
 						["execution.cancelled"],
 						Array.AsReadOnly(turnResults.ToArray()),
 						Outcome: finalResult is null ? null : ToOutcome(finalResult.Response.Outcome),
-						CanonicalComparison: CreateCanonicalComparison(variation.ExpectedFinal, finalResult)),
+						CanonicalComparison: canonicalComparison),
 					cancelledTotals);
 			}
 		}
@@ -97,7 +102,6 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 			control.Mode = EvaluationFailureMode.None;
 		}
 
-		stopwatch.Stop();
 		var totalSideEffects = await CountSideEffectsAsync(
 			scope.ServiceProvider,
 			cancellationToken);
@@ -138,6 +142,7 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 			canonicalFailures,
 			turnResults,
 			safety);
+		long elapsedMilliseconds = GetElapsedMilliseconds(startedTimestamp);
 
 		return new EvaluationVariationExecution(
 			new EvaluationVariationResult(
@@ -147,13 +152,18 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 					: EvaluationScenarioStatus.Failed,
 				canonicalFailures.Count == 0,
 				safety,
-				stopwatch.ElapsedMilliseconds,
+				elapsedMilliseconds,
 				variationSideEffects,
 				blockingFailures,
 				Array.AsReadOnly(turnResults.ToArray()),
 				finalResult is null ? null : ToOutcome(finalResult.Response.Outcome),
 				canonicalGrade.Comparison),
 			totalSideEffects);
+	}
+
+	private long GetElapsedMilliseconds(long startedTimestamp)
+	{
+		return (long)timeProvider.GetElapsedTime(startedTimestamp).TotalMilliseconds;
 	}
 
 	internal static bool HasExpectedMutationRestraint(

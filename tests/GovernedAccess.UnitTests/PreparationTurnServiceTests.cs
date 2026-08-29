@@ -313,38 +313,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
     }
 
     [Fact]
-    public async Task StructuralFailurePreservesStateAndDoesNotWrite()
-    {
-        var collecting = RequestPreparation.CreateRoot(Binding(), CreatedAt, "root");
-        var store = new InMemoryPreparationStore(collecting);
-        var service = Service(
-            store,
-            new FakePreparationAuthority(),
-            new FakeClock(CreatedAt.AddMinutes(1)));
-        var started = await service.BeginAsync(
-            Binding(),
-            "invalid",
-            TestContext.Current.CancellationToken);
-        var proposal = new TurnProposal(
-            TurnProposal.CurrentSchemaVersion,
-            DialogueAct.Unclear);
-        SetPrivateProperty(proposal, nameof(TurnProposal.SchemaVersion), 999);
-
-        var result = await service.ApplyAsync(
-            started.Value,
-            proposal,
-            TurnAttribution,
-            TestContext.Current.CancellationToken);
-
-        var failure = Assert.IsType<Failed>(result.Response.Outcome);
-        Assert.Equal(
-            "request-preparation-proposal-structural-invalid",
-            failure.Failure.Code);
-        Assert.Equal(0, store.SaveCount);
-        Assert.Equal(1, collecting.ConcurrencyVersion);
-    }
-
-    [Fact]
     public async Task AgentFailurePreservesReadyIdentityCandidateAndDeadlineWithoutWrite()
     {
         var ready = ReadyPreparation();

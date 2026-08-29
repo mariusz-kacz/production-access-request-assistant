@@ -21,7 +21,7 @@ public sealed class DeterministicChatClient(DeterministicChatMode mode) : IChatC
 
     private const string UnclearResponse =
         """
-        {"schemaVersion":1,"dialogueAct":"unclear"}
+        {"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}
         """;
 
     private int requestCount;

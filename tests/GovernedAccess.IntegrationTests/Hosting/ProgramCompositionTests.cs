@@ -27,7 +27,7 @@ public sealed class ProgramCompositionTests(
 
     private const string CompleteProposal =
         """
-        {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}},"role":{"operation":"set","roleId":"ProductionReadOnly"},"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}},"incident":{"operation":"set","incidentId":"INC-1042"}}}
+        {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}},"role":{"operation":"set","roleId":"ProductionReadOnly"},"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}},"incident":{"operation":"set","incidentId":"INC-1042"}},"discussionTopic":null}
         """;
 
     [Fact]
@@ -209,8 +209,9 @@ public sealed class ProgramCompositionTests(
                     cancellationToken);
         }
 
-        Assert.Equal(TeamsResponseKind.Card, prepared.Kind);
-        var preparationId = Assert.IsType<Guid>(prepared.PreparationId);
+        var preparationId = Assert
+            .IsType<TeamsDraftCardResponse>(prepared)
+            .PreparationId;
 
         Guid requestId;
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -219,15 +220,11 @@ public sealed class ProgramCompositionTests(
                 .GetRequiredService<TeamsRequestHandler>()
                 .HandleConfirmationAsync(
                     TeamsContext(),
-                    new
-                    {
-                        schemaVersion = 1,
-                        preparationId = preparationId.ToString("D"),
-                    },
+                    preparationId,
                     "production-confirmation",
                     cancellationToken);
 
-            Assert.Equal(TeamsResponseKind.Card, submitted.Kind);
+            Assert.IsType<TeamsTerminalCardResponse>(submitted);
             requestId = await scope.ServiceProvider
                 .GetRequiredService<WorkflowDbContext>()
                 .Set<AccessRequest>()

@@ -11,32 +11,35 @@ public sealed class TurnProposalJsonTranslatorTests
         [
             (
             """
-            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"role":{"operation":"clear"}}}
+            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":null,"role":{"operation":"clear"},"justification":null,"incident":null},"discussionTopic":null}
             """,
             DialogueAct.UpdateDraft
             ),
             (
             """
-            {"schemaVersion":1,"dialogueAct":"discussDraft","discussionTopic":"currentDraft"}
+            {"schemaVersion":1,"dialogueAct":"discussDraft","patch":null,"discussionTopic":"currentDraft"}
             """,
             DialogueAct.DiscussDraft
             ),
             (
-            """{"schemaVersion":1,"dialogueAct":"requestSubmission"}""",
+            """{"schemaVersion":1,"dialogueAct":"requestSubmission","patch":null,"discussionTopic":null}""",
             DialogueAct.RequestSubmission
             ),
             (
-            """{"schemaVersion":1,"dialogueAct":"unrelated"}""",
+            """{"schemaVersion":1,"dialogueAct":"unrelated","patch":null,"discussionTopic":null}""",
             DialogueAct.Unrelated
             ),
             (
-            """{"schemaVersion":1,"dialogueAct":"unclear"}""",
+            """{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""",
             DialogueAct.Unclear
             ),
         ];
 
     private static readonly string[] StructurallyInvalidPayloads =
     [
+        """{"schemaVersion":1,"dialogueAct":"unclear","discussionTopic":null}""",
+        """{"schemaVersion":1,"dialogueAct":"unclear","patch":null}""",
+        """{"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"role":{"operation":"clear"}},"discussionTopic":null}""",
         """{"schemaVersion":2,"dialogueAct":"unclear"}""",
         """{"schemaVersion":1,"dialogueAct":"unknown"}""",
         """{"schemaVersion":1,"dialogueAct":"updateDraft"}""",
@@ -156,7 +159,7 @@ public sealed class TurnProposalJsonTranslatorTests
     {
         const string payload =
             """
-            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}}}}
+            {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":null,"role":null,"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}},"incident":null},"discussionTopic":null}
             """;
 
         var translated = TurnProposalJsonTranslator.TryTranslate(

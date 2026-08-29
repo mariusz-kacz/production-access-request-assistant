@@ -14,6 +14,30 @@ namespace GovernedAccess.IntegrationTests.Teams;
 public sealed class TeamsRequestHandlerTests
 {
     [Fact]
+    public void ConfirmationPayloadIsParsedOnlyAtTheAgentIngress()
+    {
+        var preparationId = Guid.NewGuid();
+
+        Assert.True(
+            TeamsAccessRequestAgent.TryParseConfirmationData(
+                new
+                {
+                    schemaVersion = TeamsAdaptiveCardRenderer.ContractSchemaVersion,
+                    preparationId = preparationId.ToString("D"),
+                },
+                out var parsedPreparationId));
+        Assert.Equal(preparationId, parsedPreparationId);
+        Assert.False(
+            TeamsAccessRequestAgent.TryParseConfirmationData(
+                new
+                {
+                    schemaVersion = TeamsAdaptiveCardRenderer.ContractSchemaVersion,
+                    preparedRequestId = preparationId.ToString("D"),
+                },
+                out _));
+    }
+
+    [Fact]
     public async Task EveryNonblankNonCommandMessageGoesThroughPreparationOrchestration()
     {
         string[] messages =
@@ -40,7 +64,7 @@ public sealed class TeamsRequestHandlerTests
             Assert.Equal([message], orchestrator.ProcessedMessages);
             Assert.Equal(0, orchestrator.ResetCount);
             Assert.Equal(0, confirmation.CallCount);
-            Assert.Equal(TeamsResponseKind.Text, result.Kind);
+            Assert.IsType<TeamsTextResponse>(result);
         }
     }
 
@@ -61,10 +85,10 @@ public sealed class TeamsRequestHandlerTests
 
             Assert.Equal(1, orchestrator.ResetCount);
             Assert.Empty(orchestrator.ProcessedMessages);
-            Assert.True(result.InvalidatesTrackedCard);
+            var text = Assert.IsType<TeamsRetiringTextResponse>(result);
             Assert.Contains(
                 "Started a new request",
-                result.Message,
+                text.Message,
                 StringComparison.Ordinal);
         }
     }
@@ -86,7 +110,10 @@ public sealed class TeamsRequestHandlerTests
         Assert.Empty(orchestrator.ProcessedMessages);
         Assert.Equal(0, orchestrator.ResetCount);
         Assert.Equal(0, confirmation.CallCount);
-        Assert.Contains("Describe", result.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "Describe",
+            Assert.IsType<TeamsTextResponse>(result).Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -112,10 +139,8 @@ public sealed class TeamsRequestHandlerTests
             "correlation",
             cancellationToken);
 
-        Assert.Equal(TeamsResponseKind.Card, result.Kind);
-        Assert.NotNull(result.Card);
-        Assert.Equal(ready.PreparationId, result.PreparationId);
-        Assert.True(result.TrackAsActiveDraft);
+        var card = Assert.IsType<TeamsDraftCardResponse>(result);
+        Assert.Equal(ready.PreparationId, card.PreparationId);
         Assert.Equal([ready.PreparationId], reviewService.PreparationIds);
     }
 
@@ -151,11 +176,11 @@ public sealed class TeamsRequestHandlerTests
             "correlation",
             cancellationToken);
 
-        Assert.True(result.InvalidatesTrackedCard);
+        Assert.IsType<TeamsReplacementDraftCardResponse>(result);
     }
 
     [Fact]
-    public async Task ConfirmationAcceptsOnlyTheFinalClosedPayload()
+    public async Task ConfirmationReceivesThePreparationIdParsedAtIngress()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var preparationId = Guid.NewGuid();
@@ -173,29 +198,17 @@ public sealed class TeamsRequestHandlerTests
 
         var accepted = await handler.HandleConfirmationAsync(
             Context(),
-            new
-            {
-                schemaVersion = 1,
-                preparationId = preparationId.ToString("D"),
-            },
-            "correlation",
-            cancellationToken);
-        var rejectedLegacy = await handler.HandleConfirmationAsync(
-            Context(),
-            new
-            {
-                schemaVersion = 1,
-                preparedRequestId = preparationId.ToString("D"),
-            },
+            preparationId,
             "correlation",
             cancellationToken);
 
         Assert.Equal(1, confirmation.CallCount);
         Assert.Equal(preparationId, confirmation.LastPreparationId);
-        Assert.Equal(TeamsResponseKind.Card, accepted.Kind);
-        Assert.False(accepted.TrackAsActiveDraft);
-        Assert.Contains(requestId.ToString("D"), CardJson(accepted), StringComparison.Ordinal);
-        Assert.Equal(TeamsResponseKind.InvalidAction, rejectedLegacy.Kind);
+        var card = Assert.IsType<TeamsTerminalCardResponse>(accepted);
+        Assert.Contains(
+            requestId.ToString("D"),
+            CardJson(card),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -217,21 +230,16 @@ public sealed class TeamsRequestHandlerTests
 
         var result = await handler.HandleConfirmationAsync(
             Context(),
-            new
-            {
-                schemaVersion = 1,
-                preparationId = preparationId.ToString("D"),
-            },
+            preparationId,
             "replay",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(TeamsResponseKind.Card, result.Kind);
-        Assert.False(result.TrackAsActiveDraft);
+        var card = Assert.IsType<TeamsTerminalCardResponse>(result);
         Assert.Contains(
             request.Id.ToString("D"),
-            CardJson(result),
+            CardJson(card),
             StringComparison.Ordinal);
-        Assert.Contains("active", CardJson(result), StringComparison.Ordinal);
+        Assert.Contains("active", CardJson(card), StringComparison.Ordinal);
     }
 
     private static TeamsRequestHandler CreateHandler(
@@ -317,8 +325,8 @@ public sealed class TeamsRequestHandlerTests
             new DateTimeOffset(2026, 8, 26, 12, 0, 0, TimeSpan.Zero),
             "attribution");
 
-    private static string CardJson(TeamsResponse result) =>
-        ((System.Text.Json.JsonElement)result.Card!.Content!).GetRawText();
+    private static string CardJson(TeamsCardResponse result) =>
+        ((System.Text.Json.JsonElement)result.Card.Content!).GetRawText();
 
     private sealed class StubOrchestrator : IRequestPreparationOrchestrator
     {
