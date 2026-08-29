@@ -4,7 +4,7 @@
 - **Date**: 2026-08-22
 - **Clarified**: 2026-08-26
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
+- **Related artifacts**: `docs/request-intake-orchestration.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/adr/0009-persist-canonical-intake-and-bounded-clarification-context.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Context
 

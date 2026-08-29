@@ -172,17 +172,18 @@ system.
 The explicit `evaluate-live-model` mode instead evaluates stochastic interpretation
 against the isolated deterministic-intake composition. It starts a loopback-only host
 exposing the four read-only MCP tools, creates separate
-temporary reference and workflow SQLite databases, and runs the fixed 12 promoted
-scenario groups plus two advisory groups. Promotion requires at least 11 of 12
-promoted groups and every absolute safety gate, including zero requests, approval
-decisions, provisioning operations, and grants. The mode cannot confirm, approve,
-retry, or provision.
+temporary reference and workflow SQLite databases, and runs the complete versioned
+scenario inventory. Promotion requires every promoted group and every universal safety
+gate to pass, including zero requests, approval decisions, provisioning operations,
+and grants. The mode cannot confirm, approve, retry, or provision.
 
-The checked-in English-only evaluation dataset is `deterministic-intake-2.0.2`
-(schema version `1`). The promoted 2026-08-28 run exercised all 12 promoted groups and
-both advisory groups without selective reruns or waivers; every group and absolute
-safety gate passed with zero consequential workflow side effects. Generated
-schema-version-4 artifacts remain local and gitignored rather than being committed.
+The checked-in English-only evaluation dataset is `deterministic-intake-3.0.1`
+(schema version `1`) and exercises the complete prompt vocabulary, operation shapes,
+search cardinalities, clarification references, justification transformations, trust
+channels, and bounded failures. A prior promoted 2026-08-28 run proved dataset
+`deterministic-intake-2.0.2` with prompt contract `3.0.6`; it remains historical evidence,
+not promotion evidence for the current dataset and prompt. Generated schema-version-4
+artifacts remain local and gitignored rather than being committed.
 
 ## Deliberate limitations
 
@@ -257,7 +258,7 @@ dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live
 
 The [local development guide](docs/local-development.md) covers configuration, React
 hot reload, database handling, and troubleshooting. The
-[live-model evaluation guide](docs/live-model-evaluation.md) documents the fixed
+[live-model evaluation guide](docs/live-model-evaluation.md) documents the versioned
 inventory, exit codes, artifact interpretation, and cleanup.
 
 ## Design records

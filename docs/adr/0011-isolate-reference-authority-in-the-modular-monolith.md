@@ -5,7 +5,7 @@
 - **Promoted**: 2026-08-27
 - **Clarified**: 2026-08-28
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `tasks/deterministic-request-intake.md`, ADR 0008, ADR 0010
+- **Related artifacts**: `docs/architecture.md`, `docs/request-intake-orchestration.md`, ADR 0008, ADR 0010
 
 ## 2026-08-28 promotion clarification
 

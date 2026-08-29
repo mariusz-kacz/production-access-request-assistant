@@ -149,7 +149,7 @@ internal sealed partial class TeamsRequestHandler(
             conversation.ConversationId,
             conversation.RequesterId);
 
-    private static bool TryReadConfirmationData(
+    internal static bool TryReadConfirmationData(
         object? data,
         out Guid preparationId)
     {

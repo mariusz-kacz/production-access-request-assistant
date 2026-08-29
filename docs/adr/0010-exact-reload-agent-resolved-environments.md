@@ -4,7 +4,7 @@
 - **Date**: 2026-08-25
 - **Decision owners**: Project maintainer
 - **Refines**: ADR 0008 for the unique model-side environment-search path
-- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
+- **Related artifacts**: `docs/request-intake-orchestration.md`, `docs/adr/0007-use-sparse-model-patches-and-a-deterministic-reducer.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Context
 

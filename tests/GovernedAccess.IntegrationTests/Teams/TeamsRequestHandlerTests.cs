@@ -115,6 +115,7 @@ public sealed class TeamsRequestHandlerTests
         Assert.Equal(TeamsResponseKind.Card, result.Kind);
         Assert.NotNull(result.Card);
         Assert.Equal(ready.PreparationId, result.PreparationId);
+        Assert.True(result.TrackAsActiveDraft);
         Assert.Equal([ready.PreparationId], reviewService.PreparationIds);
     }
 
@@ -192,6 +193,7 @@ public sealed class TeamsRequestHandlerTests
         Assert.Equal(1, confirmation.CallCount);
         Assert.Equal(preparationId, confirmation.LastPreparationId);
         Assert.Equal(TeamsResponseKind.Card, accepted.Kind);
+        Assert.False(accepted.TrackAsActiveDraft);
         Assert.Contains(requestId.ToString("D"), CardJson(accepted), StringComparison.Ordinal);
         Assert.Equal(TeamsResponseKind.InvalidAction, rejectedLegacy.Kind);
     }
@@ -224,6 +226,7 @@ public sealed class TeamsRequestHandlerTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(TeamsResponseKind.Card, result.Kind);
+        Assert.False(result.TrackAsActiveDraft);
         Assert.Contains(
             request.Id.ToString("D"),
             CardJson(result),

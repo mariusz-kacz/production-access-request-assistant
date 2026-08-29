@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
@@ -271,6 +272,7 @@ public sealed class TeamsResponsePresenterTests
         Assert.NotNull(presentation.Card);
         Assert.Equal(snapshot.PreparationId, presentation.PreparationId);
         Assert.Null(presentation.Message);
+        Assert.True(presentation.TrackAsActiveDraft);
     }
 
     [Fact]
@@ -299,9 +301,13 @@ public sealed class TeamsResponsePresenterTests
 
         Assert.Equal(TeamsResponseKind.Card, presentation.Kind);
         Assert.NotNull(presentation.Card);
-        Assert.Equal(
+        Assert.Null(presentation.Message);
+        Assert.True(presentation.TrackAsActiveDraft);
+        var card = Assert.IsType<JsonElement>(presentation.Card.Content);
+        Assert.Contains(
             "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
-            presentation.Message);
+            card.GetRawText(),
+            StringComparison.Ordinal);
     }
 
     [Fact]

@@ -6,7 +6,7 @@
 - **Refined by**: ADR 0010 for exact environment IDs resolved through model-side search
 - **Implemented structurally by**: ADR 0011 for the co-hosted reference-authority module and database
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `SPEC-deterministic-request-intake.md`, `docs/constitution-amendment-3.0.0.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
+- **Related artifacts**: `docs/request-intake-orchestration.md`, `docs/constitution-amendment-3.0.0.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Context
 

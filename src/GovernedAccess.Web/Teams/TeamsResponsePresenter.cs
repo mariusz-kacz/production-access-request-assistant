@@ -21,7 +21,8 @@ internal sealed record TeamsResponse(
     Attachment? Card,
     string InputHint,
     bool InvalidatesTrackedCard,
-    Guid? PreparationId)
+    Guid? PreparationId,
+    bool TrackAsActiveDraft)
 {
     internal static TeamsResponse CreateText(
         string message,
@@ -34,7 +35,8 @@ internal sealed record TeamsResponse(
             Card: null,
             inputHint,
             invalidatesTrackedCard,
-            preparationId);
+            preparationId,
+            TrackAsActiveDraft: false);
 
     internal static TeamsResponse CreateInvalidAction(string message) =>
         new(
@@ -43,7 +45,36 @@ internal sealed record TeamsResponse(
             Card: null,
             InputHints.IgnoringInput,
             InvalidatesTrackedCard: false,
-            PreparationId: null);
+            PreparationId: null,
+            TrackAsActiveDraft: false);
+
+    internal static TeamsResponse CreateActionableDraft(
+        Attachment card,
+        string inputHint,
+        bool invalidatesTrackedCard,
+        Guid preparationId) =>
+        new(
+            TeamsResponseKind.Card,
+            Message: null,
+            card,
+            inputHint,
+            invalidatesTrackedCard,
+            preparationId,
+            TrackAsActiveDraft: true);
+
+    internal static TeamsResponse CreateTerminalCard(
+        Attachment card,
+        string inputHint,
+        bool invalidatesTrackedCard,
+        Guid preparationId) =>
+        new(
+            TeamsResponseKind.Card,
+            Message: null,
+            card,
+            inputHint,
+            invalidatesTrackedCard,
+            preparationId,
+            TrackAsActiveDraft: false);
 }
 
 internal sealed class TeamsResponsePresenter(
@@ -211,12 +242,11 @@ internal sealed class TeamsResponsePresenter(
                 preparation.PreparationId);
         }
 
-        return new TeamsResponse(
-            TeamsResponseKind.Card,
-            message,
+        return TeamsResponse.CreateActionableDraft(
             TeamsAdaptiveCardRenderer.CreateReadyCard(
                 review.Value,
-                TeamsLocale.Resolve(locale)),
+                TeamsLocale.Resolve(locale),
+                message),
             InputHints.AcceptingInput,
             invalidatesTrackedCard,
             preparation.PreparationId);
@@ -229,14 +259,12 @@ internal sealed class TeamsResponsePresenter(
         var title = result.WasAlreadySubmitted
             ? "Request already submitted"
             : "Request submitted";
-        return new TeamsResponse(
-            TeamsResponseKind.Card,
-            Message: null,
+        return TeamsResponse.CreateTerminalCard(
             TeamsAdaptiveCardRenderer.CreateStatusCard(
                 title,
                 $"Request {result.Request.Id:D} is {StatusText(result.Request.Status)}."),
             InputHints.IgnoringInput,
-            InvalidatesTrackedCard: true,
+            invalidatesTrackedCard: true,
             preparationId);
     }
 

@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "3.0.7";
+    internal const string PromptContractVersion = "3.1.0";
     internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
 
@@ -78,17 +78,19 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
 
         Environment set uses either exactEnvironmentId or searchQuery. Build a concise search query only from
         searchable environment discriminators in the request: environment ID or display name, client ID or
-        display name, region, and primary/recovery classification. Every search-query token must match at
-        least one of those authoritative fields because the search policy combines tokens with AND. Omit
+        display name, region, and primary/recovery classification. Every search-query token must come from
+        one of those requester-supplied discriminator spans because the search policy combines tokens with
+        AND. Omit
         generic request framing and category words such as need, access, and environment unless they are part
         of an exact authoritative value.
 
         Use exactEnvironmentId only when an exact stable ID is supplied or one environment is uniquely
         justified. After search_production_environments returns exactly one environment, return exactEnvironmentId
-        with that result's exact ID; never return or replay searchQuery for the unique result. Two or more search
-        results must never be collapsed into an unprompted exact ID; preserve a
-        searchQuery, use clarification-compatible behavior, or return unclear. Do not rank, truncate, or
-        guess among ambiguous results.
+        with that result's exact ID; never return or replay searchQuery for the unique result. After zero or
+        multiple search results, return the same concise searchQuery so the application can apply its current
+        authoritative search policy and present the deterministic no-match, too-broad, or clarification
+        outcome. Never collapse multiple results into an unprompted exact ID. Do not rank, truncate, or guess
+        among ambiguous results.
 
         A role set carries an exact authoritative role ID. When the requester uses a natural-language role
         label such as read-only instead of an exact role ID, first resolve the exact environment, then call get_environment_roles

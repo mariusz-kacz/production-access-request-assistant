@@ -164,6 +164,13 @@ Every card carries its own preparation ID. Confirmation reloads that exact intak
 a stale or superseded card cannot submit replacement scope even if Teams could not
 update the old activity visually.
 
+If confirmation finds that authoritative context changed, it creates no request and
+terminally supersedes the confirmed preparation. A corrected ready successor is the
+only actionable revision, and its replacement card contains an application-owned
+notice explaining the authoritative change. Only actionable ready cards are retained
+as active draft presentation metadata; submitted request receipts are terminal cards
+and are never rewritten as drafts.
+
 ### Submission and approval
 
 Confirmation reloads the owned, unexpired ready preparation and revalidates its

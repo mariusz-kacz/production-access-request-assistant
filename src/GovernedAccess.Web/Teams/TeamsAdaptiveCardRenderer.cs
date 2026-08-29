@@ -17,7 +17,8 @@ internal static class TeamsAdaptiveCardRenderer
 
     internal static Attachment CreateReadyCard(
         PreparationReview review,
-        string? locale)
+        string? locale,
+        string? notice = null)
     {
         ArgumentNullException.ThrowIfNull(review);
 
@@ -58,20 +59,27 @@ internal static class TeamsAdaptiveCardRenderer
                     locale)),
         };
 
-        var card = CreateCard(
-            new JsonArray
+        var body = new JsonArray
+        {
+            CreateTitle("Review request draft", "Large"),
+        };
+        if (notice is not null)
+        {
+            body.Add(CreateText(Normalize(notice, nameof(notice))));
+        }
+
+        body.Add(CreateText(
+            "Review the draft below. To change any details, send another message. Confirming submits it for business approval; it does not approve or grant production access."));
+        body.Add(
+            new JsonObject
             {
-                CreateTitle("Review request draft", "Large"),
-                CreateText(
-                    "Review the draft below. To change any details, send another message. Confirming submits it for business approval; it does not approve or grant production access."),
-                new JsonObject
-                {
-                    ["type"] = "FactSet",
-                    ["facts"] = facts,
-                },
-                CreateTitle("Justification", size: null),
-                CreateText(review.Justification),
+                ["type"] = "FactSet",
+                ["facts"] = facts,
             });
+        body.Add(CreateTitle("Justification", size: null));
+        body.Add(CreateText(review.Justification));
+
+        var card = CreateCard(body);
         card["actions"] = new JsonArray
         {
             new JsonObject

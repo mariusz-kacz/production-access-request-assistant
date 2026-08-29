@@ -82,6 +82,34 @@ public sealed class TeamsAdaptiveCardRendererTests
             card.GetProperty("body")[0].GetProperty("text").GetString());
     }
 
+    [Fact]
+    public void ReadyCardRendersAnApplicationOwnedNoticeInsideTheCard()
+    {
+        var attachment = TeamsAdaptiveCardRenderer.CreateReadyCard(
+            new PreparationReview(
+                Guid.NewGuid(),
+                "Demo Requester",
+                "requester",
+                "Client Alpha",
+                "client-alpha",
+                "Primary production",
+                "PROD-ALPHA-EU",
+                "Production read-only",
+                "ProductionReadOnly",
+                IncidentDisplayName: null,
+                IncidentId: null,
+                "Investigate elevated customer errors.",
+                new DateTimeOffset(2026, 8, 26, 12, 30, 0, TimeSpan.Zero)),
+            "en-US",
+            "Authoritative production context changed. Review this replacement.");
+
+        var card = Assert.IsType<JsonElement>(attachment.Content);
+        Assert.Equal(
+            "Authoritative production context changed. Review this replacement.",
+            card.GetProperty("body")[1].GetProperty("text").GetString());
+        Assert.Single(card.GetProperty("actions").EnumerateArray());
+    }
+
     private static void AssertFact(
         JsonElement fact,
         string expectedTitle,

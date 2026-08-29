@@ -179,14 +179,14 @@ sequenceDiagram
     Prepare->>Reference: Search/exact reload authoritative facts
     Prepare->>Prepare: Deterministic grouped reduction
     Prepare->>Workflow: Short OCC commit of canonical outcome
-    Prepare-->>Agent: Application-owned guidance or ready card
+    Prepare-->>Agent: Application-owned guidance or ready card with inline notice
     User->>Teams: Confirm and submit
     Teams->>Agent: Authenticated card action
     Agent->>Submit: Confirm(preparation ID, actor)
     Submit->>Workflow: Reload ownership, status, expiry, and scope
     Submit->>Reference: Revalidate authoritative scope
     Submit->>Workflow: Commit request and audit evidence
-    Agent-->>Teams: Stable request ID and Web link
+    Agent-->>Teams: Terminal submitted-request receipt
 ```
 
 The collecting candidate creates no request or approval. Core reloads every proposed
@@ -203,6 +203,12 @@ of whether Teams presentation metadata survived restart or activity update.
 An exact trimmed, case-insensitive `/new` command bypasses the model and MCP,
 terminally clears the active unsubmitted preparation, and atomically creates a clean
 collecting replacement.
+
+The Teams presentation result explicitly distinguishes actionable ready cards from
+terminal status cards. Only actionable ready cards enter the process-local draft-card
+tracker. Confirmation removes the matching active draft; a submitted receipt is not
+tracked, while a ready successor produced by authoritative revalidation replaces the
+original activity and carries the authoritative-change explanation in its own body.
 
 The complete turn algorithm, tool policy, and clarification rules are maintained in
 [request-intake orchestration](request-intake-orchestration.md).

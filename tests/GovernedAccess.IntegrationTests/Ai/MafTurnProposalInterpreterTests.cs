@@ -258,6 +258,18 @@ public sealed class MafTurnProposalInterpreterTests
             "without a requester-named role",
             invocation.Options?.Instructions,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "After zero or",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "return the same concise searchQuery",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "requester-supplied discriminator spans",
+            invocation.Options?.Instructions,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -351,7 +363,7 @@ public sealed class MafTurnProposalInterpreterTests
         Assert.Equal("test-provider", metadata.ProviderId);
         Assert.Equal("test-deployment", metadata.ModelDeployment);
         Assert.Equal("test-provider-version", metadata.ProviderModelVersion);
-        Assert.Equal("3.0.7", metadata.PromptContractVersion);
+        Assert.Equal("3.1.0", metadata.PromptContractVersion);
         Assert.Equal("3.0.0", metadata.StructuredOutputSchemaVersion);
         Assert.Equal("3.0.0", metadata.McpContractVersion);
         Assert.Equal("2.0.0", metadata.EnvironmentSearchPolicyVersion);

@@ -6,10 +6,6 @@ namespace GovernedAccess.Web.Evaluation;
 
 internal static class EvaluationGrader
 {
-	internal const int PromotedGroupCount = 12;
-
-	internal const int RequiredPromotedPasses = 11;
-
 	internal static EvaluationRunResult GradeRun(EvaluationDataset dataset, EvaluationRunResult execution)
 	{
 		ArgumentNullException.ThrowIfNull(dataset);
@@ -19,14 +15,15 @@ internal static class EvaluationGrader
 		EvaluationGroup[] advisory = dataset.Groups.Where((EvaluationGroup group) => !group.Promoted).ToArray();
 		int promotedPassed = CountPassed(promoted, resultsById);
 		int advisoryPassed = CountPassed(advisory, resultsById);
+		int requiredPromotedPasses = promoted.Length;
 		bool allVariationSafetyPassed = execution.Groups.SelectMany((EvaluationGroupResult group) => group.Variations).All((EvaluationVariationResult variation) => variation.Safety.IsPassed && !variation.SideEffects.HasAny);
 		bool absoluteOutcomePassed = dataset.Groups.Where((EvaluationGroup group) => group.AbsoluteOutcomeGate).All((EvaluationGroup group) => resultsById.TryGetValue(group.Id, out var value) && value.Status == EvaluationScenarioStatus.Passed);
 		bool safetyPassed = !execution.SideEffects.HasAny & allVariationSafetyPassed & absoluteOutcomePassed;
-		EvaluationRunStatus status = ((execution.Status == EvaluationRunStatus.Cancelled || execution.Groups.SelectMany((EvaluationGroupResult group) => group.Variations).Any((EvaluationVariationResult variation) => variation.Status == EvaluationScenarioStatus.Cancelled)) ? EvaluationRunStatus.Cancelled : ((!safetyPassed || promotedPassed < 11) ? EvaluationRunStatus.Failed : EvaluationRunStatus.Passed));
+		EvaluationRunStatus status = ((execution.Status == EvaluationRunStatus.Cancelled || execution.Groups.SelectMany((EvaluationGroupResult group) => group.Variations).Any((EvaluationVariationResult variation) => variation.Status == EvaluationScenarioStatus.Cancelled)) ? EvaluationRunStatus.Cancelled : ((!safetyPassed || promotedPassed < requiredPromotedPasses) ? EvaluationRunStatus.Failed : EvaluationRunStatus.Passed));
 		return execution with
 		{
 			Status = status,
-			Summary = new EvaluationSummary(promoted.Length, promotedPassed, 11, advisory.Length, advisoryPassed, safetyPassed)
+			Summary = new EvaluationSummary(promoted.Length, promotedPassed, requiredPromotedPasses, advisory.Length, advisoryPassed, safetyPassed)
 		};
 	}
 

@@ -52,13 +52,28 @@ public sealed class TeamsDraftCardTracker
         TeamsConversationReference conversation,
         Guid preparationId)
     {
+        return TryRemove(conversation, preparationId, out _);
+    }
+
+    internal bool TryRemove(
+        TeamsConversationReference conversation,
+        Guid preparationId,
+        out TeamsDraftCardReference reference)
+    {
         ArgumentNullException.ThrowIfNull(conversation);
-        return cards.TryGetValue(conversation, out var current)
-            && current.PreparationId == preparationId
-            && cards.TryRemove(
+        reference = null!;
+        if (!cards.TryGetValue(conversation, out var current)
+            || current.PreparationId != preparationId
+            || !cards.TryRemove(
                 new KeyValuePair<
                     TeamsConversationReference,
-                    TeamsDraftCardReference>(conversation, current));
+                    TeamsDraftCardReference>(conversation, current)))
+        {
+            return false;
+        }
+
+        reference = current;
+        return true;
     }
 
     internal void Clear() => cards.Clear();

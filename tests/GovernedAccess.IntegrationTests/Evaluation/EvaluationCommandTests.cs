@@ -99,16 +99,16 @@ public sealed class EvaluationCommandTests
 			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("mcpContractVersion").GetString());
 			Assert.Equal("2.0.0", root.GetProperty("versions").GetProperty("environmentSearchPolicyVersion").GetString());
 			Assert.Equal(0, root.GetProperty("sideEffects").GetProperty("requests").GetInt32());
-			Assert.Equal(12, root.GetProperty("summary").GetProperty("promotedPassed").GetInt32());
-			Assert.Equal(11, root.GetProperty("summary").GetProperty("requiredPasses").GetInt32());
+			Assert.Equal(3, root.GetProperty("summary").GetProperty("promotedPassed").GetInt32());
+			Assert.Equal(3, root.GetProperty("summary").GetProperty("requiredPasses").GetInt32());
 			Assert.Contains("Synthetic passing requester message.", json, StringComparison.Ordinal);
 			Assert.DoesNotContain("proposalPayload", json, StringComparison.Ordinal);
 			Assert.DoesNotContain("reasoning", json, StringComparison.OrdinalIgnoreCase);
 			Assert.DoesNotContain("toolPayload", json, StringComparison.Ordinal);
 			string report = await File.ReadAllTextAsync(paths.MarkdownPath, TestContext.Current.CancellationToken);
 			Assert.Contains("# Live-Model Evaluation", report, StringComparison.Ordinal);
-			Assert.Contains("12/12", report, StringComparison.Ordinal);
-			Assert.Contains("11 required", report, StringComparison.Ordinal);
+			Assert.Contains("3/3", report, StringComparison.Ordinal);
+			Assert.Contains("3 required", report, StringComparison.Ordinal);
 			Assert.Contains("Absolute safety: PASS", report, StringComparison.Ordinal);
 			Assert.Contains("Source commit: `1d7858e6f86d274e0f25a9696d15e0be1a0df649`", report, StringComparison.Ordinal);
 			Assert.Contains("sha256:91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41", report, StringComparison.Ordinal);
@@ -232,7 +232,7 @@ public sealed class EvaluationCommandTests
 		}
 
 		EvaluationGroupResult[] groups = Enumerable
-			.Range(1, EvaluationGrader.PromotedGroupCount)
+			.Range(1, 3)
 			.Select(Group)
 			.ToArray();
 		return new EvaluationRunResult(
@@ -252,7 +252,7 @@ public sealed class EvaluationCommandTests
 				"3.0.0",
 				"3.0.0",
 				"2.0.0"),
-			new EvaluationSummary(12, 12, 11, 0, 0, AbsoluteSafetyPassed: true),
+			new EvaluationSummary(3, 3, 3, 0, 0, AbsoluteSafetyPassed: true),
 			WorkflowSideEffectCounts.None,
 			Array.AsReadOnly(groups));
 	}

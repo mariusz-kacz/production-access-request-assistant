@@ -52,12 +52,15 @@ grouped-reducer behavior, four-tool contracts, restart-safe clarification, optim
 concurrency, immutable confirmation, the complete approval/provisioning journey, and
 absence of the deleted graph.
 
-The promoted credentialed run on 2026-08-28 passed all 12 promoted groups and both
-advisory groups without selective reruns or waivers. Every absolute safety,
+The historical promoted credentialed run on 2026-08-28 passed all 12 promoted groups
+and both advisory groups in its recorded dataset without selective reruns or waivers.
+Every absolute safety,
 authoritative-identifier, ambiguity, justification-fidelity, and bounded-execution
-gate passed with zero requests, decisions, operations, or grants. Generated evidence
-remains gitignored local output as described in the
+gate passed with zero requests, decisions, operations, or grants. Generated output
+remains gitignored, and the formerly committed retired-evaluator artifact was removed
+as described in the
 [live-model evaluation guide](live-model-evaluation.md).
+The current dataset and prompt contract require fresh complete credentialed evidence.
 
 ## Deliberate current exclusions
 

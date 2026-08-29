@@ -5,7 +5,7 @@
 - **Last reconciled:** 2026-08-28
 - **Target constitution version:** `3.0.0`
 - **Affected principle:** II. Untrusted AI, Bounded MCP
-- **Related artifacts:** `SPEC-deterministic-request-intake.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
+- **Related artifacts:** `docs/request-intake-orchestration.md`, `docs/adr/0008-separate-read-only-context-capabilities-by-authoritative-source.md`, `docs/contracts/deterministic-request-intake-mcp-contract.md`
 
 ## Motivation
 
@@ -14,7 +14,7 @@ explicitly forbids a separate role capability. That was appropriate for the deli
 baseline, but it makes a product-level capability change impossible without rewriting
 a core principle even when the security properties remain unchanged.
 
-The deterministic request-intake feature introduces four narrow read-only
+The deterministic request-intake feature introduced four narrow read-only
 capabilities to represent different enterprise responsibilities:
 
 - deterministic environment discovery;
@@ -67,7 +67,7 @@ canonical machine-readable contract now define the exact four-tool catalog.
 ## Security impact
 
 The amendment does not widen the class of permitted tool behavior. All model-visible
-tools remain read-only and untrusted. The accepted four-tool target adds independent
+tools remain read-only and untrusted. The promoted four-tool catalog adds independent
 failure and freshness boundaries, but Core remains responsible for canonical search,
 exact reload, relationship validation, readiness, confirmation, and every side effect.
 
@@ -78,9 +78,9 @@ The primary new risks are:
 - additional latency and provider iterations; and
 - accidental introduction of generic discovery through a poorly bounded search tool.
 
-The specification and ADR 0008 mitigate these risks with an exact catalog, closed
-schemas, one-call bounds, deterministic search, independent Core authority, and typed
-source failures.
+The active product baseline, request-intake orchestration contract, and ADR 0008
+mitigate these risks with an exact catalog, closed schemas, one-call bounds,
+deterministic search, independent Core authority, and typed source failures.
 
 ## Migration record
 

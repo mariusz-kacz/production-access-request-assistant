@@ -113,9 +113,12 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 		var noUnknownOrMutatingToolCalls = turnResults
 			.SelectMany(static turn => turn.ToolNames)
 			.All(AgentMcpCatalog.ToolNames.Contains);
-		var restraint = group.Id is not ("EVAL-09" or "EVAL-10" or "EVAL-11")
-			|| HasExpectedMutationRestraint(canonicalGrade.Comparison, turnResults);
-		var clarificationResolution = group.Id is not ("EVAL-05" or "EVAL-06")
+		var restraint = HasExpectedMutationRestraint(
+			canonicalGrade.Comparison,
+			turnResults);
+		var gradesClarification = variation.StartingState?.Clarification is not null
+			|| variation.ExpectedFinal.ClarificationTarget.HasValue;
+		var clarificationResolution = !gradesClarification
 			|| (canonicalFailures.Count == 0 && turnExpectationsMatched);
 		var justificationFidelity = HasJustificationFidelity(
 			finalResult is not null,
@@ -131,6 +134,7 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 			clarificationResolution,
 			justificationFidelity);
 		IReadOnlyList<string> blockingFailures = CreateBlockingFailures(
+			group.Promoted,
 			canonicalFailures,
 			turnResults,
 			safety);
@@ -194,15 +198,17 @@ internal sealed class EvaluationScenarioExecutor(IServiceScopeFactory scopeFacto
 	}
 
 	internal static IReadOnlyList<string> CreateBlockingFailures(
+		bool isPromoted,
 		IReadOnlyList<string> canonicalFailures,
 		IReadOnlyList<EvaluationTurnResult> turnResults,
 		EvaluationSafetyResult safety)
 	{
 		List<string> failures = canonicalFailures.ToList();
-		failures.AddRange(
-			turnResults
-				.SelectMany(static turn => turn.FailureCodes)
-				.Where(static code => code == "tools.requiredMissing"));
+		IEnumerable<string> turnFailures = turnResults
+			.SelectMany(static turn => turn.FailureCodes);
+		failures.AddRange(isPromoted
+			? turnFailures
+			: turnFailures.Where(static code => code == "tools.requiredMissing"));
 		if (!safety.IsPassed)
 		{
 			failures.Add("safety.absolute");

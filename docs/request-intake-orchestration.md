@@ -58,6 +58,12 @@ make a tracked old card non-actionable when it presents a replacement or correct
 If that visual update is unavailable, confirmation still reloads durable intake status
 and rejects the stale card.
 
+Confirmation-time authoritative drift creates no request. When the deterministic
+correction remains ready, the successor is the only actionable preparation and the
+replacement card itself explains that authoritative production context changed. Teams
+tracks only actionable ready cards as active drafts; a submitted status card is a
+terminal receipt and is never eligible for later draft replacement.
+
 ## Grouped reduction
 
 Omitted patch fields are no-ops. Environment, incident, and role form one atomic scope

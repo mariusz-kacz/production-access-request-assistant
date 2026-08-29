@@ -31,16 +31,6 @@ internal static class EvaluationDatasetLoader
 {
 	private const string SchemaResourceName = "GovernedAccess.Web.Evaluation.evaluation-dataset.schema.json";
 
-	private static readonly string[] PromotedGroupIds = new string[12]
-	{
-		"EVAL-01", "EVAL-02", "EVAL-03", "EVAL-04", "EVAL-05", "EVAL-06", "EVAL-07", "EVAL-08", "EVAL-09", "EVAL-10",
-		"EVAL-11", "EVAL-12"
-	};
-
-	private static readonly string[] AbsoluteOutcomeGroupIds = new string[7] { "EVAL-05", "EVAL-06", "EVAL-07", "EVAL-08", "EVAL-09", "EVAL-10", "EVAL-11" };
-
-	private static readonly string[] AdvisoryGroupIds = new string[2] { "ADV-01", "ADV-02" };
-
 	private static readonly Lazy<JsonSchema> DatasetSchema = new Lazy<JsonSchema>(LoadSchema, LazyThreadSafetyMode.ExecutionAndPublication);
 
 	private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
@@ -55,9 +45,7 @@ internal static class EvaluationDatasetLoader
 
 	internal static async Task<EvaluationDataset> LoadDefaultAsync(CancellationToken cancellationToken)
 	{
-		EvaluationDataset dataset = await LoadAsync(DefaultDatasetPath, cancellationToken);
-		ValidatePromotedInventory(dataset);
-		return dataset;
+		return await LoadAsync(DefaultDatasetPath, cancellationToken);
 	}
 
 	internal static async Task<EvaluationDataset> LoadAsync(string path, CancellationToken cancellationToken)
@@ -115,28 +103,21 @@ internal static class EvaluationDatasetLoader
 		return JsonSchema.FromText(reader.ReadToEnd());
 	}
 
-	private static void ValidatePromotedInventory(EvaluationDataset dataset)
-	{
-		string[] promotedIds = (from @group in dataset.Groups
-			where @group.Promoted
-			select @group.Id).ToArray();
-		string[] absoluteOutcomeIds = (from @group in dataset.Groups
-			where @group.AbsoluteOutcomeGate
-			select @group.Id).ToArray();
-		string[] advisoryIds = (from @group in dataset.Groups
-			where !@group.Promoted
-			select @group.Id).ToArray();
-		if (!promotedIds.SequenceEqual<string>(PromotedGroupIds, StringComparer.Ordinal) || !absoluteOutcomeIds.SequenceEqual<string>(AbsoluteOutcomeGroupIds, StringComparer.Ordinal) || !advisoryIds.SequenceEqual<string>(AdvisoryGroupIds, StringComparer.Ordinal))
-		{
-			throw new EvaluationDatasetException("The default evaluation dataset must contain the fixed promoted, absolute-gate, and advisory inventories.");
-		}
-	}
-
 	private static void ValidateSemantics(EvaluationDataset dataset)
 	{
 		if (dataset.SchemaVersion != 1 || dataset.Groups.Count == 0 || HasDuplicates(dataset.Groups.Select((EvaluationGroup group) => group.Id)))
 		{
 			throw new EvaluationDatasetException("The evaluation dataset has an invalid group inventory.");
+		}
+		if (!dataset.Groups.Any(static group => group.Promoted)
+			|| dataset.Groups.Any(static group =>
+				(group.Promoted
+					? !group.Id.StartsWith("EVAL-", StringComparison.Ordinal)
+					: !group.Id.StartsWith("ADV-", StringComparison.Ordinal))
+					|| (group.AbsoluteOutcomeGate && !group.Promoted)))
+		{
+			throw new EvaluationDatasetException(
+				"The evaluation dataset must contain promoted EVAL groups and may use ADV groups only for non-promoted guidance quality.");
 		}
 		EvaluationVariation[] variations = dataset.Groups.SelectMany((EvaluationGroup group) => group.Variations).ToArray();
 		if (variations.Length == 0 || HasDuplicates(variations.Select((EvaluationVariation variation) => variation.Id)))
@@ -169,12 +150,12 @@ internal static class EvaluationDatasetLoader
 		}
 		if (flag2 || expectation.AllowedTools.Except<string>(AgentMcpCatalog.ToolNames, StringComparer.Ordinal).Any() || expectation.RequiredTools.Except<string>(expectation.AllowedTools, StringComparer.Ordinal).Any() || HasDuplicates(expectation.AllowedTools) || HasDuplicates(expectation.RequiredTools))
 		{
-			throw new EvaluationDatasetException("A evaluation turn has an invalid interpretation or tool expectation.");
+			throw new EvaluationDatasetException("An evaluation turn has an invalid interpretation or tool expectation.");
 		}
 		bool hasProposal = expectation.Proposal is not null;
 		if (expectation.DialogueAct == DialogueAct.UpdateDraft != hasProposal || expectation.DialogueAct == DialogueAct.DiscussDraft != expectation.DiscussionTopic.HasValue)
 		{
-			throw new EvaluationDatasetException("A evaluation turn has an invalid dialogue-act payload expectation.");
+			throw new EvaluationDatasetException("An evaluation turn has an invalid dialogue-act payload expectation.");
 		}
 	}
 

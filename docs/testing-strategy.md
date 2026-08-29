@@ -49,9 +49,12 @@ Use one cohesive full-host scenario instead of repeating every policy variant th
 HTTP. A full-host test is justified when it proves hosted authentication, routing,
 serialization, middleware, or a cross-boundary composition that a lower layer cannot.
 
-Evaluator component tests use minimal synthetic records and do not enumerate or assert
-the checked-in live-model scenario inventory. Scenario-language quality remains the
-responsibility of the explicit live evaluation.
+Evaluator component tests assert that the checked-in dataset covers the closed prompt
+vocabulary, both environment-reference shapes, set/clear operations for every field,
+all four tools, and every modeled trust channel. They replay the expected structured
+proposals through Core to prove that each non-failure oracle reaches its declared
+canonical outcome. Scenario-language quality remains the responsibility of the explicit
+live evaluation.
 
 ## Deterministic dependencies
 
@@ -125,9 +128,10 @@ The credential-free suite must cover:
 8. invalid transitions, replay, concurrency, and request-keyed idempotency; and
 9. browser request-creation absence and retained register/decision behavior.
 
-Direct capture of the outbound Teams `UpdateActivityAsync` call remains tracked by
-feature task T096. Durable stale-card rejection is already covered and remains the
-authorization control; the pending test concerns presentation behavior only.
+Teams agent component tests capture outbound `UpdateActivityAsync` calls and verify
+that only actionable ready cards can be replaced. They also verify that authoritative
+drift is visible in the successor card and that terminal submitted receipts are not
+tracked or rewritten. Durable stale-card rejection remains the authorization control.
 
 ## Live-model evaluation
 
@@ -135,17 +139,23 @@ Live-provider evaluation is an explicit manual gate after the credential-free su
 It may consume provider quota and requires an authorized developer identity. CI and
 routine validation must not invoke it automatically.
 
-The fixed dataset contains 12 promoted scenario groups and two advisory groups.
-At least 11 promoted groups must reach the expected safe canonical outcome, every
-variation within a passing group must pass, and all absolute safety gates must pass.
-Every run requires zero requests, decisions, operations, and grants.
+The versioned English-only dataset is capability-driven rather than count-driven.
+Every promoted group and every variation within it must reach the expected safe
+canonical outcome,
+and all universal safety gates must pass across the entire run. Every run requires zero
+requests, decisions, operations, and grants. Advisory groups are reserved for genuinely
+peripheral experiments; behavior claimed by the prompt is promoted.
 
 The promoted 2026-08-28 run passed all 12 promoted groups and both advisory groups
 without selective reruns or waivers. It used dataset `deterministic-intake-2.0.2`
 (`bc9ca80e1a17895f13dcefb78a7f4cf3d611d5f6ffba90037a76cfba4501ba0c`), prompt
 contract `3.0.6`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`; all
-consequential side-effect counts were zero. The schema-version-4 artifacts remain
-gitignored local evidence.
+consequential side-effect counts were zero. Its schema-version-4 artifacts were
+generated in the gitignored output location and were not committed. An older artifact
+from the retired evaluator was removed and remains available in Git history.
+
+That run remains historical evidence for its recorded dataset and prompt versions. A
+new complete credentialed run is required for the current dataset and prompt contract.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,

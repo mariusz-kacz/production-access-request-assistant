@@ -63,7 +63,7 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
         await PresentAsync(turnContext, context, result, cancellationToken);
     }
 
-    private async Task<AdaptiveCardInvokeResponse> OnConfirmAndSubmitAsync(
+    internal async Task<AdaptiveCardInvokeResponse> OnConfirmAndSubmitAsync(
         ITurnContext turnContext,
         ITurnState _,
         object data,
@@ -76,6 +76,9 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
                 RejectedActivityMessage);
         }
 
+        var hasPreparationId = TeamsRequestHandler.TryReadConfirmationData(
+            data,
+            out var confirmedPreparationId);
         var result = await handler.HandleConfirmationAsync(
             context,
             data,
@@ -86,11 +89,22 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
             return AdaptiveCardInvokeResponseFactory.BadRequest(result.Message!);
         }
 
-        if (result.InvalidatesTrackedCard
-            && cardTracker.TryRemove(context.Conversation, out var tracked)
-            && result.Card is not null
-            && result.PreparationId is Guid replacementId)
+        if (!hasPreparationId)
         {
+            throw new InvalidOperationException(
+                "A valid confirmation response requires a preparation identifier.");
+        }
+
+        if (result.InvalidatesTrackedCard
+            && cardTracker.TryRemove(
+                context.Conversation,
+                confirmedPreparationId,
+                out var tracked)
+            && result.TrackAsActiveDraft)
+        {
+            var replacementId = result.PreparationId
+                ?? throw new InvalidOperationException(
+                    "An actionable Teams draft requires a preparation identifier.");
             cardTracker.Set(
                 context.Conversation,
                 replacementId,
@@ -134,16 +148,22 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
         }
 
         if (result.Kind != TeamsResponseKind.Card
-            || result.Card is null
-            || result.PreparationId is not Guid preparationId)
+            || result.Card is null)
         {
             throw new InvalidOperationException(
                 "The Teams preparation result is unsupported.");
         }
 
+        Guid? preparationId = result.TrackAsActiveDraft
+            ? result.PreparationId
+                ?? throw new InvalidOperationException(
+                    "An actionable Teams draft requires a preparation identifier.")
+            : null;
+
         if (cardTracker.TryGet(context.Conversation, out var current))
         {
-            if (current.PreparationId == preparationId
+            if (preparationId is Guid currentPreparationId
+                && current.PreparationId == currentPreparationId
                 && await TryUpdateAttachmentAsync(
                     turnContext,
                     current.ActivityId,
@@ -166,7 +186,13 @@ internal sealed partial class TeamsAccessRequestAgent : AgentApplication
             cancellationToken);
         if (activityId is not null)
         {
-            cardTracker.Set(context.Conversation, preparationId, activityId);
+            if (preparationId is Guid activePreparationId)
+            {
+                cardTracker.Set(
+                    context.Conversation,
+                    activePreparationId,
+                    activityId);
+            }
         }
     }
 
