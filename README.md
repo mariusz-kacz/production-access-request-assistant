@@ -197,15 +197,19 @@ and every universal safety gate to pass, including zero requests, approval decis
 provisioning operations, and grants. The mode cannot confirm, approve, retry, or
 provision.
 
-The checked-in English-only evaluation dataset is `deterministic-intake-3.0.1`
-(schema version `1`) and exercises the complete prompt vocabulary, operation shapes,
-search cardinalities, clarification references, justification transformations, trust
-channels, and bounded failures. A documented 2026-08-31 full-inventory run passed all
-14 promoted groups and 41 variations for the current dataset and prompt. Because its
-working tree was not clean, it is stable passing documentation rather than clean-source
-promotion evidence. Its reviewed [report and result](docs/evaluation/runs/README.md)
-are retained in the repository; newly generated runs remain local and gitignored by
-default.
+The checked-in English-only
+[`deterministic-intake-v1.json`](src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
+is the golden source for the executable evaluation inventory and exact expected
+outcomes. Its current dataset version is `deterministic-intake-3.0.1` (schema version
+`1`): 14 promoted groups, 41 variations, and 42 turns covering sparse field
+operations, environment-search cardinalities, clarification references, role
+authority, justification transformations, represented discussion/non-update acts,
+trust channels, and bounded failures. A documented 2026-08-31 full-inventory run
+passed all 14 groups and 41 variations for that dataset and prompt. Because its
+working tree was not clean, it is stable passing documentation rather than
+clean-source promotion evidence. Its reviewed
+[report and result](docs/evaluation/runs/README.md) are retained in the repository;
+newly generated runs remain local and gitignored by default.
 
 ## Deliberate limitations
 

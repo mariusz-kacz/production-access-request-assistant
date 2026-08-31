@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-28
+- **Last reviewed**: 2026-08-31
 
 ## Principles
 
@@ -139,12 +139,14 @@ Live-provider evaluation is an explicit manual gate after the credential-free su
 It may consume provider quota and requires an authorized developer identity. CI and
 routine validation must not invoke it automatically.
 
-The versioned English-only dataset is capability-driven rather than count-driven.
-Every promoted group and every variation within it must reach the expected safe
-canonical outcome,
-and all universal safety gates must pass across the entire run. Every run requires zero
-requests, decisions, operations, and grants. Advisory groups are reserved for genuinely
-peripheral experiments; behavior claimed by the prompt is promoted.
+The versioned English-only
+[`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
+is the golden source for executable evaluation inventory and exact expectations. It is
+capability-driven rather than count-driven; the current version declares 14 promoted
+groups, no advisory groups, 41 variations, and 42 turns. Every promoted group and every
+variation within it must reach the expected safe canonical outcome, and all universal
+safety gates must pass across the entire run. Every run requires zero requests,
+decisions, operations, and grants.
 
 The promoted 2026-08-28 run passed all 12 promoted groups and both advisory groups
 without selective reruns or waivers. It used dataset `deterministic-intake-2.0.2`
@@ -155,7 +157,11 @@ generated in the gitignored output location and were not committed. An older art
 from the retired evaluator was removed and remains available in Git history.
 
 That run remains historical evidence for its recorded dataset and prompt versions. A
-new complete credentialed run is required for the current dataset and prompt contract.
+documented 2026-08-31 full-inventory run passed the current dataset's 14 groups and 41
+variations with zero consequential side effects, but its working tree was not clean.
+It is retained as stable passing documentation rather than clean-source promotion
+evidence. A complete credentialed rerun from a clean committed tree is required for
+that stronger claim.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,

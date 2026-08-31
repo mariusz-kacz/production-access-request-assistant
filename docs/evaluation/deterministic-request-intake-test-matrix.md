@@ -1,10 +1,17 @@
 # Deterministic Request Intake: Test and Evaluation Matrix
 
-- **Status:** Current test and evaluation authority
+- **Status:** Current test strategy and evaluation interpretation
 - **Date:** 2026-08-26
-- **Last reconciled:** 2026-08-28
+- **Last reconciled:** 2026-08-31
 - **Normative sources:** Current product baseline, request-intake orchestration, and MCP contract
+- **Golden executable inventory:** [`deterministic-intake-v1.json`](../../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
 - **Purpose:** Assign each risk to the narrowest credible test layer and define promotion thresholds
+
+For live-model evaluation, the JSON dataset is authoritative for its version, groups,
+promotion and absolute-gate flags, variations, starting states, turns, expected
+proposals/tool behavior, and final outcomes. This matrix documents why those cases
+matter and how they are graded; if prose and JSON differ, the JSON controls the
+executable inventory and this document must be reconciled.
 
 ## 1. Principles
 
@@ -464,23 +471,42 @@ Verify:
 
 ## 10. Live-model evaluation
 
-The executable inventory is capability-driven rather than count-driven. Each promoted
-group declares the expected dialogue act, ordinary structured proposal or `unclear`,
-allowed and required tool behavior, expected canonical outcome, and forbidden side
-effects. Behavior claimed by the prompt or product baseline is promoted; advisory
-groups are reserved for genuinely peripheral experiments.
+The executable inventory is capability-driven rather than count-driven. The golden
+dataset currently declares 14 promoted groups, no advisory groups, 41 variations, and
+42 turns. Each group declares the expected dialogue act, ordinary structured proposal
+or `unclear`, allowed and required tool behavior, expected canonical outcome, and
+forbidden side effects. Seven groups (`EVAL-05` through `EVAL-11`) enable the absolute
+outcome gate. The format supports advisory groups for peripheral experiments, but the
+current dataset declares none.
+
+| Group | Variations | Absolute outcome gate | Dataset coverage |
+|---|---:|---:|---|
+| `EVAL-01` | 2 | no | Complete requests, with and without an incident. |
+| `EVAL-02` | 2 | no | Incremental incident update and atomic rejection of conflicting scope. |
+| `EVAL-03` | 4 | no | Incident, environment, role, and justification clear operations and cascades. |
+| `EVAL-04` | 4 | no | Unique, ambiguous, absent, and too-broad environment search. |
+| `EVAL-05` | 5 | yes | Ordinal/displayed-choice references, unresolved `other`, and explicit different environment. |
+| `EVAL-06` | 4 | yes | Multi-turn environment/role choice, sole-role selection, omitted role, and natural role label. |
+| `EVAL-07` | 2 | yes | Justification append and replacement. |
+| `EVAL-08` | 4 | yes | Style-rewrite restraint and current-draft, missing-information, and confirmation-process discussion. |
+| `EVAL-09` | 1 | yes | Natural-language reset guidance. |
+| `EVAL-10` | 2 | yes | Submission intent while ready and while collecting. |
+| `EVAL-11` | 5 | yes | Requester, MCP, persisted, clarification-display, and legitimate instruction-like trust inputs. |
+| `EVAL-12` | 3 | no | Provider/tool unavailability and clarification preservation. |
+| `EVAL-13` | 1 | no | Unrelated input. |
+| `EVAL-14` | 2 | no | Unclear coreference and ordinal input without active context. |
 
 The reviewed inventory covers:
 
 | Contract area | Required variations |
 |---|---|
-| Complete and incremental intake | One-shot complete request, exact stable IDs without redundant lookup, and sparse updates preserving omitted fields. |
+| Complete and incremental intake | One-shot complete requests, exact stable IDs, and sparse updates preserving omitted fields. |
 | Field operations | `set` and `clear` for environment, role, justification, and incident, including environment-clear cascade, role re-clarification, and atomic rejection of conflicting scope. |
 | Environment authority | Unique readable match, ambiguous match, no match, too-broad query, exact conditional lookup, and the distinction between `exactEnvironmentId` and `searchQuery`. |
-| Clarification | Short and explicit English ordinal forms, descriptive, contrastive, eliminative, unresolved multi-choice, explicit different choice, and multi-turn environment-then-role resolution. |
+| Clarification | Short ordinal forms, descriptive environment/role references, unresolved multi-choice `other`, explicit different environment, and multi-turn environment-then-role resolution. |
 | Role authority | Natural-label lookup, multiple-role omission/clarification, and sole-role selection. |
 | Justification fidelity | English extraction, append, replacement, removal, exact wording preservation, instruction-like legitimate text, and refusal to style-rewrite. |
-| Discussion | Every closed topic: current draft, missing information, allowed changes, confirmation process, reset instructions, and unsupported intent. |
+| Discussion | Current draft, missing information, confirmation process, reset instructions, and unsupported intent. The current dataset has no `allowedChanges` variation. |
 | Non-update acts | Submission while ready or collecting, unrelated input, and unclear references without active context. |
 | Trust boundaries | Injection attempts in requester text, persisted requester-authored justification, clarification display data, and MCP display fields. |
 | Bounded failure | Provider and MCP unavailability, including preservation of canonical draft and active clarification state. |
@@ -552,13 +578,14 @@ Any change to the first five requires a new run and explicit re-baseline decisio
 `result.json` retains the source commit, dataset version and SHA-256, exact fixed
 synthetic requester message, and exact expected and observed typed values for proposal
 operations, canonical candidates, clarification IDs, failure codes, and tool names.
-`report.md` renders the same values for failed variations. This evidence is local and
-generated; it is not application logging, workflow persistence, or authorization input.
+`report.md` renders the same values for failed variations. This evidence is generated;
+it is not application logging, workflow persistence, or authorization input.
 
 The artifacts exclude raw system prompts, model reasoning, complete provider
 responses, complete MCP arguments/results, and credentials. Generated result
 directories remain excluded from source control and must not be populated with
-non-synthetic requester data.
+non-synthetic requester data. Deliberately reviewed immutable synthetic copies may be
+retained under the [documented run index](runs/README.md).
 
 ## 11. Acceptance-criterion traceability
 

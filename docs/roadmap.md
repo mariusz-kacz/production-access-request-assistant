@@ -1,7 +1,7 @@
 # Product Roadmap
 
 - **Status**: Proposed; non-authoritative
-- **Last reviewed**: 2026-08-28
+- **Last reviewed**: 2026-08-31
 - **Current baseline**: [Governed Production Access Product Baseline](governed-production-access-product-baseline.md)
 
 ## Purpose
@@ -54,13 +54,13 @@ absence of the deleted graph.
 
 The historical promoted credentialed run on 2026-08-28 passed all 12 promoted groups
 and both advisory groups in its recorded dataset without selective reruns or waivers.
-Every absolute safety,
-authoritative-identifier, ambiguity, justification-fidelity, and bounded-execution
-gate passed with zero requests, decisions, operations, or grants. Generated output
-remains gitignored, and the formerly committed retired-evaluator artifact was removed
-as described in the
+A documented 2026-08-31 full-inventory run passed current 14
+promoted groups and 41 variations with every absolute safety gate passing and zero
+requests, decisions, operations, or grants. Because that run used a dirty working
+tree, it is stable passing documentation rather than clean-source promotion evidence.
+Generated output remains gitignored; reviewed copies and the remaining clean-source
+evidence requirement are described in the
 [live-model evaluation guide](live-model-evaluation.md).
-The current dataset and prompt contract require fresh complete credentialed evidence.
 
 ## Deliberate current exclusions
 

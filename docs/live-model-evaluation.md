@@ -1,7 +1,7 @@
 # Live-Model Evaluation
 
 - **Status**: Current operator guidance
-- **Last reviewed**: 2026-08-28
+- **Last reviewed**: 2026-08-31
 
 The evaluation command runs the isolated deterministic-request-intake composition against
 an explicitly configured live model. It exercises the grouped preparation path and
@@ -70,13 +70,17 @@ The process exit codes are:
 
 ## Inventory and grading
 
-The versioned English-only dataset is organized by prompt-contract capability, not by
-a fixed promoted/advisory quota. Its promoted inventory covers complete and incremental
-requests; every sparse field operation; exact, unique, ambiguous, absent, and too-broad
-environment resolution; clarification and role selection; justification fidelity; all
-discussion and non-update acts; every untrusted input channel; and bounded provider/MCP
-failures. Advisory groups remain available for peripheral experiments, but behavior
-claimed by the prompt or product baseline belongs in the promoted inventory.
+The versioned English-only
+[`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
+is the golden source for executable group membership, promotion flags, turns, inputs,
+expected proposals/tool behavior, and final outcomes. The current dataset declares 14
+promoted groups, no advisory groups, 41 variations, and 42 turns. Seven groups use the
+absolute-outcome gate. The inventory covers complete and incremental requests; every
+sparse field operation; exact, unique, ambiguous, absent, and too-broad environment
+resolution; clarification and role selection; justification fidelity; five represented
+discussion topics plus submission, unrelated, and unclear acts; every represented
+untrusted-input channel; and bounded provider/MCP failures. The format supports
+advisory groups, but the current dataset declares none.
 
 A promoted group passes only when every variation reaches its expected safe canonical
 outcome, and overall promotion requires every promoted group to pass. The following
@@ -94,10 +98,9 @@ interpretation failure, sparse proposal operations, allowed and required tool na
 maximum tool-call count, and final canonical outcome are all blocking. Tool order and
 provider iteration count remain diagnostic.
 
-The detailed inventory and governance rules remain authoritative in the
-[deterministic intake evaluation matrix](evaluation/deterministic-request-intake-test-matrix.md).
-The executable dataset is
-[`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json).
+The [deterministic intake evaluation matrix](evaluation/deterministic-request-intake-test-matrix.md)
+explains test placement, coverage intent, graded dimensions, and promotion policy. It
+must be reconciled to the executable dataset and does not override dataset facts.
 
 ## Evaluation evidence
 

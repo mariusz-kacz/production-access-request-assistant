@@ -30,6 +30,7 @@ Use the narrowest authoritative artifact that covers the decision:
 | Accepted architectural decisions and revisit criteria | [ADR index](docs/adr/README.md) |
 | MCP wire surface | [Current MCP contract](docs/contracts/mcp-tools.json) |
 | Test ownership and required validation | [Testing strategy](docs/testing-strategy.md) |
+| Executable live-model evaluation inventory and expected outcomes | [`deterministic-intake-v1.json`](src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json) |
 | Setup, configuration, run commands, and troubleshooting | [Local development](docs/local-development.md) |
 | Operator-only live model checks | [Live-model evaluation](docs/live-model-evaluation.md) |
 
@@ -99,8 +100,9 @@ Node range are in [`package.json`](src/GovernedAccess.Web/ClientApp/package.json
   `tests/.../Teams`.
 - React: current controller response types, `ClientApp/src/api/contracts.ts`, affected
   component/page, and `ClientApp/src/test`.
-- Evaluation: live-model evaluation guide, Web `Evaluation/`, its contracts and
-  dataset, and evaluation integration tests.
+- Evaluation: the executable dataset as the inventory source, then the
+  live-model evaluation guide, Web `Evaluation/` contracts, evaluation matrix, and
+  evaluation integration tests.
 
 Before editing, read the target, its closest tests, and one existing analogous pattern.
 No repository-specific SDLC scaffolding is currently selected; add replacement
