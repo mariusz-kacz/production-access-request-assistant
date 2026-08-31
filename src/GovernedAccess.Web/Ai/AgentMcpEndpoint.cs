@@ -1,0 +1,38 @@
+namespace GovernedAccess.Web.Ai;
+
+internal sealed class AgentMcpEndpoint(Func<Uri?> baseUriResolver)
+{
+    private const string McpPath = "mcp";
+
+    internal Uri Resolve()
+    {
+        ArgumentNullException.ThrowIfNull(baseUriResolver);
+
+        var baseUri = baseUriResolver()
+            ?? throw new InvalidOperationException(
+                "The target request-preparation MCP base URI is unavailable.");
+
+        var usesSupportedScheme = string.Equals(
+                baseUri.Scheme,
+                Uri.UriSchemeHttp,
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                baseUri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!baseUri.IsAbsoluteUri
+            || !usesSupportedScheme
+            || string.IsNullOrWhiteSpace(baseUri.Host)
+            || baseUri.AbsolutePath != "/"
+            || baseUri.Query.Length != 0
+            || baseUri.Fragment.Length != 0
+            || baseUri.UserInfo.Length != 0)
+        {
+            throw new InvalidOperationException(
+                "The target request-preparation MCP base URI must be an absolute HTTP or HTTPS origin.");
+        }
+
+        return new Uri(baseUri, McpPath);
+    }
+}

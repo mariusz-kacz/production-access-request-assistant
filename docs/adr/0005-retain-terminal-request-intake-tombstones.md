@@ -2,8 +2,20 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-10
+- **Clarified**: 2026-08-28
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`, `specs/002-teams-access-intake/data-model.md`
+- **Related artifacts**: `docs/architecture.md`, `docs/security-model.md`, `docs/request-intake-orchestration.md`
+
+## 2026-08-28 clarification
+
+The retained decision is terminal tombstone preservation and candidate clearing, not
+the names or fields of the delivered aggregate described below. The current
+`RequestPreparation` lifecycle is `Collecting`, `Ready`, `Submitted`, `Superseded`, or
+`Expired`; it has no `Invalidated` state or reserved request ID. A submitted tombstone
+resolves replay through the unique request `PreparationId`, and revision successors
+use mandatory predecessor linkage. Historical `RequestIntakeSession`, `Invalidated`,
+and reserved-ID wording below records the context in which this ADR was accepted and
+does not describe the current schema.
 
 ## Context
 

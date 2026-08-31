@@ -20,6 +20,7 @@ internal sealed class FakeTeamsActivityBuilder
     private string? conversationId = DefaultConversationId;
     private string? channelId = Channels.Msteams;
     private string? conversationType = "personal";
+    private string? locale;
     private string? text = "I need production access.";
     private string activityId = "teams-activity";
     private string? invokeName;
@@ -53,6 +54,12 @@ internal sealed class FakeTeamsActivityBuilder
     public FakeTeamsActivityBuilder WithConversationType(string? value)
     {
         conversationType = value;
+        return this;
+    }
+
+    public FakeTeamsActivityBuilder WithLocale(string? value)
+    {
+        locale = value;
         return this;
     }
 
@@ -112,6 +119,7 @@ internal sealed class FakeTeamsActivityBuilder
                 Role = RoleTypes.Agent,
             },
             Text = text,
+            Locale = locale,
             Name = invokeName,
             Value = invokeData,
             ChannelData = new Dictionary<string, object?>

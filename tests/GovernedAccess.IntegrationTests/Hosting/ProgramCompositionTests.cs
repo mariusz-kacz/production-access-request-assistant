@@ -1,23 +1,21 @@
-using System.Net;
-using System.Text.Json;
-using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
+using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
-using GovernedAccess.Web.Authentication;
+using GovernedAccess.ReferenceAuthority.Persistence;
 using GovernedAccess.Web.Ai;
-using GovernedAccess.Web.Observability;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Teams;
-using Microsoft.Agents.AI.Hosting;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.Agents.Authentication;
 using Microsoft.Agents.Builder;
-using Microsoft.AspNetCore.Routing;
+using Microsoft.Agents.Builder.App;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
 
 namespace GovernedAccess.IntegrationTests.Hosting;
 
@@ -27,16 +25,28 @@ public sealed class ProgramCompositionTests(
 {
     private const string BotConnectionName = "BotServiceConnection";
 
+    private const string CompleteProposal =
+        """
+        {"schemaVersion":1,"dialogueAct":"updateDraft","patch":{"environment":{"operation":"set","reference":{"kind":"exactEnvironmentId","id":"PROD-ALPHA-EU"}},"role":{"operation":"set","roleId":"ProductionReadOnly"},"justification":{"operation":"set","value":{"text":"Investigate elevated customer errors."}},"incident":{"operation":"set","incidentId":"INC-1042"}},"discussionTopic":null}
+        """;
+
     [Fact]
-    public async Task StartupCreatesAndSeedsTheConfiguredDatabase()
+    public async Task StartupCreatesAndSeedsTheIndependentProductionDatabases()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var factory = applicationFixture.Factory;
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var referenceContext = scope.ServiceProvider
+            .GetRequiredService<ReferenceAuthorityDbContext>();
+        var workflowContext = scope.ServiceProvider
+            .GetRequiredService<WorkflowDbContext>();
 
-        var clientCount = await dbContext.Clients.CountAsync(cancellationToken);
-        var principalCount = await dbContext.AuthenticatedPrincipals.CountAsync(cancellationToken);
+        var clientCount = await referenceContext.Clients.CountAsync(
+            cancellationToken);
+        var principalCount = await workflowContext.Database
+            .SqlQueryRaw<int>(
+                "SELECT COUNT(*) AS Value FROM \"AuthenticatedPrincipals\"")
+            .SingleAsync(cancellationToken);
 
         Assert.Equal(4, clientCount);
         Assert.Equal(6, principalCount);
@@ -44,35 +54,25 @@ public sealed class ProgramCompositionTests(
     }
 
     [Fact]
-    public async Task IntakeComponentsUseOneScopedServiceStoreAndDbContext()
+    public async Task ProductionCompositionResolvesOnlyTheCompleteTargetGraph()
     {
         await using var scope = applicationFixture.Factory.Services
             .CreateAsyncScope();
         var services = scope.ServiceProvider;
-        var dbContext = services.GetRequiredService<GovernedAccessDbContext>();
-        var intakeStore = services.GetRequiredService<IRequestIntakeStore>();
-        var workflowStore = services.GetRequiredService<IWorkflowStore>();
-        var draftService = services.GetRequiredService<RequestDraftService>();
-        var submissionService = services.GetRequiredService<RequestSubmissionService>();
 
-        Assert.Same(
-            intakeStore,
-            services.GetRequiredService<IRequestIntakeStore>());
-        Assert.Contains(
-            GetPrivateDependencies(draftService),
-            dependency => ReferenceEquals(dependency, intakeStore));
-        Assert.Contains(
-            GetPrivateDependencies(submissionService),
-            dependency => ReferenceEquals(dependency, intakeStore));
-        Assert.Contains(
-            GetPrivateDependencies(submissionService),
-            dependency => ReferenceEquals(dependency, workflowStore));
-        Assert.Contains(
-            GetPrivateDependencies(intakeStore),
-            dependency => ReferenceEquals(dependency, dbContext));
-        Assert.Contains(
-            GetPrivateDependencies(workflowStore),
-            dependency => ReferenceEquals(dependency, dbContext));
+        Assert.NotNull(services.GetService<ReferenceAuthorityDbContext>());
+        Assert.NotNull(services.GetService<WorkflowDbContext>());
+        Assert.IsType<MafTurnProposalInterpreter>(
+            services.GetRequiredService<ITurnProposalInterpreter>());
+        Assert.IsType<RequestPreparationOrchestrator>(
+            services.GetRequiredService<IRequestPreparationOrchestrator>());
+        Assert.IsType<PreparationConfirmationService>(
+            services.GetRequiredService<IPreparationConfirmationService>());
+        Assert.IsType<TeamsRequestHandler>(
+            services.GetRequiredService<TeamsRequestHandler>());
+        Assert.Equal(
+            typeof(WorkflowDbContext).Assembly,
+            services.GetRequiredService<IWorkflowStore>().GetType().Assembly);
     }
 
     [Fact]
@@ -85,34 +85,47 @@ public sealed class ProgramCompositionTests(
 
         await using var firstScope = services.CreateAsyncScope();
         await using var secondScope = services.CreateAsyncScope();
+        var firstHandler = firstScope.ServiceProvider
+            .GetRequiredService<TeamsRequestHandler>();
         var firstAgent = firstScope.ServiceProvider
             .GetRequiredService<TeamsAccessRequestAgent>();
 
         Assert.Same(
-            firstAgent,
+            firstHandler,
             firstScope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAgent>());
+                .GetRequiredService<TeamsRequestHandler>());
+        Assert.NotSame(
+            firstHandler,
+            secondScope.ServiceProvider
+                .GetRequiredService<TeamsRequestHandler>());
         Assert.NotSame(
             firstAgent,
-            secondScope.ServiceProvider
-                .GetRequiredService<TeamsAccessRequestAgent>());
+            secondScope.ServiceProvider.GetRequiredService<TeamsAccessRequestAgent>());
+    }
+
+    [Fact]
+    public void TeamsMessagesStartTypingWithoutAnInitialDelay()
+    {
+        var options = applicationFixture.Factory.Services
+            .GetRequiredService<AgentApplicationOptions>();
+
+        Assert.True(options.StartTypingTimer);
+        Assert.Equal(0, options.TypingOptions.InitialDelayMs);
+        Assert.Equal(2000, options.TypingOptions.IntervalMs);
     }
 
     [Fact]
     public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
     {
         var services = applicationFixture.Factory.Services;
-        var concreteStore = services.GetRequiredService<InMemoryAgentSessionStore>();
-        var sessionStore = services.GetRequiredService<AgentSessionStore>();
-        var coordinator = services.GetRequiredService<MafConversationTurnCoordinator>();
-        var interpreter = services.GetRequiredService<IRequestPreparationInterpreter>();
+        var interpreter = services.GetRequiredService<ITurnProposalInterpreter>();
         var chatClient = services.GetRequiredService<IChatClient>();
         var modelResolution = services
             .GetRequiredService<RequestPreparationModelResolution>();
         var modelMetadata = services
             .GetRequiredService<RequestPreparationModelMetadata>();
 
-        Assert.Same(concreteStore, sessionStore);
+        Assert.IsType<MafTurnProposalInterpreter>(interpreter);
         Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
         Assert.Equal(
             RequestPreparationModelProfile.Deterministic,
@@ -125,27 +138,13 @@ public sealed class ProgramCompositionTests(
         await using var secondScope = services.CreateAsyncScope();
 
         Assert.Same(
-            concreteStore,
-            firstScope.ServiceProvider.GetRequiredService<AgentSessionStore>());
-        Assert.Same(
-            concreteStore,
-            secondScope.ServiceProvider.GetRequiredService<AgentSessionStore>());
-        Assert.Same(
-            coordinator,
-            firstScope.ServiceProvider
-                .GetRequiredService<MafConversationTurnCoordinator>());
-        Assert.Same(
-            coordinator,
-            secondScope.ServiceProvider
-                .GetRequiredService<MafConversationTurnCoordinator>());
-        Assert.Same(
             interpreter,
             firstScope.ServiceProvider
-                .GetRequiredService<IRequestPreparationInterpreter>());
+                .GetRequiredService<ITurnProposalInterpreter>());
         Assert.Same(
             interpreter,
             secondScope.ServiceProvider
-                .GetRequiredService<IRequestPreparationInterpreter>());
+                .GetRequiredService<ITurnProposalInterpreter>());
         Assert.Same(
             chatClient,
             firstScope.ServiceProvider.GetRequiredService<IChatClient>());
@@ -168,6 +167,100 @@ public sealed class ProgramCompositionTests(
             modelMetadata,
             secondScope.ServiceProvider
                 .GetRequiredService<RequestPreparationModelMetadata>());
+    }
+
+    [Fact]
+    public async Task ProductionMcpEndpointExposesOnlyTheTargetToolCatalog()
+    {
+        await using var client = await CreateProductionMcpClientAsync(
+            applicationFixture.Factory.CreateClient(),
+            TestContext.Current.CancellationToken);
+
+        var tools = await client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [
+                "get_environment_roles",
+                "get_incident",
+                "get_production_environment",
+                "search_production_environments",
+            ],
+            tools.Select(tool => tool.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task ProductionCompositionCompletesPreparationAndDownstreamWorkflow()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = new GovernedAccessWebFactory(
+            new RecordingChatClient(CompleteProposal));
+        await factory.ResetDatabaseAsync(cancellationToken);
+
+        TeamsResponse prepared;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            prepared = await scope.ServiceProvider
+                .GetRequiredService<TeamsRequestHandler>()
+                .HandleMessageAsync(
+                    TeamsContext(),
+                    "Prepare the incident investigation request.",
+                    "production-preparation",
+                    cancellationToken);
+        }
+
+        var preparationId = Assert
+            .IsType<TeamsDraftCardResponse>(prepared)
+            .PreparationId;
+
+        Guid requestId;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var submitted = await scope.ServiceProvider
+                .GetRequiredService<TeamsRequestHandler>()
+                .HandleConfirmationAsync(
+                    TeamsContext(),
+                    preparationId,
+                    "production-confirmation",
+                    cancellationToken);
+
+            Assert.IsType<TeamsTerminalCardResponse>(submitted);
+            requestId = await scope.ServiceProvider
+                .GetRequiredService<WorkflowDbContext>()
+                .Set<AccessRequest>()
+                .Where(request => request.PreparationId == preparationId)
+                .Select(request => request.Id)
+                .SingleAsync(cancellationToken);
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var workflow = scope.ServiceProvider
+                .GetRequiredService<AccessRequestWorkflowService>();
+            var business = await workflow.DecideAsync(
+                ApprovalStage.Business,
+                requestId,
+                "client-alpha-business-approver",
+                ApprovalOutcome.Approved,
+                "Approved for incident investigation.",
+                "production-business",
+                cancellationToken);
+            var devOps = await workflow.DecideAsync(
+                ApprovalStage.DevOps,
+                requestId,
+                "devops-approver",
+                ApprovalOutcome.Approved,
+                null,
+                "production-devops",
+                cancellationToken);
+
+            Assert.True(business.IsSuccess, business.Failure?.Message);
+            Assert.True(devOps.IsSuccess, devOps.Failure?.Message);
+            Assert.Equal(RequestStatus.Active, devOps.Value.Request.Status);
+            Assert.Equal(
+                AccessGrant.FixedLifetime,
+                devOps.Value.Grant!.ExpiresAt - devOps.Value.Grant.ActivatedAt);
+        }
     }
 
     [Fact]
@@ -277,11 +370,45 @@ public sealed class ProgramCompositionTests(
             ["TeamsAccessRequest:PreparationLifetime"] = "00:30:00",
         };
 
-    private static IEnumerable<object?> GetPrivateDependencies(object instance) =>
-        instance
-            .GetType()
-            .GetFields(
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic)
-            .Select(field => field.GetValue(instance));
+    private static async Task<McpClient> CreateProductionMcpClientAsync(
+        HttpClient httpClient,
+        CancellationToken cancellationToken)
+    {
+        var endpoint = new Uri(
+            httpClient.BaseAddress
+                ?? throw new InvalidOperationException(
+                    "The production test client has no base address."),
+            "mcp");
+        var transport = new HttpClientTransport(
+            new HttpClientTransportOptions
+            {
+                Endpoint = endpoint,
+                Name = "governed-access-production-composition-tests",
+                TransportMode = HttpTransportMode.StreamableHttp,
+            },
+            httpClient,
+            ownsHttpClient: true);
+
+        try
+        {
+            return await McpClient.CreateAsync(
+                transport,
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            await transport.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static TeamsAuthenticatedContext TeamsContext() =>
+        new(
+            new TeamsConversationReference(
+                PreparationBinding.TeamsChannel,
+                FakeTeamsActivityBuilder.DefaultTenantId,
+                FakeTeamsActivityBuilder.DefaultActorId,
+                FakeTeamsActivityBuilder.DefaultConversationId,
+                "requester"),
+            "en-US");
 }

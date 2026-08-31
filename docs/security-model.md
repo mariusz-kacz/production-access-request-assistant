@@ -1,14 +1,14 @@
 # Security and Trust Model
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 - **Scope**: Local synthetic MVP
 
 ## Security boundary
 
 The application protects the integrity of request scope, human decisions,
 provisioning evidence, grants, and audit history inside one application-owned process
-and SQLite database.
+and two application-owned SQLite databases with separate module ownership.
 
 > AI interprets and gathers context. Humans approve. Deterministic services authorize
 > and execute.
@@ -20,7 +20,8 @@ application services backed by persisted state form the authorization boundary.
 The current assessment assumes:
 
 - fixed synthetic identities and reference data;
-- one ASP.NET Core process and one application-owned SQLite database;
+- one ASP.NET Core process with separate application-owned reference and workflow
+  SQLite databases;
 - no supported out-of-band database writer;
 - a local or otherwise controlled demonstration environment;
 - no real client, incident, credential, or production-access data; and
@@ -45,7 +46,8 @@ flowchart LR
         App[Deterministic application and domain rules]
         Protected[Protected provisioning]
         Provider[Synthetic provider]
-        DB[(SQLite)]
+        ReferenceDB[(Reference SQLite)]
+        WorkflowDB[(Workflow SQLite)]
     end
 
     Human --> Browser
@@ -55,12 +57,13 @@ flowchart LR
     Activity --> AI
     Activity --> App
     AI <--> Model
-    AI -->|two read-only tools| MCP
-    MCP --> DB
+    AI -->|four read-only tools| MCP
+    MCP --> ReferenceDB
     Web --> App
-    App --> DB
+    App --> ReferenceDB
+    App --> WorkflowDB
     App -->|request ID only| Protected
-    Protected -->|reload evidence| DB
+    Protected -->|reload evidence| WorkflowDB
     Protected -->|server-built scope| Provider
 ```
 
@@ -70,9 +73,10 @@ flowchart LR
 | Teams activity | Untrusted payload received through the protected Activity Protocol endpoint. |
 | Chat model | Untrusted interpreter; output requires closed-schema parsing and authoritative validation. |
 | MCP client and wire data | Untrusted protocol data until typed translation and application validation complete. |
-| MAF session memory | Best-effort conversational context; never durable candidate truth or authorization evidence. |
+| Fresh MAF turn | Ephemeral interpretation over the latest message and bounded application-owned context; never candidate truth or authorization evidence. |
 | Application and domain services | Enforcement boundary for validation, authorization, transitions, and scope. |
-| SQLite | Authoritative under the single application-writer assumption. |
+| Reference SQLite | Authoritative synthetic client/environment/role/incident facts under its owning module and single-writer assumption. |
+| Workflow SQLite | Authoritative preparation, identity snapshot, request, decision, operation, grant, and audit evidence under its owning module and single-writer assumption. |
 | Synthetic provisioner | Executes already-authorized server-built scope; it does not decide eligibility. |
 
 ## Identity and request entry
@@ -121,8 +125,9 @@ settings.
 
 The model receives one closed response schema and exactly:
 
-- `get_production_environment` for bounded discovery or exact environment lookup,
-  including authoritative client and assigned-role context; and
+- `search_production_environments` for bounded deterministic discovery;
+- `get_production_environment` for exact environment and owning-client context;
+- `get_environment_roles` for current environment-scoped role assignments; and
 - `get_incident` for exact incident lookup.
 
 The client rejects any different tool catalog or non-read-only annotation. Function
@@ -135,42 +140,42 @@ synthetic read-only dataset and has no workflow or provisioning dependency. This
 not suitable for real or sensitive context; such use requires endpoint authentication,
 caller authorization, rate controls, and an appropriate network boundary.
 
-Model proposals remain untrusted after successful tool use. Core reloads every
-proposed identifier and validates client ownership, environment existence, assigned
-role, incident status, and incident compatibility. Structured environment choices are
-also reloaded before the Teams adapter may show the model's bounded message beside
-application-rendered authoritative options. Prose is never parsed into scope.
+Model proposals remain untrusted after successful tool use. Core validates the closed
+dialogue-act/payload shape, evaluates a sparse patch in deterministic groups, reloads
+every proposed identifier, and validates client ownership, environment existence,
+assigned role, incident status, and incident compatibility. All requester-facing
+guidance and clarification choices are application-rendered from authoritative data;
+model prose is neither displayed nor parsed into scope.
 
 ## Intake and conversation memory
 
-An intake binds the authenticated channel, tenant, actor, conversation, and synthetic
-requester. SQLite stores its sanitized candidate and lifecycle, not raw activities,
-prompts, transcripts, model responses, clarification option lists, or serialized MAF
-sessions.
+A preparation binds the authenticated channel, tenant, actor, conversation, and
+synthetic requester. Workflow SQLite stores its canonical candidate, lifecycle, one
+optimistic concurrency version, and at most one bounded ordered environment/role
+clarification context. It does not store raw activities, prompts, transcripts,
+provider sessions, model reasoning, raw proposals, agent-authored search queries, or
+complete MCP payloads.
 
-MAF sessions are keyed by the server-generated intake ID. One process-local gate per
-intake serializes session load, model execution, and successful save. Failed,
-cancelled, timed-out, or malformed turns do not replace the last successfully stored
-session.
-
-Sessions and gates remain allocated until the host stops. Restart loses conversation
-history but retains accepted candidate state. Without the preceding question and
-ordering, a relative reply must be clarified again. Confirmation and every downstream
-workflow action ignore conversation memory.
+Every normal message creates a fresh MAF session for one bounded turn. Restart retains
+the canonical candidate and active displayed choices, allowing the agent to interpret
+references against that exact application-owned context. General conversation
+coreference outside the candidate and active choices is intentionally unsupported.
+Confirmation and every downstream workflow action ignore provider memory.
 
 An exact trimmed, case-insensitive `/new` command bypasses the model and MCP,
-terminally clears an active unsubmitted intake, and causes the next message to use a
-new intake ID. It cannot modify a submitted request.
+terminally clears an active unsubmitted preparation, and atomically creates a clean
+collecting preparation with a new ID for the next message. It cannot modify a
+submitted request.
 
 ### Ready-draft revisions
 
-Discussion, a value-equal proposal, or a valid unresolved revision clarification
-preserves the existing ready intake, reserved request ID, deadline, and confirmation
-card. Other differing assessed outcomes supersede it:
-
-- a different ready candidate receives a separate review card;
-- a rejected candidate or an incomplete proposal without an applicable clarification
-  leaves a replacement intake collecting corrections.
+Discussion, submission guidance, unrelated or unclear input, value-equal proposals,
+wholly rejected proposals, and transient failures preserve the existing ready
+preparation and deadline. An accepted material or clarification-producing revision
+atomically supersedes it and creates a predecessor-linked replacement with a new
+preparation ID. A clarification-producing replacement copies canonical scope and
+persists the complete bounded authoritative choice set; ambiguity alone does not erase
+accepted scope.
 
 Every card carries its own preparation ID. Confirmation reloads that exact intake and
 rejects terminal or stale status. Process-local card updates improve presentation but
@@ -213,9 +218,11 @@ workflow to converge without claiming a distributed transaction.
 
 ## Persistence, visibility, and audit
 
-SQLite enforces authoritative foreign keys, one decision per request/stage, one
-request-keyed operation, at most one grant per request, unique active-intake and
-reserved-request bindings, and optimistic concurrency on mutable aggregates.
+Reference SQLite enforces relationships within the synthetic authority dataset.
+Workflow SQLite enforces one active preparation per actor/conversation, revision
+predecessor linkage, one optimistic concurrency token per preparation, unique request
+`PreparationId`, one decision per request/stage, one request-keyed operation, and at
+most one grant per request. No EF relationship or transaction crosses the databases.
 
 Lists and details are filtered to the requester, responsible business approver, and
 DevOps approver. Nonparticipants receive no detail through normal query endpoints.
@@ -236,10 +243,10 @@ complete MCP payloads.
 | Wrong-client approval or guessed request ID | Stored approver responsibility and participant filtering. | Direct database access is outside the application boundary. |
 | Prompt injection or invented identifiers | No state-changing model tools; closed schema; authoritative reload and validation. | The model can still produce unusable or confusing text. |
 | Silent substitution after lookup failure | Exact identifier policy, typed failures, and deterministic blocking of discovery after every exact outcome. | Natural-language shortlist quality on the separate readable-wording discovery path remains model-dependent. |
-| MCP capability expansion | Explicit two-tool server registration and exact client catalog check. | The unauthenticated local route can be enumerated or abused for resource consumption. |
+| MCP capability expansion | Explicit four-tool server registration and exact client catalog check. | The unauthenticated local route can be enumerated or abused for resource consumption. |
 | Request tampering after approval | Immutable request details and request-bound decisions and operations. | A compromised host process can bypass in-process controls. |
 | Duplicate or lost provisioning outcome | Request-keyed get-or-create, unique grant constraint, and scoped retry. | No automatic reconciliation or distributed provider guarantee. |
-| Conversation cross-talk or restart loss | Per-intake session key and gate; durable canonical candidate; safe re-clarification. | Process memory grows with intake count and has no compaction policy. |
+| Conversation cross-talk or restart loss | Fresh per-message provider session; authenticated binding; durable canonical candidate and bounded ordered choices; optimistic concurrency. | General transcript-dependent coreference is intentionally unavailable. |
 | Stored script injection | React renders values as escaped JSX text. | Any future rich-text rendering needs separate review. |
 | Resource exhaustion | Teams and provisioning deadlines, bounded tool iterations, and cancellation propagation. | No rate limiting, edge protection, quotas, or production capacity SLO. |
 

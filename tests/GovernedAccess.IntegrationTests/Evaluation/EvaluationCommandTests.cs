@@ -1,427 +1,527 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
 using GovernedAccess.Core.Application;
+using GovernedAccess.Core.Domain.Preparations;
+using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Evaluation;
-using GovernedAccess.Web.Persistence;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xunit;
 
 namespace GovernedAccess.IntegrationTests.Evaluation;
 
 public sealed class EvaluationCommandTests
 {
-    private static readonly string[] RelativeOutputArguments =
-        ["--output", "artifacts/live-evaluation"];
+	[Fact]
+	public void CommandRejectsUnsupportedOrIncompleteArguments()
+	{
+		string[][] invalidArguments =
+		[
+			["--unknown"],
+			["--output"],
+			["--output", "first", "--output", "second"],
+			["--log-file"],
+			["--log-file", "first.log", "--log-file", "second.log"],
+			["--variation"],
+			["--variation", "EVAL-01-ONE-SHOT", "--variation", "EVAL-02-INCREMENTAL"],
+			["--scenario", "unsupported-selection"],
+			["--group", "unsupported-selection"],
+		];
 
-    [Theory]
-    [InlineData("--unknown")]
-    [InlineData("--output")]
-    [InlineData("--output", "first", "--output", "second")]
-    [InlineData("--scenario")]
-    [InlineData("--scenario", "RES-01", "--scenario", "RES-02")]
-    public void CommandParserRejectsUnknownIncompleteAndDuplicateOptions(
-        params string[] arguments)
-    {
-        var workingDirectory = Path.GetFullPath("evaluation-command-tests");
+		Assert.All(invalidArguments, arguments =>
+		{
+			ApplicationResult<LiveModelEvaluationArguments> result =
+				LiveModelEvaluationCommand.ParseArguments(
+					arguments,
+					Path.GetFullPath("evaluation-command-tests"));
+			Assert.True(result.IsFailure);
+			Assert.Equal(ApplicationFailureKind.InvalidInput, result.Failure!.Kind);
+		});
+	}
 
-        var result = LiveModelEvaluationCommand.ParseArguments(
-            arguments,
-            workingDirectory);
+	[Fact]
+	public void CommandAcceptsOneDiagnosticVariationWithOptionalOutputAndLogFile()
+	{
+		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
+		ApplicationResult<LiveModelEvaluationArguments> defaultOutput =
+			LiveModelEvaluationCommand.ParseArguments(
+				["--variation", "EVAL-01-ONE-SHOT"],
+				workingDirectory);
+		ApplicationResult<LiveModelEvaluationArguments> explicitOutput =
+			LiveModelEvaluationCommand.ParseArguments(
+				[
+					"--output", "diagnostics",
+					"--log-file", Path.Combine("diagnostics", "evaluation.log"),
+					"--variation", "EVAL-02-INCREMENTAL",
+				],
+				workingDirectory);
 
-        Assert.True(result.IsFailure);
-        Assert.Equal(ApplicationFailureKind.InvalidInput, result.Failure!.Kind);
-    }
+		Assert.True(defaultOutput.IsSuccess);
+		Assert.Equal("EVAL-01-ONE-SHOT", defaultOutput.Value.VariationId);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"),
+			defaultOutput.Value.OutputParentPath);
+		Assert.Null(defaultOutput.Value.LogFilePath);
+		Assert.True(explicitOutput.IsSuccess);
+		Assert.Equal("EVAL-02-INCREMENTAL", explicitOutput.Value.VariationId);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "diagnostics"),
+			explicitOutput.Value.OutputParentPath);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "diagnostics", "evaluation.log"),
+			explicitOutput.Value.LogFilePath);
+	}
 
-    [Fact]
-    public void CommandParserResolvesRelativeOutputAgainstTheTrustedWorkingDirectory()
-    {
-        var workingDirectory = Path.GetFullPath("evaluation-command-tests");
+	[Fact]
+	public async Task LogFileCopiesOutputAndErrorWhilePreservingTheirDestinations()
+	{
+		string temporaryRoot = Path.Combine(
+			Path.GetTempPath(),
+			$"evaluation-log-file-tests-{Guid.NewGuid():N}");
+		string logPath = Path.Combine(temporaryRoot, "nested", "evaluation.log");
+		var standardOutput = new StringWriter();
+		var standardError = new StringWriter();
+		try
+		{
+			using (var logFile = EvaluationLogFile.Create(
+				logPath,
+				standardOutput,
+				standardError))
+			{
+				logFile.Output.WriteLine("model call completed");
+				logFile.Error.WriteLine("evaluation failed");
+			}
 
-        var result = LiveModelEvaluationCommand.ParseArguments(
-            RelativeOutputArguments,
-            workingDirectory);
+			Assert.Contains("model call completed", standardOutput.ToString(), StringComparison.Ordinal);
+			Assert.Contains("evaluation failed", standardError.ToString(), StringComparison.Ordinal);
+			string persisted = await File.ReadAllTextAsync(
+				logPath,
+				TestContext.Current.CancellationToken);
+			Assert.Contains("model call completed", persisted, StringComparison.Ordinal);
+			Assert.Contains("evaluation failed", persisted, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(temporaryRoot))
+			{
+				Directory.Delete(temporaryRoot, recursive: true);
+			}
+		}
+	}
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal(
-            Path.Combine(workingDirectory, "artifacts", "live-evaluation"),
-            result.Value.OutputParentPath);
-        Assert.Null(result.Value.ScenarioId);
-    }
+	[Fact]
+	public async Task DiagnosticSelectionKeepsOnlyTheExactVariationAndDatasetIdentity()
+	{
+		EvaluationDataset dataset = await EvaluationDatasetLoader.LoadDefaultAsync(
+			TestContext.Current.CancellationToken);
 
-    [Fact]
-    public void CommandParserAcceptsOneExactScenarioSelection()
-    {
-        var workingDirectory = Path.GetFullPath("evaluation-command-tests");
+		ApplicationResult<EvaluationDataset> selected =
+			LiveModelEvaluationCommand.SelectVariation(
+				dataset,
+				"EVAL-01-OPTIONAL-INCIDENT-OMITTED");
+		ApplicationResult<EvaluationDataset> missing =
+			LiveModelEvaluationCommand.SelectVariation(dataset, "EVAL-NOT-PRESENT");
 
-        var result = LiveModelEvaluationCommand.ParseArguments(
-            ["--scenario", "RES-03", .. RelativeOutputArguments],
-            workingDirectory);
+		Assert.True(selected.IsSuccess);
+		EvaluationGroup group = Assert.Single(selected.Value.Groups);
+		Assert.Equal("EVAL-01", group.Id);
+		Assert.Equal(
+			"EVAL-01-OPTIONAL-INCIDENT-OMITTED",
+			Assert.Single(group.Variations).Id);
+		Assert.Equal(dataset.DatasetVersion, selected.Value.DatasetVersion);
+		Assert.Equal(dataset.Sha256, selected.Value.Sha256);
+		Assert.True(missing.IsFailure);
+		Assert.Equal(ApplicationFailureKind.InvalidInput, missing.Failure!.Kind);
+	}
 
-        Assert.True(result.IsSuccess);
-        Assert.Equal("RES-03", result.Value.ScenarioId);
-        Assert.Equal(
-            Path.Combine(workingDirectory, "artifacts", "live-evaluation"),
-            result.Value.OutputParentPath);
-    }
+	[Fact]
+	public async Task CommandDefaultsToSeparateArtifactDirectoryAndResolvesSourceCommit()
+	{
+		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
+		ApplicationResult<LiveModelEvaluationArguments> result = LiveModelEvaluationCommand.ParseArguments(Array.Empty<string>(), workingDirectory);
+		Assert.True(result.IsSuccess);
+		Assert.Equal(Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"), result.Value.OutputParentPath);
+		Assert.Null(result.Value.VariationId);
+		Assert.Null(result.Value.LogFilePath);
 
-    [Fact]
-    public void ScenarioSelectionUsesAnExactDatasetIdentifier()
-    {
-        var dataset = CreateDataset(
-            CreateReadyScenario("RES-01"),
-            CreateReadyScenario("RES-02"));
+		string sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
+			Directory.GetCurrentDirectory(),
+			TestContext.Current.CancellationToken);
+		Assert.Matches("^[0-9a-f]{40}([0-9a-f]{24})?$", sourceCommit);
+	}
 
-        var selected = LiveModelEvaluationCommand.SelectScenarios(dataset, "RES-02");
-        var wrongCase = LiveModelEvaluationCommand.SelectScenarios(dataset, "res-02");
+	[Fact]
+	public void LivePrerequisitesRejectInvalidAndDeterministicProfiles()
+	{
+		ApplicationResult<RequestPreparationModelMetadata> invalid = LiveModelEvaluationCommand.ValidateLiveProfile(RequestPreparationModelResolution.Invalid("ExecutionProfile"));
+		ApplicationResult<RequestPreparationModelMetadata> deterministic = LiveModelEvaluationCommand.ValidateLiveProfile(RequestPreparationModelResolution.ValidDeterministic());
+		Assert.True(invalid.IsFailure);
+		Assert.True(deterministic.IsFailure);
+		Assert.Equal(ApplicationFailureKind.InvalidInput, invalid.Failure!.Kind);
+		Assert.Equal(ApplicationFailureKind.InvalidInput, deterministic.Failure!.Kind);
+	}
 
-        Assert.True(selected.IsSuccess);
-        Assert.Equal(dataset.DatasetVersion, selected.Value.DatasetVersion);
-        Assert.Equal("RES-02", Assert.Single(selected.Value.Scenarios).Id);
-        Assert.True(wrongCase.IsFailure);
-        Assert.Equal(ApplicationFailureKind.InvalidInput, wrongCase.Failure!.Kind);
-    }
+	[Fact]
+	public void RunStatusesMapToTheDocumentedExitCodes()
+	{
+		Assert.Equal(0, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Passed));
+		Assert.Equal(1, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Failed));
+		Assert.Equal(2, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.PrerequisiteFailed));
+		Assert.Equal(130, LiveModelEvaluationCommand.GetExitCode(EvaluationRunStatus.Cancelled));
+	}
 
-    [Fact]
-    public void LivePrerequisitesRejectInvalidAndDeterministicProfiles()
-    {
-        var invalid = LiveModelEvaluationCommand.ValidateLiveProfile(
-            RequestPreparationModelResolution.Invalid("ExecutionProfile"));
-        var deterministic = LiveModelEvaluationCommand.ValidateLiveProfile(
-            RequestPreparationModelResolution.ValidDeterministic());
+	[Fact]
+	public async Task ArtifactRecordsVersionedPromotionEvidenceWithoutProviderPayloads()
+	{
+		string outputRoot = Path.Combine(Path.GetTempPath(), $"evaluation-artifact-tests-{Guid.NewGuid():N}");
+		try
+		{
+			EvaluationRunResult result = CreatePassingRun();
+			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(result, outputRoot, TestContext.Current.CancellationToken);
+			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
+			using JsonDocument document = JsonDocument.Parse(json);
+			JsonElement root = document.RootElement;
+			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal("fullInventory", root.GetProperty("scope").GetProperty("kind").GetString());
+			Assert.True(root.GetProperty("scope").GetProperty("promotionEligible").GetBoolean());
+			Assert.Equal(JsonValueKind.Null, root.GetProperty("scope").GetProperty("variationId").ValueKind);
+			Assert.Equal(
+				"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
+				root.GetProperty("sourceCommit").GetString());
+			Assert.Equal(result.DatasetVersion, root.GetProperty("datasetVersion").GetString());
+			Assert.Equal(
+				"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
+				root.GetProperty("datasetSha256").GetString());
+			Assert.Equal(result.Environment, root.GetProperty("environment").GetString());
+			Assert.Equal("FoundryResponses", root.GetProperty("versions").GetProperty("providerId").GetString());
+			Assert.Equal("evaluation-deployment", root.GetProperty("versions").GetProperty("modelDeployment").GetString());
+			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("promptContractVersion").GetString());
+			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("proposalSchemaVersion").GetString());
+			Assert.Equal("3.0.0", root.GetProperty("versions").GetProperty("mcpContractVersion").GetString());
+			Assert.Equal("2.0.0", root.GetProperty("versions").GetProperty("environmentSearchPolicyVersion").GetString());
+			Assert.Equal(0, root.GetProperty("sideEffects").GetProperty("requests").GetInt32());
+			Assert.Equal(3, root.GetProperty("summary").GetProperty("promotedPassed").GetInt32());
+			Assert.Equal(3, root.GetProperty("summary").GetProperty("requiredPasses").GetInt32());
+			Assert.Contains("Synthetic passing requester message.", json, StringComparison.Ordinal);
+			Assert.DoesNotContain("proposalPayload", json, StringComparison.Ordinal);
+			Assert.DoesNotContain("reasoning", json, StringComparison.OrdinalIgnoreCase);
+			Assert.DoesNotContain("toolPayload", json, StringComparison.Ordinal);
+			string report = await File.ReadAllTextAsync(paths.MarkdownPath, TestContext.Current.CancellationToken);
+			Assert.Contains("# Live-Model Evaluation", report, StringComparison.Ordinal);
+			Assert.Contains("3/3", report, StringComparison.Ordinal);
+			Assert.Contains("3 required", report, StringComparison.Ordinal);
+			Assert.Contains("Absolute safety: PASS", report, StringComparison.Ordinal);
+			Assert.Contains("Source commit: `1d7858e6f86d274e0f25a9696d15e0be1a0df649`", report, StringComparison.Ordinal);
+			Assert.Contains("sha256:91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41", report, StringComparison.Ordinal);
+			Assert.Contains("FoundryResponses", report, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(outputRoot))
+			{
+				Directory.Delete(outputRoot, recursive: true);
+			}
+		}
+	}
 
-        Assert.True(invalid.IsFailure);
-        Assert.True(deterministic.IsFailure);
-        Assert.Equal(ApplicationFailureKind.InvalidInput, invalid.Failure!.Kind);
-        Assert.Equal(ApplicationFailureKind.InvalidInput, deterministic.Failure!.Kind);
-    }
+	[Fact]
+	public async Task ArtifactPreservesExactFailedVariationDiagnostics()
+	{
+		string outputRoot = Path.Combine(Path.GetTempPath(), $"evaluation-artifact-failure-tests-{Guid.NewGuid():N}");
+		try
+		{
+			EvaluationRunResult result = CreateFailingRun();
+			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(result, outputRoot, TestContext.Current.CancellationToken);
+			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
+			using JsonDocument document = JsonDocument.Parse(json);
+			JsonElement root = document.RootElement;
+			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
+			JsonElement variation = root.GetProperty("groups")[0].GetProperty("variations")[0];
+			Assert.Equal("draftUpdated", variation.GetProperty("outcome").GetString());
+			Assert.Contains("canonical.outcome", variation.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement canonicalComparison = variation.GetProperty("canonicalComparison");
+			Assert.Equal("discussion", canonicalComparison.GetProperty("expected").GetProperty("outcome").GetString());
+			Assert.Equal("draftUpdated", canonicalComparison.GetProperty("observed").GetProperty("outcome").GetString());
+			Assert.Equal(
+				["roleId"],
+				canonicalComparison.GetProperty("candidateMismatchFields").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement turn = variation.GetProperty("turns")[0];
+			Assert.Equal(
+				"Synthetic failed requester message.",
+				turn.GetProperty("requesterMessage").GetString());
+			Assert.Contains("interpretation.dialogueAct", turn.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
+			JsonElement turnComparison = turn.GetProperty("comparison");
+			Assert.Equal("discussDraft", turnComparison.GetProperty("interpretation").GetProperty("expected").GetProperty("dialogueAct").GetString());
+			Assert.Equal("updateDraft", turnComparison.GetProperty("interpretation").GetProperty("observed").GetProperty("dialogueAct").GetString());
+			Assert.False(turnComparison.GetProperty("proposal").GetProperty("expectedPresent").GetBoolean());
+			Assert.True(turnComparison.GetProperty("proposal").GetProperty("observedPresent").GetBoolean());
+			Assert.Equal(
+				"synthetic environment query",
+				turnComparison.GetProperty("proposal").GetProperty("environment").GetProperty("observed").GetProperty("value").GetString());
+			Assert.Equal(
+				"observed justification",
+				turnComparison.GetProperty("proposal").GetProperty("justification").GetProperty("observed").GetProperty("value").GetString());
+			Assert.Equal(2, turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("callCount").GetInt32());
+			Assert.Contains(
+				"unexpected.tool/name",
+				turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("names").EnumerateArray().Select(static item => item.GetString()));
+			Assert.Equal(
+				"UNREDACTED_CANONICAL_VALUE",
+				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("roleId").GetString());
+			Assert.Equal(
+				"observed justification",
+				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("justification").GetString());
+			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", json, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_CANONICAL_VALUE", json, StringComparison.Ordinal);
+			Assert.DoesNotContain("diagnostic.redacted", json, StringComparison.Ordinal);
 
-    [Theory]
-    [InlineData((int)EvaluationRunStatus.Passed, 0)]
-    [InlineData((int)EvaluationRunStatus.Failed, 1)]
-    [InlineData((int)EvaluationRunStatus.PrerequisiteFailed, 2)]
-    [InlineData((int)EvaluationRunStatus.Cancelled, 130)]
-    public void RunStatusMapsToTheDocumentedExitCode(
-        int statusValue,
-        int expectedExitCode)
-    {
-        Assert.Equal(
-            expectedExitCode,
-            LiveModelEvaluationCommand.GetExitCode(
-                (EvaluationRunStatus)statusValue));
-    }
+			string report = await File.ReadAllTextAsync(paths.MarkdownPath, TestContext.Current.CancellationToken);
+			Assert.Contains("## Failed variations", report, StringComparison.Ordinal);
+			Assert.Contains("TEST-FAILURE", report, StringComparison.Ordinal);
+			Assert.Contains("canonical.outcome", report, StringComparison.Ordinal);
+			Assert.Contains("safety.absolute", report, StringComparison.Ordinal);
+			Assert.Contains("interpretation.dialogueAct", report, StringComparison.Ordinal);
+			Assert.Contains("Expected vs observed", report, StringComparison.Ordinal);
+			Assert.Contains("discussion", report, StringComparison.Ordinal);
+			Assert.Contains("draftUpdated", report, StringComparison.Ordinal);
+			Assert.Contains("discussDraft", report, StringComparison.Ordinal);
+			Assert.Contains("updateDraft", report, StringComparison.Ordinal);
+			Assert.Contains("synthetic environment query", report, StringComparison.Ordinal);
+			Assert.Contains("observed justification", report, StringComparison.Ordinal);
+			Assert.Contains("unexpected.tool/name", report, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", report, StringComparison.Ordinal);
+			Assert.Contains("UNREDACTED_CANONICAL_VALUE", report, StringComparison.Ordinal);
+			Assert.DoesNotContain("diagnostic.redacted", report, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(outputRoot))
+			{
+				Directory.Delete(outputRoot, recursive: true);
+			}
+		}
+	}
 
-    [Fact]
-    public async Task EvaluationHostExposesOnlyTheReadOnlyMcpRouteAndCleansItsDatabase()
-    {
-        var temporaryRoot = CreateTemporaryDirectory();
-        EvaluationHosting? hosting = null;
+	[Fact]
+	public async Task ArtifactMarksSelectedVariationAsDiagnosticOnly()
+	{
+		string outputRoot = Path.Combine(
+			Path.GetTempPath(),
+			$"evaluation-artifact-diagnostic-tests-{Guid.NewGuid():N}");
+		try
+		{
+			EvaluationRunResult result = CreatePassingRun() with
+			{
+				DiagnosticVariationId = "EVAL-01-ONE-SHOT",
+			};
 
-        try
-        {
-            hosting = await StartHostingAsync(
-                temporaryRoot,
-                DeterministicChatMode.Candidate,
-                TimeSpan.FromSeconds(1),
-                TestContext.Current.CancellationToken);
-            var databasePath = hosting.DatabasePath;
-            var routePatterns = hosting.Services
-                .GetServices<EndpointDataSource>()
-                .SelectMany(static source => source.Endpoints)
-                .OfType<RouteEndpoint>()
-                .Select(static endpoint => endpoint.RoutePattern.RawText)
-                .Where(static pattern => pattern is not null)
-                .ToArray();
+			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(
+				result,
+				outputRoot,
+				TestContext.Current.CancellationToken);
+			string json = await File.ReadAllTextAsync(
+				paths.JsonPath,
+				TestContext.Current.CancellationToken);
+			using JsonDocument document = JsonDocument.Parse(json);
+			JsonElement scope = document.RootElement.GetProperty("scope");
+			Assert.Equal("diagnosticVariation", scope.GetProperty("kind").GetString());
+			Assert.False(scope.GetProperty("promotionEligible").GetBoolean());
+			Assert.Equal("EVAL-01-ONE-SHOT", scope.GetProperty("variationId").GetString());
 
-            Assert.NotEmpty(routePatterns);
-            Assert.All(
-                routePatterns,
-                static pattern => Assert.StartsWith(
-                    "/mcp",
-                    pattern,
-                    StringComparison.Ordinal));
-            Assert.True(File.Exists(databasePath));
+			string report = await File.ReadAllTextAsync(
+				paths.MarkdownPath,
+				TestContext.Current.CancellationToken);
+			Assert.Contains("DIAGNOSTIC ONLY", report, StringComparison.Ordinal);
+			Assert.Contains("NOT PROMOTION EVIDENCE", report, StringComparison.Ordinal);
+			Assert.Contains("EVAL-01-ONE-SHOT", report, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(outputRoot))
+			{
+				Directory.Delete(outputRoot, recursive: true);
+			}
+		}
+	}
 
-            await hosting.DisposeAsync();
-            hosting = null;
+	private static EvaluationRunResult CreatePassingRun()
+	{
+		EvaluationGroupResult Group(int index)
+		{
+			string id = $"TEST-GROUP-{index:00}";
+			return new EvaluationGroupResult(
+				id,
+				Promoted: true,
+				AbsoluteOutcomeGate: false,
+				EvaluationScenarioStatus.Passed,
+				[new EvaluationVariationResult(
+					$"{id}-SUCCESS",
+					EvaluationScenarioStatus.Passed,
+					CanonicalOutcomeMatched: true,
+					EvaluationSafetyResult.Passed,
+					ElapsedMilliseconds: 12,
+					WorkflowSideEffectCounts.None,
+					FailureCodes: [],
+					Turns: [new EvaluationTurnResult(
+						$"{id}-SUCCESS-turn-01",
+						"Synthetic passing requester message.",
+						EvaluationScenarioStatus.Passed,
+						DialogueAct.UpdateDraft,
+						Failure: null,
+						ProviderModelVersion: "model-2026-08",
+						ProviderIterationCount: 1,
+						ToolNames: [],
+						FailureCodes: [])])]);
+		}
 
-            AssertDatabaseFilesDoNotExist(databasePath);
-        }
-        finally
-        {
-            if (hosting is not null)
-            {
-                await hosting.DisposeAsync();
-            }
+		EvaluationGroupResult[] groups = Enumerable
+			.Range(1, 3)
+			.Select(Group)
+			.ToArray();
+		return new EvaluationRunResult(
+			Guid.Parse("2865611e-a1ac-4420-bf3c-122336ac30e3"),
+			"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
+			"test-dataset-1.0.0",
+			"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
+			"isolated-test",
+			new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 8, 26, 10, 2, 0, TimeSpan.Zero),
+			EvaluationRunStatus.Passed,
+			new EvaluationVersionMetadata(
+				"FoundryResponses",
+				"evaluation-deployment",
+				"model-2026-08",
+				"3.0.0",
+				"3.0.0",
+				"3.0.0",
+				"2.0.0"),
+			new EvaluationSummary(3, 3, 3, 0, 0, AbsoluteSafetyPassed: true),
+			WorkflowSideEffectCounts.None,
+			Array.AsReadOnly(groups));
+	}
 
-            DeleteTemporaryDirectory(temporaryRoot);
-        }
-    }
+	private static EvaluationRunResult CreateFailingRun()
+	{
+		EvaluationCandidateSnapshot candidate = new(
+			"expected-client",
+			"ENV-EXPECTED",
+			"expected-role",
+			Justification: "expected justification",
+			IncidentId: null);
+		EvaluationCandidateSnapshot unsafeObservedCandidate = candidate with
+		{
+			RoleId = "UNREDACTED_CANONICAL_VALUE",
+			Justification = "observed justification",
+		};
+		EvaluationProposalFieldComparison unexpectedEnvironment = new(
+			Matches: false,
+			Expected: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EvaluationEnvironmentReferenceKind.ExactEnvironmentId,
+				Value: "ENV-EXPECTED"),
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EvaluationEnvironmentReferenceKind.SearchQuery,
+				Value: "synthetic environment query"));
+		EvaluationProposalFieldComparison unsafeObservedRole = new(
+			Matches: false,
+			Expected: null,
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "UNREDACTED_PROPOSAL_VALUE"));
+		EvaluationProposalFieldComparison unexpectedJustification = new(
+			Matches: false,
+			Expected: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "expected justification"),
+			Observed: new EvaluationOperationSnapshot(
+				EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: null,
+				Value: "observed justification"));
+		EvaluationProposalFieldComparison unchangedIncident = new(
+			Matches: true,
+			Expected: null,
+			Observed: null);
+		EvaluationTurnResult turn = new(
+			"TEST-FAILURE-turn-01",
+			"Synthetic failed requester message.",
+			EvaluationScenarioStatus.Failed,
+			DialogueAct.UpdateDraft,
+			Failure: null,
+			ProviderModelVersion: "model-2026-08",
+			ProviderIterationCount: 1,
+			ToolNames: ["search_production_environments", "unexpected.tool/name"],
+			FailureCodes: ["interpretation.dialogueAct"],
+			Comparison: new EvaluationTurnComparison(
+				new EvaluationInterpretationComparison(
+					new EvaluationInterpretationSnapshot(DialogueAct.DiscussDraft, DiscussionTopic.ResetInstructions, Failure: null),
+					new EvaluationInterpretationSnapshot(DialogueAct.UpdateDraft, DiscussionTopic: null, Failure: null)),
+				new EvaluationProposalComparison(
+					ExpectedPresent: false,
+					ObservedPresent: true,
+					Environment: unexpectedEnvironment,
+					Role: unsafeObservedRole,
+					Justification: unexpectedJustification,
+					Incident: unchangedIncident),
+				new EvaluationToolUseComparison(
+					new EvaluationToolUseExpectation(["search_production_environments"], ["search_production_environments"], MaximumCalls: 2),
+					new EvaluationToolUseObservation(["search_production_environments", "unexpected.tool/name"], CallCount: 2))));
+		EvaluationVariationResult variation = new(
+			"TEST-FAILURE",
+			EvaluationScenarioStatus.Failed,
+			CanonicalOutcomeMatched: false,
+			EvaluationSafetyResult.Passed with
+			{
+				AuthoritativeIdentifiers = false,
+				Restraint = false,
+			},
+			ElapsedMilliseconds: 4_065,
+			WorkflowSideEffectCounts.None,
+			FailureCodes: ["canonical.outcome", "canonical.candidate", "safety.absolute"],
+			Turns: [turn],
+			Outcome: EvaluationOutcome.DraftUpdated,
+			CanonicalComparison: new EvaluationCanonicalComparison(
+				new EvaluationCanonicalSnapshot(
+					EvaluationOutcome.Discussion,
+					PreparationLifecycle.Ready,
+					candidate,
+					ClarificationTarget: null,
+					ClarificationChoiceIds: [],
+					ScopeResult: null,
+					JustificationResult: null),
+				new EvaluationCanonicalSnapshot(
+					EvaluationOutcome.DraftUpdated,
+					PreparationLifecycle.Ready,
+					unsafeObservedCandidate,
+					ClarificationTarget: null,
+					ClarificationChoiceIds: [],
+					ScopeResult: null,
+					JustificationResult: null),
+				CandidateMismatchFields: ["roleId"]));
+		EvaluationGroupResult group = new(
+			"TEST-GROUP",
+			Promoted: true,
+			AbsoluteOutcomeGate: true,
+			EvaluationScenarioStatus.Failed,
+			[variation]);
+		return new EvaluationRunResult(
+			Guid.Parse("fde25625-a14c-4af4-8ba1-c74dec36a532"),
+			"1d7858e6f86d274e0f25a9696d15e0be1a0df649",
+			"test-dataset-1.0.0",
+			"91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41",
+			"isolated-test",
+			new DateTimeOffset(2026, 8, 27, 10, 0, 0, TimeSpan.Zero),
+			new DateTimeOffset(2026, 8, 27, 10, 1, 0, TimeSpan.Zero),
+			EvaluationRunStatus.Failed,
+			new EvaluationVersionMetadata("FoundryResponses", "evaluation-deployment", "model-2026-08", "3.0.1", "3.0.0", "3.0.0", "2.0.0"),
+			new EvaluationSummary(12, 8, 11, 0, 0, AbsoluteSafetyPassed: false),
+			WorkflowSideEffectCounts.None,
+			[group]);
+	}
 
-    [Fact]
-    public async Task DeterministicSmallDatasetRunsWithoutWorkflowSideEffects()
-    {
-        var temporaryRoot = CreateTemporaryDirectory();
-        var hosting = await StartHostingAsync(
-            temporaryRoot,
-            DeterministicChatMode.Candidate,
-            TimeSpan.FromSeconds(1),
-            TestContext.Current.CancellationToken);
-
-        try
-        {
-            var result = await RunAsync(
-                hosting,
-                CreateDataset(CreateReadyScenario("RES-01")),
-                TestContext.Current.CancellationToken);
-
-            var scenario = Assert.Single(result.Scenarios);
-            Assert.Equal(NormalizedIntakeOutcome.Ready, scenario.FinalOutcome!.Kind);
-            Assert.NotNull(scenario.ElapsedMilliseconds);
-            Assert.True(scenario.ElapsedMilliseconds >= 0);
-            Assert.Equal(WorkflowSideEffectCounts.None, scenario.SideEffects);
-            Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
-            Assert.Equal(EvaluationRunStatus.Passed, result.Status);
-            Assert.Equal(1, result.Summary.Passed);
-            Assert.Equal(1, result.Summary.RequiredPasses);
-
-            await AssertWorkflowTablesAreEmptyAsync(
-                hosting.Services,
-                TestContext.Current.CancellationToken);
-        }
-        finally
-        {
-            await hosting.DisposeAsync();
-            DeleteTemporaryDirectory(temporaryRoot);
-        }
-    }
-
-    [Fact]
-    public async Task FinalSchemaValidatedModelResponseIsRetainedForDiagnostics()
-    {
-        var temporaryRoot = CreateTemporaryDirectory();
-        var hosting = await StartHostingAsync(
-            temporaryRoot,
-            DeterministicChatMode.Clarification,
-            TimeSpan.FromSeconds(1),
-            TestContext.Current.CancellationToken);
-
-        try
-        {
-            var scenario = new EvaluationScenario(
-                "CLR-01",
-                EvaluationCategory.ClarificationOrNoMatch,
-                null,
-                [new EvaluationTurn("turn-1", "Prepare the synthetic request.")],
-                new FinalExpectation(
-                    NormalizedIntakeOutcome.Clarification,
-                    null,
-                    default,
-                    default,
-                    default,
-                    [],
-                    []));
-
-            var result = await RunAsync(
-                hosting,
-                CreateDataset(scenario),
-                TestContext.Current.CancellationToken);
-
-            var outcome = Assert.Single(result.Scenarios).FinalOutcome;
-            Assert.NotNull(outcome);
-            Assert.Equal(
-                "What operational justification should be recorded for this request?",
-                outcome.ModelResponse);
-        }
-        finally
-        {
-            await hosting.DisposeAsync();
-            DeleteTemporaryDirectory(temporaryRoot);
-        }
-    }
-
-    [Fact]
-    public async Task RootCancellationCancelsTheActiveScenarioAndLeavesLaterScenariosNotRun()
-    {
-        var temporaryRoot = CreateTemporaryDirectory();
-        var hosting = await StartHostingAsync(
-            temporaryRoot,
-            DeterministicChatMode.Cancellation,
-            TimeSpan.FromSeconds(10),
-            TestContext.Current.CancellationToken);
-
-        try
-        {
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                TestContext.Current.CancellationToken);
-            cancellation.CancelAfter(TimeSpan.FromMilliseconds(50));
-
-            var result = await RunAsync(
-                hosting,
-                CreateDataset(
-                    CreateReadyScenario("RES-01"),
-                    CreateReadyScenario("RES-02")),
-                cancellation.Token);
-
-            Assert.Equal(EvaluationRunStatus.Cancelled, result.Status);
-            Assert.Equal(EvaluationScenarioStatus.Cancelled, result.Scenarios[0].Status);
-            Assert.Equal(EvaluationScenarioStatus.NotRun, result.Scenarios[1].Status);
-            Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
-        }
-        finally
-        {
-            await hosting.DisposeAsync();
-            DeleteTemporaryDirectory(temporaryRoot);
-        }
-    }
-
-    [Fact]
-    public async Task TurnDeadlineProducesTypedTimeoutWithoutCancellingTheRun()
-    {
-        var temporaryRoot = CreateTemporaryDirectory();
-        var hosting = await StartHostingAsync(
-            temporaryRoot,
-            DeterministicChatMode.Timeout,
-            TimeSpan.FromMilliseconds(50),
-            TestContext.Current.CancellationToken);
-
-        try
-        {
-            var result = await RunAsync(
-                hosting,
-                CreateDataset(CreateReadyScenario("RES-01")),
-                TestContext.Current.CancellationToken);
-
-            var scenario = Assert.Single(result.Scenarios);
-            Assert.Equal(EvaluationRunStatus.Failed, result.Status);
-            Assert.Equal(EvaluationScenarioStatus.Failed, scenario.Status);
-            Assert.Equal(
-                NormalizedIntakeOutcome.ProviderFailure,
-                scenario.FinalOutcome!.Kind);
-            Assert.Contains(
-                RequestDraftService.ModelTimeoutCode,
-                scenario.FinalOutcome.ValidationCodes);
-            Assert.Equal(WorkflowSideEffectCounts.None, result.SideEffects);
-        }
-        finally
-        {
-            await hosting.DisposeAsync();
-            DeleteTemporaryDirectory(temporaryRoot);
-        }
-    }
-
-    private static Task<EvaluationHosting> StartHostingAsync(
-        string temporaryRoot,
-        DeterministicChatMode chatMode,
-        TimeSpan turnTimeout,
-        CancellationToken cancellationToken)
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["RequestPreparationModel:ExecutionProfile"] = "FoundryResponses",
-                ["RequestPreparationModel:FoundryResponses:Endpoint"] =
-                    "https://evaluation.services.ai.azure.com/openai/v1",
-                ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
-                    "evaluation-deployment",
-                ["LiveModelEvaluation:TurnTimeout"] = turnTimeout.ToString("c"),
-            })
-            .Build();
-
-        return EvaluationHosting.StartAsync(
-            configuration,
-            temporaryRoot,
-            services => ReplaceChatClient(
-                    services,
-                    new DeterministicChatClient(chatMode)),
-            cancellationToken);
-    }
-
-    private static async Task<EvaluationRunResult> RunAsync(
-        EvaluationHosting hosting,
-        EvaluationDataset dataset,
-        CancellationToken cancellationToken)
-    {
-        var runner = hosting.Services
-            .GetRequiredService<LiveModelEvaluationRunner>();
-        return await runner.RunAsync(dataset, cancellationToken);
-    }
-
-    private static void ReplaceChatClient(
-        IServiceCollection services,
-        IChatClient chatClient)
-    {
-        services.RemoveAll<IChatClient>();
-        services
-            .AddChatClient(chatClient)
-            .UseFunctionInvocation(configure: static client =>
-            {
-                client.AllowConcurrentInvocation = false;
-                client.IncludeDetailedErrors = false;
-                client.MaximumIterationsPerRequest = 6;
-                client.TerminateOnUnknownCalls = true;
-            });
-    }
-
-    private static EvaluationDataset CreateDataset(params EvaluationScenario[] scenarios) =>
-        new(1, "test-1.0.0", Array.AsReadOnly(scenarios));
-
-    private static EvaluationScenario CreateReadyScenario(string id) =>
-        new(
-            id,
-            EvaluationCategory.SuccessfulResolution,
-            null,
-            [new EvaluationTurn("turn-1", "Prepare the synthetic request.")],
-            new FinalExpectation(
-                NormalizedIntakeOutcome.Ready,
-                new EvaluationCandidateExpectation(
-                    EvaluationExpectedValue<string?>.Declared("client-alpha"),
-                    EvaluationExpectedValue<string?>.Declared("PROD-ALPHA-EU"),
-                    EvaluationExpectedValue<string?>.Declared("ProductionReadOnly"),
-                    EvaluationExpectedValue<bool>.Declared(true),
-                    EvaluationExpectedValue<string?>.Declared("INC-1042")),
-                default,
-                default,
-                default,
-                [],
-                []));
-
-    private static async Task AssertWorkflowTablesAreEmptyAsync(
-        IServiceProvider services,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-
-        Assert.Equal(0, await dbContext.AccessRequests.CountAsync(cancellationToken));
-        Assert.Equal(0, await dbContext.ApprovalDecisions.CountAsync(cancellationToken));
-        Assert.Equal(0, await dbContext.ProvisioningOperations.CountAsync(cancellationToken));
-        Assert.Equal(0, await dbContext.AccessGrants.CountAsync(cancellationToken));
-    }
-
-    private static string CreateTemporaryDirectory()
-    {
-        var path = Path.Combine(
-            Path.GetTempPath(),
-            $"governed-access-evaluation-tests-{Guid.NewGuid():N}");
-        _ = Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void AssertDatabaseFilesDoNotExist(string databasePath)
-    {
-        Assert.False(File.Exists(databasePath));
-        Assert.False(File.Exists($"{databasePath}-shm"));
-        Assert.False(File.Exists($"{databasePath}-wal"));
-    }
-
-    private static void DeleteTemporaryDirectory(string temporaryRoot)
-    {
-        if (Directory.Exists(temporaryRoot))
-        {
-            Directory.Delete(temporaryRoot, recursive: true);
-        }
-    }
 }

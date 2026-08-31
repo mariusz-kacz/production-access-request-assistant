@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GovernedAccess.Core.Preparations.Contracts;
 
 namespace GovernedAccess.Core.Domain.AccessRequests;
 
@@ -14,6 +15,7 @@ public sealed class AuditEvent
             new JsonStringEnumConverter<ApprovalStage>(),
             new JsonStringEnumConverter<ApprovalOutcome>(),
             new JsonStringEnumConverter<ProvisioningOperationStatus>(),
+            new JsonStringEnumConverter<ProposalField>(),
         },
     };
 

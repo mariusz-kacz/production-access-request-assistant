@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using GovernedAccess.Core.Ports;
 
 namespace GovernedAccess.Web.Teams;
 
@@ -11,23 +10,23 @@ namespace GovernedAccess.Web.Teams;
 public sealed class TeamsDraftCardTracker
 {
     private readonly ConcurrentDictionary<
-        AuthenticatedChannelActor,
+        TeamsConversationReference,
         TeamsDraftCardReference> cards = new();
 
     internal bool TryGet(
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         out TeamsDraftCardReference reference)
     {
-        ArgumentNullException.ThrowIfNull(actor);
-        return cards.TryGetValue(actor, out reference!);
+        ArgumentNullException.ThrowIfNull(conversation);
+        return cards.TryGetValue(conversation, out reference!);
     }
 
     internal void Set(
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         Guid preparationId,
         string activityId)
     {
-        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentNullException.ThrowIfNull(conversation);
         if (preparationId == Guid.Empty)
         {
             throw new ArgumentException(
@@ -36,30 +35,45 @@ public sealed class TeamsDraftCardTracker
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(activityId);
-        cards[actor] = new TeamsDraftCardReference(
+        cards[conversation] = new TeamsDraftCardReference(
             preparationId,
             activityId.Trim());
     }
 
     internal bool TryRemove(
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         out TeamsDraftCardReference reference)
     {
-        ArgumentNullException.ThrowIfNull(actor);
-        return cards.TryRemove(actor, out reference!);
+        ArgumentNullException.ThrowIfNull(conversation);
+        return cards.TryRemove(conversation, out reference!);
     }
 
     internal bool TryRemove(
-        AuthenticatedChannelActor actor,
+        TeamsConversationReference conversation,
         Guid preparationId)
     {
-        ArgumentNullException.ThrowIfNull(actor);
-        return cards.TryGetValue(actor, out var current)
-            && current.PreparationId == preparationId
-            && cards.TryRemove(
+        return TryRemove(conversation, preparationId, out _);
+    }
+
+    internal bool TryRemove(
+        TeamsConversationReference conversation,
+        Guid preparationId,
+        out TeamsDraftCardReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(conversation);
+        reference = null!;
+        if (!cards.TryGetValue(conversation, out var current)
+            || current.PreparationId != preparationId
+            || !cards.TryRemove(
                 new KeyValuePair<
-                    AuthenticatedChannelActor,
-                    TeamsDraftCardReference>(actor, current));
+                    TeamsConversationReference,
+                    TeamsDraftCardReference>(conversation, current)))
+        {
+            return false;
+        }
+
+        reference = current;
+        return true;
     }
 
     internal void Clear() => cards.Clear();

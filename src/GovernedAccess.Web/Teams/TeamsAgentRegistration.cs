@@ -1,10 +1,7 @@
-using GovernedAccess.Core.Application;
 using GovernedAccess.Web.Ai;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.Authentication;
+using Microsoft.Agents.Builder.App;
 using Microsoft.Agents.Hosting.AspNetCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.IdentityModel.Validators;
@@ -39,24 +36,30 @@ public static class TeamsAgentRegistration
         builder.Services.AddRequestTimeouts();
 
         AddActivityAuthentication(builder.Services, builder.Configuration);
-
-        builder.Services.AddSingleton(static serviceProvider =>
-            new RequestPreparationMcpEndpoint(
-                () => serviceProvider.GetRequiredService<
-                        IOptions<TeamsAccessRequestOptions>>()
-                    .Value
-                    .TrustedWebBaseUri));
-        builder.Services.AddRequestPreparation();
-        builder.Services.AddScoped<RequestSubmissionService>();
+        builder.Services.AddRequestPreparation(builder.Configuration);
         builder.Services.AddSingleton<TeamsDraftCardTracker>();
         builder.Services.AddScoped<TeamsActorResolver>();
-        builder.Services.AddScoped<PreparedRequestCardFactory>();
+        builder.Services.AddScoped<TeamsResponsePresenter>();
+        builder.Services.AddScoped<TeamsRequestHandler>();
         builder.Services.AddScoped<TeamsAccessRequestAgent>();
 
+        builder.Services.AddSingleton<AgentApplicationOptions>(
+            static services => CreateAgentApplicationOptions(services));
         builder.Services.AddAgentApplicationOptions(replaceExisting: false);
         builder.AddAgent<ScopedTeamsAccessRequestAgentDispatcher>();
 
         return builder;
+    }
+
+    private static AgentApplicationOptions CreateAgentApplicationOptions(
+        IServiceProvider services)
+    {
+        var options = ActivatorUtilities.CreateInstance<AgentApplicationOptions>(
+            services);
+        options.StartTypingTimer = true;
+        options.TypingOptions.InitialDelayMs = 0;
+        options.TypingOptions.IntervalMs = 2000;
+        return options;
     }
 
     public static IEndpointConventionBuilder MapGovernedAccessTeams(
@@ -75,9 +78,6 @@ public static class TeamsAgentRegistration
                     .Value
                     .RequestTimeout);
 
-        // The dedicated integration host supplies an authenticated SDK-shaped
-        // identity through its test scheme. Every other environment requires
-        // the Azure Bot Service bearer-token policy registered above.
         return app.Environment.IsEnvironment("Testing")
             ? endpoint.RequireAuthorization()
             : endpoint.RequireAuthorization(ActivityAuthorizationPolicy);

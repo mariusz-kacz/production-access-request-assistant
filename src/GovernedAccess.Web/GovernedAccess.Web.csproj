@@ -13,7 +13,6 @@
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
     <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.15.0-preview.260722.1" />
     <PackageReference Include="Microsoft.Agents.Authentication.Msal" Version="1.8.34-beta" />
     <PackageReference Include="Microsoft.Agents.Hosting.AspNetCore" Version="1.8.34-beta" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
@@ -26,13 +25,15 @@
   <ItemGroup>
     <ProjectReference Include="..\GovernedAccess.Core\GovernedAccess.Core.csproj" />
     <ProjectReference Include="..\GovernedAccess.Mcp\GovernedAccess.Mcp.csproj" />
+    <ProjectReference Include="..\GovernedAccess.ReferenceAuthority\GovernedAccess.ReferenceAuthority.csproj" />
+    <ProjectReference Include="..\GovernedAccess.Workflow.Persistence\GovernedAccess.Workflow.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Evaluation\Datasets\intake-v1.json"
+    <None Update="Evaluation\Datasets\deterministic-intake-v1.json"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-    <EmbeddedResource Include="..\..\specs\006-live-model-evaluation\contracts\evaluation-dataset.schema.json"
+    <EmbeddedResource Include="Evaluation\Contracts\evaluation-dataset.schema.json"
                       LogicalName="GovernedAccess.Web.Evaluation.evaluation-dataset.schema.json" />
   </ItemGroup>
 

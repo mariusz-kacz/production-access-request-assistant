@@ -6,7 +6,7 @@ using GovernedAccess.IntegrationTests.Teams;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +25,7 @@ public sealed class TeamsOnlyRequestCreationTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var factory = new GovernedAccessWebFactory(
-            DeterministicChatMode.Candidate);
+            DeterministicChatMode.Unclear);
         await factory.ResetDatabaseAsync(cancellationToken);
 
         AssertRetainedWebEndpointInventory(factory);
@@ -66,12 +66,12 @@ public sealed class TeamsOnlyRequestCreationTests
         CancellationToken cancellationToken)
     {
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         Assert.Empty(
-            await dbContext.AccessRequests.AsNoTracking().ToArrayAsync(
+            await dbContext.Set<AccessRequest>().AsNoTracking().ToArrayAsync(
                 cancellationToken));
         Assert.Empty(
-            await dbContext.AuditEvents.AsNoTracking().ToArrayAsync(
+            await dbContext.Set<AuditEvent>().AsNoTracking().ToArrayAsync(
                 cancellationToken));
     }
 

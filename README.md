@@ -19,20 +19,39 @@ creates a request; the browser has no request-creation endpoint.
 <details>
 <summary>View example conversations</summary>
 
-The assistant can ground a request in an authoritative incident, ask only for the
-missing role, and present the completed draft for explicit confirmation.
+### Ambiguous environment through business review
 
-![Incident-based production access request prepared in Microsoft Teams](docs/img/Case1.png)
+The assistant narrows an ambiguous Client Alpha production environment, asks for the
+role and operational justification, and presents the completed draft for explicit
+confirmation.
 
-When a description matches several environments, the assistant presents bounded
-choices and gathers the role and operational justification before producing a draft.
+![Ambiguous Client Alpha environment resolved and prepared as a request draft in Microsoft Teams](docs/img/Case1-draft.png)
 
-![Ambiguous production environment resolved through a Microsoft Teams conversation](docs/img/Case2.png)
+Confirmation creates the immutable request and makes clear that access is still
+awaiting human approval.
 
-A requester can refine an ambiguous environment choice and revise the proposed role;
-the earlier draft is invalidated and replaced instead of being silently changed.
+![Microsoft Teams confirmation that the production access request was submitted for business approval](docs/img/Case1-sent.png)
 
-![Production access request refined and revised in Microsoft Teams](docs/img/Case3.png)
+The browser register shows the exact submitted scope, the current business-review
+stage, the authenticated decision controls, and the recorded request-created event.
+
+![Submitted production access request awaiting business approval in the browser register](docs/img/Case1-business-approval.png)
+
+### Incident-grounded request
+
+An authoritative incident identifies the Client Alpha EU environment. The assistant
+preserves the supplied justification, asks only for the missing role, and presents the
+incident-linked draft.
+
+![Incident-grounded Client Alpha production access request prepared in Microsoft Teams](docs/img/Case2-draft.png)
+
+### Single-role environment
+
+When an ambiguous Client Beta description is narrowed to the UK environment, the
+assistant reloads authoritative roles and selects the only assignable role before
+presenting the draft.
+
+![Client Beta UK production access request with its only assignable role selected](docs/img/Case3-draft.png)
 
 </details>
 
@@ -41,14 +60,14 @@ the earlier draft is invalidated and replaced instead of being silently changed.
 With the live model profile selected, the MAF-based interpreter:
 
 - interprets a server-owned envelope containing the latest natural-language message
-  and the currently accepted candidate;
-- extracts, preserves, or revises client, environment, role, justification, and
-  optional incident information;
+  plus the canonical candidate and any persisted bounded clarification choices;
+- expresses supported changes as a sparse `set`/`clear` patch over environment, role,
+  justification, and incident;
 - uses approved read-only MCP tools when authoritative context is needed;
-- resolves unambiguous readable environment descriptions and asks a focused question
-  when information is missing, ambiguous, or conflicting; and
-- returns one closed, schema-bound result: either a complete nullable candidate or a
-  clarification with a typed target and structured environment option IDs.
+- resolves unambiguous readable environment descriptions and active displayed-choice
+  references while returning `unclear` when they cannot be resolved safely; and
+- returns one closed dialogue act with either a compatible sparse patch, one closed
+  discussion topic, or no semantic payload. It returns no requester-visible prose.
 
 The model does **not** decide whether a candidate is valid or ready. It has no
 capability to:
@@ -77,21 +96,22 @@ does not fall back to the deterministic client.
 
 | Boundary | What this project uses it for |
 |---|---|
-| MAF | One bounded interpretation run, process-local conversation sessions keyed by server-generated intake ID, schema-constrained responses, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. |
-| MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact two-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
+| MAF | One fresh bounded interpretation session per message, a schema-constrained sparse proposal, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. Provider sessions are not retained. |
+| MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact four-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
 | Core | Provider- and protocol-independent validation, authorization, state transitions, confirmation, approval policy, provisioning eligibility, and fixed grant lifetime. |
 
 The MCP server exposes exactly:
 
-- `get_production_environment`: bounded discovery of at most 20 synthetic
-  environments or exact lookup by stable ID, including authoritative client and
-  assigned-role context; and
+- `search_production_environments`: deterministic bounded search returning at most
+  five eligible environment/client projections;
+- `get_production_environment`: exact lookup of one eligible environment and its
+  authoritative client;
+- `get_environment_roles`: current assignable roles for one exact environment; and
 - `get_incident`: exact lookup by a requester-supplied stable incident ID.
 
-There is no separate role-listing tool. The MCP project has no workflow store,
-decision service, or provisioning dependency. Identifier-like environment input uses
-exact lookup only; application-controlled gating prevents a later catalog-discovery
-call in the same model turn.
+The MCP project has no workflow store, decision service, or provisioning dependency.
+Every result remains untrusted interpretation context and is independently reproduced
+or exact-reloaded by Core.
 
 ## End-to-end flow
 
@@ -99,8 +119,8 @@ call in the same model turn.
 flowchart LR
     Teams[Personal Teams conversation] --> Draft[Request preparation]
     Draft --> AI[MAF interpretation]
-    AI <--> MCP[Two read-only MCP tools]
-    MCP --> Context[(Synthetic context in SQLite)]
+    AI <--> MCP[Four read-only MCP tools]
+    MCP --> Context[(Reference-authority SQLite)]
     AI --> Proposal[Schema-bound proposal]
     Proposal --> Validation[Deterministic Core validation]
     Validation --> Ready[Persisted ready intake]
@@ -108,17 +128,18 @@ flowchart LR
     Request --> Business[Business approval]
     Business --> DevOps[DevOps approval]
     DevOps --> Provisioning[Protected synthetic provisioning]
-    Provisioning --> Evidence[(Grant and audit evidence)]
+    Provisioning --> Evidence[(Workflow SQLite evidence)]
     Web[React register] --> Business
     Web --> DevOps
 ```
 
-The AI path ends at the proposal. SQLite stores the sanitized candidate and intake
-lifecycle, immutable requests, approvals, provisioning operations, grants, and audit
-events. It does not store prompts, transcripts, or serialized MAF history.
-Conversation history and per-intake serialization gates are process-local; a restart
-loses conversational context but preserves the accepted candidate. Relative replies
-that can no longer be grounded are clarified again rather than guessed.
+The AI path ends at the proposal. The independently owned reference database stores
+synthetic clients, eligible environments, assignments, and incidents. The workflow
+database stores canonical preparations and bounded clarification context, immutable
+requests, approvals, provisioning operations, grants, and audit events. Neither stores
+raw prompts, requester transcripts, provider sessions, model reasoning, raw proposals,
+or complete MCP payloads. Restart preserves the canonical candidate and active ordered
+choices; no process-local conversation history is required.
 
 Confirmation reloads the owned, unexpired ready intake and revalidates its scope.
 Business approval is restricted to the approver configured for the authoritative
@@ -136,8 +157,8 @@ as its get-or-create idempotency key.
 - Browser identities are six fixed demo identities mapped to server-owned claims.
   Unsafe browser actions require authentication and antiforgery validation; command
   payloads do not accept acting identity, approved scope, role, or duration.
-- The interpreter rejects a missing, additional, or non-read-only MCP catalog. Neither
-  MCP tool can mutate workflow state.
+- The interpreter rejects a missing, additional, or non-read-only MCP catalog. No MCP
+  tool can mutate workflow state.
 - Model proposals use a closed JSON schema with unknown fields rejected. Core reloads
   candidate identifiers, structured options, client/environment relationships,
   assigned roles, and incident relationships before accepting them.
@@ -159,49 +180,50 @@ Deterministic automated tests and live-model evaluation answer different questio
 
 The credential-free backend suites use deterministic chat clients, while the
 frontend suite is isolated from a live model. Together they cover domain policy,
-candidate validation, SQLite persistence,
-MAF session behavior, the real MCP transport and contract, Teams and browser
+candidate validation, independent SQLite persistence and migrations,
+bounded MAF turn behavior, the real MCP transport and contract, Teams and browser
 authentication boundaries, antiforgery, confirmation, approvals, concurrency,
 provisioning failure/retry/idempotency, audit evidence, and representative UI wiring.
 They do not require a live LLM, Teams tenant, Azure subscription, or production
 system.
 
-The explicit `evaluate-live-model` mode instead evaluates stochastic interpretation.
-It starts an isolated loopback host exposing only `/mcp`, creates a temporary SQLite
-database, and runs the checked-in 20-scenario dataset through the real
-`RequestDraftService` path. It grades final normalized application outcomes and
-declared candidate or clarification facts, and it requires zero access requests,
-approval decisions, provisioning operations, and grants. It does not inspect prompts,
-transcripts, tool order, provider iterations, raw payloads, or token usage, and it
-cannot confirm, approve, retry, or provision.
+The explicit `evaluate-live-model` mode instead evaluates stochastic interpretation
+against the isolated deterministic-intake composition. It starts a loopback-only host
+exposing the four read-only MCP tools, creates separate
+temporary reference and workflow SQLite databases, and runs the complete versioned
+scenario inventory by default. One exact variation can be selected for diagnosis, but
+that run is explicitly not promotion evidence. Promotion requires every promoted group
+and every universal safety gate to pass, including zero requests, approval decisions,
+provisioning operations, and grants. The mode cannot confirm, approve, retry, or
+provision.
 
-The evaluated checked-in dataset is version `1.2.0` (schema version `1`) and
-contains 20 scenarios in six categories. The latest retained reviewed run records:
-
-- run ID `e4943a61-16af-4e13-8edd-b735d28c48a0`, completed 2026-08-10;
-- deployment label `production-access-request-model`;
-- 20/20 scenarios passed; and
-- zero requests, approval decisions, provisioning operations, and grants.
-
-See the [human-readable report](docs/evaluation/report.md) and
-[machine-readable result](docs/evaluation/result.json). The retained artifact records
-the run ID, timestamps, dataset version, deployment label, scenario outcomes,
-latencies, and side-effect counts. It does **not** record a commit SHA, prompt or
-schema hash, dataset hash, or exact provider model version. This is evidence from one
-reviewed run, not proof of production reliability, security, reproducibility across
-deployments, or performance at scale.
+The checked-in English-only
+[`deterministic-intake-v1.json`](src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
+is the golden source for the executable evaluation inventory and exact expected
+outcomes. Its current dataset version is `deterministic-intake-3.0.1` (schema version
+`1`): 14 promoted groups, 41 variations, and 42 turns covering sparse field
+operations, environment-search cardinalities, clarification references, role
+authority, justification transformations, represented discussion/non-update acts,
+trust channels, and bounded failures. A documented 2026-08-31 full-inventory run
+passed all 14 groups and 41 variations for that dataset and prompt. Because its
+working tree was not clean, it is stable passing documentation rather than
+clean-source promotion evidence. Its reviewed
+[report and result](docs/evaluation/runs/README.md) are retained in the repository;
+newly generated runs remain local and gitignored by default.
 
 ## Deliberate limitations
 
 - All clients, environments, roles, incidents, identities, requests, and grants are
   synthetic. Teams actors map to one fixed synthetic requester, browser authentication
   is a demo identity selector, and no production credential or access provider exists.
-- The application is one process and one deployment unit. SQLite is created with
-  `EnsureCreated`; there are no production migrations, high availability, database
-  encryption, row-level security, or protected backup/recovery controls.
-- MAF conversation sessions and keyed concurrency gates are in memory. They are lost
-  on restart, retained for the process lifetime, and are not designed for distributed
-  replicas or high-volume workloads.
+- The application is one process and one deployment unit. Reference and workflow
+  SQLite files have separate EF Core contexts, migrations, and seeders, but no high
+  availability, encryption, row-level security, or protected backup/recovery controls.
+  Disposable local schemas must be fresh or exactly current; there is no supported
+  in-place upgrade path.
+- Each message uses a fresh MAF session. Only provider-neutral canonical state and one
+  bounded clarification context survive a restart; general transcript-based
+  coreference is intentionally unsupported.
 - The synthetic provider keeps its external grant simulation in process memory.
   Grant expiry is recorded and evaluated logically, but there is no automatic
   revocation or background reconciliation.
@@ -262,17 +284,18 @@ dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live
 
 The [local development guide](docs/local-development.md) covers configuration, React
 hot reload, database handling, and troubleshooting. The
-[live-model evaluation guide](docs/live-model-evaluation.md) documents scenario
-selection, exit codes, artifact interpretation, and cleanup.
+[live-model evaluation guide](docs/live-model-evaluation.md) documents the versioned
+inventory, exit codes, artifact interpretation, and cleanup.
 
 ## Design records
 
+- [Common project specification and context map](spec.md)
 - [Architecture](docs/architecture.md) and
   [architecture decisions](docs/adr/README.md)
 - [Security and trust model](docs/security-model.md) and
   [current product baseline](docs/governed-production-access-product-baseline.md)
 - [Request-intake orchestration](docs/request-intake-orchestration.md) and the
-  [current MCP contract](specs/004-resolve-context-identifiers/contracts/mcp-tools.json)
+  [current MCP contract](docs/contracts/mcp-tools.json)
 - [Testing strategy](docs/testing-strategy.md),
-  [live-model evaluation](docs/live-model-evaluation.md), and
-  [latest reviewed evidence](docs/evaluation/README.md)
+  [live-model evaluation](docs/live-model-evaluation.md), and the
+  [deterministic evaluation matrix](docs/evaluation/deterministic-request-intake-test-matrix.md)

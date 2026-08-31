@@ -1,5 +1,3 @@
-using System.Reflection;
-using System.Runtime.ExceptionServices;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using Microsoft.Extensions.AI;
@@ -144,7 +142,10 @@ public sealed class RequestPreparationChatRegistrationTests
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        InvokeRegistration(services, configuration, foundryResponsesClientFactory);
+        RequestPreparationChatRegistration.AddRequestPreparationChat(
+            services,
+            configuration,
+            foundryResponsesClientFactory);
 
         return services.BuildServiceProvider(
             new ServiceProviderOptions
@@ -152,45 +153,6 @@ public sealed class RequestPreparationChatRegistrationTests
                 ValidateOnBuild = true,
                 ValidateScopes = true,
             });
-    }
-
-    private static void InvokeRegistration(
-        IServiceCollection services,
-        IConfiguration configuration,
-        Func<IChatClient> foundryResponsesClientFactory)
-    {
-        var registrationType = typeof(DeterministicChatClient).Assembly.GetType(
-            "GovernedAccess.Web.Ai.RequestPreparationChatRegistration");
-        Assert.NotNull(registrationType);
-
-        var registrationMethod = Assert.Single(
-            registrationType.GetMethods(
-                BindingFlags.Static
-                | BindingFlags.Public
-                | BindingFlags.NonPublic),
-            method =>
-            {
-                var parameters = method.GetParameters();
-                return method.Name == "AddRequestPreparationChat"
-                    && parameters.Length == 3
-                    && parameters[0].ParameterType == typeof(IServiceCollection)
-                    && parameters[1].ParameterType == typeof(IConfiguration)
-                    && parameters[2].ParameterType == typeof(Func<IChatClient>);
-            });
-
-        try
-        {
-            var result = registrationMethod.Invoke(
-                null,
-                [services, configuration, foundryResponsesClientFactory]);
-            Assert.Same(services, result);
-        }
-        catch (TargetInvocationException exception)
-            when (exception.InnerException is not null)
-        {
-            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-            throw;
-        }
     }
 
     private static Dictionary<string, string?>

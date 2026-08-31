@@ -7,8 +7,8 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -135,8 +135,8 @@ public sealed class RequestQueriesTests(DefaultWebApplicationFixture fixture)
             .GetBoolean());
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
         Assert.Equal(RequestStatus.Active, storedRequest.Status);
@@ -351,7 +351,8 @@ public sealed class RequestQueryComponentTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var alphaAwaitingBusiness = CreateRequest(
             DemoDataIds.ClientAlphaId,
             DemoDataIds.ClientAlphaEnvironmentId,
@@ -370,13 +371,13 @@ public sealed class RequestQueryComponentTests
         var businessDecision = ApplyBusinessApproval(
             alphaAwaitingDevOps,
             fixture.Clock.UtcNow);
-        dbContext.AccessRequests.AddRange(
+        dbContext.Set<AccessRequest>().AddRange(
             alphaAwaitingBusiness,
             betaAwaitingBusiness,
             alphaAwaitingDevOps);
-        dbContext.ApprovalDecisions.Add(businessDecision);
+        dbContext.Set<ApprovalDecision>().Add(businessDecision);
         await dbContext.SaveChangesAsync(cancellationToken);
-        var service = CreateQueryService(dbContext, fixture.Clock);
+        var service = CreateQueryService(scope.ServiceProvider, fixture.Clock);
 
         var requester = await service.ListAsync(
             DemoDataIds.RequesterPrincipalId,
@@ -438,7 +439,8 @@ public sealed class RequestQueryComponentTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var awaitingDevOps = CreateRequest(
             DemoDataIds.ClientAlphaId,
             DemoDataIds.ClientAlphaEnvironmentId,
@@ -455,14 +457,14 @@ public sealed class RequestQueryComponentTests
         var failedBusinessDecision = ApplyBusinessApproval(
             failedRequest,
             fixture.Clock.UtcNow);
-        dbContext.AccessRequests.AddRange(awaitingDevOps, failedRequest);
-        dbContext.ApprovalDecisions.AddRange(
+        dbContext.Set<AccessRequest>().AddRange(awaitingDevOps, failedRequest);
+        dbContext.Set<ApprovalDecision>().AddRange(
             awaitingDecision,
             failedBusinessDecision);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var workflowService = CreateWorkflowService(
-            dbContext,
+            scope.ServiceProvider,
             new AlwaysFailProvisioner(),
             fixture.Clock);
         var failed = await workflowService.DecideAsync(
@@ -475,7 +477,7 @@ public sealed class RequestQueryComponentTests
             cancellationToken);
         Assert.True(failed.IsFailure);
 
-        var queryService = CreateQueryService(dbContext, fixture.Clock);
+        var queryService = CreateQueryService(scope.ServiceProvider, fixture.Clock);
         var decisionDetail = await queryService.GetDetailAsync(
             awaitingDevOps.Id,
             DemoDataIds.DevOpsApproverPrincipalId,
@@ -509,18 +511,19 @@ public sealed class RequestQueryComponentTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
             cancellationToken);
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var request = CreateRequest(
             DemoDataIds.ClientAlphaId,
             DemoDataIds.ClientAlphaEnvironmentId,
             DemoDataIds.PrimaryIncidentId,
             fixture.Clock.UtcNow);
         var businessDecision = ApplyBusinessApproval(request, fixture.Clock.UtcNow);
-        dbContext.AccessRequests.Add(request);
-        dbContext.ApprovalDecisions.Add(businessDecision);
+        dbContext.Set<AccessRequest>().Add(request);
+        dbContext.Set<ApprovalDecision>().Add(businessDecision);
         await dbContext.SaveChangesAsync(cancellationToken);
         var workflowService = CreateWorkflowService(
-            dbContext,
+            scope.ServiceProvider,
             new AlwaysSucceedProvisioner(fixture.Clock),
             fixture.Clock);
         var activation = await workflowService.DecideAsync(
@@ -533,7 +536,7 @@ public sealed class RequestQueryComponentTests
             cancellationToken);
         Assert.True(activation.IsSuccess);
 
-        var queryService = CreateQueryService(dbContext, fixture.Clock);
+        var queryService = CreateQueryService(scope.ServiceProvider, fixture.Clock);
         var list = await queryService.ListAsync(
             DemoDataIds.ClientBetaApproverPrincipalId,
             status: null,
@@ -550,11 +553,11 @@ public sealed class RequestQueryComponentTests
     }
 
     private static AccessRequestQueryService CreateQueryService(
-        GovernedAccessDbContext dbContext,
+        IServiceProvider services,
         IClock clock)
     {
-        var requestContext = new EfRequestContextReader(dbContext);
-        var workflowStore = new EfWorkflowStore(dbContext);
+        var requestContext = services.GetRequiredService<IRequestContextReader>();
+        var workflowStore = services.GetRequiredService<IWorkflowStore>();
         return new AccessRequestQueryService(
             requestContext,
             workflowStore,
@@ -563,12 +566,12 @@ public sealed class RequestQueryComponentTests
     }
 
     private static AccessRequestWorkflowService CreateWorkflowService(
-        GovernedAccessDbContext dbContext,
+        IServiceProvider services,
         IAccessProvisioner provisioner,
         IClock clock)
     {
-        var requestContext = new EfRequestContextReader(dbContext);
-        var workflowStore = new EfWorkflowStore(dbContext);
+        var requestContext = services.GetRequiredService<IRequestContextReader>();
+        var workflowStore = services.GetRequiredService<IWorkflowStore>();
         return new AccessRequestWorkflowService(
             requestContext,
             workflowStore,
@@ -584,6 +587,7 @@ public sealed class RequestQueryComponentTests
         string incidentId,
         DateTimeOffset createdAt) =>
         new(
+            Guid.NewGuid(),
             Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
             new ValidatedRequestDetails(

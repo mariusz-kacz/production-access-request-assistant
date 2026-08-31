@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using ModelContextProtocol.Client;
@@ -9,221 +10,390 @@ public sealed class McpContractTests
 {
     private static readonly string[] ExpectedToolNames =
     [
+        "get_environment_roles",
         "get_incident",
         "get_production_environment",
+        "search_production_environments",
     ];
 
     [Fact]
-    public async Task ServerAdvertisesOnlyTheTwoClosedReadOnlyToolContracts()
+    public void PublishedContractParsesAndMatchesTheBoundedCatalog()
     {
-        await using var host = await McpTestHost.CreateSeededAsync(
+        var contractPath = Path.Combine(
+            GetRepositoryRoot(),
+            "docs",
+            "contracts",
+            "mcp-tools.json");
+        using var contract = JsonDocument.Parse(File.ReadAllText(contractPath));
+        var root = contract.RootElement;
+        var tools = root.GetProperty("tools").EnumerateArray().ToArray();
+
+        Assert.Equal(
+            "https://json-schema.org/draft/2020-12/schema",
+            root.GetProperty("$schema").GetString());
+        Assert.Equal("current", root.GetProperty("status").GetString());
+        Assert.Equal("3.0.0", root.GetProperty("contractVersion").GetString());
+        Assert.Equal(5, root.GetProperty("maximumEnvironmentCandidates").GetInt32());
+        Assert.Equal(4, root.GetProperty("maximumTotalToolCallsPerTurn").GetInt32());
+        Assert.Equal(
+            ExpectedToolNames,
+            tools
+                .Select(tool => tool.GetProperty("name").GetString())
+                .Order(StringComparer.Ordinal));
+        Assert.All(
+            tools,
+            tool =>
+            {
+                var annotations = tool.GetProperty("annotations");
+                Assert.True(annotations.GetProperty("readOnlyHint").GetBoolean());
+                Assert.False(annotations.GetProperty("destructiveHint").GetBoolean());
+                Assert.True(annotations.GetProperty("idempotentHint").GetBoolean());
+                Assert.False(annotations.GetProperty("openWorldHint").GetBoolean());
+            });
+    }
+
+    [Fact]
+    public async Task ServerAdvertisesExactlyTheFourClosedReadOnlyTools()
+    {
+        await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
         await using var client = await host.CreateClientAsync(
-            "governed-access-contract-tests",
+            "governed-access-target-contract-tests",
             TestContext.Current.CancellationToken);
 
         var tools = await client.ListToolsAsync(
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(ExpectedToolNames, tools.Select(tool => tool.Name).Order());
-        Assert.All(
-            tools,
-            tool => Assert.True(tool.ProtocolTool.Annotations?.ReadOnlyHint));
         Assert.NotNull(client.ServerCapabilities.Tools);
         Assert.Null(client.ServerCapabilities.Prompts);
         Assert.Null(client.ServerCapabilities.Resources);
+        Assert.All(tools, AssertReadOnlyAnnotations);
+
+        var searchTool = Assert.Single(
+            tools,
+            tool => tool.Name == "search_production_environments");
+        var environmentTool = Assert.Single(
+            tools,
+            tool => tool.Name == "get_production_environment");
+        var roleTool = Assert.Single(
+            tools,
+            tool => tool.Name == "get_environment_roles");
+        var incidentTool = Assert.Single(
+            tools,
+            tool => tool.Name == "get_incident");
+
         AssertInputSchema(
-            Assert.Single(tools, tool => tool.Name == "get_production_environment"),
-            "environmentId",
-            required: false);
-        AssertInputSchema(
-            Assert.Single(tools, tool => tool.Name == "get_incident"),
-            "incidentId",
-            required: true);
+            searchTool,
+            "query",
+            maximumLength: 200);
+        AssertInputSchema(environmentTool, "environmentId");
+        AssertInputSchema(roleTool, "environmentId");
+        AssertInputSchema(incidentTool, "incidentId");
+        AssertSearchOutputSchema(searchTool);
+        AssertEnvironmentOutputSchema(environmentTool);
+        AssertRoleOutputSchema(roleTool);
+        AssertIncidentOutputSchema(incidentTool);
     }
 
     [Fact]
-    public async Task ToolsReturnTheEnvironmentCatalogExactContextAndExactIncident()
+    public async Task ToolsReturnOnlyTheirClosedBoundedWireProjections()
     {
-        await using var host = await McpTestHost.CreateSeededAsync(
+        await using var host = await TargetMcpTestHost.CreateSeededAsync(
             TestContext.Current.CancellationToken);
         await using var client = await host.CreateClientAsync(
-            "governed-access-contract-tests",
+            "governed-access-target-result-tests",
             TestContext.Current.CancellationToken);
-        var tool = await GetToolAsync(client, "get_production_environment");
 
-        var result = await tool.CallAsync(
-            new Dictionary<string, object?>(),
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        var content = AssertSuccessfulStructuredContent(result);
-        AssertExactProperties(content, "environments");
-        var environments = content.GetProperty("environments")
-            .EnumerateArray()
-            .ToArray();
-        var environmentIds = environments
-            .Select(environment => environment.GetProperty("environmentId").GetString())
-            .ToArray();
-        Assert.NotEmpty(environmentIds);
-        Assert.Equal(environmentIds.Order(), environmentIds);
-        Assert.Equal(environmentIds.Length, environmentIds.Distinct().Count());
-        Assert.InRange(environmentIds.Length, 1, 20);
-
-        var alphaPrimary = Assert.Single(environments, environment =>
-            environment.GetProperty("environmentId").GetString() == "PROD-ALPHA-EU");
-        AssertEnvironment(
-            alphaPrimary,
+        var search = await CallAsync(
+            client,
+            "search_production_environments",
+            "query",
+            "alpha EU primary");
+        var searchContent = AssertSuccessfulStructuredContent(search);
+        AssertExactProperties(searchContent, "environments");
+        var searchEnvironment = Assert.Single(
+            searchContent.GetProperty("environments").EnumerateArray());
+        AssertEnvironmentProjection(searchEnvironment);
+        Assert.Equal(
             "PROD-ALPHA-EU",
+            searchEnvironment.GetProperty("environmentId").GetString());
+
+        var exact = await CallAsync(
+            client,
+            "get_production_environment",
+            "environmentId",
+            "PROD-ALPHA-EU");
+        var exactContent = AssertSuccessfulStructuredContent(exact);
+        AssertEnvironmentProjection(exactContent);
+        Assert.Equal(
             "client-alpha",
-            "Client Alpha",
-            "Primary Production EU",
-            ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
+            exactContent.GetProperty("clientId").GetString());
+        Assert.DoesNotContain(
+            exactContent.EnumerateObject(),
+            property => property.Name is "roles" or "businessApproverPrincipalId");
 
-        var alphaRecovery = Assert.Single(environments, environment =>
-            environment.GetProperty("environmentId").GetString()
-                == "RECOVERY-PROD-ALPHA-EU");
-        AssertEnvironment(
-            alphaRecovery,
-            "RECOVERY-PROD-ALPHA-EU",
-            "client-alpha",
-            "Client Alpha",
-            "Recovery Production EU",
-            ["ProductionReadOnly", "ProductionSupport"]);
+        var roles = await CallAsync(
+            client,
+            "get_environment_roles",
+            "environmentId",
+            "PROD-ALPHA-EU");
+        var rolesContent = AssertSuccessfulStructuredContent(roles);
+        AssertExactProperties(rolesContent, "environmentId", "roles");
+        Assert.Equal(
+            [
+                "ProductionDeployment",
+                "ProductionReadOnly",
+                "ProductionSupport",
+            ],
+            rolesContent
+                .GetProperty("roles")
+                .EnumerateArray()
+                .Select(role => role.GetProperty("roleId").GetString()));
+        Assert.All(
+            rolesContent.GetProperty("roles").EnumerateArray(),
+            role => AssertExactProperties(role, "roleId", "displayName"));
 
-        result = await tool.CallAsync(
-            new Dictionary<string, object?>
-            {
-                ["environmentId"] = "PROD-ALPHA-EU",
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        content = AssertSuccessfulStructuredContent(result);
-        AssertExactProperties(content, "environments");
-        var exactEnvironment = Assert.Single(
-            content.GetProperty("environments").EnumerateArray());
-        AssertEnvironment(
-            exactEnvironment,
-            "PROD-ALPHA-EU",
-            "client-alpha",
-            "Client Alpha",
-            "Primary Production EU",
-            ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"]);
-
-        tool = await GetToolAsync(client, "get_incident");
-        result = await tool.CallAsync(
-            new Dictionary<string, object?>
-            {
-                ["incidentId"] = "INC-1042",
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        content = AssertSuccessfulStructuredContent(result);
+        var incident = await CallAsync(
+            client,
+            "get_incident",
+            "incidentId",
+            "INC-1042");
+        var incidentContent = AssertSuccessfulStructuredContent(incident);
         AssertExactProperties(
-            content,
+            incidentContent,
             "incidentId",
             "title",
             "status",
             "environmentId");
-        Assert.Equal("INC-1042", content.GetProperty("incidentId").GetString());
-        Assert.Equal(JsonValueKind.String, content.GetProperty("title").ValueKind);
-        Assert.Equal("Active", content.GetProperty("status").GetString());
-        Assert.Equal("PROD-ALPHA-EU", content.GetProperty("environmentId").GetString());
+        Assert.Equal("INC-1042", incidentContent.GetProperty("incidentId").GetString());
+        Assert.Equal("Active", incidentContent.GetProperty("status").GetString());
+        Assert.Equal(
+            "PROD-ALPHA-EU",
+            incidentContent.GetProperty("environmentId").GetString());
     }
 
-    [Fact]
-    public async Task InvalidAndMissingStoredValuesReturnTypedFailureEnvelopes()
+    private static void AssertReadOnlyAnnotations(McpClientTool tool)
     {
-        await using var host = await McpTestHost.CreateSeededAsync(
-            TestContext.Current.CancellationToken);
-        await using var client = await host.CreateClientAsync(
-            "governed-access-contract-tests",
-            TestContext.Current.CancellationToken);
-        var tool = await GetToolAsync(client, "get_production_environment");
-
-        var invalidInput = await tool.CallAsync(
-            new Dictionary<string, object?>
-            {
-                ["environmentId"] = "   ",
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
-        var notFound = await tool.CallAsync(
-            new Dictionary<string, object?>
-            {
-                ["environmentId"] = "PROD-UNKNOWN",
-            },
-            cancellationToken: TestContext.Current.CancellationToken);
-
-        AssertTypedFailure(invalidInput, "InvalidInput");
-        AssertTypedFailure(notFound, "NotFound");
-    }
-
-    private static async Task<McpClientTool> GetToolAsync(McpClient client, string name)
-    {
-        var tools = await client.ListToolsAsync(
-            cancellationToken: TestContext.Current.CancellationToken);
-        return Assert.Single(tools, tool => tool.Name == name);
+        var annotations = Assert.IsType<ToolAnnotations>(tool.ProtocolTool.Annotations);
+        Assert.True(annotations.ReadOnlyHint);
+        Assert.False(annotations.DestructiveHint);
+        Assert.True(annotations.IdempotentHint);
+        Assert.False(annotations.OpenWorldHint);
     }
 
     private static void AssertInputSchema(
         McpClientTool tool,
         string parameterName,
-        bool required)
+        int? maximumLength = null)
     {
         var schema = JsonSerializer.SerializeToElement(tool.ProtocolTool.InputSchema);
 
         Assert.Equal("object", schema.GetProperty("type").GetString());
         Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
-        var requiredNames = schema.TryGetProperty("required", out var requiredSchema)
-            ? requiredSchema.EnumerateArray().Select(item => item.GetString()).ToArray()
-            : [];
-        Assert.Equal(required ? [parameterName] : [], requiredNames);
-
+        Assert.Equal(
+            [parameterName],
+            schema
+                .GetProperty("required")
+                .EnumerateArray()
+                .Select(item => item.GetString()));
         var properties = schema.GetProperty("properties");
         AssertExactProperties(properties, parameterName);
         var parameter = properties.GetProperty(parameterName);
         Assert.Equal("string", parameter.GetProperty("type").GetString());
         Assert.Equal(1, parameter.GetProperty("minLength").GetInt32());
+        if (maximumLength is not null)
+        {
+            Assert.Equal(
+                maximumLength,
+                parameter.GetProperty("maxLength").GetInt32());
+        }
     }
 
-    private static void AssertEnvironment(
-        JsonElement environment,
-        string environmentId,
-        string clientId,
-        string clientDisplayName,
-        string displayName,
-        string[] expectedRoleIds)
+    private static async Task<CallToolResult> CallAsync(
+        McpClient client,
+        string toolName,
+        string argumentName,
+        string argumentValue)
+    {
+        var tools = await client.ListToolsAsync(
+            cancellationToken: TestContext.Current.CancellationToken);
+        var tool = Assert.Single(tools, candidate => candidate.Name == toolName);
+        return await tool.CallAsync(
+            new Dictionary<string, object?>
+            {
+                [argumentName] = argumentValue,
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
+    }
+
+    private static void AssertSearchOutputSchema(McpClientTool tool)
+    {
+        var root = JsonSerializer.SerializeToElement(tool.ProtocolTool.OutputSchema);
+        var schema = ResolveSchema(root, root);
+        var properties = AssertClosedObjectSchema(
+            root,
+            schema,
+            "environments");
+        var environments = ResolveSchema(root, properties.GetProperty("environments"));
+        Assert.Equal("array", environments.GetProperty("type").GetString());
+        Assert.Equal(5, environments.GetProperty("maxItems").GetInt32());
+        var environmentProperties = AssertClosedObjectSchema(
+            root,
+            ResolveSchema(root, environments.GetProperty("items")),
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+        AssertNonemptyStringSchemas(
+            root,
+            environmentProperties,
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+    }
+
+    private static void AssertEnvironmentOutputSchema(McpClientTool tool)
+    {
+        var root = JsonSerializer.SerializeToElement(tool.ProtocolTool.OutputSchema);
+        var properties = AssertClosedObjectSchema(
+            root,
+            ResolveSchema(root, root),
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+        AssertNonemptyStringSchemas(
+            root,
+            properties,
+            "environmentId",
+            "displayName",
+            "clientId",
+            "clientDisplayName");
+    }
+
+    private static void AssertRoleOutputSchema(McpClientTool tool)
+    {
+        var root = JsonSerializer.SerializeToElement(tool.ProtocolTool.OutputSchema);
+        var properties = AssertClosedObjectSchema(
+            root,
+            ResolveSchema(root, root),
+            "environmentId",
+            "roles");
+        AssertNonemptyStringSchemas(root, properties, "environmentId");
+        var roles = ResolveSchema(root, properties.GetProperty("roles"));
+        Assert.Equal("array", roles.GetProperty("type").GetString());
+        var roleProperties = AssertClosedObjectSchema(
+            root,
+            ResolveSchema(root, roles.GetProperty("items")),
+            "roleId",
+            "displayName");
+        Assert.Equal(
+            [
+                "ProductionReadOnly",
+                "ProductionSupport",
+                "ProductionDeployment",
+            ],
+            ResolveSchema(root, roleProperties.GetProperty("roleId"))
+                .GetProperty("enum")
+                .EnumerateArray()
+                .Select(item => item.GetString()));
+        AssertNonemptyStringSchemas(root, roleProperties, "displayName");
+    }
+
+    private static void AssertIncidentOutputSchema(McpClientTool tool)
+    {
+        var root = JsonSerializer.SerializeToElement(tool.ProtocolTool.OutputSchema);
+        var properties = AssertClosedObjectSchema(
+            root,
+            ResolveSchema(root, root),
+            "incidentId",
+            "title",
+            "status",
+            "environmentId");
+        AssertNonemptyStringSchemas(
+            root,
+            properties,
+            "incidentId",
+            "title");
+        var environmentId = ResolveSchema(
+            root,
+            properties.GetProperty("environmentId"));
+        Assert.Equal(
+            ["string", "null"],
+            environmentId
+                .GetProperty("type")
+                .EnumerateArray()
+                .Select(type => type.GetString()));
+        Assert.Equal(1, environmentId.GetProperty("minLength").GetInt32());
+        Assert.Equal(
+            ["Active", "Inactive"],
+            ResolveSchema(root, properties.GetProperty("status"))
+                .GetProperty("enum")
+                .EnumerateArray()
+                .Select(item => item.GetString()));
+    }
+
+    private static JsonElement AssertClosedObjectSchema(
+        JsonElement root,
+        JsonElement schema,
+        params string[] expectedProperties)
+    {
+        schema = ResolveSchema(root, schema);
+        Assert.Equal("object", schema.GetProperty("type").GetString());
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            expectedProperties.Order(),
+            schema
+                .GetProperty("required")
+                .EnumerateArray()
+                .Select(item => item.GetString())
+                .Order());
+        var properties = schema.GetProperty("properties");
+        AssertExactProperties(properties, expectedProperties);
+        return properties;
+    }
+
+    private static void AssertNonemptyStringSchemas(
+        JsonElement root,
+        JsonElement properties,
+        params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var property = ResolveSchema(root, properties.GetProperty(propertyName));
+            Assert.Equal("string", property.GetProperty("type").GetString());
+            Assert.Equal(1, property.GetProperty("minLength").GetInt32());
+        }
+    }
+
+    private static JsonElement ResolveSchema(JsonElement root, JsonElement schema)
+    {
+        if (!schema.TryGetProperty("$ref", out var reference))
+        {
+            return schema;
+        }
+
+        const string definitionPrefix = "#/$defs/";
+        var referenceValue = Assert.IsType<string>(reference.GetString());
+        Assert.StartsWith(definitionPrefix, referenceValue, StringComparison.Ordinal);
+        return root
+            .GetProperty("$defs")
+            .GetProperty(referenceValue[definitionPrefix.Length..]);
+    }
+
+    private static void AssertEnvironmentProjection(JsonElement environment)
     {
         AssertExactProperties(
             environment,
             "environmentId",
-            "clientId",
-            "clientDisplayName",
             "displayName",
-            "roles");
-        Assert.Equal(
-            environmentId,
-            environment.GetProperty("environmentId").GetString());
-        Assert.Equal(clientId, environment.GetProperty("clientId").GetString());
-        Assert.Equal(
-            clientDisplayName,
-            environment.GetProperty("clientDisplayName").GetString());
-        Assert.Equal(displayName, environment.GetProperty("displayName").GetString());
-        var roles = environment.GetProperty("roles").EnumerateArray().ToArray();
-        Assert.Equal(
-            expectedRoleIds,
-            roles.Select(role => role.GetProperty("roleId").GetString()));
+            "clientId",
+            "clientDisplayName");
         Assert.All(
-            roles,
-            role =>
-            {
-                AssertExactProperties(role, "roleId", "displayName");
-                Assert.False(string.IsNullOrWhiteSpace(
-                    role.GetProperty("displayName").GetString()));
-                Assert.DoesNotContain(
-                    role.EnumerateObject(),
-                    property => property.Name is
-                        "rank" or "privilegeLevel" or "implies");
-            });
+            environment.EnumerateObject(),
+            property => Assert.Equal(JsonValueKind.String, property.Value.ValueKind));
     }
 
     private static JsonElement AssertSuccessfulStructuredContent(CallToolResult result)
@@ -235,22 +405,24 @@ public sealed class McpContractTests
         return content;
     }
 
-    private static void AssertTypedFailure(CallToolResult result, string expectedOutcome)
-    {
-        Assert.True(result.IsError);
-        Assert.NotNull(result.StructuredContent);
-        var content = JsonSerializer.SerializeToElement(result.StructuredContent);
-
-        AssertExactProperties(content, "outcome", "code", "message", "correlationId");
-        Assert.Equal(expectedOutcome, content.GetProperty("outcome").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(content.GetProperty("code").GetString()));
-        Assert.False(string.IsNullOrWhiteSpace(content.GetProperty("message").GetString()));
-        Assert.False(string.IsNullOrWhiteSpace(content.GetProperty("correlationId").GetString()));
-    }
-
-    private static void AssertExactProperties(JsonElement value, params string[] expectedNames)
+    private static void AssertExactProperties(
+        JsonElement value,
+        params string[] expectedNames)
     {
         Assert.Equal(JsonValueKind.Object, value.ValueKind);
-        Assert.Equal(expectedNames.Order(), value.EnumerateObject().Select(property => property.Name).Order());
+        Assert.Equal(
+            expectedNames.Order(),
+            value.EnumerateObject().Select(property => property.Name).Order());
     }
+
+    private static string GetRepositoryRoot(
+        [CallerFilePath] string sourceFilePath = "") =>
+        Path.GetFullPath(
+            Path.Combine(
+                Path.GetDirectoryName(sourceFilePath)
+                    ?? throw new InvalidOperationException(
+                        "The MCP contract-test source path is unavailable."),
+                "..",
+                "..",
+                ".."));
 }

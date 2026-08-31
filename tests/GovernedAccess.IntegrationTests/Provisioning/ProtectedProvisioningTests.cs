@@ -4,8 +4,9 @@ using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GovernedAccess.IntegrationTests.Provisioning;
 
@@ -37,10 +38,11 @@ public sealed class ProtectedProvisioningTests
             cancellationToken);
         await SeedAwaitingProvisioningAsync(fixture, cancellationToken: cancellationToken);
 
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var provisioner = new RecordingAccessProvisioner(ActivatedAt);
         var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
+            scope.ServiceProvider.GetRequiredService<IWorkflowStore>(),
             provisioner,
             fixture.Clock);
 
@@ -59,34 +61,35 @@ public sealed class ProtectedProvisioningTests
         Assert.Equal("devops-provisioning-correlation", providerRequest.CorrelationId);
     }
 
-    [Theory]
-    [InlineData(ApprovalStage.Business)]
-    [InlineData(ApprovalStage.DevOps)]
-    public async Task ProvisionAsyncRejectsMissingApprovalEvidence(
-        ApprovalStage omittedStage)
+    [Fact]
+    public async Task ProvisionAsyncRejectsMissingApprovalEvidence()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var fixture = await ProvisioningTestFixture.CreateAsync(
-            cancellationToken);
-        await SeedAwaitingProvisioningAsync(
-            fixture,
-            includeBusinessApproval: omittedStage != ApprovalStage.Business,
-            includeDevOpsApproval: omittedStage != ApprovalStage.DevOps,
-            cancellationToken: cancellationToken);
+        foreach (var omittedStage in new[] { ApprovalStage.Business, ApprovalStage.DevOps })
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            await using var fixture = await ProvisioningTestFixture.CreateAsync(
+                cancellationToken);
+            await SeedAwaitingProvisioningAsync(
+                fixture,
+                includeBusinessApproval: omittedStage != ApprovalStage.Business,
+                includeDevOpsApproval: omittedStage != ApprovalStage.DevOps,
+                cancellationToken: cancellationToken);
 
-        await using var dbContext = fixture.CreateDbContext();
-        var provisioner = new RecordingAccessProvisioner(ActivatedAt);
-        var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
-            provisioner,
-            fixture.Clock);
+            await using var scope = fixture.Services.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+            var provisioner = new RecordingAccessProvisioner(ActivatedAt);
+            var service = new ProtectedProvisioningService(
+                scope.ServiceProvider.GetRequiredService<IWorkflowStore>(),
+                provisioner,
+                fixture.Clock);
 
-        var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
+            var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
-        _ = Assert.IsType<ProtectedProvisioningFailed>(outcome);
-        Assert.Empty(provisioner.Requests);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
-            cancellationToken));
+            _ = Assert.IsType<ProtectedProvisioningFailed>(outcome);
+            Assert.Empty(provisioner.Requests);
+            Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
+                cancellationToken));
+        }
     }
 
     [Fact]
@@ -97,25 +100,26 @@ public sealed class ProtectedProvisioningTests
             cancellationToken);
         await SeedAwaitingProvisioningAsync(fixture, cancellationToken: cancellationToken);
 
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var service = new ProtectedProvisioningService(
-            new EfWorkflowStore(dbContext),
+            scope.ServiceProvider.GetRequiredService<IWorkflowStore>(),
             new RecordingAccessProvisioner(ActivatedAt),
             fixture.Clock);
 
         var outcome = await service.ProvisionAsync(RequestId, cancellationToken);
 
         _ = Assert.IsType<ProtectedProvisioningCompleted>(outcome);
-        var grant = await dbContext.AccessGrants
+        var grant = await dbContext.Set<AccessGrant>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
-        var request = await dbContext.AccessRequests
+        var request = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == RequestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == RequestId, cancellationToken);
-        var auditEvent = await dbContext.AuditEvents
+        var auditEvent = await dbContext.Set<AuditEvent>()
             .AsNoTracking()
             .SingleAsync(
                 item => item.RequestId == RequestId
@@ -142,9 +146,11 @@ public sealed class ProtectedProvisioningTests
         bool includeDevOpsApproval = true,
         CancellationToken cancellationToken = default)
     {
-        await using var dbContext = fixture.CreateDbContext();
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
         var request = new AccessRequest(
             RequestId,
+            Guid.NewGuid(),
             DemoDataIds.RequesterPrincipalId,
             new ValidatedRequestDetails(
                 DemoDataIds.ClientAlphaId,
@@ -180,18 +186,18 @@ public sealed class ProtectedProvisioningTests
             request.Id,
             DevOpsApprovedAt);
 
-        dbContext.AccessRequests.Add(request);
+        dbContext.Set<AccessRequest>().Add(request);
         if (includeBusinessApproval)
         {
-            dbContext.ApprovalDecisions.Add(businessApproval);
+            dbContext.Set<ApprovalDecision>().Add(businessApproval);
         }
 
         if (includeDevOpsApproval)
         {
-            dbContext.ApprovalDecisions.Add(devOpsApproval);
+            dbContext.Set<ApprovalDecision>().Add(devOpsApproval);
         }
 
-        dbContext.ProvisioningOperations.Add(operation);
+        dbContext.Set<ProvisioningOperation>().Add(operation);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

@@ -1,18 +1,16 @@
 using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.Mcp;
+using GovernedAccess.ReferenceAuthority;
+using GovernedAccess.Web.Authority;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Evaluation;
 using GovernedAccess.Web.Observability;
-using GovernedAccess.Web.Persistence;
 using GovernedAccess.Web.Provisioning;
 using GovernedAccess.Web.Security;
 using GovernedAccess.Web.Teams;
-using Microsoft.EntityFrameworkCore;
-
-const string databaseConnectionStringName = "GovernedAccess";
-const string defaultDatabaseConnectionString = "Data Source=governed-access.db";
+using GovernedAccess.Workflow.Persistence;
 
 if (LiveModelEvaluationCommand.IsRequested(args))
 {
@@ -20,10 +18,6 @@ if (LiveModelEvaluationCommand.IsRequested(args))
 }
 
 var builder = WebApplication.CreateBuilder(args);
-var databaseConnectionString = builder.Configuration.GetConnectionString(
-        databaseConnectionStringName)
-    ?? defaultDatabaseConnectionString;
-
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails(options =>
 {
@@ -37,11 +31,9 @@ builder.Services.AddProblemDetails(options =>
         }
     };
 });
-builder.Services.AddDbContext<GovernedAccessDbContext>(options =>
-    options.UseSqlite(databaseConnectionString));
-builder.Services.AddScoped<IRequestContextReader, EfRequestContextReader>();
-builder.Services.AddScoped<IWorkflowStore, EfWorkflowStore>();
-builder.Services.AddScoped<RequestDraftValidator>();
+builder.Services.AddReferenceAuthority(builder.Configuration);
+builder.Services.AddWorkflowPersistence(builder.Configuration);
+builder.Services.AddScoped<IRequestContextReader, AuthoritativeRequestContextReader>();
 builder.Services.AddScoped<AccessRequestValidator>();
 builder.Services.AddScoped<AccessRequestVisibilityPolicy>();
 builder.Services.AddScoped<AccessRequestCommandContextLoader>();
@@ -53,7 +45,6 @@ builder.Services.AddSingleton<SyntheticAccessProvisioner>();
 builder.Services.AddSingleton<IAccessProvisioner>(serviceProvider =>
     serviceProvider.GetRequiredService<SyntheticAccessProvisioner>());
 builder.Services.AddHttpClient();
-builder.Services.AddRequestPreparationChat(builder.Configuration);
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<GovernedAccessInstrumentation>();
 builder.Services.AddDemoAuthentication();
@@ -81,13 +72,12 @@ app.MapFallback("/api/{**path}", () => Results.NotFound());
 app.MapFallback("/mcp/{**path}", () => Results.NotFound());
 app.MapFallbackToFile("index.html");
 
-await SeedDatabaseAsync(app);
+await InitializeDatabasesAsync(app);
 await app.RunAsync();
 return 0;
 
 static async Task<int> RunLiveModelEvaluationAsync(string[] arguments)
 {
-    var configuration = BuildEvaluationConfiguration();
     var parsedArguments = LiveModelEvaluationCommand.ParseArguments(
         arguments,
         Directory.GetCurrentDirectory());
@@ -98,54 +88,98 @@ static async Task<int> RunLiveModelEvaluationAsync(string[] arguments)
             EvaluationRunStatus.PrerequisiteFailed);
     }
 
-    var modelResolution = RequestPreparationModelOptions
-        .Bind(configuration)
-        .Validate();
-    var liveProfile = LiveModelEvaluationCommand.ValidateLiveProfile(
-        modelResolution);
-    if (liveProfile.IsFailure)
+    TextWriter originalOutput = Console.Out;
+    TextWriter originalError = Console.Error;
+    EvaluationLogFile? logFile = null;
+    if (parsedArguments.Value.LogFilePath is not null)
     {
-        Console.Error.WriteLine(liveProfile.Failure!.Message);
-        return LiveModelEvaluationCommand.GetExitCode(
-            EvaluationRunStatus.PrerequisiteFailed);
+        try
+        {
+            logFile = EvaluationLogFile.Create(
+                parsedArguments.Value.LogFilePath,
+                originalOutput,
+                originalError);
+            Console.SetOut(logFile.Output);
+            Console.SetError(logFile.Error);
+            Console.WriteLine(
+                "Evaluation log file: " + parsedArguments.Value.LogFilePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine(
+                "The evaluation log file could not be opened.");
+            Console.Error.WriteLine(ex.Message);
+            return LiveModelEvaluationCommand.GetExitCode(
+                EvaluationRunStatus.PrerequisiteFailed);
+        }
     }
-
-    using var cancellation = new CancellationTokenSource();
-    ConsoleCancelEventHandler cancellationHandler = (_, eventArgs) =>
-    {
-        eventArgs.Cancel = true;
-        cancellation.Cancel();
-    };
-    Console.CancelKeyPress += cancellationHandler;
 
     try
     {
-        await using var hosting = await EvaluationHosting.StartAsync(
-            configuration,
-            Path.GetTempPath(),
-            static _ => { },
-            cancellation.Token);
-        var command = hosting.Services
-            .GetRequiredService<LiveModelEvaluationCommand>();
-        return await command.RunAsync(
-            parsedArguments.Value,
-            cancellation.Token);
-    }
-    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-    {
-        return LiveModelEvaluationCommand.GetExitCode(
-            EvaluationRunStatus.Cancelled);
-    }
-    catch (Exception)
-    {
-        Console.Error.WriteLine(
-            "Live-model evaluation could not start because a required dependency is unavailable.");
-        return LiveModelEvaluationCommand.GetExitCode(
-            EvaluationRunStatus.PrerequisiteFailed);
+        var configuration = BuildEvaluationConfiguration();
+        var modelResolution = RequestPreparationModelOptions
+            .Bind(configuration)
+            .Validate();
+        var liveProfile = LiveModelEvaluationCommand.ValidateLiveProfile(
+            modelResolution);
+        if (liveProfile.IsFailure)
+        {
+            Console.Error.WriteLine(liveProfile.Failure!.Message);
+            return LiveModelEvaluationCommand.GetExitCode(
+                EvaluationRunStatus.PrerequisiteFailed);
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancellationHandler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            cancellation.Cancel();
+        };
+        Console.CancelKeyPress += cancellationHandler;
+
+        try
+        {
+            var sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
+                Directory.GetCurrentDirectory(),
+                cancellation.Token);
+            await using var hosting = await EvaluationHosting.StartAsync(
+                configuration,
+                Path.GetTempPath(),
+                new EvaluationSourceMetadata(sourceCommit),
+                static _ => { },
+                cancellation.Token);
+            var command = hosting.Services
+                .GetRequiredService<LiveModelEvaluationCommand>();
+            return await command.RunAsync(
+                parsedArguments.Value,
+                cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return LiveModelEvaluationCommand.GetExitCode(
+                EvaluationRunStatus.Cancelled);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                "Live-model evaluation could not start because a required dependency is unavailable.");
+            Console.Error.WriteLine(ex.Message);
+            return LiveModelEvaluationCommand.GetExitCode(
+                EvaluationRunStatus.PrerequisiteFailed);
+        }
+        finally
+        {
+            Console.CancelKeyPress -= cancellationHandler;
+        }
     }
     finally
     {
-        Console.CancelKeyPress -= cancellationHandler;
+        if (logFile is not null)
+        {
+            Console.SetOut(originalOutput);
+            Console.SetError(originalError);
+            logFile.Dispose();
+        }
     }
 }
 
@@ -167,12 +201,13 @@ static IConfiguration BuildEvaluationConfiguration()
         .Build();
 }
 
-static async Task SeedDatabaseAsync(WebApplication application)
+static async Task InitializeDatabasesAsync(WebApplication application)
 {
-    await using var scope = application.Services.CreateAsyncScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-    await SyntheticDataSeeder.SeedAsync(
-        dbContext,
+    await ReferenceAuthorityDatabase.InitializeAsync(
+        application.Services,
+        application.Lifetime.ApplicationStopping);
+    await WorkflowPersistenceDatabase.InitializeAsync(
+        application.Services,
         application.Lifetime.ApplicationStopping);
 }
 

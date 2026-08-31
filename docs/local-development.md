@@ -1,7 +1,7 @@
 # Local Development
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 
 ## Paths through the repository
 
@@ -98,10 +98,11 @@ $env:RequestPreparationModel__FoundryResponses__DeploymentName = "<deployment-na
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model
 ```
 
-Use [live-model evaluation](live-model-evaluation.md) for scenario selection, exit
+Use [live-model evaluation](live-model-evaluation.md) for the fixed inventory, exit
 codes, artifact interpretation, and cleanup. An explicit `--output` may select any
 resolvable directory; only the default artifact location is ignored by repository
-rules.
+rules. `--variation <id>` runs one exact variation for diagnosis, but its artifacts
+are explicitly not promotion evidence.
 
 ## Local MCP surface
 
@@ -111,12 +112,15 @@ determines the server-side MCP client address.
 
 The endpoint advertises exactly:
 
-- `get_production_environment`, with `{}` for bounded discovery or one
-  `environmentId` for exact lookup; and
+- `search_production_environments`, with one structured `query` and a complete bound
+  of at most five eligible environment/client projections;
+- `get_production_environment`, with one exact `environmentId`;
+- `get_environment_roles`, with one exact eligible `environmentId`; and
 - `get_incident`, with one exact `incidentId`.
 
-Environment results include authoritative client and assigned-role context. The exact
-wire schemas are in the [MCP contract](../specs/004-resolve-context-identifiers/contracts/mcp-tools.json).
+Environment search and exact lookup return client context but no roles; roles are
+owned by the environment-scoped entitlement tool. The exact wire schemas are in the
+[MCP contract](contracts/mcp-tools.json).
 
 ## React hot reload
 
@@ -142,7 +146,8 @@ ASP.NET Core environment variables replace `:` with `__`.
 
 | Key | Checked-in value | Purpose |
 |---|---|---|
-| `ConnectionStrings:GovernedAccess` | `Data Source=governed-access.db` | Local SQLite database |
+| `ConnectionStrings:ReferenceAuthority` | `Data Source=governed-access-reference.db` | Reference-only SQLite database |
+| `ConnectionStrings:WorkflowPersistence` | `Data Source=governed-access-workflow.db` | Preparation and downstream workflow SQLite database |
 | `RequestPreparationModel:ExecutionProfile` | `Deterministic` | `Deterministic` or `FoundryResponses` |
 | `RequestPreparationModel:FoundryResponses:Endpoint` | empty | Foundry project URL ending in `/openai/v1` |
 | `RequestPreparationModel:FoundryResponses:DeploymentName` | empty | Foundry deployment name |
@@ -155,18 +160,32 @@ The Teams start script supplies the bot client ID, audience, tenant, secret, and
 origin from ignored local state. The bot credential is stored outside the repository
 and must not be printed or copied into `appsettings*.json`.
 
-## Local database
+## Local databases
 
-Startup uses `EnsureCreated` and validates the exact synthetic dataset. Workflow rows
-remain between runs. After an EF model change, stop the host and preserve the disposable
-database before restarting:
+Reference Authority and Workflow Persistence own separate SQLite files, EF Core
+contexts, migrations, seeders, and exact final table inventories. Startup accepts an
+empty file or the exact current schema, applies the owning migration, and validates or
+creates only the owning synthetic records. Workflow rows remain between runs.
+
+There is no supported in-place upgrade, compatibility adapter, row copy, or unified
+schema path for local data created by an older or transitional implementation. Startup
+fails with bounded reset guidance and never deletes either configured file
+automatically.
+
+To reset the checked-in defaults, first stop every host that uses the files, then run
+the focused backup helper from the repository root:
 
 ```powershell
 .\scripts\backup-local-database.ps1
 ```
 
-The script moves only the explicitly named database and sidecar files into an ignored
-timestamped directory. The next host start creates the current schema.
+The helper moves only the two exact default database filenames and their `-wal`/`-shm`
+sidecars from the repository root into one ignored `db-backup-<timestamp>` directory.
+It does not interpret connection-string overrides. When either connection string is
+overridden, verify the exact configured paths and explicitly preserve or remove both
+files and their sidecars; do not use a broad directory, wildcard, or unresolved
+environment variable as a delete/move target. The next startup migrates and seeds two
+fresh databases. This is a disposable-local-data reset, not an upgrade procedure.
 
 ## Troubleshooting
 
@@ -176,6 +195,6 @@ timestamped directory. The next host start creates the current schema.
 | Browser stays anonymous | Use HTTPS, not the HTTP MCP/tunnel binding. |
 | Browser rejects the certificate | Run `dotnet dev-certs https --trust`, then restart the host and browser. |
 | Vite cannot reach the API | Confirm the configured HTTPS host is running or set `VITE_API_PROXY_TARGET`. |
-| Synthetic-data conflict after a model change | Stop the host, run `backup-local-database.ps1`, and restart. |
+| Incompatible database schema | Stop the host. For the checked-in paths, run `backup-local-database.ps1`; for overrides, verify and explicitly preserve or remove both configured files and their sidecars. Then restart with two fresh databases. |
 | Frontend rejects Node | Use Node 24. |
 | Live model is unavailable | Check the endpoint, deployment, `az account show`, and Foundry role assignment. |

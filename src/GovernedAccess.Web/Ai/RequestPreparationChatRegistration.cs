@@ -2,6 +2,7 @@ using Azure.Identity;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenAI.Responses;
 using System.ClientModel.Primitives;
 
@@ -22,8 +23,10 @@ internal static class RequestPreparationChatRegistration
         return AddRequestPreparationChat(
             services,
             resolution,
-            CreateMetadata(options, resolution),
-            () => CreateFoundryResponsesClient(resolution));
+            CreateMetadata(resolution),
+            serviceProvider => CreateFoundryResponsesClient(
+                resolution,
+                serviceProvider.GetRequiredService<ILoggerFactory>()));
     }
 
     internal static IServiceCollection AddRequestPreparationChat(
@@ -41,22 +44,26 @@ internal static class RequestPreparationChatRegistration
         return AddRequestPreparationChat(
             services,
             resolution,
-            CreateMetadata(options, resolution),
-            foundryResponsesClientFactory);
+            CreateMetadata(resolution),
+            _ => foundryResponsesClientFactory());
     }
 
     private static IServiceCollection AddRequestPreparationChat(
         IServiceCollection services,
         RequestPreparationModelResolution resolution,
         RequestPreparationModelMetadata metadata,
-        Func<IChatClient> foundryResponsesClientFactory)
+        Func<IServiceProvider, IChatClient> foundryResponsesClientFactory)
     {
         services.AddSingleton(resolution);
         services.AddSingleton(metadata);
         services
-            .AddChatClient(_ => CreateSelectedClient(
-                resolution,
-                foundryResponsesClientFactory))
+            .AddChatClient(serviceProvider =>
+                new ModelCallLoggingChatClient(
+                    CreateSelectedClient(
+                        resolution,
+                        () => foundryResponsesClientFactory(serviceProvider)),
+                    serviceProvider.GetRequiredService<
+                        ILogger<ModelCallLoggingChatClient>>()))
             .UseFunctionInvocation(configure: static client =>
             {
                 client.AllowConcurrentInvocation = false;
@@ -69,17 +76,9 @@ internal static class RequestPreparationChatRegistration
     }
 
     private static RequestPreparationModelMetadata CreateMetadata(
-        RequestPreparationModelOptions options,
         RequestPreparationModelResolution resolution)
     {
-        var profileId = options.ExecutionProfile switch
-        {
-            nameof(RequestPreparationModelProfile.Deterministic) =>
-                nameof(RequestPreparationModelProfile.Deterministic),
-            nameof(RequestPreparationModelProfile.FoundryResponses) =>
-                nameof(RequestPreparationModelProfile.FoundryResponses),
-            _ => "Unavailable",
-        };
+        var profileId = resolution.Profile?.ToString() ?? "Unavailable";
         var deploymentName =
             resolution.Profile == RequestPreparationModelProfile.FoundryResponses
                 ? resolution.DeploymentName
@@ -100,7 +99,7 @@ internal static class RequestPreparationChatRegistration
         return resolution.Profile switch
         {
             RequestPreparationModelProfile.Deterministic =>
-                new DeterministicChatClient(DeterministicChatMode.Candidate),
+                new DeterministicChatClient(DeterministicChatMode.Unclear),
             RequestPreparationModelProfile.FoundryResponses =>
                 new ProviderFailureMappingChatClient(
                     foundryResponsesClientFactory()),
@@ -110,7 +109,8 @@ internal static class RequestPreparationChatRegistration
     }
 
     private static IChatClient CreateFoundryResponsesClient(
-        RequestPreparationModelResolution resolution)
+        RequestPreparationModelResolution resolution,
+        ILoggerFactory loggerFactory)
     {
         if (resolution.Profile != RequestPreparationModelProfile.FoundryResponses
             || resolution.Endpoint is null
@@ -120,18 +120,27 @@ internal static class RequestPreparationChatRegistration
                 "A valid Foundry Responses profile is required.");
         }
 
-        var credential = new DefaultAzureCredential();
+        var credential = new FoundryTokenCredentialLoggingDecorator(
+            new DefaultAzureCredential(),
+            loggerFactory.CreateLogger<
+                FoundryTokenCredentialLoggingDecorator>());
         BearerTokenPolicy tokenPolicy = new(
             credential,
             "https://ai.azure.com/.default");
 
 #pragma warning disable OPENAI001
+        var clientOptions = new ResponsesClientOptions
+        {
+            Endpoint = resolution.Endpoint,
+        };
+        clientOptions.AddPolicy(
+            new FoundryHttpPipelineLoggingPolicy(
+                loggerFactory.CreateLogger<
+                    FoundryHttpPipelineLoggingPolicy>()),
+            PipelinePosition.BeforeTransport);
         ResponsesClient responsesClient = new(
             tokenPolicy,
-            new ResponsesClientOptions
-            {
-                Endpoint = resolution.Endpoint,
-            });
+            clientOptions);
         return responsesClient.AsIChatClient(resolution.DeploymentName);
 #pragma warning restore OPENAI001
     }

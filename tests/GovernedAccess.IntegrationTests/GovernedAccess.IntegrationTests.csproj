@@ -22,6 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\GovernedAccess.ReferenceAuthority\GovernedAccess.ReferenceAuthority.csproj" />
+    <ProjectReference Include="..\..\src\GovernedAccess.Workflow.Persistence\GovernedAccess.Workflow.Persistence.csproj" />
     <ProjectReference Include="..\..\src\GovernedAccess.Web\GovernedAccess.Web.csproj" />
   </ItemGroup>
 

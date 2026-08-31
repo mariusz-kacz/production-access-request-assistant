@@ -1,7 +1,7 @@
 # Teams Quickstart
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-10
+- **Last reviewed**: 2026-08-28
 - **Audience**: Developers running the application from a personal Teams chat
 
 Setup is performed once. Normal daily use requires the tunnel and application commands
@@ -124,6 +124,11 @@ In the bot's personal chat, send:
 I need read-only access to Client Alpha production in Europe to inspect logs and configuration while diagnosing INC-1042.
 ```
 
+The assistant immediately sends a transient typing activity and refreshes it every two
+seconds while the message turn is running. Teams clears the indicator when the
+assistant sends its text or card response. This is presentation feedback only; it is
+not persisted workflow evidence and does not imply authorization or execution.
+
 The deterministic profile returns its stable Client Alpha candidate. The live profile
 uses the bounded environment and exact incident tools before Core validates the
 proposal. In both modes:
@@ -143,8 +148,9 @@ Send `/new` by itself to abandon the active collecting or ready intake. Matching
 trimmed and case-insensitive; `/new please` remains ordinary requester text.
 
 Reset calls neither the model nor MCP, creates no request, invalidates an old ready
-card, and leaves submitted requests unchanged. The next normal message starts a new
-intake with separate process-local history.
+card, and leaves submitted requests unchanged. The same atomic workflow commit creates
+a clean collecting preparation with a new ID; the next normal message uses that
+persisted preparation with no provider conversation history.
 
 ## Stop or remove the integration
 
@@ -164,7 +170,7 @@ is no longer needed.
 | Bot does not reply | Keep both long-running terminals open and run `check.ps1`. |
 | App says the tunnel is not hosted | Start `start-tunnel.ps1` first. |
 | Live model is unavailable | Verify `az account show`, Foundry role assignment, endpoint, and deployment name. |
-| Request fails after an EF schema change | Stop the app, run `backup-local-database.ps1`, and restart. |
+| Startup reports an incompatible database schema | Stop the app and follow the explicit two-database reset policy in [local development](local-development.md#local-databases). |
 | Teams diagnostics report the endpoint unreachable | Prefer `check.ps1`; two `401` results are expected. |
 
 Use synthetic request details only. Do not commit local Teams state, credentials,

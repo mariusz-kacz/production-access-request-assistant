@@ -44,6 +44,7 @@ public sealed class AccessRequest
 
     public AccessRequest(
         Guid id,
+        Guid preparationId,
         string requesterId,
         ValidatedRequestDetails details,
         DateTimeOffset createdAt,
@@ -54,11 +55,19 @@ public sealed class AccessRequest
             throw new ArgumentException("The request identifier must not be empty.", nameof(id));
         }
 
+        if (preparationId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "The preparation identifier must not be empty.",
+                nameof(preparationId));
+        }
+
         requesterId = AccessRequestNormalization.NormalizeIdentifier(requesterId);
         ArgumentNullException.ThrowIfNull(details);
         correlationId = AccessRequestNormalization.NormalizeIdentifier(correlationId);
 
         Id = id;
+        PreparationId = preparationId;
         RequesterId = requesterId;
         Details = details;
         Status = RequestStatus.AwaitingBusinessApproval;
@@ -69,6 +78,8 @@ public sealed class AccessRequest
     }
 
     public Guid Id { get; private set; }
+
+    public Guid PreparationId { get; private set; }
 
     public string RequesterId { get; private set; }
 

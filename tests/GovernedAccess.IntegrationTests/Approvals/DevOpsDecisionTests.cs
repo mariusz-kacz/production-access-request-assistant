@@ -7,7 +7,7 @@ using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
-using GovernedAccess.Web.Persistence;
+using GovernedAccess.Workflow.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -54,11 +54,11 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         Assert.Equal("Active", responseBody.RootElement.GetProperty("status").GetString());
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.ApprovalDecisions
+        var decisions = await dbContext.Set<ApprovalDecision>()
             .AsNoTracking()
             .Where(item => item.RequestId == requestId)
             .OrderBy(item => item.DecidedAt)
@@ -66,10 +66,10 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         var devOpsDecision = Assert.Single(
             decisions,
             item => item.Stage == ApprovalStage.DevOps);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var grant = await dbContext.AccessGrants
+        var grant = await dbContext.Set<AccessGrant>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == requestId, cancellationToken);
 
@@ -123,14 +123,14 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         _ = Assert.Single(provisioner.Requests);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<GovernedAccessDbContext>();
-        var storedRequest = await dbContext.AccessRequests
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var storedRequest = await dbContext.Set<AccessRequest>()
             .AsNoTracking()
             .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var operation = await dbContext.ProvisioningOperations
+        var operation = await dbContext.Set<ProvisioningOperation>()
             .AsNoTracking()
             .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var devOpsDecision = await dbContext.ApprovalDecisions
+        var devOpsDecision = await dbContext.Set<ApprovalDecision>()
             .AsNoTracking()
             .SingleAsync(
                 item => item.RequestId == requestId
@@ -141,7 +141,7 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
         Assert.Equal(ApprovalOutcome.Approved, devOpsDecision.Decision);
         Assert.Equal(ProvisioningOperationStatus.Failed, operation.Status);
         Assert.Equal(FailingAccessProvisioner.FailureCode, operation.LastOutcomeCode);
-        Assert.Empty(await dbContext.AccessGrants.AsNoTracking().ToListAsync(
+        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
             cancellationToken));
     }
 

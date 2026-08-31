@@ -3,7 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-07-22
 - **Decision owners**: Project maintainer
-- **Related artifacts**: `docs/adr/0004-use-request-id-as-provisioning-idempotency-identity.md`, `docs/governed-production-access-product-baseline.md`, `specs/001-governed-production-access/research.md`, `specs/001-governed-production-access/plan.md`
+- **Related artifacts**: `docs/adr/0004-use-request-id-as-provisioning-idempotency-identity.md`, `docs/governed-production-access-product-baseline.md`, `docs/architecture.md`
 
 ## Context
 
