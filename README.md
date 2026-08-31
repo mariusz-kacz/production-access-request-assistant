@@ -1,9 +1,15 @@
 # Governed Production Access Request Assistant
 
-This is a bounded, synthetic, production-shaped portfolio implementation of a
-temporary production-access request workflow. It demonstrates how a language model
-can help prepare a request without becoming an authorization boundary. It is not a
-production-ready access-management platform and grants no real production access.
+A governed AI-assisted production-access workflow that turns ambiguous Teams
+requests into validated, immutable approval records—without allowing the model to
+authorize or provision access.
+
+[**Project guide**](#project-guide) · [**Demo**](#demo) ·
+[**Run locally**](#run-and-validate-locally)
+
+> **Implementation boundary:** This is a bounded, synthetic, production-shaped local
+> implementation. It is not a production-ready access-management platform and grants
+> no real production access.
 
 > AI interprets and gathers context. Humans approve. Deterministic services authorize
 > and execute.
@@ -14,10 +20,80 @@ interpreter, a stateless MCP endpoint, deterministic application services, SQLit
 persistence, and a synthetic provisioner. Teams confirmation is the only path that
 creates a request; the browser has no request-creation endpoint.
 
-## Example Teams conversations
+## End-to-end flow
 
-<details>
-<summary>View example conversations</summary>
+```mermaid
+flowchart LR
+    Teams[Personal Teams conversation] --> Draft[Request preparation]
+    Draft --> AI[MAF interpretation]
+    AI <--> MCP[Four read-only MCP tools]
+    MCP --> Context[(Reference-authority SQLite)]
+    AI --> Proposal[Schema-bound proposal]
+    Proposal --> Validation[Deterministic Core validation]
+    Validation --> Ready[Persisted ready intake]
+    Ready -->|Authenticated card confirmation| Request[Immutable access request]
+    Request --> Business[Business approval]
+    Business --> DevOps[DevOps approval]
+    DevOps --> Provisioning[Protected synthetic provisioning]
+    Provisioning --> Evidence[(Workflow SQLite evidence)]
+    Web[React register] --> Business
+    Web --> DevOps
+```
+
+The AI path ends at the proposal. The independently owned reference database stores
+synthetic clients, eligible environments, assignments, and incidents. The workflow
+database stores canonical preparations and bounded clarification context, immutable
+requests, approvals, provisioning operations, grants, and audit events. Neither stores
+raw prompts, requester transcripts, provider sessions, model reasoning, raw proposals,
+or complete MCP payloads. Restart preserves the canonical candidate and active ordered
+choices; no process-local conversation history is required.
+
+Confirmation reloads the owned, unexpired ready intake and revalidates its scope.
+Business approval is restricted to the approver configured for the authoritative
+client. DevOps approval requires valid prior business approval and revalidates current
+scope, but cannot replace the role or duration. Protected provisioning accepts only a
+request ID, reloads persisted request, approval, and operation evidence, and constructs
+provider input from the immutable request. The synthetic provider uses the request ID
+as its get-or-create idempotency key.
+
+## Project guide
+
+Use the following documents to explore the system:
+
+1. [Architecture](docs/architecture.md) — as-built system boundaries, module
+   ownership, runtime flows, persistence, and interfaces.
+2. [Security model](docs/security-model.md) — trust boundaries, controls, threats,
+   residual risks, and review triggers.
+3. [Request preparation and orchestration](docs/request-intake-orchestration.md) —
+   context construction, MCP tool policy, sparse proposal reduction, clarification,
+   and confirmation.
+4. [MCP contracts](docs/contracts/deterministic-request-intake-mcp-contract.md) —
+   human-readable tool, authority, transport, and failure rules; the
+   [catalog](docs/contracts/mcp-tools.json) is the canonical machine-readable four-tool
+   surface.
+5. [Testing strategy](docs/testing-strategy.md) — deterministic validation ownership
+   across domain and integration boundaries.
+6. [Model evaluation](docs/live-model-evaluation.md) — versioned datasets, safety and
+   promotion gates, execution guidance, artifacts, and recorded evidence.
+7. [Architecture decisions](docs/adr/README.md) — significant design choices, their
+   trade-offs, and revisit criteria.
+
+## Architectural proof
+
+- **Bounded AI interpretation:** the model produces a schema-constrained proposal and
+  can use exactly four read-only MCP tools; deterministic Core services reload and
+  validate every proposed identifier and relationship.
+- **Human-controlled, immutable approval:** an authenticated Teams confirmation
+  creates the request, and authenticated business and DevOps decisions remain bound
+  to its exact scope.
+- **Deterministic, idempotent execution:** protected provisioning accepts only the
+  request ID, reloads persisted approval evidence, and creates at most one fixed
+  eight-hour synthetic grant for that request.
+
+## Demo
+
+These screenshots trace the workflow from natural-language intake to an immutable
+request awaiting authenticated human approval.
 
 ### Ambiguous environment through business review
 
@@ -52,8 +128,6 @@ assistant reloads authoritative roles and selects the only assignable role befor
 presenting the draft.
 
 ![Client Beta UK production access request with its only assignable role selected](docs/img/Case3-draft.png)
-
-</details>
 
 ## The AI boundary
 
@@ -112,42 +186,6 @@ The MCP server exposes exactly:
 The MCP project has no workflow store, decision service, or provisioning dependency.
 Every result remains untrusted interpretation context and is independently reproduced
 or exact-reloaded by Core.
-
-## End-to-end flow
-
-```mermaid
-flowchart LR
-    Teams[Personal Teams conversation] --> Draft[Request preparation]
-    Draft --> AI[MAF interpretation]
-    AI <--> MCP[Four read-only MCP tools]
-    MCP --> Context[(Reference-authority SQLite)]
-    AI --> Proposal[Schema-bound proposal]
-    Proposal --> Validation[Deterministic Core validation]
-    Validation --> Ready[Persisted ready intake]
-    Ready -->|Authenticated card confirmation| Request[Immutable access request]
-    Request --> Business[Business approval]
-    Business --> DevOps[DevOps approval]
-    DevOps --> Provisioning[Protected synthetic provisioning]
-    Provisioning --> Evidence[(Workflow SQLite evidence)]
-    Web[React register] --> Business
-    Web --> DevOps
-```
-
-The AI path ends at the proposal. The independently owned reference database stores
-synthetic clients, eligible environments, assignments, and incidents. The workflow
-database stores canonical preparations and bounded clarification context, immutable
-requests, approvals, provisioning operations, grants, and audit events. Neither stores
-raw prompts, requester transcripts, provider sessions, model reasoning, raw proposals,
-or complete MCP payloads. Restart preserves the canonical candidate and active ordered
-choices; no process-local conversation history is required.
-
-Confirmation reloads the owned, unexpired ready intake and revalidates its scope.
-Business approval is restricted to the approver configured for the authoritative
-client. DevOps approval requires valid prior business approval and revalidates current
-scope, but cannot replace the role or duration. Protected provisioning accepts only a
-request ID, reloads persisted request, approval, and operation evidence, and constructs
-provider input from the immutable request. The synthetic provider uses the request ID
-as its get-or-create idempotency key.
 
 ## Security and governance controls
 
@@ -289,16 +327,3 @@ The [local development guide](docs/local-development.md) covers configuration, R
 hot reload, database handling, and troubleshooting. The
 [live-model evaluation guide](docs/live-model-evaluation.md) documents the versioned
 inventory, exit codes, artifact interpretation, and cleanup.
-
-## Design records
-
-- [Common project specification and context map](spec.md)
-- [Architecture](docs/architecture.md) and
-  [architecture decisions](docs/adr/README.md)
-- [Security and trust model](docs/security-model.md) and
-  [current product baseline](docs/governed-production-access-product-baseline.md)
-- [Request-intake orchestration](docs/request-intake-orchestration.md) and the
-  [current MCP contract](docs/contracts/mcp-tools.json)
-- [Testing strategy](docs/testing-strategy.md),
-  [live-model evaluation](docs/live-model-evaluation.md), and the
-  [deterministic evaluation matrix](docs/evaluation/deterministic-request-intake-test-matrix.md)
