@@ -98,6 +98,12 @@ $env:RequestPreparationModel__FoundryResponses__DeploymentName = "<deployment-na
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model
 ```
 
+Live evaluation uses the evaluation-specific `LiveModelEvaluation:CumulativeTimeout`
+setting, checked in as two minutes and bounded to a maximum of five minutes. Override
+it through configuration when needed; there is no timeout command option. The normal
+application independently uses the standard request-preparation value, checked in as
+30 seconds, and ignores the evaluation-specific setting.
+
 Use [live-model evaluation](live-model-evaluation.md) for the fixed inventory, exit
 codes, artifact interpretation, and cleanup. An explicit `--output` may select any
 resolvable directory; only the default artifact location is ignored by repository

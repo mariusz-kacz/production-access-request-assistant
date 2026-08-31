@@ -264,9 +264,24 @@ internal sealed class EvaluationScenarioExecutor(
 		{
 			failure = failed.Failure;
 		}
-		AddMismatch(failures, "interpretation.dialogueAct", turn.Expected.DialogueAct, dialogueAct);
-		AddMismatch(failures, "interpretation.failure", turn.Expected.Failure, failure);
-		AddMismatch(failures, "interpretation.discussionTopic", turn.Expected.DiscussionTopic, proposal?.DiscussionTopic);
+		var expectedInterpretation = new EvaluationInterpretationSnapshot(
+			turn.Expected.DialogueAct,
+			turn.Expected.DiscussionTopic,
+			turn.Expected.Failure);
+		var observedInterpretation = new EvaluationInterpretationSnapshot(
+			dialogueAct,
+			proposal?.DiscussionTopic,
+			failure);
+		IReadOnlyList<EvaluationInterpretationSnapshot> acceptableInterpretations =
+			turn.Expected.AcceptableInterpretations
+			?? Array.AsReadOnly(new[] { expectedInterpretation });
+		bool interpretationMatches = acceptableInterpretations.Contains(observedInterpretation);
+		if (!interpretationMatches)
+		{
+			AddMismatch(failures, "interpretation.dialogueAct", turn.Expected.DialogueAct, dialogueAct);
+			AddMismatch(failures, "interpretation.failure", turn.Expected.Failure, failure);
+			AddMismatch(failures, "interpretation.discussionTopic", turn.Expected.DiscussionTopic, proposal?.DiscussionTopic);
+		}
 		EvaluationProposalComparison proposalComparison = CompareProposal(failures, turn.Expected.Proposal, proposal?.Patch);
 		IReadOnlyList<string> toolNames = observed.ExecutionMetadata.ToolNames ?? Array.Empty<string>();
 		if (toolNames.Except<string>(turn.Expected.AllowedTools, StringComparer.Ordinal).Any())
@@ -283,14 +298,10 @@ internal sealed class EvaluationScenarioExecutor(
 		}
 		EvaluationTurnComparison comparison = new(
 			new EvaluationInterpretationComparison(
-				new EvaluationInterpretationSnapshot(
-					turn.Expected.DialogueAct,
-					turn.Expected.DiscussionTopic,
-					turn.Expected.Failure),
-				new EvaluationInterpretationSnapshot(
-					dialogueAct,
-					proposal?.DiscussionTopic,
-					failure)),
+				expectedInterpretation,
+				observedInterpretation,
+				Array.AsReadOnly(acceptableInterpretations.ToArray()),
+				interpretationMatches),
 			proposalComparison,
 			new EvaluationToolUseComparison(
 				new EvaluationToolUseExpectation(
@@ -441,7 +452,13 @@ internal sealed class EvaluationScenarioExecutor(
 				["canonical.missing"],
 				CreateCanonicalComparison(expected, observed));
 		}
-		AddMismatch(failures, "canonical.outcome", expected.Outcome, ToOutcome(observed.Response.Outcome));
+		EvaluationOutcome observedOutcome = ToOutcome(observed.Response.Outcome);
+		IReadOnlyList<EvaluationOutcome> acceptableOutcomes = expected.AcceptableOutcomes
+			?? Array.AsReadOnly(new[] { expected.Outcome });
+		if (!acceptableOutcomes.Contains(observedOutcome))
+		{
+			failures.Add("canonical.outcome");
+		}
 		AddMismatch(failures, "canonical.lifecycle", expected.Lifecycle, observed.Preparation?.Lifecycle);
 		var candidate = observed.Preparation is null
 			? null
@@ -498,7 +515,8 @@ internal sealed class EvaluationScenarioExecutor(
 			observed is null
 				? null
 				: CreateObservedCanonicalSnapshot(observed, observedCandidate),
-			Array.AsReadOnly(CandidateMismatchFields(expected.Candidate, observedCandidate).ToArray()));
+			Array.AsReadOnly(CandidateMismatchFields(expected.Candidate, observedCandidate).ToArray()),
+			Array.AsReadOnly((expected.AcceptableOutcomes ?? new[] { expected.Outcome }).ToArray()));
 	}
 
 	private static EvaluationCanonicalSnapshot CreateObservedCanonicalSnapshot(

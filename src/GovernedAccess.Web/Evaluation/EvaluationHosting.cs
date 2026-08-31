@@ -87,7 +87,9 @@ internal sealed class EvaluationHosting : IAsyncDisposable
 		builder.Services.AddSingleton<IClock, SystemClock>();
 		builder.Services.AddSingleton(TimeProvider.System);
 		builder.Services.AddSingleton(sourceMetadata);
-		builder.Services.AddSingleton(AgentExecutionLimits.Load(builder.Configuration));
+		builder.Services.AddSingleton(
+			AgentExecutionLimits.LoadForEvaluation(
+				builder.Configuration));
 		builder.Services.AddSingleton(new AgentModelMetadata("FoundryResponses", modelResolution.DeploymentName, null));
 		builder.Services.AddSingleton((IServiceProvider _) => new AgentMcpEndpoint(() => evaluationMcpBaseAddress));
 		builder.Services.AddScoped<EvaluationFailureControl>();

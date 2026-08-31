@@ -38,6 +38,14 @@ dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live
 `--output <directory>` selects the parent directory for one run-specific result
 directory and defaults to `artifacts/live-model-evaluation`.
 
+The isolated evaluation host uses `LiveModelEvaluation:CumulativeTimeout`, checked in
+as `00:02:00`. Operators may override it through evaluation-specific configuration,
+for example `$env:LiveModelEvaluation__CumulativeTimeout = '00:03:00'`. The invariant
+.NET `TimeSpan` value must be greater than zero and cannot exceed `00:05:00`.
+`--turn-timeout` is not a supported command option. Normal application runs continue
+to use `RequestPreparationAgent:Limits:CumulativeTimeout`, checked in as `00:00:30`,
+and ignore the evaluation-specific setting.
+
 `--log-file <path>` optionally copies the complete console stream, including
 timestamped application logs, to a UTF-8 file while continuing to display it in the
 terminal. The resolved file path is written to both destinations. Relative paths
@@ -73,11 +81,12 @@ The process exit codes are:
 The versioned English-only
 [`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
 is the golden source for executable group membership, promotion flags, turns, inputs,
-expected proposals/tool behavior, and final outcomes. The current dataset declares 14
-promoted groups, no advisory groups, 41 variations, and 42 turns. Seven groups use the
-absolute-outcome gate. The inventory covers complete and incremental requests; every
+expected proposals/tool behavior, and accepted final outcomes. Dataset
+`deterministic-intake-3.1.0` uses schema version `2` and declares 14 promoted groups,
+no advisory groups, 42 variations, and 43 turns. Seven groups use the absolute-outcome
+gate. The inventory covers complete and incremental requests; every
 sparse field operation; exact, unique, ambiguous, absent, and too-broad environment
-resolution; clarification and role selection; justification fidelity; five represented
+resolution; clarification and role selection; justification fidelity; six represented
 discussion topics plus submission, unrelated, and unclear acts; every represented
 untrusted-input channel; and bounded provider/MCP failures. The format supports
 advisory groups, but the current dataset declares none.
@@ -93,10 +102,13 @@ universal gates always require 100% across promoted and advisory variations:
 - exact expected clarification IDs or conservative `unclear`; and
 - no justification invention, translation, summary, or style rewrite.
 
-Within a promoted variation, the expected dialogue act, discussion topic, typed
-interpretation failure, sparse proposal operations, allowed and required tool names,
-maximum tool-call count, and final canonical outcome are all blocking. Tool order and
-provider iteration count remain diagnostic.
+Within a promoted variation, the declared interpretation, sparse proposal operations,
+allowed and required tool names, maximum tool-call count, and final canonical outcome
+are all blocking. An expectation has one accepted interpretation and outcome by
+default; a case may declare a finite set of semantically equivalent safe alternatives.
+Proposal, tool, canonical candidate, clarification, and side-effect checks remain exact
+when alternatives are present. Tool order and provider iteration count remain
+diagnostic.
 
 The [deterministic intake evaluation matrix](evaluation/deterministic-request-intake-test-matrix.md)
 explains test placement, coverage intent, graded dimensions, and promotion policy. It
@@ -133,8 +145,8 @@ deployment/model `production-access-request-model`, dataset
 `1d6feb66f74d1bd741c9c0bee3da338100a6cd0a62c7d48f1dd1ab7a9db26c36`, prompt
 contract `3.1.1`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
 
-The golden dataset was edited after this run while retaining the same dataset-version
-label. Its current exact bytes and expectations differ from the recorded SHA-256, so
+The golden dataset has since advanced to `deterministic-intake-3.1.0`. Its current
+exact bytes and expectations differ from the recorded SHA-256, so
 this artifact is evidence only for the captured dataset snapshot. No retained
 full-inventory run currently validates the exact golden dataset in the repository.
 
@@ -170,7 +182,7 @@ exact dataset bytes. `runId` is a GUID, not a hash.
 and the command does not enforce a clean working tree. Do not present a run from
 uncommitted source as promotion evidence.
 
-`result.json` uses artifact schema version `5`. Its `scope` records `fullInventory`
+`result.json` uses artifact schema version `6`. Its `scope` records `fullInventory`
 with `promotionEligible: true` for an unfiltered run, or `diagnosticVariation` with
 `promotionEligible: false` and the selected `variationId`. Run, source, dataset,
 version, summary, group, variation, turn, safety, side-effect, and failure-code fields
@@ -181,13 +193,15 @@ former presence/length pair. Each executed variation contains a
 `canonicalComparison`, and each executed turn contains a `comparison`, with:
 
 - the exact fixed synthetic requester message;
-- expected and observed dialogue act, discussion topic, and typed interpretation
-  failure;
+- primary expected, complete acceptable set, and observed dialogue act, discussion
+  topic, and typed interpretation failure, plus whether the observed interpretation
+  matched;
 - expected and observed proposal presence plus each exact parsed operation value and a
   per-field match result;
 - allowed, required, maximum, and observed tool use;
-- expected and observed canonical outcome, lifecycle, exact candidate values,
-  clarification IDs, and application-group result; and
+- primary expected and complete acceptable canonical outcomes, plus expected and
+  observed lifecycle, exact candidate values, clarification IDs, and application-group
+  result; and
 - candidate mismatch field names.
 
 For every variation, `justificationFidelity` compares the exact expected and observed

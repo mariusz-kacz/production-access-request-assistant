@@ -81,7 +81,7 @@ internal static class EvaluationDatasetLoader
 			});
 			if (!DatasetSchema.Value.Evaluate(document.RootElement).IsValid)
 			{
-				throw new EvaluationDatasetException("The evaluation dataset does not satisfy the version 1 schema.");
+				throw new EvaluationDatasetException("The evaluation dataset does not satisfy the version 2 schema.");
 			}
 			EvaluationDataset dataset = (document.RootElement.Deserialize<EvaluationDataset>(SerializerOptions) ?? throw new EvaluationDatasetException("The evaluation dataset could not be deserialized.")) with
 			{
@@ -105,7 +105,7 @@ internal static class EvaluationDatasetLoader
 
 	private static void ValidateSemantics(EvaluationDataset dataset)
 	{
-		if (dataset.SchemaVersion != 1 || dataset.Groups.Count == 0 || HasDuplicates(dataset.Groups.Select((EvaluationGroup group) => group.Id)))
+		if (dataset.SchemaVersion != 2 || dataset.Groups.Count == 0 || HasDuplicates(dataset.Groups.Select((EvaluationGroup group) => group.Id)))
 		{
 			throw new EvaluationDatasetException("The evaluation dataset has an invalid group inventory.");
 		}
@@ -134,28 +134,76 @@ internal static class EvaluationDatasetLoader
 		{
 			ValidateExpectation(turn.Expected);
 		}
+		foreach (EvaluationVariation variation in variations)
+		{
+			ValidateExpectation(variation.ExpectedFinal);
+		}
 	}
 
 	private static void ValidateExpectation(EvaluationInterpretationExpectation expectation)
 	{
-		bool expectsSuccess = expectation.DialogueAct.HasValue;
-		bool expectsFailure = expectation.Failure.HasValue;
-		bool flag = expectsSuccess == expectsFailure;
-		bool flag2 = flag;
-		if (!flag2)
+		bool invalid = !IsValidInterpretation(
+			expectation.DialogueAct,
+			expectation.DiscussionTopic,
+			expectation.Failure,
+			expectation.Proposal is not null);
+		if (!invalid)
 		{
 			int maximumToolCalls = expectation.MaximumToolCalls;
-			bool flag3 = ((maximumToolCalls < 0 || maximumToolCalls > 4) ? true : false);
-			flag2 = flag3;
+			invalid = maximumToolCalls < 0 || maximumToolCalls > 4;
 		}
-		if (flag2 || expectation.AllowedTools.Except<string>(AgentMcpCatalog.ToolNames, StringComparer.Ordinal).Any() || expectation.RequiredTools.Except<string>(expectation.AllowedTools, StringComparer.Ordinal).Any() || HasDuplicates(expectation.AllowedTools) || HasDuplicates(expectation.RequiredTools))
+		if (invalid || expectation.AllowedTools.Except<string>(AgentMcpCatalog.ToolNames, StringComparer.Ordinal).Any() || expectation.RequiredTools.Except<string>(expectation.AllowedTools, StringComparer.Ordinal).Any() || HasDuplicates(expectation.AllowedTools) || HasDuplicates(expectation.RequiredTools))
 		{
 			throw new EvaluationDatasetException("An evaluation turn has an invalid interpretation or tool expectation.");
 		}
-		bool hasProposal = expectation.Proposal is not null;
-		if (expectation.DialogueAct == DialogueAct.UpdateDraft != hasProposal || expectation.DialogueAct == DialogueAct.DiscussDraft != expectation.DiscussionTopic.HasValue)
+
+		if (expectation.AcceptableInterpretations is not { Count: > 0 } acceptable)
 		{
-			throw new EvaluationDatasetException("An evaluation turn has an invalid dialogue-act payload expectation.");
+			return;
+		}
+
+		var primary = new EvaluationInterpretationSnapshot(
+			expectation.DialogueAct,
+			expectation.DiscussionTopic,
+			expectation.Failure);
+		if (!acceptable.Contains(primary)
+			|| acceptable.Distinct().Count() != acceptable.Count
+			|| acceptable.Any(alternative => !IsValidInterpretation(
+				alternative.DialogueAct,
+				alternative.DiscussionTopic,
+				alternative.Failure,
+				expectation.Proposal is not null)))
+		{
+			throw new EvaluationDatasetException(
+				"An evaluation turn has invalid acceptable interpretations.");
+		}
+	}
+
+	private static bool IsValidInterpretation(
+		DialogueAct? dialogueAct,
+		DiscussionTopic? discussionTopic,
+		AgentInterpretationFailure? failure,
+		bool hasProposal)
+	{
+		bool expectsSuccess = dialogueAct.HasValue;
+		bool expectsFailure = failure.HasValue;
+		return expectsSuccess != expectsFailure
+			&& (dialogueAct == DialogueAct.UpdateDraft) == hasProposal
+			&& (dialogueAct == DialogueAct.DiscussDraft) == discussionTopic.HasValue;
+	}
+
+	private static void ValidateExpectation(EvaluationCanonicalExpectation expectation)
+	{
+		if (expectation.AcceptableOutcomes is not { Count: > 0 } acceptable)
+		{
+			return;
+		}
+
+		if (!acceptable.Contains(expectation.Outcome)
+			|| acceptable.Distinct().Count() != acceptable.Count)
+		{
+			throw new EvaluationDatasetException(
+				"An evaluation variation has invalid acceptable outcomes.");
 		}
 	}
 

@@ -8,7 +8,7 @@ namespace GovernedAccess.IntegrationTests.Mcp;
 public sealed class TargetMcpLoggingTests
 {
     [Fact]
-    public async Task TargetToolLogsOnlySafeCompletionMetadata()
+    public async Task TargetToolLogsOnlySafeOperationalMetadata()
     {
         const string query = "alpha EU primary";
         using var logs = new CapturingLoggerProvider();
@@ -31,9 +31,14 @@ public sealed class TargetMcpLoggingTests
             },
             cancellationToken: TestContext.Current.CancellationToken);
 
+        var entries = logs.Entries
+            .Where(candidate =>
+                candidate.Category == typeof(TargetMcpToolExecutor).FullName)
+            .ToArray();
+        Assert.Equal([3010, 3011], entries.Select(candidate => candidate.EventId.Id));
         var entry = Assert.Single(
-            logs.Entries,
-            candidate => candidate.Category == typeof(TargetMcpToolExecutor).FullName);
+            entries,
+            candidate => candidate.EventId.Id == 3011);
         Assert.Equal(LogLevel.Information, entry.Level);
         Assert.Equal(
             "search_production_environments",
@@ -42,12 +47,12 @@ public sealed class TargetMcpLoggingTests
         Assert.True(Convert.ToDouble(
             entry.Properties["DurationMilliseconds"],
             System.Globalization.CultureInfo.InvariantCulture) >= 0);
-        var captured = entry.Message
-            + " "
-            + string.Join(
-                " ",
-                entry.Properties.Select(property =>
-                    $"{property.Key}={property.Value}"));
+        var captured = string.Join(
+            " ",
+            entries.SelectMany(candidate =>
+                candidate.Properties
+                    .Select(property => $"{property.Key}={property.Value}")
+                    .Prepend(candidate.Message)));
         Assert.DoesNotContain(query, captured, StringComparison.Ordinal);
         Assert.DoesNotContain("Primary Production EU", captured, StringComparison.Ordinal);
         Assert.DoesNotContain("client-alpha", captured, StringComparison.Ordinal);
@@ -56,6 +61,7 @@ public sealed class TargetMcpLoggingTests
     private sealed record CapturedLog(
         string Category,
         LogLevel Level,
+        EventId EventId,
         string Message,
         IReadOnlyDictionary<string, object?> Properties);
 
@@ -100,6 +106,7 @@ public sealed class TargetMcpLoggingTests
                 new CapturedLog(
                     category,
                     logLevel,
+                    eventId,
                     formatter(state, exception),
                     properties));
         }

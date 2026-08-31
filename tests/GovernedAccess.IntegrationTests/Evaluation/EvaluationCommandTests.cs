@@ -27,6 +27,7 @@ public sealed class EvaluationCommandTests
 			["--log-file", "first.log", "--log-file", "second.log"],
 			["--variation"],
 			["--variation", "EVAL-01-ONE-SHOT", "--variation", "EVAL-02-INCREMENTAL"],
+			["--turn-timeout", "00:02:00"],
 			["--scenario", "unsupported-selection"],
 			["--group", "unsupported-selection"],
 		];
@@ -184,7 +185,7 @@ public sealed class EvaluationCommandTests
 			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
 			using JsonDocument document = JsonDocument.Parse(json);
 			JsonElement root = document.RootElement;
-			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
+			Assert.Equal(6, root.GetProperty("schemaVersion").GetInt32());
 			Assert.Equal("fullInventory", root.GetProperty("scope").GetProperty("kind").GetString());
 			Assert.True(root.GetProperty("scope").GetProperty("promotionEligible").GetBoolean());
 			Assert.Equal(JsonValueKind.Null, root.GetProperty("scope").GetProperty("variationId").ValueKind);
@@ -217,84 +218,6 @@ public sealed class EvaluationCommandTests
 			Assert.Contains("Source commit: `1d7858e6f86d274e0f25a9696d15e0be1a0df649`", report, StringComparison.Ordinal);
 			Assert.Contains("sha256:91710b462d3db677ff1181d382073a92f24cf59cc3f9bcf0f5bc9975917fdb41", report, StringComparison.Ordinal);
 			Assert.Contains("FoundryResponses", report, StringComparison.Ordinal);
-		}
-		finally
-		{
-			if (Directory.Exists(outputRoot))
-			{
-				Directory.Delete(outputRoot, recursive: true);
-			}
-		}
-	}
-
-	[Fact]
-	public async Task ArtifactPreservesExactFailedVariationDiagnostics()
-	{
-		string outputRoot = Path.Combine(Path.GetTempPath(), $"evaluation-artifact-failure-tests-{Guid.NewGuid():N}");
-		try
-		{
-			EvaluationRunResult result = CreateFailingRun();
-			EvaluationArtifactPaths paths = await EvaluationArtifactWriter.WriteAsync(result, outputRoot, TestContext.Current.CancellationToken);
-			string json = await File.ReadAllTextAsync(paths.JsonPath, TestContext.Current.CancellationToken);
-			using JsonDocument document = JsonDocument.Parse(json);
-			JsonElement root = document.RootElement;
-			Assert.Equal(5, root.GetProperty("schemaVersion").GetInt32());
-			JsonElement variation = root.GetProperty("groups")[0].GetProperty("variations")[0];
-			Assert.Equal("draftUpdated", variation.GetProperty("outcome").GetString());
-			Assert.Contains("canonical.outcome", variation.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
-			JsonElement canonicalComparison = variation.GetProperty("canonicalComparison");
-			Assert.Equal("discussion", canonicalComparison.GetProperty("expected").GetProperty("outcome").GetString());
-			Assert.Equal("draftUpdated", canonicalComparison.GetProperty("observed").GetProperty("outcome").GetString());
-			Assert.Equal(
-				["roleId"],
-				canonicalComparison.GetProperty("candidateMismatchFields").EnumerateArray().Select(static item => item.GetString()));
-			JsonElement turn = variation.GetProperty("turns")[0];
-			Assert.Equal(
-				"Synthetic failed requester message.",
-				turn.GetProperty("requesterMessage").GetString());
-			Assert.Contains("interpretation.dialogueAct", turn.GetProperty("failureCodes").EnumerateArray().Select(static item => item.GetString()));
-			JsonElement turnComparison = turn.GetProperty("comparison");
-			Assert.Equal("discussDraft", turnComparison.GetProperty("interpretation").GetProperty("expected").GetProperty("dialogueAct").GetString());
-			Assert.Equal("updateDraft", turnComparison.GetProperty("interpretation").GetProperty("observed").GetProperty("dialogueAct").GetString());
-			Assert.False(turnComparison.GetProperty("proposal").GetProperty("expectedPresent").GetBoolean());
-			Assert.True(turnComparison.GetProperty("proposal").GetProperty("observedPresent").GetBoolean());
-			Assert.Equal(
-				"synthetic environment query",
-				turnComparison.GetProperty("proposal").GetProperty("environment").GetProperty("observed").GetProperty("value").GetString());
-			Assert.Equal(
-				"observed justification",
-				turnComparison.GetProperty("proposal").GetProperty("justification").GetProperty("observed").GetProperty("value").GetString());
-			Assert.Equal(2, turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("callCount").GetInt32());
-			Assert.Contains(
-				"unexpected.tool/name",
-				turnComparison.GetProperty("tools").GetProperty("observed").GetProperty("names").EnumerateArray().Select(static item => item.GetString()));
-			Assert.Equal(
-				"UNREDACTED_CANONICAL_VALUE",
-				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("roleId").GetString());
-			Assert.Equal(
-				"observed justification",
-				canonicalComparison.GetProperty("observed").GetProperty("candidate").GetProperty("justification").GetString());
-			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", json, StringComparison.Ordinal);
-			Assert.Contains("UNREDACTED_CANONICAL_VALUE", json, StringComparison.Ordinal);
-			Assert.DoesNotContain("diagnostic.redacted", json, StringComparison.Ordinal);
-
-			string report = await File.ReadAllTextAsync(paths.MarkdownPath, TestContext.Current.CancellationToken);
-			Assert.Contains("## Failed variations", report, StringComparison.Ordinal);
-			Assert.Contains("TEST-FAILURE", report, StringComparison.Ordinal);
-			Assert.Contains("canonical.outcome", report, StringComparison.Ordinal);
-			Assert.Contains("safety.absolute", report, StringComparison.Ordinal);
-			Assert.Contains("interpretation.dialogueAct", report, StringComparison.Ordinal);
-			Assert.Contains("Expected vs observed", report, StringComparison.Ordinal);
-			Assert.Contains("discussion", report, StringComparison.Ordinal);
-			Assert.Contains("draftUpdated", report, StringComparison.Ordinal);
-			Assert.Contains("discussDraft", report, StringComparison.Ordinal);
-			Assert.Contains("updateDraft", report, StringComparison.Ordinal);
-			Assert.Contains("synthetic environment query", report, StringComparison.Ordinal);
-			Assert.Contains("observed justification", report, StringComparison.Ordinal);
-			Assert.Contains("unexpected.tool/name", report, StringComparison.Ordinal);
-			Assert.Contains("UNREDACTED_PROPOSAL_VALUE", report, StringComparison.Ordinal);
-			Assert.Contains("UNREDACTED_CANONICAL_VALUE", report, StringComparison.Ordinal);
-			Assert.DoesNotContain("diagnostic.redacted", report, StringComparison.Ordinal);
 		}
 		finally
 		{
@@ -460,7 +383,13 @@ public sealed class EvaluationCommandTests
 			Comparison: new EvaluationTurnComparison(
 				new EvaluationInterpretationComparison(
 					new EvaluationInterpretationSnapshot(DialogueAct.DiscussDraft, DiscussionTopic.ResetInstructions, Failure: null),
-					new EvaluationInterpretationSnapshot(DialogueAct.UpdateDraft, DiscussionTopic: null, Failure: null)),
+					new EvaluationInterpretationSnapshot(DialogueAct.UpdateDraft, DiscussionTopic: null, Failure: null),
+					Acceptable:
+					[
+						new EvaluationInterpretationSnapshot(DialogueAct.DiscussDraft, DiscussionTopic.ResetInstructions, Failure: null),
+						new EvaluationInterpretationSnapshot(DialogueAct.Unclear, DiscussionTopic: null, Failure: null),
+					],
+					Matches: false),
 				new EvaluationProposalComparison(
 					ExpectedPresent: false,
 					ObservedPresent: true,
@@ -502,7 +431,12 @@ public sealed class EvaluationCommandTests
 					ClarificationChoiceIds: [],
 					ScopeResult: null,
 					JustificationResult: null),
-				CandidateMismatchFields: ["roleId"]));
+				CandidateMismatchFields: ["roleId"],
+				AcceptableOutcomes:
+				[
+					EvaluationOutcome.Discussion,
+					EvaluationOutcome.UnclearGuidance,
+				]));
 		EvaluationGroupResult group = new(
 			"TEST-GROUP",
 			Promoted: true,

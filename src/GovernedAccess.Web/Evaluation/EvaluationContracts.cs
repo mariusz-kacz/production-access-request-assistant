@@ -77,7 +77,7 @@ internal sealed record EvaluationOperationExpectation(EvaluationOperationKind Op
 
 internal sealed record EvaluationProposalExpectation(EvaluationOperationExpectation? Environment, EvaluationOperationExpectation? Role, EvaluationOperationExpectation? Justification, EvaluationOperationExpectation? Incident);
 
-internal sealed record EvaluationInterpretationExpectation(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure, EvaluationProposalExpectation? Proposal, IReadOnlyList<string> AllowedTools, IReadOnlyList<string> RequiredTools, int MaximumToolCalls)
+internal sealed record EvaluationInterpretationExpectation(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure, EvaluationProposalExpectation? Proposal, IReadOnlyList<string> AllowedTools, IReadOnlyList<string> RequiredTools, int MaximumToolCalls, IReadOnlyList<EvaluationInterpretationSnapshot>? AcceptableInterpretations = null)
 {
 	internal static EvaluationInterpretationExpectation Unclear()
 	{
@@ -89,7 +89,7 @@ internal sealed record EvaluationTurn(string Id, string RequesterMessage, Evalua
 
 internal sealed record EvaluationApplicationGroupExpectation(ApplicationGroupResultKind Kind, ApplicationGroupRejectionReason? RejectionReason);
 
-internal sealed record EvaluationCanonicalExpectation(EvaluationOutcome Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidate? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult)
+internal sealed record EvaluationCanonicalExpectation(EvaluationOutcome Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidate? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult, IReadOnlyList<EvaluationOutcome>? AcceptableOutcomes = null)
 {
 	internal static EvaluationCanonicalExpectation EmptyCollecting()
 	{
@@ -116,7 +116,7 @@ internal sealed record EvaluationSafetyResult(bool ZeroConsequentialSideEffects,
 
 internal sealed record EvaluationInterpretationSnapshot(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure);
 
-internal sealed record EvaluationInterpretationComparison(EvaluationInterpretationSnapshot Expected, EvaluationInterpretationSnapshot Observed);
+internal sealed record EvaluationInterpretationComparison(EvaluationInterpretationSnapshot Expected, EvaluationInterpretationSnapshot Observed, IReadOnlyList<EvaluationInterpretationSnapshot>? Acceptable = null, bool Matches = true);
 
 internal sealed record EvaluationOperationSnapshot(EvaluationOperationKind Operation, EvaluationEnvironmentReferenceKind? EnvironmentReferenceKind, string? Value);
 
@@ -136,7 +136,7 @@ internal sealed record EvaluationCandidateSnapshot(string? ClientId, string? Env
 
 internal sealed record EvaluationCanonicalSnapshot(EvaluationOutcome? Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidateSnapshot? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult);
 
-internal sealed record EvaluationCanonicalComparison(EvaluationCanonicalSnapshot Expected, EvaluationCanonicalSnapshot? Observed, IReadOnlyList<string> CandidateMismatchFields);
+internal sealed record EvaluationCanonicalComparison(EvaluationCanonicalSnapshot Expected, EvaluationCanonicalSnapshot? Observed, IReadOnlyList<string> CandidateMismatchFields, IReadOnlyList<EvaluationOutcome>? AcceptableOutcomes = null);
 
 internal sealed record EvaluationTurnResult(string Id, string RequesterMessage, EvaluationScenarioStatus Status, DialogueAct? DialogueAct, AgentInterpretationFailure? Failure, string? ProviderModelVersion, int ProviderIterationCount, IReadOnlyList<string> ToolNames, IReadOnlyList<string> FailureCodes, EvaluationTurnComparison? Comparison = null);
 

@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "3.1.1";
+    internal const string PromptContractVersion = "3.1.2";
     internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
 
@@ -53,10 +53,14 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         field uses exactly one set or clear operation.
 
         Use discussDraft when the intent is understood but no mutation should be proposed. Select currentDraft
-        for current canonical facts, missingInformation for incomplete requirements, allowedChanges for change capabilities and field-integrity constraints,
-        confirmationProcess for confirmation and approval flow, resetInstructions for reset guidance, and
-        unsupported for clearly understood requests outside supported preparation operations. Use
-        requestSubmission only for submission intent and unrelated only for content unrelated to request
+        for current canonical facts and missingInformation for incomplete requirements.
+        Use allowedChanges only for informational questions about which draft fields may be changed or their field-integrity constraints;
+        do not use it for a request to perform a disallowed transformation. Select confirmationProcess for
+        confirmation and approval flow, resetInstructions for reset guidance, and unsupported for clearly
+        understood requests outside supported preparation operations.
+        Requests to rewrite, polish, summarize, or translate a justification are understood but unsupported:
+        return discussDraft with unsupported and no patch.
+        Use requestSubmission only for submission intent and unrelated only for content unrelated to request
         preparation. Use unclear only when no single intent, operation, or discussion topic can be safely
         determined; do not use it merely because a clear request cannot be performed under field-integrity
         rules. The non-update acts have no semantic payload except discussDraft's one closed discussionTopic.

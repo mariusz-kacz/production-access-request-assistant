@@ -10,6 +10,8 @@ internal sealed record AgentExecutionLimits
 {
     private const string ConfigurationSection =
         "RequestPreparationAgent:Limits";
+    private const string EvaluationConfigurationSection =
+        "LiveModelEvaluation";
 
     internal const int HardMaximumMessageCharacters = 4000;
     internal const int HardMaximumCallsPerTool = 1;
@@ -17,6 +19,8 @@ internal sealed record AgentExecutionLimits
     internal const int HardMaximumProviderIterations = 6;
     internal static readonly TimeSpan HardMaximumCumulativeTimeout =
         TimeSpan.FromSeconds(60);
+    internal static readonly TimeSpan HardMaximumEvaluationCumulativeTimeout =
+        TimeSpan.FromMinutes(5);
 
     internal static AgentExecutionLimits Default { get; } = new(
         HardMaximumMessageCharacters,
@@ -31,6 +35,23 @@ internal sealed record AgentExecutionLimits
         int maximumToolCalls,
         int maximumProviderIterations,
         TimeSpan cumulativeTimeout)
+        : this(
+            maximumMessageCharacters,
+            maximumCallsPerTool,
+            maximumToolCalls,
+            maximumProviderIterations,
+            cumulativeTimeout,
+            HardMaximumCumulativeTimeout)
+    {
+    }
+
+    private AgentExecutionLimits(
+        int maximumMessageCharacters,
+        int maximumCallsPerTool,
+        int maximumToolCalls,
+        int maximumProviderIterations,
+        TimeSpan cumulativeTimeout,
+        TimeSpan maximumCumulativeTimeout)
     {
         MaximumMessageCharacters = ValidateBound(
             maximumMessageCharacters,
@@ -49,7 +70,7 @@ internal sealed record AgentExecutionLimits
             HardMaximumProviderIterations,
             nameof(maximumProviderIterations));
         if (cumulativeTimeout <= TimeSpan.Zero
-            || cumulativeTimeout > HardMaximumCumulativeTimeout)
+            || cumulativeTimeout > maximumCumulativeTimeout)
         {
             throw new ArgumentOutOfRangeException(nameof(cumulativeTimeout));
         }
@@ -80,6 +101,31 @@ internal sealed record AgentExecutionLimits
         catch (ArgumentException exception)
         {
             throw InvalidConfiguration(exception);
+        }
+    }
+
+    internal static AgentExecutionLimits LoadForEvaluation(
+        IConfiguration configuration)
+    {
+        var configured = Load(configuration);
+        var evaluationSection = configuration.GetSection(
+            EvaluationConfigurationSection);
+
+        try
+        {
+            return new AgentExecutionLimits(
+                configured.MaximumMessageCharacters,
+                configured.MaximumCallsPerTool,
+                configured.MaximumToolCalls,
+                configured.MaximumProviderIterations,
+                RequiredTimeSpan(
+                    evaluationSection,
+                    nameof(CumulativeTimeout)),
+                HardMaximumEvaluationCumulativeTimeout);
+        }
+        catch (ArgumentException exception)
+        {
+            throw InvalidEvaluationConfiguration(exception);
         }
     }
 
@@ -126,6 +172,12 @@ internal sealed record AgentExecutionLimits
         Exception innerException) =>
         new(
             "Request-preparation agent execution limits are missing or invalid.",
+            innerException);
+
+    private static InvalidOperationException InvalidEvaluationConfiguration(
+        Exception innerException) =>
+        new(
+            "Live-model evaluation execution limits are missing or invalid.",
             innerException);
 }
 

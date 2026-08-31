@@ -30,7 +30,7 @@ internal static class EvaluationArtifactWriter
 
 	private sealed record EvaluationInterpretationSnapshotArtifact(DialogueAct? DialogueAct, DiscussionTopic? DiscussionTopic, AgentInterpretationFailure? Failure);
 
-	private sealed record EvaluationInterpretationComparisonArtifact(EvaluationInterpretationSnapshotArtifact Expected, EvaluationInterpretationSnapshotArtifact Observed);
+	private sealed record EvaluationInterpretationComparisonArtifact(EvaluationInterpretationSnapshotArtifact Expected, IReadOnlyList<EvaluationInterpretationSnapshotArtifact> Acceptable, EvaluationInterpretationSnapshotArtifact Observed, bool Matches);
 
 	private sealed record EvaluationOperationSnapshotArtifact(EvaluationOperationKind Operation, EvaluationEnvironmentReferenceKind? EnvironmentReferenceKind, string? Value);
 
@@ -50,7 +50,7 @@ internal static class EvaluationArtifactWriter
 
 	private sealed record EvaluationCanonicalSnapshotArtifact(EvaluationOutcome? Outcome, PreparationLifecycle? Lifecycle, EvaluationCandidateSnapshotArtifact? Candidate, ClarificationTarget? ClarificationTarget, IReadOnlyList<string> ClarificationChoiceIds, EvaluationApplicationGroupExpectation? ScopeResult, EvaluationApplicationGroupExpectation? JustificationResult);
 
-	private sealed record EvaluationCanonicalComparisonArtifact(EvaluationCanonicalSnapshotArtifact Expected, EvaluationCanonicalSnapshotArtifact? Observed, IReadOnlyList<string> CandidateMismatchFields);
+	private sealed record EvaluationCanonicalComparisonArtifact(EvaluationCanonicalSnapshotArtifact Expected, IReadOnlyList<EvaluationOutcome> AcceptableOutcomes, EvaluationCanonicalSnapshotArtifact? Observed, IReadOnlyList<string> CandidateMismatchFields);
 
 	private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
 	{
@@ -92,7 +92,7 @@ internal static class EvaluationArtifactWriter
 	private static EvaluationArtifact CreateArtifact(EvaluationRunResult result)
 	{
 		bool promotionEligible = result.DiagnosticVariationId is null;
-		return new EvaluationArtifact(5, result.RunId, result.SourceCommit, result.DatasetVersion, result.DatasetSha256, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationScopeArtifact(promotionEligible ? "fullInventory" : "diagnosticVariation", promotionEligible, result.DiagnosticVariationId), new EvaluationVersionArtifact(result.Versions.ProviderId, result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
+		return new EvaluationArtifact(6, result.RunId, result.SourceCommit, result.DatasetVersion, result.DatasetSha256, result.Environment, result.StartedAt, result.CompletedAt, result.Status, new EvaluationScopeArtifact(promotionEligible ? "fullInventory" : "diagnosticVariation", promotionEligible, result.DiagnosticVariationId), new EvaluationVersionArtifact(result.Versions.ProviderId, result.Versions.ModelDeployment, result.Versions.ProviderModelVersion, result.Versions.PromptContractVersion, result.Versions.ProposalSchemaVersion, result.Versions.McpContractVersion, result.Versions.EnvironmentSearchPolicyVersion), result.Summary, result.SideEffects, Array.AsReadOnly(result.Groups.Select(ToArtifact).ToArray()));
 	}
 
 	private static EvaluationGroupArtifact ToArtifact(EvaluationGroupResult group)
@@ -144,7 +144,12 @@ internal static class EvaluationArtifactWriter
 		return new EvaluationTurnComparisonArtifact(
 			new EvaluationInterpretationComparisonArtifact(
 				ToArtifact(comparison.Interpretation.Expected),
-				ToArtifact(comparison.Interpretation.Observed)),
+				Array.AsReadOnly((comparison.Interpretation.Acceptable
+					?? new[] { comparison.Interpretation.Expected })
+					.Select(ToArtifact)
+					.ToArray()),
+				ToArtifact(comparison.Interpretation.Observed),
+				comparison.Interpretation.Matches),
 			new EvaluationProposalComparisonArtifact(
 				comparison.Proposal.ExpectedPresent,
 				comparison.Proposal.ObservedPresent,
@@ -196,6 +201,8 @@ internal static class EvaluationArtifactWriter
 			? null
 			: new EvaluationCanonicalComparisonArtifact(
 				ToArtifact(comparison.Expected),
+				Array.AsReadOnly((comparison.AcceptableOutcomes
+					?? new[] { comparison.Expected.Outcome!.Value }).ToArray()),
 				comparison.Observed is null
 					? null
 					: ToArtifact(comparison.Observed),
@@ -380,7 +387,11 @@ internal static class EvaluationArtifactWriter
 		report.AppendLine();
 		report.AppendLine("| Canonical field | Expected | Observed |");
 		report.AppendLine("|---|---|---|");
-		AppendComparisonRow(report, "outcome", OptionalEnumName(comparison.Expected.Outcome), OptionalEnumName(comparison.Observed?.Outcome));
+		AppendComparisonRow(
+			report,
+			"outcome",
+			string.Join(" or ", comparison.AcceptableOutcomes.Select(EnumName)),
+			OptionalEnumName(comparison.Observed?.Outcome));
 		AppendComparisonRow(report, "lifecycle", OptionalEnumName(comparison.Expected.Lifecycle), OptionalEnumName(comparison.Observed?.Lifecycle));
 		AppendComparisonRow(report, "candidate.clientId", comparison.Expected.Candidate?.ClientId, comparison.Observed?.Candidate?.ClientId);
 		AppendComparisonRow(report, "candidate.environmentId", comparison.Expected.Candidate?.EnvironmentId, comparison.Observed?.Candidate?.EnvironmentId);
@@ -400,6 +411,12 @@ internal static class EvaluationArtifactWriter
 		report.Append("##### `").Append(turn.Id).AppendLine("` diagnostics");
 		report.AppendLine();
 		report.Append("- Requester message: ").AppendLine(MarkdownCell(turn.RequesterMessage));
+		report.Append("- Acceptable interpretations: ")
+			.AppendLine(MarkdownCell(string.Join(
+				" or ",
+				comparison.Interpretation.Acceptable.Select(FormatInterpretation))));
+		report.Append("- Interpretation matched: ")
+			.AppendLine(comparison.Interpretation.Matches ? "yes" : "no");
 		report.Append("- Discussion topic: `")
 			.Append(OptionalEnumName(comparison.Interpretation.Expected.DiscussionTopic))
 			.Append("` -> `")
@@ -442,6 +459,20 @@ internal static class EvaluationArtifactWriter
 			.Append(comparison.Matches ? "yes" : "no").Append(" | ")
 			.Append(MarkdownCell(FormatOperation(comparison.Expected))).Append(" | ")
 			.Append(MarkdownCell(FormatOperation(comparison.Observed))).AppendLine(" |");
+	}
+
+	private static string FormatInterpretation(
+		EvaluationInterpretationSnapshotArtifact interpretation)
+	{
+		if (interpretation.Failure is not null)
+		{
+			return "failure/" + EnumName(interpretation.Failure.Value);
+		}
+
+		string dialogueAct = OptionalEnumName(interpretation.DialogueAct);
+		return interpretation.DiscussionTopic is null
+			? dialogueAct
+			: dialogueAct + "/" + EnumName(interpretation.DiscussionTopic.Value);
 	}
 
 	private static string FormatOperation(EvaluationOperationSnapshotArtifact? operation)

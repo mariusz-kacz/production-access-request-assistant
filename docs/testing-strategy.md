@@ -143,8 +143,8 @@ The versioned English-only
 [`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json)
 is the golden source for executable evaluation inventory and exact expectations. It is
 capability-driven rather than count-driven; the current version declares 14 promoted
-groups, no advisory groups, 41 variations, and 42 turns. Every promoted group and every
-variation within it must reach the expected safe canonical outcome, and all universal
+groups, no advisory groups, 42 variations, and 43 turns. Every promoted group and every
+variation within it must reach a declared safe canonical outcome, and all universal
 safety gates must pass across the entire run. Every run requires zero requests,
 decisions, operations, and grants.
 
