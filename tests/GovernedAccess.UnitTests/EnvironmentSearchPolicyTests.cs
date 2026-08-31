@@ -37,6 +37,27 @@ public sealed class EnvironmentSearchPolicyTests
         Assert.Empty(result.Matches);
     }
 
+    [Theory]
+    [InlineData("Client Zeta primary EU", "Client Zeta EU primary")]
+    [InlineData("client-zeta PRIMARY eu", "CLIENT zeta eu primary")]
+    [InlineData("caf\u00e9 eu", "cafe\u0301 / eu")]
+    [InlineData("alpha alpha eu", "EU alpha")]
+    public void EquivalentQueriesUseNormalizedSearchTokenSemantics(
+        string expected,
+        string observed)
+    {
+        Assert.True(EnvironmentSearchPolicy.AreQueriesEquivalent(expected, observed));
+    }
+
+    [Theory]
+    [InlineData("Client Zeta primary EU", "Client Zeta EU")]
+    [InlineData("Client Zeta primary EU", "Client Zeta recovery EU")]
+    [InlineData(" ", " ")]
+    public void NonEquivalentQueriesRemainDifferent(string expected, string observed)
+    {
+        Assert.False(EnvironmentSearchPolicy.AreQueriesEquivalent(expected, observed));
+    }
+
     [Fact]
     public void SearchCollapsesUnicodeWhitespaceBeforeCheckingLength()
     {

@@ -19,21 +19,39 @@ creates a request; the browser has no request-creation endpoint.
 <details>
 <summary>View example conversations</summary>
 
-The assistant can ground a request in an authoritative incident, ask only for the
-missing role, and present the completed draft for explicit confirmation.
+### Ambiguous environment through business review
 
-![Incident-based production access request prepared in Microsoft Teams](docs/img/Case1.png)
+The assistant narrows an ambiguous Client Alpha production environment, asks for the
+role and operational justification, and presents the completed draft for explicit
+confirmation.
 
-When a description matches several environments, the assistant presents bounded
-choices and gathers the role and operational justification before producing a draft.
+![Ambiguous Client Alpha environment resolved and prepared as a request draft in Microsoft Teams](docs/img/Case1-draft.png)
 
-![Ambiguous production environment resolved through a Microsoft Teams conversation](docs/img/Case2.png)
+Confirmation creates the immutable request and makes clear that access is still
+awaiting human approval.
 
-A requester can refine an ambiguous environment choice and revise the proposed role;
-the earlier ready preparation is superseded and replaced instead of being silently
-changed.
+![Microsoft Teams confirmation that the production access request was submitted for business approval](docs/img/Case1-sent.png)
 
-![Production access request refined and revised in Microsoft Teams](docs/img/Case3.png)
+The browser register shows the exact submitted scope, the current business-review
+stage, the authenticated decision controls, and the recorded request-created event.
+
+![Submitted production access request awaiting business approval in the browser register](docs/img/Case1-business-approval.png)
+
+### Incident-grounded request
+
+An authoritative incident identifies the Client Alpha EU environment. The assistant
+preserves the supplied justification, asks only for the missing role, and presents the
+incident-linked draft.
+
+![Incident-grounded Client Alpha production access request prepared in Microsoft Teams](docs/img/Case2-draft.png)
+
+### Single-role environment
+
+When an ambiguous Client Beta description is narrowed to the UK environment, the
+assistant reloads authoritative roles and selects the only assignable role before
+presenting the draft.
+
+![Client Beta UK production access request with its only assignable role selected](docs/img/Case3-draft.png)
 
 </details>
 
@@ -182,10 +200,12 @@ provision.
 The checked-in English-only evaluation dataset is `deterministic-intake-3.0.1`
 (schema version `1`) and exercises the complete prompt vocabulary, operation shapes,
 search cardinalities, clarification references, justification transformations, trust
-channels, and bounded failures. A prior promoted 2026-08-28 run proved dataset
-`deterministic-intake-2.0.2` with prompt contract `3.0.6`; it remains historical evidence,
-not promotion evidence for the current dataset and prompt. Generated schema-version-5
-artifacts remain local and gitignored rather than being committed.
+channels, and bounded failures. A documented 2026-08-31 full-inventory run passed all
+14 promoted groups and 41 variations for the current dataset and prompt. Because its
+working tree was not clean, it is stable passing documentation rather than clean-source
+promotion evidence. Its reviewed [report and result](docs/evaluation/runs/README.md)
+are retained in the repository; newly generated runs remain local and gitignored by
+default.
 
 ## Deliberate limitations
 

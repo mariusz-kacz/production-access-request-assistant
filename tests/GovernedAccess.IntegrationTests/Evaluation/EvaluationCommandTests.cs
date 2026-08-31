@@ -23,6 +23,8 @@ public sealed class EvaluationCommandTests
 			["--unknown"],
 			["--output"],
 			["--output", "first", "--output", "second"],
+			["--log-file"],
+			["--log-file", "first.log", "--log-file", "second.log"],
 			["--variation"],
 			["--variation", "EVAL-01-ONE-SHOT", "--variation", "EVAL-02-INCREMENTAL"],
 			["--scenario", "unsupported-selection"],
@@ -41,7 +43,7 @@ public sealed class EvaluationCommandTests
 	}
 
 	[Fact]
-	public void CommandAcceptsOneDiagnosticVariationWithOptionalOutput()
+	public void CommandAcceptsOneDiagnosticVariationWithOptionalOutputAndLogFile()
 	{
 		string workingDirectory = Path.GetFullPath("evaluation-command-tests");
 		ApplicationResult<LiveModelEvaluationArguments> defaultOutput =
@@ -50,7 +52,11 @@ public sealed class EvaluationCommandTests
 				workingDirectory);
 		ApplicationResult<LiveModelEvaluationArguments> explicitOutput =
 			LiveModelEvaluationCommand.ParseArguments(
-				["--output", "diagnostics", "--variation", "EVAL-02-INCREMENTAL"],
+				[
+					"--output", "diagnostics",
+					"--log-file", Path.Combine("diagnostics", "evaluation.log"),
+					"--variation", "EVAL-02-INCREMENTAL",
+				],
 				workingDirectory);
 
 		Assert.True(defaultOutput.IsSuccess);
@@ -58,11 +64,52 @@ public sealed class EvaluationCommandTests
 		Assert.Equal(
 			Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"),
 			defaultOutput.Value.OutputParentPath);
+		Assert.Null(defaultOutput.Value.LogFilePath);
 		Assert.True(explicitOutput.IsSuccess);
 		Assert.Equal("EVAL-02-INCREMENTAL", explicitOutput.Value.VariationId);
 		Assert.Equal(
 			Path.Combine(workingDirectory, "diagnostics"),
 			explicitOutput.Value.OutputParentPath);
+		Assert.Equal(
+			Path.Combine(workingDirectory, "diagnostics", "evaluation.log"),
+			explicitOutput.Value.LogFilePath);
+	}
+
+	[Fact]
+	public async Task LogFileCopiesOutputAndErrorWhilePreservingTheirDestinations()
+	{
+		string temporaryRoot = Path.Combine(
+			Path.GetTempPath(),
+			$"evaluation-log-file-tests-{Guid.NewGuid():N}");
+		string logPath = Path.Combine(temporaryRoot, "nested", "evaluation.log");
+		var standardOutput = new StringWriter();
+		var standardError = new StringWriter();
+		try
+		{
+			using (var logFile = EvaluationLogFile.Create(
+				logPath,
+				standardOutput,
+				standardError))
+			{
+				logFile.Output.WriteLine("model call completed");
+				logFile.Error.WriteLine("evaluation failed");
+			}
+
+			Assert.Contains("model call completed", standardOutput.ToString(), StringComparison.Ordinal);
+			Assert.Contains("evaluation failed", standardError.ToString(), StringComparison.Ordinal);
+			string persisted = await File.ReadAllTextAsync(
+				logPath,
+				TestContext.Current.CancellationToken);
+			Assert.Contains("model call completed", persisted, StringComparison.Ordinal);
+			Assert.Contains("evaluation failed", persisted, StringComparison.Ordinal);
+		}
+		finally
+		{
+			if (Directory.Exists(temporaryRoot))
+			{
+				Directory.Delete(temporaryRoot, recursive: true);
+			}
+		}
 	}
 
 	[Fact]
@@ -98,6 +145,7 @@ public sealed class EvaluationCommandTests
 		Assert.True(result.IsSuccess);
 		Assert.Equal(Path.Combine(workingDirectory, "artifacts", "live-model-evaluation"), result.Value.OutputParentPath);
 		Assert.Null(result.Value.VariationId);
+		Assert.Null(result.Value.LogFilePath);
 
 		string sourceCommit = await EvaluationSourceCommitResolver.ResolveAsync(
 			Directory.GetCurrentDirectory(),

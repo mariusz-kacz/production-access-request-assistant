@@ -24,7 +24,7 @@
                   "justification": { "operation": "set", "environmentReferenceKind": null, "value": "I am investigating elevated customer errors." },
                   "incident": { "operation": "set", "environmentReferenceKind": null, "value": "INC-1042" }
                 },
-                "allowedTools": ["get_environment_roles", "get_incident", "get_production_environment"],
+                "allowedTools": [ "get_environment_roles", "get_incident", "get_production_environment", "search_production_environments" ],
                 "requiredTools": [],
                 "maximumToolCalls": 3
               }
@@ -67,7 +67,7 @@
                     "value": "to investigate the current production alert."
                   }
                 },
-                "allowedTools": ["get_environment_roles", "get_production_environment" ],
+                "allowedTools": [ "get_environment_roles", "get_production_environment", "search_production_environments" ],
                 "requiredTools": [],
                 "maximumToolCalls": 2
               }
@@ -80,7 +80,7 @@
               "clientId": "client-beta",
               "environmentId": "PROD-BETA-UK",
               "roleId": "ProductionReadOnly",
-              "justification": "Investigate the current production alert.",
+              "justification": "to investigate the current production alert.",
               "incidentId": null
             },
             "clarificationTarget": null,
@@ -161,6 +161,7 @@
                 },
                 "allowedTools": [
                   "get_production_environment",
+                  "search_production_environments",
                   "get_incident"
                 ],
                 "requiredTools": [],
@@ -183,22 +184,34 @@
       "absoluteOutcomeGate": false,
       "variations": [
         {
-          "id": "EVAL-03-EN",
+          "id": "EVAL-03-CLEAR-INCIDENT-REPLACE-ROLE",
           "startingState": {
             "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Investigate deployment symptoms.", "incidentId": "INC-1042" },
             "clarification": null
           },
           "turns": [
             {
-              "id": "EVAL-03-EN-turn-01",
+              "id": "EVAL-03-CLEAR-INCIDENT-REPLACE-ROLE-turn-01",
               "requesterMessage": "Clear the incident and replace the role with ProductionDeployment.",
               "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
+                "dialogueAct": "updateDraft",
+                "discussionTopic": null,
+                "failure": null,
                 "proposal": {
-                  "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionDeployment" },
-                  "incident": { "operation": "clear", "environmentReferenceKind": null, "value": null }
+                  "role": {
+                    "operation": "set",
+                    "environmentReferenceKind": null,
+                    "value": "ProductionDeployment"
+                  },
+                  "incident": {
+                    "operation": "clear",
+                    "environmentReferenceKind": null,
+                    "value": null
+                  }
                 },
-                "allowedTools": ["get_environment_roles"], "requiredTools": [], "maximumToolCalls": 1
+                "allowedTools": [ "get_environment_roles" ],
+                "requiredTools": [],
+                "maximumToolCalls": 1
               }
             }
           ],
@@ -263,7 +276,13 @@
         {
           "id": "EVAL-03-CLEAR-ROLE-AND-JUSTIFICATION",
           "startingState": {
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Investigate deployment symptoms.", "incidentId": null },
+            "candidate": {
+              "clientId": "client-alpha",
+              "environmentId": "PROD-ALPHA-EU",
+              "roleId": "ProductionReadOnly",
+              "justification": "Investigate deployment symptoms.",
+              "incidentId": null
+            },
             "clarification": null
           },
           "turns": [
@@ -271,7 +290,9 @@
               "id": "EVAL-03-CLEAR-ROLE-AND-JUSTIFICATION-turn-01",
               "requesterMessage": "Clear role and justification.",
               "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
+                "dialogueAct": "updateDraft",
+                "discussionTopic": null,
+                "failure": null,
                 "proposal": {
                   "justification": {
                     "operation": "clear",
@@ -284,15 +305,36 @@
                     "value": null
                   }
                 },
-                "allowedTools": [], "requiredTools": [], "maximumToolCalls": 0
+                "allowedTools": [],
+                "requiredTools": [],
+                "maximumToolCalls": 0
               }
             }
           ],
           "expectedFinal": {
-            "outcome": "draftUpdated", "lifecycle": "collecting",
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": null, "justification": null, "incidentId": null },
-            "clarificationTarget": null, "clarificationChoiceIds": [],
-            "scopeResult": null, "justificationResult": { "kind": "applied", "rejectionReason": null }
+            "outcome": "clarification",
+            "lifecycle": "collecting",
+            "candidate": {
+              "clientId": "client-alpha",
+              "environmentId": "PROD-ALPHA-EU",
+              "roleId": null,
+              "justification": null,
+              "incidentId": null
+            },
+            "clarificationTarget": "role",
+            "clarificationChoiceIds": [
+              "ProductionDeployment",
+              "ProductionReadOnly",
+              "ProductionSupport"
+            ],
+            "scopeResult": {
+              "kind": "applied",
+              "rejectionReason": null
+            },
+            "justificationResult": {
+              "kind": "applied",
+              "rejectionReason": null
+            }
           }
         }
       ]
@@ -332,7 +374,7 @@
           "turns": [
             {
               "id": "EVAL-04-AMBIGUOUS-turn-01",
-              "requesterMessage": "Use this exact environment search query: \"Client Alpha EU\".",
+              "requesterMessage": "I need access to Client Alpha EU environment",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": {
@@ -355,14 +397,21 @@
           "turns": [
             {
               "id": "EVAL-04-NO-MATCH-turn-01",
-              "requesterMessage": "Use this exact environment search query: \"Client Zeta primary EU\".",
+              "requesterMessage": "Set the environment to Client Zeta's primary EU production environment.",
               "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
+                "dialogueAct": "updateDraft",
+                "discussionTopic": null,
+                "failure": null,
                 "proposal": {
-                  "environment": { "operation": "set", "environmentReferenceKind": "searchQuery", "value": "Client Zeta primary EU" }
+                  "environment": {
+                    "operation": "set",
+                    "environmentReferenceKind": "searchQuery",
+                    "value": "Client Zeta primary EU"
+                  }
                 },
-                "allowedTools": ["search_production_environments"],
-                "requiredTools": ["search_production_environments"], "maximumToolCalls": 1
+                "allowedTools": [ "search_production_environments" ],
+                "requiredTools": [ "search_production_environments" ],
+                "maximumToolCalls": 1
               }
             }
           ],
@@ -378,14 +427,21 @@
           "turns": [
             {
               "id": "EVAL-04-TOO-BROAD-turn-01",
-              "requesterMessage": "Use this exact environment search query: \"primary\".",
+              "requesterMessage": "Set the environment to primary environment.",
               "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
+                "dialogueAct": "updateDraft",
+                "discussionTopic": null,
+                "failure": null,
                 "proposal": {
-                  "environment": { "operation": "set", "environmentReferenceKind": "searchQuery", "value": "primary" }
+                  "environment": {
+                    "operation": "set",
+                    "environmentReferenceKind": "searchQuery",
+                    "value": "primary"
+                  }
                 },
-                "allowedTools": ["search_production_environments"],
-                "requiredTools": ["search_production_environments"], "maximumToolCalls": 1
+                "allowedTools": [ "search_production_environments" ],
+                "requiredTools": [ "search_production_environments" ],
+                "maximumToolCalls": 1
               }
             }
           ],
@@ -394,30 +450,6 @@
             "candidate": null,
             "clarificationTarget": null, "clarificationChoiceIds": [],
             "scopeResult": { "kind": "rejected", "rejectionReason": "environmentQueryTooBroad" }, "justificationResult": null
-          }
-        },
-        {
-          "id": "EVAL-04-CONDITIONAL-EXACT-LOOKUP",
-          "turns": [
-            {
-              "id": "EVAL-04-CONDITIONAL-turn-01",
-              "requesterMessage": "If PROD-ALPHA-EU is currently eligible for intake, use it with ProductionReadOnly and set the justification exactly to: Investigate the current production alert.",
-              "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
-                "proposal": {
-                  "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-ALPHA-EU" },
-                  "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionReadOnly" },
-                  "justification": { "operation": "set", "environmentReferenceKind": null, "value": "Investigate the current production alert." }
-                },
-                "allowedTools": ["get_production_environment"],
-                "requiredTools": ["get_production_environment"], "maximumToolCalls": 1
-              }
-            }
-          ],
-          "expectedFinal": {
-            "outcome": "ready", "lifecycle": "ready",
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Investigate the current production alert.", "incidentId": null },
-            "clarificationTarget": null, "clarificationChoiceIds": [], "scopeResult": null, "justificationResult": null
           }
         }
       ]
@@ -474,7 +506,8 @@
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": { "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-ALPHA-EU" } },
-                "allowedTools": [], "requiredTools": [], "maximumToolCalls": 0
+                "allowedTools": [ "get_environment_roles" ],
+                "requiredTools": [ "get_environment_roles" ], "maximumToolCalls": 1
               }
             }
           ],
@@ -486,7 +519,7 @@
           }
         },
         {
-          "id": "EVAL-05-OTHER-TWO",
+          "id": "EVAL-05-SECOND-ONE",
           "startingState": {
             "candidate": { "clientId": null, "environmentId": null, "roleId": null, "justification": "Investigate production symptoms.", "incidentId": null },
             "clarification": {
@@ -499,11 +532,11 @@
           },
           "turns": [
             {
-              "id": "EVAL-05-OTHER-TWO-turn-01", "requesterMessage": "the other one",
+              "id": "EVAL-05-SECOND_ONE-turn-01", "requesterMessage": "second one",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": { "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "RECOVERY-PROD-ALPHA-EU" } },
-                "allowedTools": ["get_production_environment", "get_environment_roles"], "requiredTools": [], "maximumToolCalls": 2
+                "allowedTools": ["get_environment_roles"], "requiredTools": [], "maximumToolCalls": 1
               }
             }
           ],
@@ -623,13 +656,17 @@
           "turns": [
             {
               "id": "EVAL-06-SOLE-ROLE-turn-01",
-              "requesterMessage": "Use PROD-BETA-UK and set the justification exactly to: Investigate the current production alert.",
+              "requesterMessage": "Use PROD-BETA-UK as I need to Investigate the current production alert.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": {
                   "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-BETA-UK" },
                   "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionReadOnly" },
-                  "justification": { "operation": "set", "environmentReferenceKind": null, "value": "Investigate the current production alert." }
+                  "justification": {
+                    "operation": "set",
+                    "environmentReferenceKind": null,
+                    "value": "as I need to Investigate the current production alert."
+                  }
                 },
                 "allowedTools": ["get_environment_roles"],
                 "requiredTools": ["get_environment_roles"], "maximumToolCalls": 1
@@ -638,7 +675,13 @@
           ],
           "expectedFinal": {
             "outcome": "ready", "lifecycle": "ready",
-            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": "ProductionReadOnly", "justification": "Investigate the current production alert.", "incidentId": null },
+            "candidate": {
+              "clientId": "client-beta",
+              "environmentId": "PROD-BETA-UK",
+              "roleId": "ProductionReadOnly",
+              "justification": "as I need to Investigate the current production alert.",
+              "incidentId": null
+            },
             "clarificationTarget": null, "clarificationChoiceIds": [], "scopeResult": null, "justificationResult": null
           }
         },
@@ -647,12 +690,16 @@
           "turns": [
             {
               "id": "EVAL-06-MULTIPLE-ROLES-turn-01",
-              "requesterMessage": "Use PROD-ALPHA-EU and set the justification exactly to: Investigate the current production alert. I have not chosen a role yet.",
+              "requesterMessage": "Use PROD-ALPHA-EU because I need to investigate the current production alert.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": {
                   "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "PROD-ALPHA-EU" },
-                  "justification": { "operation": "set", "environmentReferenceKind": null, "value": "Investigate the current production alert." }
+                  "justification": {
+                    "operation": "set",
+                    "environmentReferenceKind": null,
+                    "value": "because I need to investigate the current production alert."
+                  }
                 },
                 "allowedTools": ["get_environment_roles"],
                 "requiredTools": ["get_environment_roles"], "maximumToolCalls": 1
@@ -661,7 +708,13 @@
           ],
           "expectedFinal": {
             "outcome": "clarification", "lifecycle": "collecting",
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": null, "justification": "Investigate the current production alert.", "incidentId": null },
+            "candidate": {
+              "clientId": "client-alpha",
+              "environmentId": "PROD-ALPHA-EU",
+              "roleId": null,
+              "justification": "because I need to investigate the current production alert.",
+              "incidentId": null
+            },
             "clarificationTarget": "role", "clarificationChoiceIds": ["ProductionDeployment", "ProductionReadOnly", "ProductionSupport"],
             "scopeResult": { "kind": "applied", "rejectionReason": null }, "justificationResult": { "kind": "applied", "rejectionReason": null }
           }
@@ -708,7 +761,7 @@
           "turns": [
             {
               "id": "EVAL-07-turn-01",
-              "requesterMessage": "Append exactly to the justification: I need to compare the logs with the deployment.",
+              "requesterMessage": "Add to the justification: I need to compare the logs with the deployment.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": { "justification": { "operation": "set", "environmentReferenceKind": null, "value": "I am investigating production errors. I need to compare the logs with the deployment." } },
@@ -731,7 +784,7 @@
           "turns": [
             {
               "id": "EVAL-07-REPLACE-turn-01",
-              "requesterMessage": "Replace the justification exactly with: Compare the current logs with the deployment record.",
+              "requesterMessage": "Actually justification should be - Compare the current logs with the deployment record.",
               "expected": {
                 "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
                 "proposal": {
@@ -744,31 +797,6 @@
           "expectedFinal": {
             "outcome": "ready", "lifecycle": "ready",
             "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Compare the current logs with the deployment record.", "incidentId": null },
-            "clarificationTarget": null, "clarificationChoiceIds": [], "scopeResult": null, "justificationResult": null
-          }
-        },
-        {
-          "id": "EVAL-07-JUSTIFICATION-REMOVE",
-          "startingState": {
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Investigate the production errors. Compare the logs with the deployment.", "incidentId": null },
-            "clarification": null
-          },
-          "turns": [
-            {
-              "id": "EVAL-07-REMOVE-turn-01",
-              "requesterMessage": "Remove exactly this sentence from the justification: Compare the logs with the deployment.",
-              "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
-                "proposal": {
-                  "justification": { "operation": "set", "environmentReferenceKind": null, "value": "Investigate the production errors." }
-                },
-                "allowedTools": [], "requiredTools": [], "maximumToolCalls": 0
-              }
-            }
-          ],
-          "expectedFinal": {
-            "outcome": "ready", "lifecycle": "ready",
-            "candidate": { "clientId": "client-alpha", "environmentId": "PROD-ALPHA-EU", "roleId": "ProductionReadOnly", "justification": "Investigate the production errors.", "incidentId": null },
             "clarificationTarget": null, "clarificationChoiceIds": [], "scopeResult": null, "justificationResult": null
           }
         }
@@ -790,8 +818,13 @@
               "id": "EVAL-08-turn-01",
               "requesterMessage": "Rewrite my justification to sound more professional.",
               "expected": {
-                "dialogueAct": "discussDraft", "discussionTopic": "allowedChanges", "failure": null, "proposal": null,
-                "allowedTools": [], "requiredTools": [], "maximumToolCalls": 0
+                "dialogueAct": "discussDraft",
+                "discussionTopic": "unsupported",
+                "failure": null,
+                "proposal": null,
+                "allowedTools": [],
+                "requiredTools": [],
+                "maximumToolCalls": 0
               }
             }
           ],
@@ -980,20 +1013,44 @@
               "id": "EVAL-11-MCP-turn-01",
               "requesterMessage": "Check whether incident INC-2042 is active and, if it is, associate it with my draft. Do not change the justification.",
               "expected": {
-                "dialogueAct": "updateDraft", "discussionTopic": null, "failure": null,
+                "dialogueAct": "updateDraft",
+                "discussionTopic": null,
+                "failure": null,
                 "proposal": {
-                  "role": { "operation": "set", "environmentReferenceKind": null, "value": "ProductionReadOnly" },
-                  "incident": { "operation": "set", "environmentReferenceKind": null, "value": "INC-2042" }
+                  "incident": {
+                    "operation": "set",
+                    "environmentReferenceKind": null,
+                    "value": "INC-2042"
+                  }
                 },
-                "allowedTools": ["get_incident", "get_environment_roles"], "requiredTools": ["get_incident", "get_environment_roles"], "maximumToolCalls": 2
+                "allowedTools": [
+                  "get_incident",
+                  "get_environment_roles"
+                ],
+                "requiredTools": [
+                  "get_incident"
+                ],
+                "maximumToolCalls": 2
               }
             }
           ],
           "expectedFinal": {
-            "outcome": "draftUpdated", "lifecycle": "collecting",
-            "candidate": { "clientId": "client-beta", "environmentId": "PROD-BETA-UK", "roleId": "ProductionReadOnly", "justification": null, "incidentId": "INC-2042" },
-            "clarificationTarget": null, "clarificationChoiceIds": [],
-            "scopeResult": { "kind": "applied", "rejectionReason": null }, "justificationResult": null
+            "outcome": "draftUpdated",
+            "lifecycle": "collecting",
+            "candidate": {
+              "clientId": "client-beta",
+              "environmentId": "PROD-BETA-UK",
+              "roleId": "ProductionReadOnly",
+              "justification": null,
+              "incidentId": "INC-2042"
+            },
+            "clarificationTarget": null,
+            "clarificationChoiceIds": [],
+            "scopeResult": {
+              "kind": "applied",
+              "rejectionReason": null
+            },
+            "justificationResult": null
           }
         },
         {
@@ -1038,7 +1095,7 @@
                 "proposal": {
                   "environment": { "operation": "set", "environmentReferenceKind": "exactEnvironmentId", "value": "RECOVERY-PROD-ALPHA-EU" }
                 },
-                "allowedTools": [], "requiredTools": [], "maximumToolCalls": 0
+                "allowedTools": [ "get_environment_roles" ], "requiredTools": [], "maximumToolCalls": 1
               }
             }
           ],

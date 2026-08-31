@@ -9,13 +9,15 @@ namespace GovernedAccess.Web.Evaluation;
 
 internal sealed record LiveModelEvaluationArguments(
 	string OutputParentPath,
-	string? VariationId);
+	string? VariationId,
+	string? LogFilePath);
 
 internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 {
 	internal const string CommandName = "evaluate-live-model";
 
 	private const string OutputOption = "--output";
+	private const string LogFileOption = "--log-file";
 	private const string VariationOption = "--variation";
 
 	private const string InvalidArgumentsCode = "live_model_evaluation_arguments_invalid";
@@ -51,6 +53,7 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 		ArgumentNullException.ThrowIfNull(arguments);
 		ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 		string? outputPath = null;
+		string? logFilePath = null;
 		string? variationId = null;
 		int index;
 		for (index = 0; index < arguments.Length; index++)
@@ -63,6 +66,12 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 				&& hasValue)
 			{
 				outputPath = arguments[++index];
+			}
+			else if (string.Equals(arguments[index], LogFileOption, StringComparison.Ordinal)
+				&& logFilePath is null
+				&& hasValue)
+			{
+				logFilePath = arguments[++index];
 			}
 			else if (string.Equals(arguments[index], VariationOption, StringComparison.Ordinal)
 				&& variationId is null
@@ -85,7 +94,10 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 			return ApplicationResult.Succeeded(
 				new LiveModelEvaluationArguments(
 					Path.GetFullPath(outputPath, trustedWorkingDirectory),
-					variationId));
+					variationId,
+					logFilePath is null
+						? null
+						: Path.GetFullPath(logFilePath, trustedWorkingDirectory)));
 		}
 		catch (Exception ex) when (((ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException) ? 1 : 0) != 0)
 		{
@@ -172,6 +184,6 @@ internal sealed class LiveModelEvaluationCommand(EvaluationRunner runner)
 
 	private static ApplicationResult<LiveModelEvaluationArguments> InvalidArguments()
 	{
-		return ApplicationResult.Failed<LiveModelEvaluationArguments>(new ApplicationFailure(ApplicationFailureKind.InvalidInput, "live_model_evaluation_arguments_invalid", "Evaluation arguments are invalid. Supported options are '--output <directory>' and '--variation <id>'."));
+		return ApplicationResult.Failed<LiveModelEvaluationArguments>(new ApplicationFailure(ApplicationFailureKind.InvalidInput, "live_model_evaluation_arguments_invalid", "Evaluation arguments are invalid. Supported options are '--output <directory>', '--log-file <path>', and '--variation <id>'."));
 	}
 }

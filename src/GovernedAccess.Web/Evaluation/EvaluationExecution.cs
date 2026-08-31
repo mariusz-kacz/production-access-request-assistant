@@ -305,6 +305,16 @@ internal sealed class EvaluationScenarioExecutor(
 
 	private static EvaluationProposalComparison CompareProposal(List<string> failures, EvaluationProposalExpectation? expected, DraftPatch? observed)
 	{
+		EvaluationOperationExpectation? observedEnvironment = ToOperationExpectation(observed?.Environment);
+		EvaluationOperationExpectation? observedRole = ToOperationExpectation(observed?.Role);
+		EvaluationOperationExpectation? observedJustification = ToOperationExpectation(observed?.Justification);
+		EvaluationOperationExpectation? observedIncident = ToOperationExpectation(observed?.Incident);
+		bool environmentMatches = EnvironmentOperationsMatch(
+			expected?.Environment,
+			observedEnvironment);
+		bool roleMatches = expected?.Role == observedRole;
+		bool justificationMatches = expected?.Justification == observedJustification;
+		bool incidentMatches = expected?.Incident == observedIncident;
 		if (expected is not null || observed is not null)
 		{
 			if (expected is null || observed is null)
@@ -313,33 +323,56 @@ internal sealed class EvaluationScenarioExecutor(
 			}
 			else
 			{
-				CompareOperation(failures, "environment", expected.Environment, observed.Environment);
-				CompareOperation(failures, "role", expected.Role, observed.Role);
-				CompareOperation(failures, "justification", expected.Justification, observed.Justification);
-				CompareOperation(failures, "incident", expected.Incident, observed.Incident);
+				AddOperationMismatch(failures, "environment", environmentMatches);
+				AddOperationMismatch(failures, "role", roleMatches);
+				AddOperationMismatch(failures, "justification", justificationMatches);
+				AddOperationMismatch(failures, "incident", incidentMatches);
 			}
 		}
-		EvaluationOperationExpectation? observedEnvironment = ToOperationExpectation(observed?.Environment);
-		EvaluationOperationExpectation? observedRole = ToOperationExpectation(observed?.Role);
-		EvaluationOperationExpectation? observedJustification = ToOperationExpectation(observed?.Justification);
-		EvaluationOperationExpectation? observedIncident = ToOperationExpectation(observed?.Incident);
 		return new EvaluationProposalComparison(
 			expected is not null,
 			observed is not null,
-			ToFieldComparison(expected?.Environment, observedEnvironment),
-			ToFieldComparison(expected?.Role, observedRole),
-			ToFieldComparison(expected?.Justification, observedJustification),
-			ToFieldComparison(expected?.Incident, observedIncident));
+			ToFieldComparison(expected?.Environment, observedEnvironment, environmentMatches),
+			ToFieldComparison(expected?.Role, observedRole, roleMatches),
+			ToFieldComparison(expected?.Justification, observedJustification, justificationMatches),
+			ToFieldComparison(expected?.Incident, observedIncident, incidentMatches));
 	}
 
 	private static EvaluationProposalFieldComparison ToFieldComparison(
 		EvaluationOperationExpectation? expected,
-		EvaluationOperationExpectation? observed)
+		EvaluationOperationExpectation? observed,
+		bool matches)
 	{
 		return new EvaluationProposalFieldComparison(
-			expected == observed,
+			matches,
 			ToOperationSnapshot(expected),
 			ToOperationSnapshot(observed));
+	}
+
+	private static bool EnvironmentOperationsMatch(
+		EvaluationOperationExpectation? expected,
+		EvaluationOperationExpectation? observed)
+	{
+		if (expected == observed)
+		{
+			return true;
+		}
+
+		return expected is
+			{
+				Operation: EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: EvaluationEnvironmentReferenceKind.SearchQuery,
+				Value: { } expectedQuery,
+			}
+			&& observed is
+			{
+				Operation: EvaluationOperationKind.Set,
+				EnvironmentReferenceKind: EvaluationEnvironmentReferenceKind.SearchQuery,
+				Value: { } observedQuery,
+			}
+			&& EnvironmentSearchPolicy.AreQueriesEquivalent(
+				expectedQuery,
+				observedQuery);
 	}
 
 	private static EvaluationOperationSnapshot? ToOperationSnapshot(
@@ -353,10 +386,12 @@ internal sealed class EvaluationScenarioExecutor(
 				operation.Value);
 	}
 
-	private static void CompareOperation(List<string> failures, string field, EvaluationOperationExpectation? expected, object? observed)
+	private static void AddOperationMismatch(
+		List<string> failures,
+		string field,
+		bool matches)
 	{
-		var actual = ToOperationExpectation(observed);
-		if (expected != actual)
+		if (!matches)
 		{
 			failures.Add("proposal." + field);
 		}

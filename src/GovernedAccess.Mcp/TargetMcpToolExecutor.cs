@@ -23,6 +23,7 @@ public sealed partial class TargetMcpToolExecutor(
         where TResult : notnull
     {
         var startedAt = Stopwatch.GetTimestamp();
+        LogToolStarted(logger, toolName);
 
         try
         {
@@ -134,6 +135,14 @@ public sealed partial class TargetMcpToolExecutor(
         options.Converters.Add(new JsonStringEnumConverter());
         return options;
     }
+
+    [LoggerMessage(
+        EventId = 3010,
+        Level = LogLevel.Information,
+        Message = "Target MCP tool {ToolName} started.")]
+    private static partial void LogToolStarted(
+        ILogger logger,
+        string toolName);
 
     [LoggerMessage(
         EventId = 3011,

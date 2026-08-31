@@ -32,16 +32,25 @@ Do not store credentials or tokens in `appsettings*.json`.
 Run the complete fixed inventory:
 
 ```powershell
-dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation --log-file artifacts/live-model-evaluation/evaluation.log
 ```
 
 `--output <directory>` selects the parent directory for one run-specific result
 directory and defaults to `artifacts/live-model-evaluation`.
 
+`--log-file <path>` optionally copies the complete console stream, including
+timestamped application logs, to a UTF-8 file while continuing to display it in the
+terminal. The resolved file path is written to both destinations. Relative paths
+resolve from the evaluation process working directory; use an absolute path if the
+exact location matters. Missing parent directories are created, and an existing file at
+that exact path is replaced when the run starts. The file contains the same safe
+operational metadata as the console; the option does not enable raw prompts,
+transcripts, model responses, credentials, or complete MCP payload logging.
+
 To rerun one variation while diagnosing a failure, pass its exact, case-sensitive ID:
 
 ```powershell
-dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --variation EVAL-01-ONE-SHOT --output artifacts/live-model-evaluation
+dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --variation EVAL-05-OTHER-THREE --output artifacts/live-model-evaluation --log-file artifacts/live-model-evaluation/EVAL-05-OTHER-THREE.log
 ```
 
 `--variation <id>` accepts one variation from the fixed dataset. An unknown ID,
@@ -90,7 +99,9 @@ The detailed inventory and governance rules remain authoritative in the
 The executable dataset is
 [`deterministic-intake-v1.json`](../src/GovernedAccess.Web/Evaluation/Datasets/deterministic-intake-v1.json).
 
-## Promoted evidence
+## Evaluation evidence
+
+### Historical promoted run
 
 The complete credentialed run `61e44fc4-9fae-43c2-825e-3b366199f712`, executed on
 2026-08-28 against source commit
@@ -107,9 +118,25 @@ requests, decisions, operations, or grants. Its schema-version-4 artifacts were
 generated in the gitignored output location and were not committed; generated
 artifacts are not a source-controlled product contract.
 
-That run is retained as historical evidence for its recorded versions. The current
-`deterministic-intake-3.0.1` dataset and prompt contract `3.1.0` require a new complete
-credentialed run before they can be presented as promoted live-model evidence.
+That run is retained as historical evidence for its recorded versions.
+
+### Documented passing run
+
+The complete credentialed run `ae36feff-01f1-49b6-9b4e-8c5579dcd9e8`, completed on
+2026-08-31, passed all 14 promoted groups and all 41 variations with absolute safety
+PASS and zero requests, decisions, operations, or grants. It used Foundry Responses
+deployment/model `production-access-request-model`, dataset
+`deterministic-intake-3.0.1` with SHA-256
+`1d6feb66f74d1bd741c9c0bee3da338100a6cd0a62c7d48f1dd1ab7a9db26c36`, prompt
+contract `3.1.1`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
+
+Its reviewed [report](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/report.md)
+and [machine-readable result](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/result.json)
+are retained as repository documentation. The run records source commit
+`7cd529eeb275eade3225c48b44de34fdf58dc404`, but the evaluated working tree contained
+uncommitted changes. It therefore documents the observed stable passing behavior but
+is not clean-source promotion evidence. A complete rerun from a clean committed tree
+is required for that stronger claim.
 
 ## Artifacts
 
@@ -182,7 +209,9 @@ Environment search queries, justifications, mismatching model-proposed identifie
 canonical candidate values, clarification IDs, diagnostic codes, and tool names are
 retained exactly. These values remain untrusted diagnostic evidence and never become
 authorization input. Because the dataset is fixed and synthetic, generated artifacts
-must not be reused for non-synthetic requester data or committed to source control.
+must not be reused for non-synthetic requester data. Only deliberately reviewed
+synthetic copies in the [documented run index](evaluation/runs/README.md) are retained
+in source control.
 
 Generated runs remain ignored by default. A previously committed artifact from the
 retired evaluator has been removed from the working tree and remains in Git history;

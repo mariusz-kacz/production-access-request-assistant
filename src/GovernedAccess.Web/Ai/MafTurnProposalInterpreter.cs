@@ -13,7 +13,7 @@ namespace GovernedAccess.Web.Ai;
 
 internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpreter
 {
-    internal const string PromptContractVersion = "3.1.0";
+    internal const string PromptContractVersion = "3.1.1";
     internal const string McpContractVersion = "3.0.0";
     internal const string McpHttpClientName = "GovernedAccess.MafMcpLoopback";
 
@@ -62,6 +62,10 @@ internal sealed partial class MafTurnProposalInterpreter : ITurnProposalInterpre
         rules. The non-update acts have no semantic payload except discussDraft's one closed discussionTopic.
 
         Resolve requester references to an active clarification only against its bounded displayed choices.
+        An active clarification limits only references intended to select among its displayed choices.
+        If the requester explicitly supplies a different exact environment or role ID matching the clarification
+        target, treat it as a new field update that replaces the active clarification; do not require the ID to
+        appear among the clarification choices.
         A reference is safely resolvable when its positional, identifier-based, descriptive, contrastive, or eliminative
         meaning identifies exactly one active choice. Stable 1-based positions reflect displayed order. In a
         two-choice clarification, an unqualified contrastive reference denotes the second displayed choice

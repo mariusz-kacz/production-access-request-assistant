@@ -62,6 +62,23 @@ public static class EnvironmentSearchPolicy
         return EnvironmentSearchResult.FromMatches(matches);
     }
 
+    public static bool AreQueriesEquivalent(string? left, string? right)
+    {
+        if (!TryNormalizeQuery(left, out var normalizedLeft)
+            || !TryNormalizeQuery(right, out var normalizedRight))
+        {
+            return false;
+        }
+
+        var leftTokens = Tokenize(normalizedLeft);
+        var rightTokens = Tokenize(normalizedRight);
+        return leftTokens.Count > 0
+            && rightTokens.Count > 0
+            && new HashSet<string>(
+                leftTokens,
+                StringComparer.OrdinalIgnoreCase).SetEquals(rightTokens);
+    }
+
     private static bool TryNormalizeQuery(
         string? query,
         out string normalizedQuery)

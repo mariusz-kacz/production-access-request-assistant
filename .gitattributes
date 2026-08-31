@@ -1,0 +1,2 @@
+/docs/evaluation/runs/*/result.json -text
+/docs/evaluation/runs/*/report.md -text

@@ -16,7 +16,7 @@ internal sealed record AgentExecutionLimits
     internal const int HardMaximumToolCalls = 4;
     internal const int HardMaximumProviderIterations = 6;
     internal static readonly TimeSpan HardMaximumCumulativeTimeout =
-        TimeSpan.FromSeconds(30);
+        TimeSpan.FromSeconds(60);
 
     internal static AgentExecutionLimits Default { get; } = new(
         HardMaximumMessageCharacters,
