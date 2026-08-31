@@ -281,15 +281,7 @@ public sealed class GovernedAccessWebFactory : WebApplicationFactory<Program>
                     new RequestPreparationModelMetadata(
                         nameof(RequestPreparationModelProfile.Deterministic),
                         null));
-                services
-                    .AddChatClient(replacementChatClient)
-                    .UseFunctionInvocation(configure: static client =>
-                    {
-                        client.AllowConcurrentInvocation = false;
-                        client.IncludeDetailedErrors = false;
-                        client.MaximumIterationsPerRequest = 6;
-                        client.TerminateOnUnknownCalls = true;
-                    });
+                services.AddChatClient(replacementChatClient);
             }
             else
             {

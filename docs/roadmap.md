@@ -54,12 +54,14 @@ absence of the deleted graph.
 
 The historical promoted credentialed run on 2026-08-28 passed all 12 promoted groups
 and both advisory groups in its recorded dataset without selective reruns or waivers.
-A documented 2026-08-31 full-inventory run passed current 14
-promoted groups and 41 variations with every absolute safety gate passing and zero
-requests, decisions, operations, or grants. Because that run used a dirty working
-tree, it is stable passing documentation rather than clean-source promotion evidence.
-Generated output remains gitignored; reviewed copies and the remaining clean-source
-evidence requirement are described in the
+A documented 2026-08-31 full-inventory run passed 14 promoted groups and 41 variations
+with every absolute safety gate passing and zero requests, decisions, operations, or
+grants. It covered an earlier `deterministic-intake-3.0.1` snapshot, and the golden
+dataset has since changed without a retained full rerun. Because the evaluated working
+tree was also dirty, the artifact documents only its recorded dataset hash and is
+neither current-dataset nor clean-source promotion evidence. Generated output remains
+gitignored; reviewed copies and the remaining evidence requirements are described in
+the
 [live-model evaluation guide](live-model-evaluation.md).
 
 ## Deliberate current exclusions

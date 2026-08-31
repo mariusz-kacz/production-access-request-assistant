@@ -7,6 +7,8 @@ using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Ai;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
@@ -199,6 +201,82 @@ public sealed class MafTurnProposalToolBoundaryTests
     }
 
     [Fact]
+    public async Task RegisteredProviderToolLoopCountsEveryProviderIteration()
+    {
+        var providerIteration = 0;
+        var providerClient = new RecordingChatClient(_ => Task.FromResult(
+            providerIteration++ == 0
+                ? ToolCalls(
+                    new FunctionCallContent(
+                        "roles-call",
+                        "get_environment_roles",
+                        new Dictionary<string, object?>
+                        {
+                            ["environmentId"] = "PROD-ALPHA-EU",
+                        }))
+                : TextResponse(
+                    """{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""")));
+        using var serviceProvider = CreateRegisteredProvider(providerClient);
+        await using var host = await TargetMcpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        var interpreter = CreateInterpreter(
+            serviceProvider.GetRequiredService<IChatClient>(),
+            host);
+
+        var result = await interpreter.InterpretAsync(
+            Turn("Check the available roles before responding."),
+            TestContext.Current.CancellationToken);
+
+        var succeeded = Assert.IsType<AgentInterpretationSucceeded>(result);
+        Assert.Equal(2, succeeded.ExecutionMetadata.ProviderIterationCount);
+        Assert.Equal(1, succeeded.ExecutionMetadata.ToolCallCount);
+        Assert.Equal(2, providerClient.InvocationCount);
+    }
+
+    [Fact]
+    public async Task RegisteredProviderToolLoopHonorsProviderIterationLimit()
+    {
+        var providerIteration = 0;
+        var providerClient = new RecordingChatClient(_ => Task.FromResult(
+            providerIteration++ == 0
+                ? ToolCalls(
+                    new FunctionCallContent(
+                        "roles-call",
+                        "get_environment_roles",
+                        new Dictionary<string, object?>
+                        {
+                            ["environmentId"] = "PROD-ALPHA-EU",
+                        }))
+                : TextResponse(
+                    """{"schemaVersion":1,"dialogueAct":"unclear","patch":null,"discussionTopic":null}""")));
+        using var serviceProvider = CreateRegisteredProvider(providerClient);
+        await using var host = await TargetMcpTestHost.CreateSeededAsync(
+            TestContext.Current.CancellationToken);
+        var limits = new AgentExecutionLimits(
+            maximumMessageCharacters: 4000,
+            maximumCallsPerTool: 1,
+            maximumToolCalls: 4,
+            maximumProviderIterations: 1,
+            cumulativeTimeout: TimeSpan.FromSeconds(30));
+        var interpreter = CreateInterpreter(
+            serviceProvider.GetRequiredService<IChatClient>(),
+            host,
+            limits: limits);
+
+        var result = await interpreter.InterpretAsync(
+            Turn("Check the available roles before responding."),
+            TestContext.Current.CancellationToken);
+
+        var failed = Assert.IsType<AgentInterpretationFailed>(result);
+        Assert.Equal(
+            AgentInterpretationFailure.ExecutionBudgetExceeded,
+            failed.Failure);
+        Assert.Equal(1, failed.ExecutionMetadata.ProviderIterationCount);
+        Assert.Equal(1, failed.ExecutionMetadata.ToolCallCount);
+        Assert.Equal(1, providerClient.InvocationCount);
+    }
+
+    [Fact]
     public async Task UnknownFunctionCallFailsClosedWithoutRepair()
     {
         var providerIteration = 0;
@@ -279,14 +357,44 @@ public sealed class MafTurnProposalToolBoundaryTests
     private static MafTurnProposalInterpreter CreateInterpreter(
         IChatClient chatClient,
         TargetMcpTestHost host,
-        ILoggerFactory? loggerFactory = null) =>
+        ILoggerFactory? loggerFactory = null,
+        AgentExecutionLimits? limits = null) =>
         new(
             chatClient,
-            AgentExecutionLimits.Default,
+            limits ?? AgentExecutionLimits.Default,
             new AgentModelMetadata("test-provider", "test-deployment", null),
             loggerFactory ?? NullLoggerFactory.Instance,
             new AgentMcpEndpoint(() => new Uri("http://localhost/")),
             host.HttpClientFactory);
+
+    private static ServiceProvider CreateRegisteredProvider(
+        IChatClient providerClient)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["RequestPreparationModel:ExecutionProfile"] =
+                        "FoundryResponses",
+                    ["RequestPreparationModel:FoundryResponses:Endpoint"] =
+                        "https://governed-access.services.ai.azure.com/openai/v1",
+                    ["RequestPreparationModel:FoundryResponses:DeploymentName"] =
+                        "governed-access-chat",
+                })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        RequestPreparationChatRegistration.AddRequestPreparationChat(
+            services,
+            configuration,
+            () => providerClient);
+        return services.BuildServiceProvider(
+            new ServiceProviderOptions
+            {
+                ValidateOnBuild = true,
+                ValidateScopes = true,
+            });
+    }
 
     private static ChatResponse ToolCalls(params FunctionCallContent[] calls) =>
         new(

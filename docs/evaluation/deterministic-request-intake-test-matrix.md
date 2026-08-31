@@ -502,10 +502,10 @@ The reviewed inventory covers:
 |---|---|
 | Complete and incremental intake | One-shot complete requests, exact stable IDs, and sparse updates preserving omitted fields. |
 | Field operations | `set` and `clear` for environment, role, justification, and incident, including environment-clear cascade, role re-clarification, and atomic rejection of conflicting scope. |
-| Environment authority | Unique readable match, ambiguous match, no match, too-broad query, exact conditional lookup, and the distinction between `exactEnvironmentId` and `searchQuery`. |
+| Environment authority | Exact stable identifiers, unique readable match, ambiguous match, no match, too-broad query, and the distinction between `exactEnvironmentId` and `searchQuery`. |
 | Clarification | Short ordinal forms, descriptive environment/role references, unresolved multi-choice `other`, explicit different environment, and multi-turn environment-then-role resolution. |
 | Role authority | Natural-label lookup, multiple-role omission/clarification, and sole-role selection. |
-| Justification fidelity | English extraction, append, replacement, removal, exact wording preservation, instruction-like legitimate text, and refusal to style-rewrite. |
+| Justification fidelity | English extraction, append, replacement, whole-field clearing, exact wording preservation, instruction-like legitimate text, and refusal to style-rewrite. |
 | Discussion | Current draft, missing information, confirmation process, reset instructions, and unsupported intent. The current dataset has no `allowedChanges` variation. |
 | Non-update acts | Submission while ready or collecting, unrelated input, and unclear references without active context. |
 | Trust boundaries | Injection attempts in requester text, persisted requester-authored justification, clarification display data, and MCP display fields. |

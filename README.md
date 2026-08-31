@@ -205,9 +205,12 @@ outcomes. Its current dataset version is `deterministic-intake-3.0.1` (schema ve
 operations, environment-search cardinalities, clarification references, role
 authority, justification transformations, represented discussion/non-update acts,
 trust channels, and bounded failures. A documented 2026-08-31 full-inventory run
-passed all 14 groups and 41 variations for that dataset and prompt. Because its
-working tree was not clean, it is stable passing documentation rather than
-clean-source promotion evidence. Its reviewed
+passed all 14 groups and 41 variations for an earlier
+`deterministic-intake-3.0.1` snapshot with recorded SHA-256 `1d6feb66...`. The golden
+dataset was edited after that run and no retained full run covers its current exact
+bytes and expectations. Because the evaluated working tree was also not clean, the run
+is stable passing documentation for its recorded snapshot rather than current-dataset
+or clean-source promotion evidence. Its reviewed
 [report and result](docs/evaluation/runs/README.md) are retained in the repository;
 newly generated runs remain local and gitignored by default.
 

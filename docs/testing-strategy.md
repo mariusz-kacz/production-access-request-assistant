@@ -157,11 +157,13 @@ generated in the gitignored output location and were not committed. An older art
 from the retired evaluator was removed and remains available in Git history.
 
 That run remains historical evidence for its recorded dataset and prompt versions. A
-documented 2026-08-31 full-inventory run passed the current dataset's 14 groups and 41
-variations with zero consequential side effects, but its working tree was not clean.
-It is retained as stable passing documentation rather than clean-source promotion
-evidence. A complete credentialed rerun from a clean committed tree is required for
-that stronger claim.
+documented 2026-08-31 full-inventory run passed 14 groups and 41 variations with zero
+consequential side effects, but it covered an earlier
+`deterministic-intake-3.0.1` snapshot and its working tree was not clean. The golden
+dataset has since changed without a retained full rerun. The artifact is therefore
+stable passing documentation for its recorded SHA-256, not current-dataset or
+clean-source promotion evidence. A complete credentialed rerun from a clean committed
+tree against the current golden dataset is required for those stronger claims.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,

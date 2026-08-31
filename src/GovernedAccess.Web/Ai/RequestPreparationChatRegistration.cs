@@ -56,21 +56,13 @@ internal static class RequestPreparationChatRegistration
     {
         services.AddSingleton(resolution);
         services.AddSingleton(metadata);
-        services
-            .AddChatClient(serviceProvider =>
-                new ModelCallLoggingChatClient(
-                    CreateSelectedClient(
-                        resolution,
-                        () => foundryResponsesClientFactory(serviceProvider)),
-                    serviceProvider.GetRequiredService<
-                        ILogger<ModelCallLoggingChatClient>>()))
-            .UseFunctionInvocation(configure: static client =>
-            {
-                client.AllowConcurrentInvocation = false;
-                client.IncludeDetailedErrors = false;
-                client.MaximumIterationsPerRequest = 6;
-                client.TerminateOnUnknownCalls = true;
-            });
+        services.AddChatClient(serviceProvider =>
+            new ModelCallLoggingChatClient(
+                CreateSelectedClient(
+                    resolution,
+                    () => foundryResponsesClientFactory(serviceProvider)),
+                serviceProvider.GetRequiredService<
+                    ILogger<ModelCallLoggingChatClient>>()));
 
         return services;
     }

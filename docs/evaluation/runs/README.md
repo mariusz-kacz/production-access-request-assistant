@@ -27,6 +27,11 @@ For run `ae36feff-01f1-49b6-9b4e-8c5579dcd9e8`:
   `1d6feb66f74d1bd741c9c0bee3da338100a6cd0a62c7d48f1dd1ab7a9db26c36`
   matches the executable dataset reviewed with the run.
 
+The checked-in golden dataset was edited after this run while retaining the
+`deterministic-intake-3.0.1` version label. It no longer matches the recorded dataset
+hash, so these immutable artifacts do not validate the current exact inputs and
+expectations.
+
 `scope.promotionEligible: true` in a result means the evaluator covered the full
 inventory. It does not override the separate clean-source provenance requirement in
 the [live-model evaluation guide](../../live-model-evaluation.md).

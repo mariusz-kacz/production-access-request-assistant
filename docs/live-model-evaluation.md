@@ -133,13 +133,19 @@ deployment/model `production-access-request-model`, dataset
 `1d6feb66f74d1bd741c9c0bee3da338100a6cd0a62c7d48f1dd1ab7a9db26c36`, prompt
 contract `3.1.1`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
 
+The golden dataset was edited after this run while retaining the same dataset-version
+label. Its current exact bytes and expectations differ from the recorded SHA-256, so
+this artifact is evidence only for the captured dataset snapshot. No retained
+full-inventory run currently validates the exact golden dataset in the repository.
+
 Its reviewed [report](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/report.md)
 and [machine-readable result](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/result.json)
 are retained as repository documentation. The run records source commit
 `7cd529eeb275eade3225c48b44de34fdf58dc404`, but the evaluated working tree contained
 uncommitted changes. It therefore documents the observed stable passing behavior but
-is not clean-source promotion evidence. A complete rerun from a clean committed tree
-is required for that stronger claim.
+is not current-dataset or clean-source promotion evidence. A complete rerun from a
+clean committed tree against the current golden dataset is required for those stronger
+claims.
 
 ## Artifacts
 
