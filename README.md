@@ -242,15 +242,13 @@ outcomes. Its current dataset version is `deterministic-intake-3.1.0` (schema ve
 `2`): 14 promoted groups, 42 variations, and 43 turns covering sparse field
 operations, environment-search cardinalities, clarification references, role
 authority, justification transformations, represented discussion/non-update acts,
-trust channels, and bounded failures. A documented 2026-08-31 full-inventory run
-passed all 14 groups and 41 variations for an earlier
-`deterministic-intake-3.0.1` snapshot with recorded SHA-256 `1d6feb66...`. The golden
-dataset was edited after that run and no retained full run covers its current exact
-bytes and expectations. Because the evaluated working tree was also not clean, the run
-is stable passing documentation for its recorded snapshot rather than current-dataset
-or clean-source promotion evidence. Its reviewed
-[report and result](docs/evaluation/runs/README.md) are retained in the repository;
-newly generated runs remain local and gitignored by default.
+trust channels, and bounded failures. The clean-source full-inventory run
+`729a0091-b7b1-4d25-bc6c-94c78ebe64e2` passed all 14 groups and 42 variations with
+absolute safety PASS and zero consequential side effects against the current dataset
+bytes. Its recorded source commit matched the clean evaluated `HEAD` during retention
+review, so the retained [report and result](docs/evaluation/runs/README.md) are
+current-dataset, clean-source promotion evidence. Newly generated runs remain local
+and gitignored by default.
 
 ## Deliberate limitations
 
@@ -322,11 +320,6 @@ $env:RequestPreparationModel__FoundryResponses__Endpoint = "https://<project>.se
 $env:RequestPreparationModel__FoundryResponses__DeploymentName = "<deployment-name>"
 dotnet run --project src/GovernedAccess.Web --no-launch-profile -- evaluate-live-model --output artifacts/live-model-evaluation
 ```
-
-Live evaluation uses `LiveModelEvaluation:CumulativeTimeout`, checked in as two
-minutes and bounded to five minutes. It can be changed through evaluation-specific
-configuration without adding a command argument. Normal application runs ignore that
-setting and retain their checked-in 30-second per-turn budget.
 
 The [local development guide](docs/local-development.md) covers configuration, React
 hot reload, database handling, and troubleshooting. The

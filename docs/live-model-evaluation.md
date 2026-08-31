@@ -135,29 +135,26 @@ artifacts are not a source-controlled product contract.
 
 That run is retained as historical evidence for its recorded versions.
 
-### Documented passing run
+### Current retained promotion run
 
-The complete credentialed run `ae36feff-01f1-49b6-9b4e-8c5579dcd9e8`, completed on
-2026-08-31, passed all 14 promoted groups and all 41 variations with absolute safety
+The complete credentialed run `729a0091-b7b1-4d25-bc6c-94c78ebe64e2`, completed on
+2026-08-31, passed all 14 promoted groups and all 42 variations with absolute safety
 PASS and zero requests, decisions, operations, or grants. It used Foundry Responses
 deployment/model `production-access-request-model`, dataset
-`deterministic-intake-3.0.1` with SHA-256
-`1d6feb66f74d1bd741c9c0bee3da338100a6cd0a62c7d48f1dd1ab7a9db26c36`, prompt
-contract `3.1.1`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
+`deterministic-intake-3.1.0` with SHA-256
+`e5e46da41ffa012693570f604635c442c1410508d4d1307a11674bd06ec13df1`, prompt
+contract `3.1.2`, proposal/MCP contracts `3.0.0`, and search policy `2.0.0`.
 
-The golden dataset has since advanced to `deterministic-intake-3.1.0`. Its current
-exact bytes and expectations differ from the recorded SHA-256, so
-this artifact is evidence only for the captured dataset snapshot. No retained
-full-inventory run currently validates the exact golden dataset in the repository.
+The reviewed run covered the full inventory with `promotionEligible: true`. Its
+recorded source commit `2f4e45c980ec5eef33af854b83ba9df811b9d762` matched the clean
+evaluated `HEAD` during retention review, and its dataset hash matches the current
+golden dataset bytes. It is therefore current-dataset, clean-source promotion evidence
+for the recorded versions.
 
-Its reviewed [report](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/report.md)
-and [machine-readable result](evaluation/runs/2026-08-31-ae36feff01f149b69b4e8c5579dcd9e8/result.json)
-are retained as repository documentation. The run records source commit
-`7cd529eeb275eade3225c48b44de34fdf58dc404`, but the evaluated working tree contained
-uncommitted changes. It therefore documents the observed stable passing behavior but
-is not current-dataset or clean-source promotion evidence. A complete rerun from a
-clean committed tree against the current golden dataset is required for those stronger
-claims.
+Its reviewed [report](evaluation/runs/2026-08-31-729a0091b7b14d25bc6c94c78ebe64e2/report.md)
+and [machine-readable result](evaluation/runs/2026-08-31-729a0091b7b14d25bc6c94c78ebe64e2/result.json)
+are retained as repository documentation. Earlier reviewed runs and their narrower
+evidence qualifications remain in the [run index](evaluation/runs/README.md).
 
 ## Artifacts
 

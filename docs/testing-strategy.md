@@ -157,13 +157,12 @@ generated in the gitignored output location and were not committed. An older art
 from the retired evaluator was removed and remains available in Git history.
 
 That run remains historical evidence for its recorded dataset and prompt versions. A
-documented 2026-08-31 full-inventory run passed 14 groups and 41 variations with zero
-consequential side effects, but it covered an earlier
-`deterministic-intake-3.0.1` snapshot and its working tree was not clean. The golden
-dataset has since changed without a retained full rerun. The artifact is therefore
-stable passing documentation for its recorded SHA-256, not current-dataset or
-clean-source promotion evidence. A complete credentialed rerun from a clean committed
-tree against the current golden dataset is required for those stronger claims.
+retained 2026-08-31 clean-source full-inventory run passed all 14 groups and 42
+variations with absolute safety PASS and zero consequential side effects. It covered
+the current `deterministic-intake-3.1.0` bytes, and its recorded source commit matched
+the clean evaluated `HEAD` during retention review. It is current-dataset, clean-source
+promotion evidence for the recorded provider, prompt, proposal, MCP, and search-policy
+versions.
 
 The command cannot replace deterministic schema, authorization, persistence,
 side-effect, concurrency, or failure-path assertions. Configuration, execution,
