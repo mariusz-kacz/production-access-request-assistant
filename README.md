@@ -78,7 +78,7 @@ Use the following documents to explore the system:
 7. [Architecture decisions](docs/adr/README.md) — significant design choices, their
    trade-offs, and revisit criteria.
 
-## Architectural proof
+## Architectural properties
 
 - **Bounded AI interpretation:** the model produces a schema-constrained proposal and
   can use exactly four read-only MCP tools; deterministic Core services reload and
@@ -168,7 +168,7 @@ does not fall back to the deterministic client.
 
 ## Why MAF and MCP are here
 
-| Boundary | What this project uses it for |
+| Boundary | Role in this implementation |
 |---|---|
 | MAF | One fresh bounded interpretation session per message, a schema-constrained sparse proposal, and sequential function invocation through `IChatClient`. The loop allows at most six iterations, disables concurrent tool invocation, and terminates on unknown calls. Provider sessions are not retained. |
 | MCP | A real stateless Streamable HTTP boundary for request context. The interpreter requires an exact four-tool catalog and read-only annotations before model execution. MCP is not used for the approval or provisioning workflow. |
@@ -272,10 +272,10 @@ and gitignored by default.
 - Observability is limited to structured logs, correlation IDs, persisted audit
   evidence, and an `ActivitySource` seam. There is no configured OpenTelemetry export,
   production monitoring, abuse detection, or production capacity SLO.
-- Several Microsoft Agent packages are preview or beta dependencies. The project does
-  not claim stable production support for those integration surfaces.
+- Several Microsoft Agent packages are preview or beta dependencies. The implementation
+  does not claim stable production support for those integration surfaces.
 
-The project intentionally excludes real identity federation, mutable enterprise
+The implementation intentionally excludes real identity federation, mutable enterprise
 reference systems, automatic reconciliation and revocation, distributed transactions,
 generic workflow engines, RAG, multi-agent orchestration, and multiple deployable
 services.

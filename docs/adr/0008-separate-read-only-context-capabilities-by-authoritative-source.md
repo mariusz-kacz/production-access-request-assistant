@@ -55,7 +55,9 @@ on both surfaces. The agent never receives a larger hidden result set.
 
 ## Rationale
 
-The four capabilities model enterprise ownership and failure boundaries without exposing generic access. They demonstrate federated context gathering while retaining least privilege:
+The four capabilities model enterprise ownership and failure boundaries without
+exposing generic access. They support federated context gathering while retaining
+least privilege:
 
 - search input is readable but bounded;
 - exact lookup establishes stable identity and eligibility;
@@ -77,7 +79,8 @@ Using one shared search-policy implementation prevents the agent's visible catal
 - Core can revalidate mutable role assignments before readiness and confirmation.
 - Environment eligibility is explicit rather than inferred from existence.
 - One search policy version governs both the MCP projection and authoritative Core result.
-- The project provides a stronger enterprise GenAI architecture narrative without adding deployable services or real integrations.
+- The implementation represents distinct enterprise authority boundaries without
+  adding deployable services or real integrations.
 
 ### Negative and risks
 

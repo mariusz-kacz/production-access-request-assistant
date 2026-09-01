@@ -156,8 +156,8 @@ linguistic and justification-fidelity quality is evaluated at the agent boundary
 - Mixed patches have one atomic scope group and one independent justification group.
 - Justification fidelity is governed without trusting a model-authored certification.
 - Model prose cannot claim a transition that did not commit.
-- The project demonstrates a credible enterprise GenAI boundary: probabilistic
-  interpretation, deterministic state/authority, and explicit confirmation.
+- The implementation preserves a clear governed AI boundary: probabilistic
+  interpretation, deterministic state and authority, and explicit confirmation.
 
 ### Negative and risks
 

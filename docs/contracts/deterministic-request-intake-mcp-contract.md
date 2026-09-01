@@ -1,6 +1,6 @@
 # MCP Contract: Deterministic Request Intake
 
-- **Status:** Current; promoted to production on 2026-08-27
+- **Status:** Current; promoted to the active product baseline on 2026-08-27
 - **Date:** 2026-08-26
 - **Last reconciled:** 2026-08-28
 - **Canonical machine-readable contract:** `mcp-tools.json`
@@ -297,7 +297,8 @@ proposals execute authoritative search and exact-reload a unique result.
 
 ## 11. Promotion record
 
-The four-tool contract was promoted to production on 2026-08-27 after the deterministic
-implementation gates passed. `docs/contracts/mcp-tools.json` is the canonical
-machine-readable shape. Current product, architecture, security, orchestration,
-testing, operator, and README guidance use this catalog without a target qualifier.
+The four-tool contract became the active product baseline on 2026-08-27 after the
+deterministic implementation gates passed. `docs/contracts/mcp-tools.json` is the
+canonical machine-readable shape. Current product, architecture, security,
+orchestration, testing, operator, and README guidance use this catalog without a
+target qualifier.

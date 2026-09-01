@@ -85,7 +85,8 @@ deterministic search, independent Core authority, and typed source failures.
 ## Migration record
 
 1. The amendment and ADR 0008 governed the target four-tool catalog.
-2. The implementation passed its deterministic gates before production cutover.
+2. The implementation passed its deterministic gates before the four-tool baseline
+   was promoted.
 3. The four-tool contract and independent Core revalidation boundaries were promoted.
 4. Current product, architecture, security, testing, operator, and contract
    documentation was reconciled with the promoted catalog.

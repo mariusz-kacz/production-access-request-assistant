@@ -84,8 +84,9 @@ immutable copies are indexed from the
 
 ## Future direction: enterprise production adoption
 
-The portfolio implementation is synthetic. Moving toward production requires a new
-governed target rather than treating the local architecture as production-ready.
+The current reference implementation is bounded and synthetic. Moving toward
+production requires a new governed target rather than treating the local architecture
+as production-ready.
 
 ### Invariants that carry forward
 

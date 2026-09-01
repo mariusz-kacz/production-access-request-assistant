@@ -80,7 +80,7 @@ AI-provider, and MCP SDK details. The project MUST NOT add a generic workflow en
 multi-agent design, large RAG subsystem, separate deployable services, or
 distributed-system infrastructure without an approved baseline amendment and a
 documented concrete need. New projects, modules, and abstractions MUST solve a current
-boundary or testability requirement. This keeps the portfolio implementation
+boundary or testability requirement. This keeps the bounded local implementation
 understandable and proportionate to its single-host scope.
 
 ## Product and Technical Constraints

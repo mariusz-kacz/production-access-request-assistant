@@ -43,8 +43,9 @@ tests, and surface any remaining mismatch before changing behavior.
 
 ## Current product boundary
 
-- This is a portfolio-grade local implementation using only synthetic identity, data,
-  provisioning, and grants. It grants no real production access.
+- This is a bounded, synthetic, production-shaped local implementation. It uses only
+  synthetic identity, data, provisioning, and grants; it grants no real production
+  access.
 - One executable `GovernedAccess.Web` host serves the Teams endpoint, same-origin API,
   React assets, read-only MCP endpoint, two independently owned SQLite databases, and
   synthetic provisioner.

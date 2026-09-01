@@ -20,15 +20,15 @@ The governed production access application needs to provide:
 - idempotent synthetic provisioning.
 
 These capabilities could be split into separately deployed web, MCP, workflow, and
-provisioning services. The current product, however, is a focused local
-reference implementation maintained by one developer. It has two clients, two
-environments, six fixed demonstration principals, synthetic data, no real production
-access, and no independent scaling or ownership requirements.
+provisioning services. The current product, however, is a focused local reference
+implementation. It has two clients, two environments, six fixed synthetic principals,
+synthetic data, no real production access, and no independent scaling or ownership
+requirements.
 
 Splitting the application at this stage would introduce service-to-service identity,
 network failure handling, deployment coordination, contract versioning, distributed
-observability, and cross-service consistency concerns that do not demonstrate an
-approved product requirement. In particular, a separate MCP process would add an
+observability, and cross-service consistency concerns unsupported by an approved
+product requirement. In particular, a separate MCP process would add an
 operational boundary without making MCP an authorization boundary.
 
 ## Decision
@@ -91,8 +91,8 @@ This deployment shape is proportionate to the current requirements:
   consistency boundary.
 - It avoids distributed failure modes and security machinery that would be synthetic
   rather than product-driven in this MVP.
-- It gives one developer a codebase that can be implemented, tested, run, and
-  demonstrated coherently.
+- It keeps the application implementable, testable, and operable as one coherent
+  system.
 - It still exercises a real typed MCP protocol boundary and permits MCP contract and
   interaction tests.
 - Internal ports and adapters provide a practical extraction seam if a genuine
@@ -213,15 +213,16 @@ real provider, credential boundary, or independent operations owner appears late
 Under this alternative, the model adapter would call application context services or
 repository-backed functions directly. Tool definitions might be constructed in memory,
 but request drafting would not traverse the `/mcp` transport. The application could
-omit the MCP server entirely or expose an endpoint used only by tests and demonstrations.
+omit the MCP server entirely or expose an endpoint unused by the runtime request-
+drafting path.
 
 This is the simplest runtime shape. It avoids loopback HTTP configuration, MCP session
 and transport behavior, serialization overhead, and an additional timeout/failure
 boundary. Direct calls would also be easier to debug in a small application.
 
-It is nevertheless rejected because a real MCP interaction is part of the product
-claim being demonstrated, not an incidental implementation mechanism. Bypassing the
-endpoint in the actual drafting flow would fail to prove:
+It is nevertheless rejected because a real MCP interaction is required product
+behavior, not an incidental implementation mechanism. Bypassing the endpoint in the
+actual drafting flow would leave unverified:
 
 - that MCP inputs and results conform to the explicit typed contracts;
 - that the model-visible server advertises exactly the two allowed tools;
@@ -234,9 +235,9 @@ endpoint in the actual drafting flow would fail to prove:
 - that approval, provisioning, workflow, database, and generic-query capabilities are
   absent from the real model-facing MCP surface.
 
-An unused MCP endpoint alongside direct production calls would test a different path
-from the one demonstrated to users and could drift unnoticed. Calling the co-hosted
-`/mcp` endpoint over Streamable HTTP adds a deliberate local failure boundary, but its
+An unused MCP endpoint alongside direct runtime calls would test a different path
+from the user-facing request-drafting path and could drift unnoticed. Calling the
+co-hosted `/mcp` endpoint over Streamable HTTP adds a deliberate local failure boundary, but its
 timeouts, cancellation, logging, and typed outcomes are required behavior and can be
 covered by integration tests.
 
