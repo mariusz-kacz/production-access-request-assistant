@@ -1,6 +1,7 @@
+using GovernedAccess.Core.Ports;
+using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority;
 using GovernedAccess.ReferenceAuthority.Persistence;
-using GovernedAccess.IntegrationTests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,64 +10,25 @@ namespace GovernedAccess.IntegrationTests.Persistence;
 public sealed class ReferenceAuthorityPersistenceTests
 {
     [Fact]
-    public async Task FreshDatabaseMigratesAndSeedsOnlyReferenceAuthorityTables()
+    public async Task ForeignKeysRejectIncidentsForUnknownEnvironments()
     {
         await using var fixture = await ReferenceAuthorityFixture.CreateAsync();
         await using var scope = fixture.Services.CreateAsyncScope();
         var context = scope.ServiceProvider
             .GetRequiredService<ReferenceAuthorityDbContext>();
+        context.Incidents.Add(
+            new ReferenceIncident(
+                "INC-UNKNOWN",
+                "Incident with an invalid environment",
+                isActive: true,
+                environmentId: "PROD-UNKNOWN"));
 
-        var tables = await ReadTableNamesAsync(
-            context,
-            TestContext.Current.CancellationToken);
-        var migrations = await context.Database.GetAppliedMigrationsAsync(
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            [
-                "Clients",
-                "EnvironmentRoles",
-                "Incidents",
-                "ProductionEnvironments",
-                "__EFMigrationsHistory",
-                "__EFMigrationsLock",
-            ],
-            tables);
-        Assert.Equal(
-            ["20260825072917_InitialReferenceAuthority"],
-            migrations);
-        Assert.Equal(4, await context.Clients.CountAsync(TestContext.Current.CancellationToken));
-        Assert.Equal(
-            16,
-            await context.ProductionEnvironments.CountAsync(
-                TestContext.Current.CancellationToken));
-        Assert.Equal(3, await context.Incidents.CountAsync(TestContext.Current.CancellationToken));
-        var incidentEntity = context.Model.FindEntityType(typeof(ReferenceIncident));
-        Assert.NotNull(incidentEntity);
-        Assert.Equal(
-            ["EnvironmentId", "Id", "IsActive", "Title"],
-            incidentEntity.GetProperties().Select(property => property.Name).Order());
-        var incidentEnvironmentForeignKey = Assert.Single(
-            incidentEntity.GetForeignKeys());
-        Assert.Equal(
-            nameof(ReferenceIncident.EnvironmentId),
-            Assert.Single(incidentEnvironmentForeignKey.Properties).Name);
-        Assert.False(incidentEnvironmentForeignKey.IsRequired);
-        Assert.Equal(
-            nameof(ReferenceIncident.EnvironmentId),
-            Assert.Single(Assert.Single(incidentEntity.GetIndexes()).Properties).Name);
-        Assert.Equal(
-            "PROD-ALPHA-EU",
-            (await context.Incidents.SingleAsync(
-                incident => incident.Id == "INC-1042",
-                TestContext.Current.CancellationToken)).EnvironmentId);
-        Assert.DoesNotContain(tables, table => table.Contains("Request", StringComparison.Ordinal));
-        Assert.DoesNotContain(tables, table => table.Contains("Approval", StringComparison.Ordinal));
-        Assert.DoesNotContain(tables, table => table.Contains("Grant", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => context.SaveChangesAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task RestartUsesTheSameIndependentMigrationAndIdempotentSeed()
+    public async Task ReferenceDataRemainsUsableAfterIdempotentInitializationAndRestart()
     {
         var databasePath = Path.Combine(
             Path.GetTempPath(),
@@ -76,62 +38,27 @@ public sealed class ReferenceAuthorityPersistenceTests
         {
             await using (var first = await ReferenceAuthorityFixture.CreateAsync(databasePath))
             {
-                await using var scope = first.Services.CreateAsyncScope();
-                var context = scope.ServiceProvider
-                    .GetRequiredService<ReferenceAuthorityDbContext>();
                 await ReferenceAuthorityDatabase.InitializeAsync(
                     first.Services,
                     TestContext.Current.CancellationToken);
-                Assert.Equal(
-                    16,
-                    await context.ProductionEnvironments.CountAsync(
-                        TestContext.Current.CancellationToken));
             }
 
             await using var restarted = await ReferenceAuthorityFixture.CreateAsync(databasePath);
-            await using var restartedScope = restarted.Services.CreateAsyncScope();
-            var restartedContext = restartedScope.ServiceProvider
-                .GetRequiredService<ReferenceAuthorityDbContext>();
+            await using var scope = restarted.Services.CreateAsyncScope();
+            var authority = scope.ServiceProvider
+                .GetRequiredService<IProductionEnvironmentAuthority>();
 
-            Assert.Equal(
-                16,
-                await restartedContext.ProductionEnvironments.CountAsync(
-                    TestContext.Current.CancellationToken));
-            Assert.Equal(
-                ["20260825072917_InitialReferenceAuthority"],
-                await restartedContext.Database.GetAppliedMigrationsAsync(
-                    TestContext.Current.CancellationToken));
+            var environment = await authority.GetAsync(
+                "PROD-ALPHA-EU",
+                TestContext.Current.CancellationToken);
+
+            Assert.True(environment.IsSuccess, environment.Failure?.Message);
+            Assert.Equal("client-alpha", environment.Value.ClientId);
+            Assert.True(environment.Value.CanBecomeCanonical);
         }
         finally
         {
             File.Delete(databasePath);
         }
     }
-
-    private static async Task<IReadOnlyList<string>> ReadTableNamesAsync(
-        ReferenceAuthorityDbContext context,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name";
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            var names = new List<string>();
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                names.Add(reader.GetString(0));
-            }
-
-            return names;
-        }
-        finally
-        {
-            await connection.CloseAsync();
-        }
-    }
-
 }

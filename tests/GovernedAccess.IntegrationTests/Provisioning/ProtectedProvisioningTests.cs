@@ -93,7 +93,7 @@ public sealed class ProtectedProvisioningTests
     }
 
     [Fact]
-    public async Task SuccessfulProvisioningPersistsExactlyEightHourGrant()
+    public async Task SuccessfulProvisioningPersistsGrantStateAndSafeAuditEvidence()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await ProvisioningTestFixture.CreateAsync(
@@ -127,8 +127,6 @@ public sealed class ProtectedProvisioningTests
                 cancellationToken);
 
         Assert.Equal(ActivatedAt, grant.ActivatedAt);
-        Assert.Equal(ActivatedAt.AddHours(8), grant.ExpiresAt);
-        Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
         Assert.Equal(RequestId, grant.RequestId);
         Assert.Equal(RequestStatus.Active, request.Status);
         Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Status);

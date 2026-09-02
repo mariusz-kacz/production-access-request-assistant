@@ -1,4 +1,3 @@
-using System.Reflection;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Authority;
@@ -8,30 +7,6 @@ namespace GovernedAccess.UnitTests;
 
 public sealed class PreparationContractTests
 {
-    [Fact]
-    public void DialogueActsAndTopicsAreClosedToTheSpecification()
-    {
-        Assert.Equal(
-            [
-                nameof(DialogueAct.UpdateDraft),
-                nameof(DialogueAct.DiscussDraft),
-                nameof(DialogueAct.RequestSubmission),
-                nameof(DialogueAct.Unrelated),
-                nameof(DialogueAct.Unclear),
-            ],
-            Enum.GetNames<DialogueAct>());
-        Assert.Equal(
-            [
-                nameof(DiscussionTopic.CurrentDraft),
-                nameof(DiscussionTopic.MissingInformation),
-                nameof(DiscussionTopic.AllowedChanges),
-                nameof(DiscussionTopic.ConfirmationProcess),
-                nameof(DiscussionTopic.ResetInstructions),
-                nameof(DiscussionTopic.Unsupported),
-            ],
-            Enum.GetNames<DiscussionTopic>());
-    }
-
     [Fact]
     public void ProposalAcceptsEveryValidActPayloadCombination()
     {
@@ -61,17 +36,6 @@ public sealed class PreparationContractTests
         Assert.Null(submission.Patch);
         Assert.Null(unrelated.Patch);
         Assert.Null(unclear.DiscussionTopic);
-        Assert.Equal(
-            [
-                "DialogueAct",
-                "DiscussionTopic",
-                "Patch",
-                "SchemaVersion",
-            ],
-            typeof(TurnProposal)
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -131,7 +95,7 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void DraftPatchIsSparseNonemptyAndLimitedToFourMutableFields()
+    public void DraftPatchIsSparseAndNonempty()
     {
         Assert.Throws<ArgumentException>(() => new DraftPatch());
 
@@ -142,12 +106,6 @@ public sealed class PreparationContractTests
                 new JustificationProposal(" Restore service. ")),
             incident: new ClearIncidentOperation());
 
-        Assert.Equal(
-            ["Environment", "Incident", "Justification", "Role"],
-            typeof(DraftPatch)
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
         Assert.IsType<ClearEnvironmentOperation>(patch.Environment);
         Assert.Equal("ProductionSupport", Assert.IsType<SetRoleOperation>(patch.Role).RoleId);
         Assert.Equal(
@@ -162,7 +120,7 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void SetAndClearOperationsHaveClosedFieldSpecificPayloads()
+    public void SetAndClearOperationsNormalizeFieldSpecificPayloads()
     {
         var exact = new SetEnvironmentOperation(
             new ExactEnvironmentId(" PROD-ALPHA-EU "));
@@ -175,10 +133,6 @@ public sealed class PreparationContractTests
         Assert.Equal("alpha eu primary", Assert.IsType<EnvironmentSearchQuery>(search.Reference).Query);
         Assert.Equal("ProductionReadOnly", role.RoleId);
         Assert.Equal("INC-1042", incident.IncidentId);
-        Assert.Empty(typeof(ClearEnvironmentOperation).GetProperties());
-        Assert.Empty(typeof(ClearRoleOperation).GetProperties());
-        Assert.Empty(typeof(ClearJustificationOperation).GetProperties());
-        Assert.Empty(typeof(ClearIncidentOperation).GetProperties());
     }
 
     [Fact]
@@ -211,62 +165,8 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void ApplicationGroupResultsAreClosed()
+    public void ApplicationOutcomesCarryTypedSafePayloads()
     {
-        Assert.Equal(
-            [
-                nameof(ProposalField.Environment),
-                nameof(ProposalField.Incident),
-                nameof(ProposalField.Role),
-                nameof(ProposalField.Justification),
-            ],
-            Enum.GetNames<ProposalField>());
-        Assert.Equal(
-            [
-                nameof(ApplicationGroupResultKind.Applied),
-                nameof(ApplicationGroupResultKind.NoOp),
-                nameof(ApplicationGroupResultKind.Rejected),
-                nameof(ApplicationGroupResultKind.NeedsClarification),
-            ],
-            Enum.GetNames<ApplicationGroupResultKind>());
-        Assert.Equal(
-            [
-                nameof(ApplicationGroupRejectionReason.Invalid),
-                nameof(ApplicationGroupRejectionReason.Unavailable),
-                nameof(ApplicationGroupRejectionReason.Conflict),
-                nameof(ApplicationGroupRejectionReason.MissingDependency),
-                nameof(ApplicationGroupRejectionReason.EnvironmentQueryTooBroad),
-                nameof(ApplicationGroupRejectionReason.NoAssignableRoles),
-                nameof(ApplicationGroupRejectionReason.RoleChoiceLimitExceeded),
-            ],
-            Enum.GetNames<ApplicationGroupRejectionReason>());
-    }
-
-    [Fact]
-    public void ApplicationOutcomesAreClosedTypedVariantsWithSafePayloads()
-    {
-        Assert.Equal(
-            [
-                nameof(ClarificationRequired),
-                nameof(ConfirmationRevalidationFailed),
-                nameof(ConfirmationSourceUnavailable),
-                nameof(DraftDiscussion),
-                nameof(DraftUnchanged),
-                nameof(DraftUpdated),
-                nameof(Failed),
-                nameof(ReadyForConfirmation),
-                nameof(ResetGuidance),
-                nameof(SubmissionGuidance),
-                nameof(TerminalPreparationGuidance),
-                nameof(UnclearGuidance),
-                nameof(UnrelatedGuidance),
-            ],
-            typeof(ApplicationOutcome).Assembly
-                .GetTypes()
-                .Where(type => type.BaseType == typeof(ApplicationOutcome))
-                .Select(type => type.Name)
-                .Order(StringComparer.Ordinal));
-
         var updated = new DraftUpdated(
             new ApplicationGroupResult(ApplicationGroupResultKind.Applied),
             justificationResult: null);
@@ -360,32 +260,6 @@ public sealed class PreparationContractTests
     }
 
     [Fact]
-    public void DurablePreparationStateUsesOneOptimisticConcurrencyToken()
-    {
-        Assert.Equal(
-            [
-                "Binding",
-                "Candidate",
-                "Clarification",
-                "ConcurrencyVersion",
-                "CorrelationId",
-                "CreatedAt",
-                "Lifecycle",
-                "MaterialChangeAttributions",
-                "PredecessorPreparationId",
-                "PreparationId",
-                "ReadyAt",
-                "ReadyDeadline",
-                "TerminalAt",
-                "UpdatedAt",
-            ],
-            typeof(RequestPreparationPersistenceState)
-                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
     public void ApplicationGroupResultContainsOnlySafeStructuredClassification()
     {
         var result = new ApplicationGroupResult(
@@ -410,84 +284,6 @@ public sealed class PreparationContractTests
                 ApplicationGroupResultKind.Applied,
                 ApplicationGroupRejectionReason.Invalid));
     }
-
-    [Fact]
-    public void TargetContractsAreProviderNeutralAndIndependentOfDeliveredProposals()
-    {
-        var contractTypes = typeof(TurnProposal).Assembly
-            .GetTypes()
-            .Where(type => type.Namespace == typeof(TurnProposal).Namespace)
-            .ToArray();
-        var forbiddenTerms = new[]
-        {
-            "Azure",
-            "EntityFramework",
-            "Json",
-            "Mcp",
-            "Microsoft.Agents",
-            "RequestCandidate",
-            "RequestIntake",
-            "RequestPreparationProposal",
-            "Teams",
-        };
-
-        Assert.NotEmpty(contractTypes);
-        Assert.All(
-            contractTypes,
-            type => Assert.DoesNotContain(
-                forbiddenTerms,
-                term => type.FullName!.Contains(term, StringComparison.OrdinalIgnoreCase)));
-
-        var forbiddenMemberTerms = new[]
-        {
-            "Approver",
-            "Approval",
-            "Audit",
-            "Client",
-            "Duration",
-            "Grant",
-            "Json",
-            "Model",
-            "Mcp",
-            "Provision",
-            "Raw",
-            "RequestId",
-            "Retry",
-            "Teams",
-        };
-        var publicContractMembers = contractTypes
-            .SelectMany(
-                type => type.GetMembers(
-                    BindingFlags.DeclaredOnly
-                    | BindingFlags.Instance
-                    | BindingFlags.Public))
-            .ToArray();
-
-        Assert.DoesNotContain(
-            publicContractMembers,
-            member => forbiddenMemberTerms.Any(
-                term => member.Name.Contains(term, StringComparison.OrdinalIgnoreCase)));
-        Assert.DoesNotContain(
-            publicContractMembers.SelectMany(GetExposedTypes),
-            exposedType => forbiddenTerms.Any(
-                term => exposedType.FullName?.Contains(
-                    term,
-                    StringComparison.OrdinalIgnoreCase) == true));
-    }
-
-    private static IEnumerable<Type> GetExposedTypes(MemberInfo member) =>
-        member switch
-        {
-            ConstructorInfo constructor => constructor
-                .GetParameters()
-                .Select(parameter => parameter.ParameterType),
-            MethodInfo method => method
-                .GetParameters()
-                .Select(parameter => parameter.ParameterType)
-                .Append(method.ReturnType),
-            PropertyInfo property => [property.PropertyType],
-            _ => [],
-        };
 
     private static DraftPatch EnvironmentPatch() =>
         new(

@@ -6,9 +6,7 @@ using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
 using GovernedAccess.Web.Demo;
 using GovernedAccess.Workflow.Persistence;
-using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -68,8 +66,6 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await factory.ResetDatabaseAsync(cancellationToken);
-        AssertUnsafeApiEndpointInventory(factory);
-
         using var anonymousClient = CreateHttpsClient(factory);
         using var requesterClient = await factory.CreateAuthenticatedClientAsync(
             DemoPrincipalKeys.Requester,
@@ -114,16 +110,45 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
                 new { }),
             cancellationToken);
 
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        Assert.Empty(await dbContext.Set<AccessRequest>().AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.Set<ApprovalDecision>().AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.Set<ProvisioningOperation>().AsNoTracking().ToListAsync(
-            cancellationToken));
-        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
-            cancellationToken));
+        await AssertNoWorkflowEvidenceAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task BrowserCannotCreateRequestsAndRejectedPostsHaveNoSideEffects()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await factory.ResetDatabaseAsync(cancellationToken);
+        using var client = await factory.CreateAuthenticatedClientAsync(
+            DemoPrincipalKeys.Requester,
+            cancellationToken);
+
+        using var draftResponse = await SendWithAntiforgeryAsync(
+            client,
+            JsonRequest(
+                HttpMethod.Post,
+                "/api/request-drafts/prepare",
+                new { intent = "Prepare a production access request." }),
+            cancellationToken);
+        using var createResponse = await SendWithAntiforgeryAsync(
+            client,
+            JsonRequest(
+                HttpMethod.Post,
+                "/api/requests",
+                new
+                {
+                    clientId = DemoDataIds.ClientAlphaId,
+                    environmentId = DemoDataIds.ClientAlphaEnvironmentId,
+                    requestedRole = ProductionRoleIds.ReadOnly,
+                    justification = "Investigate the active production incident.",
+                    incidentId = DemoDataIds.PrimaryIncidentId,
+                }),
+            cancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, draftResponse.StatusCode);
+        Assert.Contains(
+            createResponse.StatusCode,
+            new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
+        await AssertNoWorkflowEvidenceAsync(cancellationToken);
     }
 
     [Fact]
@@ -242,36 +267,21 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
         }
     }
 
-    private static void AssertUnsafeApiEndpointInventory(
-        GovernedAccessWebFactory factory)
+    private async Task AssertNoWorkflowEvidenceAsync(
+        CancellationToken cancellationToken)
     {
-        string[] expected =
-        [
-            "DELETE /api/demo/session",
-            "POST /api/demo/session",
-            "POST /api/requests/{requestId:guid}/business-decisions",
-            "POST /api/requests/{requestId:guid}/devops-decisions",
-            "POST /api/requests/{requestId:guid}/retry-provisioning",
-        ];
-        var endpointDataSource = factory.Services.GetRequiredService<EndpointDataSource>();
-        var actual = endpointDataSource.Endpoints
-            .OfType<RouteEndpoint>()
-            .SelectMany(endpoint =>
-                endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods
-                    .Select(method => new
-                    {
-                        Method = method,
-                        Pattern = endpoint.RoutePattern.RawText,
-                    })
-                ?? [])
-            .Where(item =>
-                item.Pattern?.StartsWith("api/", StringComparison.Ordinal) == true
-                && item.Method is not "GET" and not "HEAD" and not "OPTIONS")
-            .Select(item => $"{item.Method} /{item.Pattern}")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Equal(expected, actual);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        Assert.Empty(await dbContext.Set<AccessRequest>().AsNoTracking().ToListAsync(
+            cancellationToken));
+        Assert.Empty(await dbContext.Set<ApprovalDecision>().AsNoTracking().ToListAsync(
+            cancellationToken));
+        Assert.Empty(await dbContext.Set<ProvisioningOperation>().AsNoTracking().ToListAsync(
+            cancellationToken));
+        Assert.Empty(await dbContext.Set<AccessGrant>().AsNoTracking().ToListAsync(
+            cancellationToken));
+        Assert.Empty(await dbContext.Set<AuditEvent>().AsNoTracking().ToListAsync(
+            cancellationToken));
     }
 
     private static Dictionary<string, object?> DecisionBody()
@@ -354,13 +364,4 @@ public sealed class ApiSecurityTests(DefaultWebApplicationFixture fixture)
         }
     }
 
-    private static async Task<JsonDocument> ReadJsonAsync(
-        HttpResponseMessage response,
-        CancellationToken cancellationToken)
-    {
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonDocument.ParseAsync(
-            stream,
-            cancellationToken: cancellationToken);
-    }
 }

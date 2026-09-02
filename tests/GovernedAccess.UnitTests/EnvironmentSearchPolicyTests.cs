@@ -209,24 +209,11 @@ public sealed class EnvironmentSearchPolicyTests
     }
 
     [Fact]
-    public void SearchReturnsImmutableTransportSafeMatchesWithDistinguishingFacts()
+    public void SearchReturnsImmutableMatches()
     {
         var result = EnvironmentSearchPolicy.Search("alpha", [CreateDocument(1)]);
         var match = Assert.Single(result.Matches);
 
-        Assert.Equal(
-            [
-                "Classification",
-                "ClientDisplayName",
-                "ClientId",
-                "DisplayName",
-                "EnvironmentId",
-                "Region",
-            ],
-            match.GetType()
-                .GetProperties()
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
         Assert.Throws<NotSupportedException>(
             () => ((ICollection<EnvironmentSearchMatch>)result.Matches)
                 .Add(match));

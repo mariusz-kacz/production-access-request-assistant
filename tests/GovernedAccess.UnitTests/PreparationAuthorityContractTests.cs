@@ -1,5 +1,3 @@
-using GovernedAccess.Core.Application;
-using GovernedAccess.Core.Ports;
 using GovernedAccess.Core.Preparations.Authority;
 
 namespace GovernedAccess.UnitTests;
@@ -109,12 +107,6 @@ public sealed class PreparationAuthorityContractTests
         Assert.Equal("Elevated customer errors", incident.Title);
         Assert.True(incident.IsActive);
         Assert.Equal(environmentId?.Trim(), incident.EnvironmentId);
-        Assert.Equal(
-            ["EnvironmentId", "IncidentId", "IsActive", "Title"],
-            incident.GetType()
-                .GetProperties()
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -126,29 +118,6 @@ public sealed class PreparationAuthorityContractTests
                 "Elevated customer errors",
                 isActive: true,
                 environmentId: " "));
-    }
-
-    [Fact]
-    public void AuthorityPortsKeepEnterpriseSourcesSeparate()
-    {
-        Assert.Equal(
-            typeof(Task<ApplicationResult<EnvironmentSearchResult>>),
-            typeof(IProductionEnvironmentSearchAuthority)
-                .GetMethod(nameof(IProductionEnvironmentSearchAuthority.SearchAsync))!
-                .ReturnType);
-        Assert.Equal(
-            typeof(Task<ApplicationResult<EnvironmentAuthorityProjection>>),
-            typeof(IProductionEnvironmentAuthority)
-                .GetMethod(nameof(IProductionEnvironmentAuthority.GetAsync))!
-                .ReturnType);
-        Assert.Equal(
-            2,
-            typeof(IEnvironmentRoleAuthority).GetMethods().Length);
-        Assert.Equal(
-            typeof(Task<ApplicationResult<IncidentAuthorityProjection>>),
-            typeof(IIncidentAuthority)
-                .GetMethod(nameof(IIncidentAuthority.GetAsync))!
-                .ReturnType);
     }
 
     [Fact]

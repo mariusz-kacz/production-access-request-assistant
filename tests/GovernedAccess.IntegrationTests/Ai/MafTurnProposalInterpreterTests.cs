@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations.Authority;
@@ -47,55 +46,6 @@ public sealed class MafTurnProposalInterpreterTests
           "discussionTopic": null
         }
         """;
-
-    [Fact]
-    public void AgentClarificationInputCarriesCreationTimePositionsAndSafeFields()
-    {
-        Assert.Contains(
-            "CreatedAt",
-            typeof(AgentClarificationContext)
-                .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
-                .Select(property => property.Name));
-        Assert.Equal(
-            [
-                "CanonicalId",
-                "ClientDisplayName",
-                "ClientId",
-                "DisplayName",
-                "EnvironmentClassification",
-                "Position",
-                "Region",
-            ],
-            typeof(AgentClarificationChoice)
-                .GetProperties(BindingFlags.Instance | BindingFlags.NonPublic)
-                .Where(property => property.Name != "EqualityContract")
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-    }
-
-    private static readonly string[] OrdinaryResetLikeMessages =
-    [
-        "/new please",
-        "zresetuj mój wniosek",
-    ];
-
-    [Fact]
-    public async Task NonExactResetMessagesReachTheAgent()
-    {
-        foreach (var message in OrdinaryResetLikeMessages)
-        {
-            var chatClient = new RecordingChatClient(UnclearProposal);
-            var interpreter = CreateInterpreter(chatClient);
-
-            var result = await interpreter.InterpretAsync(
-                CreateTurn(message),
-                TestContext.Current.CancellationToken);
-
-            var succeeded = Assert.IsType<AgentInterpretationSucceeded>(result);
-            Assert.Equal(DialogueAct.Unclear, succeeded.Proposal.DialogueAct);
-            Assert.Equal(1, chatClient.InvocationCount);
-        }
-    }
 
     [Fact]
     public async Task ClosedSparsePayloadTranslatesToProviderNeutralProposal()

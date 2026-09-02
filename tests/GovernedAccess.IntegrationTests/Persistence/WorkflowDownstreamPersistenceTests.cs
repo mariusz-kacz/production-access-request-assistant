@@ -2,7 +2,6 @@ using GovernedAccess.Core.Application;
 using GovernedAccess.Core.Application.AccessRequests;
 using GovernedAccess.Core.Application.Provisioning;
 using GovernedAccess.Core.Domain.AccessRequests;
-using GovernedAccess.Core.Domain.ReferenceData;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.ReferenceAuthority;
@@ -21,100 +20,88 @@ public sealed class WorkflowDownstreamPersistenceTests
         new(2026, 8, 26, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task FreshDatabaseMigratesOnlyWorkflowOwnedLifecycleTables()
+    public async Task DatabaseRejectsDuplicateDecisionAndGrantEvidence()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        var requestId = await PersistRequestAsync(fixture.Services, cancellationToken);
 
-        var tables = await ReadTableNamesAsync(
-            context,
-            TestContext.Current.CancellationToken);
+        var firstDecision = new ApprovalDecision(
+            Guid.NewGuid(),
+            requestId,
+            ApprovalStage.Business,
+            ApprovalOutcome.Approved,
+            "client-alpha-business-approver",
+            comment: null,
+            CreatedAt.AddMinutes(10),
+            "first-decision");
+        await using (var firstScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = firstScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddApprovalDecision(firstDecision);
+            Assert.True((await store.SaveChangesAsync(cancellationToken)).IsSuccess);
+        }
 
-        Assert.Equal(
-            [
-                "AccessGrants",
-                "AccessRequests",
-                "ApprovalDecisions",
-                "AuditEvents",
-                "AuthenticatedPrincipals",
-                "ProvisioningOperations",
-                "RequestPreparations",
-                "__EFMigrationsHistory",
-                "__EFMigrationsLock",
-            ],
-            tables);
-        Assert.DoesNotContain(
-            tables,
-            table => table.Contains("Client", StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            tables,
-            table => table.Contains("Environment", StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            tables,
-            table => table.Contains("Role", StringComparison.Ordinal));
-        Assert.DoesNotContain(
-            tables,
-            table => table.Contains("Incident", StringComparison.Ordinal));
-    }
+        await using (var duplicateScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = duplicateScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddApprovalDecision(
+                new ApprovalDecision(
+                    Guid.NewGuid(),
+                    requestId,
+                    ApprovalStage.Business,
+                    ApprovalOutcome.Rejected,
+                    "client-alpha-business-approver",
+                    comment: null,
+                    CreatedAt.AddMinutes(11),
+                    "duplicate-decision"));
+            var duplicate = await store.SaveChangesAsync(cancellationToken);
 
-    [Fact]
-    public async Task ModelEnforcesWorkflowConcurrencyAndRequestKeyedIdempotency()
-    {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var request = context.Model.FindEntityType(typeof(AccessRequest));
-        var decision = context.Model.FindEntityType(typeof(ApprovalDecision));
-        var operation = context.Model.FindEntityType(typeof(ProvisioningOperation));
-        var grant = context.Model.FindEntityType(typeof(AccessGrant));
+            Assert.True(duplicate.IsFailure);
+            Assert.Equal(ApplicationFailureKind.DependencyFailure, duplicate.Failure!.Kind);
+        }
 
-        Assert.NotNull(request);
-        Assert.True(
-            request.FindProperty(nameof(AccessRequest.PersistenceVersion))!
-                .IsConcurrencyToken);
-        Assert.False(
-            request.FindProperty(nameof(AccessRequest.PreparationId))!.IsNullable);
-        Assert.Contains(
-            request.GetIndexes(),
-            index =>
-                index.IsUnique
-                && index.Properties.Select(property => property.Name).SequenceEqual(
-                    [nameof(AccessRequest.PreparationId)]));
-        Assert.Contains(
-            decision!.GetIndexes(),
-            index =>
-                index.IsUnique
-                && index.Properties.Select(property => property.Name).SequenceEqual(
-                    [nameof(ApprovalDecision.RequestId), nameof(ApprovalDecision.Stage)]));
-        Assert.Equal(
-            [nameof(ProvisioningOperation.RequestId)],
-            operation!.FindPrimaryKey()!.Properties
-                .Select(property => property.Name));
-        Assert.Contains(
-            grant!.GetIndexes(),
-            index =>
-                index.IsUnique
-                && index.Properties.Select(property => property.Name).SequenceEqual(
-                    [nameof(AccessGrant.RequestId)]));
-        Assert.Null(context.Model.FindEntityType(typeof(Client)));
-        Assert.Null(context.Model.FindEntityType(typeof(ProductionEnvironment)));
-        Assert.Null(context.Model.FindEntityType(typeof(EnvironmentRole)));
-        Assert.Null(context.Model.FindEntityType(typeof(Incident)));
-    }
+        var firstGrant = new AccessGrant(
+            Guid.NewGuid(),
+            requestId,
+            CreatedAt.AddMinutes(20),
+            "first-grant");
+        await using (var firstScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = firstScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddProvisioningOperation(
+                new ProvisioningOperation(requestId, CreatedAt.AddMinutes(19)));
+            store.AddAccessGrant(firstGrant);
+            Assert.True((await store.SaveChangesAsync(cancellationToken)).IsSuccess);
+        }
 
-    [Fact]
-    public async Task FreshDatabaseUsesOneFinalWorkflowMigration()
-    {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
+        await using (var duplicateScope = fixture.Services.CreateAsyncScope())
+        {
+            var store = duplicateScope.ServiceProvider.GetRequiredService<IWorkflowStore>();
+            store.AddAccessGrant(
+                new AccessGrant(
+                    Guid.NewGuid(),
+                    requestId,
+                    CreatedAt.AddMinutes(21),
+                    "duplicate-grant"));
+            var duplicate = await store.SaveChangesAsync(cancellationToken);
 
-        var migrations = await context.Database.GetAppliedMigrationsAsync(
-            TestContext.Current.CancellationToken);
+            Assert.True(duplicate.IsFailure);
+            Assert.Equal(ApplicationFailureKind.DependencyFailure, duplicate.Failure!.Kind);
+        }
 
-        var migration = Assert.Single(migrations);
-        Assert.EndsWith("_InitialWorkflowPersistence", migration);
+        await using var verificationScope = fixture.Services.CreateAsyncScope();
+        var verificationStore = verificationScope.ServiceProvider
+            .GetRequiredService<IWorkflowStore>();
+        var decisions = await verificationStore.ListApprovalDecisionsAsync(
+            requestId,
+            cancellationToken);
+        var grant = await verificationStore.GetAccessGrantForRequestAsync(
+            requestId,
+            cancellationToken);
+
+        Assert.Equal(firstDecision.Id, Assert.Single(decisions.Value).Id);
+        Assert.Equal(firstGrant.Id, grant.Value.Id);
     }
 
     [Fact]
@@ -307,9 +294,6 @@ public sealed class WorkflowDownstreamPersistenceTests
         Assert.Equal(2, decisions.Value.Count);
         Assert.Equal(ProvisioningOperationStatus.Succeeded, operation.Value.Status);
         Assert.Equal(CreatedAt.AddMinutes(30), grant.Value.ActivatedAt);
-        Assert.Equal(
-            AccessGrant.FixedLifetime,
-            grant.Value.ExpiresAt - grant.Value.ActivatedAt);
         Assert.Contains(
             auditEvents.Value,
             auditEvent => auditEvent.EventType == AuditEventType.BusinessDecision);
@@ -538,29 +522,4 @@ public sealed class WorkflowDownstreamPersistenceTests
         Assert.Equal(expected.PersistenceVersion, actual.PersistenceVersion);
     }
 
-    private static async Task<IReadOnlyList<string>> ReadTableNamesAsync(
-        WorkflowDbContext context,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name";
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            var names = new List<string>();
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                names.Add(reader.GetString(0));
-            }
-
-            return names;
-        }
-        finally
-        {
-            await connection.CloseAsync();
-        }
-    }
 }

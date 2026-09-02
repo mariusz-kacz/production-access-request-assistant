@@ -15,50 +15,6 @@ public sealed class PreparationTurnServiceTests : RequestPreparationReducerTestB
         "schema-v1");
 
     [Fact]
-    public void ResetProtocolEventContainsOnlyBindingAndSafeCorrelationMetadata()
-    {
-        Assert.Equal(
-            [nameof(ResetPreparationCommand.Binding), nameof(ResetPreparationCommand.CorrelationId)],
-            typeof(ResetPreparationCommand)
-                .GetProperties()
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-        Assert.DoesNotContain(
-            typeof(ResetPreparationCommand).GetProperties(),
-            property => property.Name.Contains("Text", StringComparison.OrdinalIgnoreCase)
-                || property.Name.Contains("Message", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CoreTurnServiceApiAcceptsNoRequesterTextOrMessage()
-    {
-        var parameterNames = typeof(PreparationTurnService)
-            .GetMethods(
-                System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.Public
-                | System.Reflection.BindingFlags.DeclaredOnly)
-            .SelectMany(method => method.GetParameters())
-            .Select(parameter => parameter.Name!)
-            .ToArray();
-
-        Assert.DoesNotContain(
-            parameterNames,
-            name => name.Contains("text", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("message", StringComparison.OrdinalIgnoreCase));
-        Assert.Equal(
-            [
-                typeof(PreparationTurnContext),
-                typeof(TurnProposal),
-                typeof(PreparationTurnAttribution),
-                typeof(CancellationToken),
-            ],
-            typeof(PreparationTurnService)
-                .GetMethod(nameof(PreparationTurnService.ApplyAsync))!
-                .GetParameters()
-                .Select(parameter => parameter.ParameterType));
-    }
-
-    [Fact]
     public async Task FirstAcceptedCompleteTurnCreatesOneReadyPreparation()
     {
         var authority = CompleteAuthority();

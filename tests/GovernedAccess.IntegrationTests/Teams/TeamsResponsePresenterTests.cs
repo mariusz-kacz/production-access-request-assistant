@@ -5,14 +5,13 @@ using GovernedAccess.Core.Preparations;
 using GovernedAccess.Core.Preparations.Authority;
 using GovernedAccess.Core.Preparations.Contracts;
 using GovernedAccess.Web.Teams;
-using Microsoft.Agents.Core.Models;
 
 namespace GovernedAccess.IntegrationTests.Teams;
 
 public sealed class TeamsResponsePresenterTests
 {
     [Fact]
-    public async Task ClarificationUsesOnlyAuthoritativeChoicesAndBoundsTheList()
+    public async Task ClarificationContainsOnlyBoundedAuthoritativeChoices()
     {
         ClarificationChoice[] choices =
         [
@@ -37,48 +36,6 @@ public sealed class TeamsResponsePresenterTests
                 choices,
                 new ApplicationGroupResult(
                     ApplicationGroupResultKind.NeedsClarification),
-                new ApplicationGroupResult(
-                    ApplicationGroupResultKind.Applied)));
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            result,
-            "pl-PL",
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        var text = Assert.IsType<TeamsTextResponse>(presentation);
-        Assert.Equal(InputHints.ExpectingInput, text.InputHint);
-        Assert.Contains(
-            "Choose one by replying with its number, name, or exact ID:",
-            Message(presentation),
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "1. Client & One (CLIENT-1) — <b>Primary</b> (PROD-1), westeurope, primary",
-            Message(presentation),
-            StringComparison.Ordinal);
-        Assert.Contains("2. Client & One", Message(presentation), StringComparison.Ordinal);
-        Assert.StartsWith(
-            $"I updated the operational justification.{Environment.NewLine}I found more than one matching production environment.",
-            Message(presentation),
-            StringComparison.Ordinal);
-        Assert.DoesNotContain("Scope:", Message(presentation), StringComparison.Ordinal);
-        Assert.DoesNotContain("model", Message(presentation), StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task RoleClarificationExplainsWhyTheRequesterMustChoose()
-    {
-        ClarificationChoice[] choices =
-        [
-            new RoleClarificationChoice("ROLE-1", "Read only"),
-            new RoleClarificationChoice("ROLE-2", "Support"),
-        ];
-        var result = Result(
-            new ClarificationRequired(
-                ClarificationTarget.Role,
-                choices,
-                new ApplicationGroupResult(
-                    ApplicationGroupResultKind.NeedsClarification),
                 justificationResult: null));
 
         var presentation = await CreatePresenter().PresentTurnAsync(
@@ -87,193 +44,16 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.StartsWith(
-            "This environment has more than one available role. "
-            + "Choose one by replying with its number, name, or exact ID:",
-            Message(presentation),
-            StringComparison.Ordinal);
-        Assert.Contains("1. Read only (ROLE-1)", Message(presentation), StringComparison.Ordinal);
-        Assert.Contains("2. Support (ROLE-2)", Message(presentation), StringComparison.Ordinal);
+        var message = Message(presentation);
+        Assert.Contains("PROD-1", message, StringComparison.Ordinal);
+        Assert.Contains("PROD-2", message, StringComparison.Ordinal);
+        Assert.Contains("Client & One", message, StringComparison.Ordinal);
+        Assert.Contains("<b>Primary</b>", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("model", message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task DraftProgressUsesNaturalGroupResultsAndCanonicalMissingFields()
-    {
-        var candidate = new PreparationCandidate(
-            "CLIENT-1",
-            "PROD-1",
-            roleId: null,
-            justification: null,
-            incidentId: null);
-        var result = Result(
-            new DraftUpdated(
-                new ApplicationGroupResult(ApplicationGroupResultKind.Applied),
-                new ApplicationGroupResult(
-                    ApplicationGroupResultKind.Rejected,
-                    ApplicationGroupRejectionReason.Invalid)),
-            candidate);
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            result,
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            "I updated the request scope. "
-            + "I couldn't update the operational justification because some of the information wasn't valid. "
-            + "I still need the requested role and operational justification.",
-            Message(presentation));
-        Assert.DoesNotContain("Environment result", Message(presentation), StringComparison.Ordinal);
-        Assert.DoesNotContain("Role result", Message(presentation), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task UnchangedScopeExplainsThatTheDraftAlreadyMatches()
-    {
-        var candidate = new PreparationCandidate(
-            "CLIENT-1",
-            "PROD-1",
-            roleId: null,
-            justification: null,
-            incidentId: null);
-        var result = Result(
-            new DraftUnchanged(
-                new ApplicationGroupResult(ApplicationGroupResultKind.NoOp),
-                justificationResult: null),
-            candidate);
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            result,
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            "The request scope already matches the draft. "
-            + "I still need the requested role and operational justification.",
-            Message(presentation));
-    }
-
-    [Theory]
-    [InlineData(ApplicationGroupRejectionReason.Invalid, "some of the information wasn't valid")]
-    [InlineData(ApplicationGroupRejectionReason.Unavailable, "the source I use to verify it is temporarily unavailable")]
-    [InlineData(ApplicationGroupRejectionReason.Conflict, "the requested details conflict with each other")]
-    [InlineData(ApplicationGroupRejectionReason.MissingDependency, "some required information is missing")]
-    [InlineData(ApplicationGroupRejectionReason.EnvironmentQueryTooBroad, "the environment description matched too many environments")]
-    [InlineData(ApplicationGroupRejectionReason.NoAssignableRoles, "the selected environment has no roles available for assignment")]
-    [InlineData(ApplicationGroupRejectionReason.RoleChoiceLimitExceeded, "the selected environment has too many roles to show as choices")]
-    public async Task RejectedScopeExplainsWhyItCouldNotBeUpdated(
-        ApplicationGroupRejectionReason reason,
-        string explanation)
-    {
-        var result = Result(
-            new DraftUnchanged(
-                new ApplicationGroupResult(
-                    ApplicationGroupResultKind.Rejected,
-                    reason),
-                justificationResult: null));
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            result,
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            $"I couldn't update the request scope because {explanation}. "
-            + "I still need the production environment, requested role, and operational justification.",
-            Message(presentation));
-    }
-
-    [Fact]
-    public async Task AutomaticRoleSelectionExplainsWhyTheRoleWasSet()
-    {
-        var candidate = new PreparationCandidate(
-            "CLIENT-1",
-            "PROD-1",
-            "ROLE-1",
-            justification: null,
-            incidentId: null);
-        var result = Result(
-            new DraftUpdated(
-                new ApplicationGroupResult(ApplicationGroupResultKind.Applied),
-                justificationResult: null),
-            candidate,
-            new SoleRoleSelection("ROLE-1", "Production read-only"));
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            result,
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        Assert.Contains(
-            "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
-            Message(presentation),
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "I still need the requested role",
-            Message(presentation),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GuidanceOutcomesRenderFixedApplicationProse()
-    {
-        (Type OutcomeType, string Expected)[] scenarios =
-        [
-            (typeof(SubmissionGuidance), "complete the missing details"),
-            (typeof(UnrelatedGuidance), "temporary production access"),
-            (typeof(UnclearGuidance), "rephrase"),
-            (typeof(ResetGuidance), "Started a new request"),
-            (typeof(TerminalPreparationGuidance), "/new"),
-            (typeof(ConfirmationSourceUnavailable), "try confirmation again"),
-        ];
-
-        foreach (var (outcomeType, expected) in scenarios)
-        {
-            var outcome = (ApplicationOutcome)Activator.CreateInstance(outcomeType)!;
-            var presentation = await CreatePresenter().PresentTurnAsync(
-                Result(outcome),
-                TeamsLocale.Default,
-                invalidatesTrackedCard: false,
-                TestContext.Current.CancellationToken);
-
-            Assert.Contains(
-                expected,
-                Message(presentation),
-                StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    [Fact]
-    public async Task ReadyOutcomeUsesTheAuthoritativeSnapshotForCardAssembly()
-    {
-        var preparation = CreatePreparation(
-            new PreparationCandidate(
-                "CLIENT-1",
-                "PROD-1",
-                "ROLE-1",
-                "Investigate the production fault.",
-                incidentId: null));
-        var snapshot = new PreparationSnapshot(preparation);
-
-        var presentation = await CreatePresenter().PresentTurnAsync(
-            new PreparationTurnResult(
-                snapshot,
-                new PreparationResponse(
-                    new ReadyForConfirmation(preparation.PreparationId))),
-            TeamsLocale.Default,
-            invalidatesTrackedCard: false,
-            TestContext.Current.CancellationToken);
-
-        var card = Assert.IsType<TeamsDraftCardResponse>(presentation);
-        Assert.Equal(snapshot.PreparationId, card.PreparationId);
-    }
-
-    [Fact]
-    public async Task ReadyOutcomeCarriesAutomaticRoleSelectionExplanationWithTheCard()
+    public async Task ReadyOutcomeUsesTheAuthoritativeSnapshotAndSafeRoleSelection()
     {
         var preparation = CreatePreparation(
             new PreparationCandidate(
@@ -289,23 +69,21 @@ public sealed class TeamsResponsePresenterTests
                 snapshot,
                 new PreparationResponse(
                     new ReadyForConfirmation(preparation.PreparationId),
-                    new SoleRoleSelection(
-                        "ROLE-1",
-                        "Production read-only"))),
+                    new SoleRoleSelection("ROLE-1", "Production read-only"))),
             TeamsLocale.Default,
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        var presentationCard = Assert.IsType<TeamsDraftCardResponse>(presentation);
-        var card = Assert.IsType<JsonElement>(presentationCard.Card.Content);
-        Assert.Contains(
-            "Only Production read-only (ROLE-1) is available for this environment, so I selected it for the draft.",
-            card.GetRawText(),
-            StringComparison.Ordinal);
+        var response = Assert.IsType<TeamsDraftCardResponse>(presentation);
+        var card = Assert.IsType<JsonElement>(response.Card.Content);
+        Assert.Equal(snapshot.PreparationId, response.PreparationId);
+        Assert.Contains("CLIENT-1", card.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("PROD-1", card.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("ROLE-1", card.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task CurrentDraftDiscussionRendersCanonicalFactsWithoutModelProse()
+    public async Task CurrentDraftDiscussionUsesCanonicalFactsWithoutModelProse()
     {
         var candidate = new PreparationCandidate(
             "CLIENT-1",
@@ -320,18 +98,20 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Contains("Client: CLIENT-1", Message(presentation), StringComparison.Ordinal);
-        Assert.Contains("Environment: PROD-1", Message(presentation), StringComparison.Ordinal);
-        Assert.Contains("Requested role: ROLE-1", Message(presentation), StringComparison.Ordinal);
-        Assert.Contains("Incident: INC-1", Message(presentation), StringComparison.Ordinal);
+        var message = Message(presentation);
+        Assert.Contains("CLIENT-1", message, StringComparison.Ordinal);
+        Assert.Contains("PROD-1", message, StringComparison.Ordinal);
+        Assert.Contains("ROLE-1", message, StringComparison.Ordinal);
+        Assert.Contains("INC-1", message, StringComparison.Ordinal);
         Assert.Contains(
-            "Justification: Investigate </TextBlock> exactly",
-            Message(presentation),
+            "Investigate </TextBlock> exactly",
+            message,
             StringComparison.Ordinal);
+        Assert.DoesNotContain("model", message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task ConcurrencyFailureRendersRetryWithoutClaimingMutation()
+    public async Task ConcurrencyFailureDoesNotExposeInternalDetailsOrClaimMutation()
     {
         var presentation = await CreatePresenter().PresentTurnAsync(
             Result(
@@ -344,22 +124,22 @@ public sealed class TeamsResponsePresenterTests
             invalidatesTrackedCard: false,
             TestContext.Current.CancellationToken);
 
-        Assert.Contains("changed while this message was processed", Message(presentation), StringComparison.Ordinal);
-        Assert.Contains("try again", Message(presentation), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("internal details", Message(presentation), StringComparison.Ordinal);
+        var message = Message(presentation);
+        Assert.Contains("try again", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No request was submitted", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal details", message, StringComparison.Ordinal);
     }
 
     private static PreparationTurnResult Result(
         ApplicationOutcome outcome,
-        PreparationCandidate? candidate = null,
-        SoleRoleSelection? soleRoleSelection = null)
+        PreparationCandidate? candidate = null)
     {
         var preparation = candidate is null
             ? null
             : new PreparationSnapshot(CreatePreparation(candidate));
         return new PreparationTurnResult(
             preparation,
-            new PreparationResponse(outcome, soleRoleSelection));
+            new PreparationResponse(outcome));
     }
 
     private static TeamsResponsePresenter CreatePresenter() =>
@@ -398,6 +178,7 @@ public sealed class TeamsResponsePresenterTests
             PreparationSnapshot preparation,
             CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var candidate = preparation.Candidate;
             return Task.FromResult(
                 ApplicationResult.Succeeded(

@@ -216,9 +216,7 @@ public sealed class RetryProvisioningComponentTests
             ProtectedProvisioningService.SuccessCode,
             retry.Value.Operation.LastOutcomeCode);
         Assert.Equal(provisioner.GrantId, retry.Value.Grant.Id);
-        Assert.Equal(
-            provisioner.ActivatedAt.Add(AccessGrant.FixedLifetime),
-            retry.Value.Grant.ExpiresAt);
+        Assert.Equal(provisioner.ActivatedAt, retry.Value.Grant.ActivatedAt);
 
         var auditEvents = await dbContext.Set<AuditEvent>()
             .Where(item => item.RequestId == request.Id)

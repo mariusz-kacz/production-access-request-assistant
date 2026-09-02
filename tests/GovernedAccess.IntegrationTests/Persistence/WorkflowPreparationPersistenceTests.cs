@@ -16,120 +16,6 @@ public sealed class WorkflowPreparationPersistenceTests
         new(2026, 8, 25, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task FreshDatabaseMigratesAndSeedsOnlyWorkflowOwnedTables()
-    {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var principalReader = scope.ServiceProvider
-            .GetRequiredService<IAuthenticatedPrincipalReader>();
-
-        var tables = await ReadTableNamesAsync(
-            context,
-            TestContext.Current.CancellationToken);
-        var migrations = await context.Database.GetAppliedMigrationsAsync(
-            TestContext.Current.CancellationToken);
-        var requester = await principalReader.GetPrincipalAsync(
-            "requester",
-            TestContext.Current.CancellationToken);
-
-        Assert.Equal(
-            [
-                "AccessGrants",
-                "AccessRequests",
-                "ApprovalDecisions",
-                "AuditEvents",
-                "AuthenticatedPrincipals",
-                "ProvisioningOperations",
-                "RequestPreparations",
-                "__EFMigrationsHistory",
-                "__EFMigrationsLock",
-            ],
-            tables);
-        Assert.EndsWith(
-            "_InitialWorkflowPersistence",
-            Assert.Single(migrations));
-        Assert.True(requester.IsSuccess);
-        Assert.Equal(PrincipalKind.Requester, requester.Value.Kind);
-        Assert.Equal(
-            6L,
-            await ReadScalarAsync(
-                context,
-                "SELECT COUNT(*) FROM AuthenticatedPrincipals",
-                TestContext.Current.CancellationToken));
-        Assert.DoesNotContain(tables, table => table.Contains("Client", StringComparison.Ordinal));
-        Assert.DoesNotContain(tables, table => table.Contains("Environment", StringComparison.Ordinal));
-        Assert.DoesNotContain(tables, table => table.Contains("Role", StringComparison.Ordinal));
-        Assert.DoesNotContain(tables, table => table.Contains("Incident", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task ModelUsesConcurrencyVersionAndTheExactActiveBindingPartialIndex()
-    {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var preparation = context.Model.GetEntityTypes()
-            .Single(entity => entity.ClrType.Name == "RequestPreparationRecord");
-        var activeIndex = preparation.GetIndexes()
-            .Single(index => index.GetDatabaseName()
-                == "UX_RequestPreparations_ActiveBinding");
-
-        Assert.True(
-            preparation.FindProperty("ConcurrencyVersion")!.IsConcurrencyToken);
-        Assert.Equal(
-            [
-                "Channel",
-                "ChannelActorId",
-                "ClarificationJson",
-                "ClientId",
-                "ConcurrencyVersion",
-                "ConversationId",
-                "CorrelationId",
-                "CreatedAt",
-                "EnvironmentId",
-                "IncidentId",
-                "Justification",
-                "Lifecycle",
-                "MaterialChangeAttributionsJson",
-                "PredecessorPreparationId",
-                "PreparationId",
-                "ReadyAt",
-                "ReadyDeadline",
-                "RequesterId",
-                "RoleId",
-                "TenantId",
-                "TerminalAt",
-                "UpdatedAt",
-            ],
-            preparation.GetProperties()
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["Channel", "TenantId", "ChannelActorId", "ConversationId", "RequesterId"],
-            activeIndex.Properties.Select(property => property.Name).ToArray());
-        Assert.True(activeIndex.IsUnique);
-        Assert.Equal(
-            "\"Lifecycle\" IN ('Collecting', 'Ready')",
-            activeIndex.GetFilter());
-        Assert.Equal(
-            [
-                "IX_RequestPreparations_PredecessorPreparationId",
-                "IX_RequestPreparations_RequesterId",
-                "UX_RequestPreparations_ActiveBinding",
-            ],
-            preparation.GetIndexes()
-                .Select(index => index.GetDatabaseName())
-                .Order(StringComparer.Ordinal));
-        Assert.Equal(
-            ["PredecessorPreparationId", "RequesterId"],
-            preparation.GetForeignKeys()
-                .SelectMany(foreignKey => foreignKey.Properties)
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
     public async Task ReadySupersessionAndRevisionPersistAtomicallyWithPredecessorEvidence()
     {
         await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
@@ -395,15 +281,6 @@ public sealed class WorkflowPreparationPersistenceTests
                     TestContext.Current.CancellationToken);
 
                 Assert.True(saved.IsSuccess);
-                var context = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-                var clarificationJson = await ReadStringAsync(
-                    context,
-                    "SELECT ClarificationJson FROM RequestPreparations",
-                    TestContext.Current.CancellationToken);
-                Assert.Contains(
-                    "Production read-only",
-                    Assert.IsType<string>(clarificationJson),
-                    StringComparison.Ordinal);
             }
 
             await using var restarted = await WorkflowPersistenceFixture.CreateAsync(databasePath);
@@ -426,39 +303,6 @@ public sealed class WorkflowPreparationPersistenceTests
         {
             File.Delete(databasePath);
         }
-    }
-
-    [Fact]
-    public async Task MaximumRichEnvironmentClarificationRoundTripsWithinBound()
-    {
-        await using var fixture = await WorkflowPersistenceFixture.CreateAsync();
-        var escapedValue = new string('<', AuthorityValue.MaximumLength);
-        var choices = Enumerable.Range(1, RequestPreparation.MaximumClarificationChoices)
-            .Select(index => new EnvironmentClarificationChoice(
-                $"{new string('<', AuthorityValue.MaximumLength - 1)}{index}",
-                escapedValue,
-                escapedValue,
-                escapedValue,
-                escapedValue,
-                EnvironmentClassification.Primary))
-            .ToArray();
-        var preparation = RequestPreparation.CreateRoot(
-            Binding(),
-            PreparationCandidate.Empty,
-            new ClarificationSeed(ClarificationTarget.Environment, choices),
-            attribution: null,
-            CreatedAt,
-            "maximum-rich-clarification");
-        await PersistAsync(fixture, preparation);
-
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IRequestPreparationStore>();
-        var loaded = await store.GetAsync(
-            preparation.PreparationId,
-            TestContext.Current.CancellationToken);
-
-        Assert.True(loaded.IsSuccess);
-        AssertPreparationEqual(preparation, loaded.Value);
     }
 
     private static RequestPreparation CreateCollectingPreparation()
@@ -601,47 +445,6 @@ public sealed class WorkflowPreparationPersistenceTests
             }
 
             return names;
-        }
-        finally
-        {
-            await connection.CloseAsync();
-        }
-    }
-
-    private static async Task<long> ReadScalarAsync(
-        WorkflowDbContext context,
-        string commandText,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = commandText;
-            return (long)(await command.ExecuteScalarAsync(cancellationToken)
-                ?? throw new InvalidOperationException("The scalar query returned no value."));
-        }
-        finally
-        {
-            await connection.CloseAsync();
-        }
-    }
-
-    private static async Task<string> ReadStringAsync(
-        WorkflowDbContext context,
-        string commandText,
-        CancellationToken cancellationToken)
-    {
-        var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = commandText;
-            return (string)(await command.ExecuteScalarAsync(cancellationToken)
-                ?? throw new InvalidOperationException(
-                    "The scalar query returned no value."));
         }
         finally
         {

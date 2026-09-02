@@ -13,17 +13,6 @@ public sealed class PreparationConfirmationServiceTests :
     RequestPreparationReducerTestBase
 {
     [Fact]
-    public void ConfirmationCommandContainsNoRequesterTextOrScopeAssertions()
-    {
-        Assert.Equal(
-            ["Binding", "CorrelationId", "PreparationId"],
-            typeof(PreparationConfirmationCommand)
-                .GetProperties()
-                .Select(property => property.Name)
-                .Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
     public async Task ValidConfirmationCreatesOnePreparationKeyedRequestAndAudit()
     {
         var ready = ReadyPreparation(justification: "x", incidentId: "INC-1042");

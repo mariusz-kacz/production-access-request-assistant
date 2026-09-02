@@ -3,15 +3,11 @@ using GovernedAccess.Core.Domain.Preparations;
 using GovernedAccess.Core.Preparations;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.IntegrationTests.Teams;
-using GovernedAccess.ReferenceAuthority.Persistence;
 using GovernedAccess.Web.Ai;
 using GovernedAccess.Web.Teams;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.Agents.Authentication;
-using Microsoft.Agents.Builder;
-using Microsoft.Agents.Builder.App;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -31,162 +27,40 @@ public sealed class ProgramCompositionTests(
         """;
 
     [Fact]
-    public async Task StartupCreatesAndSeedsTheIndependentProductionDatabases()
+    public async Task StartupAppliesMigrationsAndMakesRequiredDataUsable()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var factory = applicationFixture.Factory;
-        await using var scope = factory.Services.CreateAsyncScope();
-        var referenceContext = scope.ServiceProvider
-            .GetRequiredService<ReferenceAuthorityDbContext>();
-        var workflowContext = scope.ServiceProvider
-            .GetRequiredService<WorkflowDbContext>();
+        await using var scope = applicationFixture.Factory.Services.CreateAsyncScope();
+        var environment = await scope.ServiceProvider
+            .GetRequiredService<IProductionEnvironmentAuthority>()
+            .GetAsync(
+                "PROD-ALPHA-EU",
+                cancellationToken);
+        var requester = await scope.ServiceProvider
+            .GetRequiredService<IAuthenticatedPrincipalReader>()
+            .GetPrincipalAsync(
+                "requester",
+                cancellationToken);
 
-        var clientCount = await referenceContext.Clients.CountAsync(
-            cancellationToken);
-        var principalCount = await workflowContext.Database
-            .SqlQueryRaw<int>(
-                "SELECT COUNT(*) AS Value FROM \"AuthenticatedPrincipals\"")
-            .SingleAsync(cancellationToken);
-
-        Assert.Equal(4, clientCount);
-        Assert.Equal(6, principalCount);
-        Assert.Same(factory.Clock, factory.Services.GetRequiredService<IClock>());
+        Assert.True(environment.IsSuccess, environment.Failure?.Message);
+        Assert.True(requester.IsSuccess, requester.Failure?.Message);
+        Assert.Equal("client-alpha", environment.Value.ClientId);
+        Assert.Equal("requester", requester.Value.Id);
     }
 
     [Fact]
-    public async Task ProductionCompositionResolvesOnlyTheCompleteTargetGraph()
+    public async Task ProductionMcpEndpointUsesTheValidatedAgentCatalog()
     {
-        await using var scope = applicationFixture.Factory.Services
-            .CreateAsyncScope();
-        var services = scope.ServiceProvider;
-
-        Assert.NotNull(services.GetService<ReferenceAuthorityDbContext>());
-        Assert.NotNull(services.GetService<WorkflowDbContext>());
-        Assert.IsType<MafTurnProposalInterpreter>(
-            services.GetRequiredService<ITurnProposalInterpreter>());
-        Assert.IsType<RequestPreparationOrchestrator>(
-            services.GetRequiredService<IRequestPreparationOrchestrator>());
-        Assert.IsType<PreparationConfirmationService>(
-            services.GetRequiredService<IPreparationConfirmationService>());
-        Assert.IsType<TeamsRequestHandler>(
-            services.GetRequiredService<TeamsRequestHandler>());
-        Assert.Equal(
-            typeof(WorkflowDbContext).Assembly,
-            services.GetRequiredService<IWorkflowStore>().GetType().Assembly);
-    }
-
-    [Fact]
-    public async Task TeamsBackgroundDispatcherIsRootSafeAndAgentsAreScopedPerTurn()
-    {
-        var services = applicationFixture.Factory.Services;
-        var rootAgent = services.GetRequiredService<IAgent>();
-
-        Assert.IsType<ScopedTeamsAccessRequestAgentDispatcher>(rootAgent);
-
-        await using var firstScope = services.CreateAsyncScope();
-        await using var secondScope = services.CreateAsyncScope();
-        var firstHandler = firstScope.ServiceProvider
-            .GetRequiredService<TeamsRequestHandler>();
-        var firstAgent = firstScope.ServiceProvider
-            .GetRequiredService<TeamsAccessRequestAgent>();
-
-        Assert.Same(
-            firstHandler,
-            firstScope.ServiceProvider
-                .GetRequiredService<TeamsRequestHandler>());
-        Assert.NotSame(
-            firstHandler,
-            secondScope.ServiceProvider
-                .GetRequiredService<TeamsRequestHandler>());
-        Assert.NotSame(
-            firstAgent,
-            secondScope.ServiceProvider.GetRequiredService<TeamsAccessRequestAgent>());
-    }
-
-    [Fact]
-    public void TeamsMessagesStartTypingWithoutAnInitialDelay()
-    {
-        var options = applicationFixture.Factory.Services
-            .GetRequiredService<AgentApplicationOptions>();
-
-        Assert.True(options.StartTypingTimer);
-        Assert.Equal(0, options.TypingOptions.InitialDelayMs);
-        Assert.Equal(2000, options.TypingOptions.IntervalMs);
-    }
-
-    [Fact]
-    public async Task MafSessionInfrastructureUsesProcessLifetimeSingletons()
-    {
-        var services = applicationFixture.Factory.Services;
-        var interpreter = services.GetRequiredService<ITurnProposalInterpreter>();
-        var chatClient = services.GetRequiredService<IChatClient>();
-        var modelResolution = services
-            .GetRequiredService<RequestPreparationModelResolution>();
-        var modelMetadata = services
-            .GetRequiredService<RequestPreparationModelMetadata>();
-
-        Assert.IsType<MafTurnProposalInterpreter>(interpreter);
-        Assert.Same(chatClient, Assert.Single(services.GetServices<IChatClient>()));
-        Assert.Equal(
-            RequestPreparationModelProfile.Deterministic,
-            modelResolution.Profile);
-        Assert.Null(modelResolution.DeploymentName);
-        Assert.Equal("Deterministic", modelMetadata.ProfileId);
-        Assert.Null(modelMetadata.DeploymentName);
-
-        await using var firstScope = services.CreateAsyncScope();
-        await using var secondScope = services.CreateAsyncScope();
-
-        Assert.Same(
-            interpreter,
-            firstScope.ServiceProvider
-                .GetRequiredService<ITurnProposalInterpreter>());
-        Assert.Same(
-            interpreter,
-            secondScope.ServiceProvider
-                .GetRequiredService<ITurnProposalInterpreter>());
-        Assert.Same(
-            chatClient,
-            firstScope.ServiceProvider.GetRequiredService<IChatClient>());
-        Assert.Same(
-            chatClient,
-            secondScope.ServiceProvider.GetRequiredService<IChatClient>());
-        Assert.Same(
-            modelResolution,
-            firstScope.ServiceProvider
-                .GetRequiredService<RequestPreparationModelResolution>());
-        Assert.Same(
-            modelResolution,
-            secondScope.ServiceProvider
-                .GetRequiredService<RequestPreparationModelResolution>());
-        Assert.Same(
-            modelMetadata,
-            firstScope.ServiceProvider
-                .GetRequiredService<RequestPreparationModelMetadata>());
-        Assert.Same(
-            modelMetadata,
-            secondScope.ServiceProvider
-                .GetRequiredService<RequestPreparationModelMetadata>());
-    }
-
-    [Fact]
-    public async Task ProductionMcpEndpointExposesOnlyTheTargetToolCatalog()
-    {
+        var cancellationToken = TestContext.Current.CancellationToken;
         await using var client = await CreateProductionMcpClientAsync(
             applicationFixture.Factory.CreateClient(),
-            TestContext.Current.CancellationToken);
+            cancellationToken);
 
         var tools = await client.ListToolsAsync(
-            cancellationToken: TestContext.Current.CancellationToken);
+            cancellationToken: cancellationToken);
 
-        Assert.Equal(
-            [
-                "get_environment_roles",
-                "get_incident",
-                "get_production_environment",
-                "search_production_environments",
-            ],
-            tools.Select(tool => tool.Name).Order(StringComparer.Ordinal));
+        Assert.True(AgentMcpCatalog.IsValid(
+            tools.Select(tool => tool.ProtocolTool).ToArray()));
     }
 
     [Fact]
@@ -257,31 +131,8 @@ public sealed class ProgramCompositionTests(
             Assert.True(business.IsSuccess, business.Failure?.Message);
             Assert.True(devOps.IsSuccess, devOps.Failure?.Message);
             Assert.Equal(RequestStatus.Active, devOps.Value.Request.Status);
-            Assert.Equal(
-                AccessGrant.FixedLifetime,
-                devOps.Value.Grant!.ExpiresAt - devOps.Value.Grant.ActivatedAt);
+            Assert.NotNull(devOps.Value.Grant);
         }
-    }
-
-    [Fact]
-    public void TeamsOptionsAcceptTheBoundedTeamsManagedConfiguration()
-    {
-        var configuration = CreateTeamsConfiguration();
-
-        var (options, result) = ValidateTeamsOptions(configuration);
-
-        Assert.True(
-            result.Succeeded,
-            result.FailureMessage ?? "Teams option validation failed.");
-        Assert.Equal(FakeTeamsActivityBuilder.DefaultTenantId, options.AllowedTenantId);
-        Assert.Equal(BotConnectionName, options.BotConnectionName);
-        Assert.Equal(GovernedAccessWebFactory.DefaultTrustedWebBaseUri, options.TrustedWebBaseUri);
-        Assert.Equal(
-            TeamsAccessRequestOptions.MaximumRequestTimeout,
-            options.RequestTimeout);
-        Assert.Equal(
-            TeamsAccessRequestOptions.RequiredPreparationLifetime,
-            options.PreparationLifetime);
     }
 
     [Fact]

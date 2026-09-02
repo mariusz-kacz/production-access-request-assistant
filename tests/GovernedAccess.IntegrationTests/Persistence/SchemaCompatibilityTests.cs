@@ -9,33 +9,38 @@ namespace GovernedAccess.IntegrationTests.Persistence;
 public sealed class SchemaCompatibilityTests
 {
     [Fact]
-    public async Task TransitionalReferenceDatabaseFailsWithBoundedResetGuidance()
+    public async Task IncompatibleLocalDatabasesFailClosedWithoutMutation()
     {
-        var tableName = "IncidentEnvironment" + "Links";
-        await AssertIncompatibleDatabaseIsRetainedAsync(
-            "ReferenceAuthority",
-            tableName,
-            static configuration => new ServiceCollection()
-                .AddReferenceAuthority(configuration)
-                .BuildServiceProvider(validateScopes: true),
-            static services => ReferenceAuthorityDatabase.InitializeAsync(
-                services,
-                TestContext.Current.CancellationToken));
-    }
+        var scenarios = new[]
+        {
+            new IncompatibleDatabaseScenario(
+                "ReferenceAuthority",
+                "IncidentEnvironmentLinks",
+                static configuration => new ServiceCollection()
+                    .AddReferenceAuthority(configuration)
+                    .BuildServiceProvider(validateScopes: true),
+                static services => ReferenceAuthorityDatabase.InitializeAsync(
+                    services,
+                    TestContext.Current.CancellationToken)),
+            new IncompatibleDatabaseScenario(
+                "WorkflowPersistence",
+                "RequestIntakeSessions",
+                static configuration => new ServiceCollection()
+                    .AddWorkflowPersistence(configuration)
+                    .BuildServiceProvider(validateScopes: true),
+                static services => WorkflowPersistenceDatabase.InitializeAsync(
+                    services,
+                    TestContext.Current.CancellationToken)),
+        };
 
-    [Fact]
-    public async Task TransitionalWorkflowDatabaseFailsWithBoundedResetGuidance()
-    {
-        var tableName = "Request" + "IntakeSessions";
-        await AssertIncompatibleDatabaseIsRetainedAsync(
-            "WorkflowPersistence",
-            tableName,
-            static configuration => new ServiceCollection()
-                .AddWorkflowPersistence(configuration)
-                .BuildServiceProvider(validateScopes: true),
-            static services => WorkflowPersistenceDatabase.InitializeAsync(
-                services,
-                TestContext.Current.CancellationToken));
+        foreach (var scenario in scenarios)
+        {
+            await AssertIncompatibleDatabaseIsRetainedAsync(
+                scenario.ConnectionStringName,
+                scenario.TableName,
+                scenario.CreateServices,
+                scenario.Initialize);
+        }
     }
 
     private static async Task AssertIncompatibleDatabaseIsRetainedAsync(
@@ -91,4 +96,10 @@ public sealed class SchemaCompatibilityTests
             File.Delete(databasePath);
         }
     }
+
+    private sealed record IncompatibleDatabaseScenario(
+        string ConnectionStringName,
+        string TableName,
+        Func<IConfiguration, ServiceProvider> CreateServices,
+        Func<IServiceProvider, Task> Initialize);
 }

@@ -57,7 +57,20 @@ verify the as-built behavior in source and tests, and surface unresolved mismatc
 - Automated tests must not require a live LLM. Use deterministic chat clients.
 - Put deterministic domain policy in unit tests. Put MCP, persistence, authentication,
   authorization, concurrency, timeout, malformed-output, transition, and idempotency
-  boundaries in integration tests. Negative scenarios are first-class evidence.
+  boundaries in integration tests.
+- Maintain one canonical scenario matrix per invariant at the lowest layer that can
+  faithfully prove it. Higher-layer tests cover only behavior unique to that boundary,
+  such as serialization, middleware, authentication, database constraints,
+  transactions, concurrency, restart behavior, or cross-boundary wiring.
+- Start a behavior change with the narrowest faithful failing test when a regression
+  test is useful. After reaching green, refactor both production and test code;
+  temporary regression tests are not automatically permanent. Remove or merge tests
+  superseded by a stronger canonical matrix.
+- Do not test source shape or incidental implementation details unless they are an
+  explicit compatibility contract. Test counts and coverage percentages are
+  diagnostics, not requirements.
+- Negative state-changing tests must assert the absence of unauthorized persisted or
+  external side effects as well as the returned failure.
 - After a code change, run these commands sequentially and in this order, never in
   parallel:
 

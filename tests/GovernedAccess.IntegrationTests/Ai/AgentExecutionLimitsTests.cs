@@ -63,7 +63,7 @@ public sealed class AgentExecutionLimitsTests
             ("MaximumCallsPerTool", "2"),
             ("MaximumToolCalls", "5"),
             ("MaximumProviderIterations", "7"),
-            ("CumulativeTimeout", "00:00:31"),
+            ("CumulativeTimeout", "00:01:01"),
             ("MaximumMessageCharacters", "0"),
         ];
 

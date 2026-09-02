@@ -8,7 +8,6 @@ import type { RequestDetailResponse } from "../api/contracts";
 import { BUSINESS_DECISION_ACTION } from "../components/BusinessDecisionPanel";
 import { DEVOPS_DECISION_ACTION } from "../components/DevOpsDecisionPanel";
 import { RequestDetailPage } from "../pages/RequestDetailPage";
-import { RequestListPage } from "../pages/RequestListPage";
 
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
@@ -86,24 +85,6 @@ describe("thin UI wiring", () => {
     expect(currentStep?.getAttribute("aria-current")).toBe("step");
     expect(within(currentStep as HTMLElement).getByText("Current")).toBeTruthy();
 
-    const scopeHeading = screen.getByRole("heading", {
-      name: "Submitted request",
-    });
-    const decisionsHeading = screen.getByRole("heading", {
-      name: "Approval history",
-    });
-    const actionRegion = screen.getByRole("complementary", {
-      name: "Action required",
-    });
-    expect(
-      scopeHeading.compareDocumentPosition(actionRegion) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      decisionsHeading.compareDocumentPosition(actionRegion) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
     const approveButton = screen.getByRole("button", {
       name: "Approve request",
     });
@@ -124,15 +105,13 @@ describe("thin UI wiring", () => {
     const nextStatusRegion = await screen.findByRole("region", {
       name: "Awaiting DevOps approval",
     });
-    expect(
-      within(nextStatusRegion).getByText(
-        "Business approved. Waiting for DevOps.",
-      ),
-    ).toBeTruthy();
+    expect(within(nextStatusRegion).getByText("Pending")).toBeTruthy();
     expect(
       screen.getByRole("complementary", { name: "Action recorded" }),
     ).toBeTruthy();
     expect(screen.getByText("Approved")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve request" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reject request" })).toBeNull();
   });
 
   it("wires the DevOps action to a safe active-grant summary", async () => {
@@ -206,38 +185,5 @@ describe("thin UI wiring", () => {
     expect(
       within(grantSummary).getByText(requestDetail.requestedRoleId),
     ).toBeTruthy();
-    expect(
-      grantSummary.querySelector(`time[datetime="${activatedAt}"]`),
-    ).toBeTruthy();
-    expect(
-      grantSummary.querySelector(`time[datetime="${expiresAt}"]`),
-    ).toBeTruthy();
-    expect(screen.getByText("correlation-devops-ui-smoke")).toBeTruthy();
-  });
-
-  it("keeps the requester register without browser creation controls", async () => {
-    mockedApiRequest.mockResolvedValue({ items: [] } as never);
-    render(
-      <MemoryRouter>
-        <RequestListPage />
-      </MemoryRouter>,
-    );
-
-    expect(
-      await screen.findByRole("heading", { name: "Access requests" }),
-    ).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "New request" })).toBeNull();
-    expect(screen.queryByRole("textbox")).toBeNull();
-    expect(mockedApiRequest).toHaveBeenCalledWith(
-      "/api/requests",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-    expect(
-      mockedApiRequest.mock.calls.every(
-        ([path, options]) =>
-          path !== "/api/request-drafts/prepare" &&
-          !(path === "/api/requests" && options?.method === "POST"),
-      ),
-    ).toBe(true);
   });
 });

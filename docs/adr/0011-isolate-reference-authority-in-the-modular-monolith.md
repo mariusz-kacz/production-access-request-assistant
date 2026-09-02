@@ -161,16 +161,13 @@ existing regression suite, and leave no independently provable target before cut
 
 ## Enforcement
 
-- Architecture tests assert the project-reference graph and forbid EF/MCP/Web references
-  from Core.
-- Source/reflection tests assert that only the owning module references each `DbContext`.
+- One compact architecture matrix asserts that each infrastructure project depends only
+  on Core; normal compilation enforces that Core has no EF, MCP, or Web dependency.
 - MCP contract tests use authority-port fakes and assert MCP-owned wire DTOs.
-- Integration tests create, migrate, seed, restart, and fail the two databases
-  independently.
-- Full-host tests prove the delivered production composition and isolated target
-  composition do not share registrations or database files.
-- Cutover checks assert exactly one active graph; cleanup checks assert no delivered
-  graph, unified context, or transitional seam remains.
+- Behavioral integration tests initialize, use, constrain, restart, and fail the two
+  databases independently, including distinct reference and workflow outage outcomes.
+- Full-host tests prove startup and one representative flow through the delivered
+  production composition.
 
 ## Revisit criteria
 

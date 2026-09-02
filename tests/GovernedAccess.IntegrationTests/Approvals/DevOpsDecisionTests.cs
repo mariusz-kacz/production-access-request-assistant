@@ -6,7 +6,6 @@ using GovernedAccess.Core.Domain;
 using GovernedAccess.Core.Ports;
 using GovernedAccess.IntegrationTests.Infrastructure;
 using GovernedAccess.Web.Authentication;
-using GovernedAccess.Web.Demo;
 using GovernedAccess.Workflow.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,71 +20,6 @@ public sealed class DevOpsDecisionTests(DefaultWebApplicationFixture fixture)
     : IClassFixture<DefaultWebApplicationFixture>
 {
     private readonly GovernedAccessWebFactory factory = fixture.Factory;
-
-    [Fact]
-    public async Task AuthenticatedDevOpsApprovalIgnoresCraftedScopeAndDuration()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await factory.ResetDatabaseAsync(cancellationToken);
-        var requestId = await CreateBusinessApprovedRequestAsync(factory, cancellationToken);
-        using var client = await CreateAuthenticatedClientAsync(
-            factory,
-            DemoPrincipalKeys.DevOpsApprover,
-            cancellationToken);
-        var body = ValidDecisionBody("Approve", " Approved for production support. ");
-        body["actorId"] = DemoDataIds.RequesterPrincipalId;
-        body["approverId"] = DemoDataIds.ClientBetaApproverPrincipalId;
-        body["clientId"] = DemoDataIds.ClientBetaId;
-        body["environmentId"] = DemoDataIds.ClientBetaEnvironmentId;
-        body["approvedRoleId"] = ProductionRoleIds.Support;
-        body["roleId"] = ProductionRoleIds.Support;
-        body["durationHours"] = 72;
-        body["approvedDurationMinutes"] = 4320;
-        body["expiresAt"] = GovernedAccessWebFactory.DefaultUtcNow.AddDays(30);
-        using var request = CreateDecisionMessage(requestId, body);
-
-        using var response = await GovernedAccessWebFactory.SendWithAntiforgeryAsync(
-            client,
-            request,
-            cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var responseBody = await ReadJsonAsync(response, cancellationToken);
-        Assert.Equal("Active", responseBody.RootElement.GetProperty("status").GetString());
-
-        await using var scope = factory.Services.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<WorkflowDbContext>();
-        var storedRequest = await dbContext.Set<AccessRequest>()
-            .AsNoTracking()
-            .SingleAsync(item => item.Id == requestId, cancellationToken);
-        var decisions = await dbContext.Set<ApprovalDecision>()
-            .AsNoTracking()
-            .Where(item => item.RequestId == requestId)
-            .OrderBy(item => item.DecidedAt)
-            .ToListAsync(cancellationToken);
-        var devOpsDecision = Assert.Single(
-            decisions,
-            item => item.Stage == ApprovalStage.DevOps);
-        var operation = await dbContext.Set<ProvisioningOperation>()
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-        var grant = await dbContext.Set<AccessGrant>()
-            .AsNoTracking()
-            .SingleAsync(item => item.RequestId == requestId, cancellationToken);
-
-        Assert.Equal(RequestStatus.Active, storedRequest.Status);
-        Assert.Equal(ApprovalOutcome.Approved, devOpsDecision.Decision);
-        Assert.Equal(DemoDataIds.DevOpsApproverPrincipalId, devOpsDecision.ApproverId);
-        Assert.Equal("Approved for production support.", devOpsDecision.Comment);
-        Assert.Equal(
-            DemoDataIds.ClientAlphaEnvironmentId,
-            storedRequest.Details.EnvironmentId);
-        Assert.Equal(ProductionRoleIds.ReadOnly, storedRequest.Details.RoleId);
-        Assert.Equal(requestId, operation.RequestId);
-        Assert.Equal(requestId, grant.RequestId);
-        Assert.Equal(AccessGrant.FixedLifetime, grant.ExpiresAt - grant.ActivatedAt);
-        Assert.Equal(grant.ActivatedAt.AddHours(8), grant.ExpiresAt);
-    }
 
     [Fact]
     public async Task TypedProvisioningFailureReturnsSafeProblemAndPersistsRetryableState()

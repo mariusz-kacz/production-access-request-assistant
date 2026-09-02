@@ -31,21 +31,6 @@ public sealed class AccessRequestPreparationTests
             "target-confirmation"));
     }
 
-    [Fact]
-    public void RequestHasNoPreparationNeutralCreationPath()
-    {
-        var constructor = Assert.Single(
-            typeof(AccessRequest).GetConstructors());
-        var parameters = constructor.GetParameters();
-
-        Assert.Equal(typeof(Guid), parameters[1].ParameterType);
-        Assert.Equal(
-            typeof(Guid),
-            typeof(AccessRequest)
-                .GetProperty(nameof(AccessRequest.PreparationId))!
-                .PropertyType);
-    }
-
     private static ValidatedRequestDetails Details() =>
         new(
             "client-alpha",

@@ -1,7 +1,7 @@
 # Testing Strategy
 
 - **Status**: Current
-- **Last reviewed**: 2026-08-31
+- **Last reviewed**: 2026-09-02
 
 ## Principles
 
@@ -10,10 +10,17 @@
 - Deterministic policy belongs in Core unit tests.
 - Framework, transport, persistence, authentication, and cross-boundary behavior uses
   the narrowest faithful component or full-host test.
-- Negative outcomes must assert both the response and absence of unauthorized persisted
-  side effects.
+- Each invariant has one canonical scenario matrix at the lowest layer capable of
+  proving it. Higher layers prove only boundary behavior that lower layers cannot.
+- A useful behavior change starts with the narrowest faithful failing test. After the
+  change is green, production and test code are both refactored; temporary regression
+  tests are not automatically permanent, and superseded tests are removed or merged.
+- Negative state-changing outcomes assert both the response and the absence of
+  unauthorized persisted or external side effects.
 - UI visibility is never treated as server authorization evidence.
-- Test counts are diagnostic and are not maintained as documentation requirements.
+- Source shape and incidental implementation details are tested only when they are an
+  explicit compatibility contract.
+- Test counts and coverage percentages are diagnostics, not requirements.
 
 ## Test layers
 
@@ -41,7 +48,7 @@ project name does not require every test to start the complete application.
 | MAF | Component tests for strict sparse-proposal parsing, exact four-tool catalog validation, discovery blocked after every exact environment outcome, fresh per-turn sessions, durable bounded turn envelopes, execution limits, and provider failures. |
 | Browser security | Full-host tests for six demo identities, cookies, antiforgery, authorization, over-posting, participant filtering, and `/api`/`/mcp` SPA exclusion. |
 | Teams transport | Full-host tests for authenticated personal activities, tenant/actor binding, reset, confirmation, safe failures, and one governed workflow. |
-| Persistence | Architecture and component tests for independent reference/workflow ownership, exact final table inventories, migrations, seeding, restart, failure isolation, unique constraints, UTC conversion, and optimistic concurrency. |
+| Persistence | A compact module-dependency guard plus behavioral SQLite tests for independent reference/workflow ownership, usable initialization, constraints, transactions, restart, failure isolation, UTC conversion, and optimistic concurrency. |
 | Frontend | Component tests for login/session behavior, list/detail rendering, approval and retry wiring, and absence of request creation. |
 | Evaluation mode | Focused component tests for dataset contract loading, grading, timeouts, cancellation, isolated composition, artifact diagnostics, and zero workflow effects. |
 
@@ -171,12 +178,19 @@ artifacts, and cleanup are documented in the
 
 ## Adding tests
 
+- Prefer extending the canonical matrix that owns an invariant over creating a new
+  standalone regression test.
 - Put pure deterministic rules in the unit project.
 - Use component tests for EF Core, MAF, MCP, SDK adapters, provider coordination, and
   concurrency.
 - Add a full-host test only for hosted behavior or a representative cross-boundary
   journey.
-- Assert persisted state and audit evidence alongside success or failure responses.
+- Remove or merge temporary tests once a stronger canonical scenario proves the same
+  defect. Do not retain a test solely because it participated in a red/green cycle.
+- Do not assert exact property, enum, subclass, migration, table, seed, DI, copy, or
+  layout inventories unless the detail is a supported versioned contract.
+- Assert persisted state and audit evidence alongside success or failure responses;
+  rejected state changes must also prove that no unauthorized side effect occurred.
 - Include unauthorized, invalid-state, duplicate, and cancellation cases with new
   state-changing behavior.
 - Preserve caller cancellation in fakes.

@@ -7,7 +7,7 @@ namespace GovernedAccess.IntegrationTests.Teams;
 public sealed class TeamsAdaptiveCardRendererTests
 {
     [Fact]
-    public void ReadyCardUsesTheFinalDeterministicIntakeContract()
+    public void ReadyCardContainsCanonicalFactsAndOnlySafeConfirmationData()
     {
         var preparationId = Guid.NewGuid();
         var review = new PreparationReview(
@@ -31,27 +31,22 @@ public sealed class TeamsAdaptiveCardRendererTests
             TeamsAdaptiveCardRenderer.AdaptiveCardContentType,
             attachment.ContentType);
         var card = Assert.IsType<JsonElement>(attachment.Content);
-        var facts = card.GetProperty("body")[2].GetProperty("facts");
-        Assert.Equal(7, facts.GetArrayLength());
-        AssertFact(facts[0], "Requester", "Demo Requester (requester)");
-        AssertFact(facts[1], "Client", "Client <Alpha> (client-alpha)");
-        AssertFact(
-            facts[2],
-            "Environment",
-            "Primary \"production\" (PROD-ALPHA-EU)");
-        AssertFact(
-            facts[3],
-            "Requested role",
-            "Production read-only (ProductionReadOnly)");
-        AssertFact(facts[4], "Incident", "No incident");
-        AssertFact(facts[5], "Requested access duration", "8 hours");
-        AssertFact(
-            facts[6],
-            "Confirm before",
-            "Wednesday, August 26, 2026 12:30 PM (UTC+00:00)");
-        Assert.Equal(
-            "Investigate </TextBlock><script>alert('x')</script>",
-            card.GetProperty("body")[4].GetProperty("text").GetString());
+        var factValues = card.GetProperty("body")
+            .EnumerateArray()
+            .Where(item => item.TryGetProperty("facts", out _))
+            .SelectMany(item => item.GetProperty("facts").EnumerateArray())
+            .Select(fact => fact.GetProperty("value").GetString())
+            .ToArray();
+        Assert.Contains("Demo Requester (requester)", factValues);
+        Assert.Contains("Client <Alpha> (client-alpha)", factValues);
+        Assert.Contains("Primary \"production\" (PROD-ALPHA-EU)", factValues);
+        Assert.Contains("Production read-only (ProductionReadOnly)", factValues);
+        Assert.Contains("8 hours", factValues);
+        Assert.Contains(
+            card.GetProperty("body").EnumerateArray(),
+            item => item.TryGetProperty("text", out var text)
+                && text.GetString()
+                    == "Investigate </TextBlock><script>alert('x')</script>");
 
         var action = Assert.Single(card.GetProperty("actions").EnumerateArray());
         Assert.Equal(
@@ -77,9 +72,7 @@ public sealed class TeamsAdaptiveCardRendererTests
 
         var card = Assert.IsType<JsonElement>(attachment.Content);
         Assert.False(card.TryGetProperty("actions", out _));
-        Assert.Equal(
-            "Draft replaced",
-            card.GetProperty("body")[0].GetProperty("text").GetString());
+        Assert.Contains("Draft replaced", card.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,18 +97,10 @@ public sealed class TeamsAdaptiveCardRendererTests
             "Authoritative production context changed. Review this replacement.");
 
         var card = Assert.IsType<JsonElement>(attachment.Content);
-        Assert.Equal(
+        Assert.Contains(
             "Authoritative production context changed. Review this replacement.",
-            card.GetProperty("body")[1].GetProperty("text").GetString());
+            card.GetRawText(),
+            StringComparison.Ordinal);
         Assert.Single(card.GetProperty("actions").EnumerateArray());
-    }
-
-    private static void AssertFact(
-        JsonElement fact,
-        string expectedTitle,
-        string expectedValue)
-    {
-        Assert.Equal(expectedTitle, fact.GetProperty("title").GetString());
-        Assert.Equal(expectedValue, fact.GetProperty("value").GetString());
     }
 }
