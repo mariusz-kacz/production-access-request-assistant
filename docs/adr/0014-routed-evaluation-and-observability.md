@@ -1,6 +1,6 @@
 # ADR 0014: Evaluate and Observe Routed Components Separately
 
-- **Status**: Accepted
+- **Status**: Accepted; router metric requirements partially superseded by [ADR 0015](0015-refine-router-policy-target-contracts.md) on 2026-09-07
 - **Date**: 2026-09-04
 - **Runtime status**: Target decision; not yet implemented or promoted
 - **Decision owners**: Project maintainer
@@ -22,7 +22,7 @@ production telemetry would duplicate infrastructure and weaken the current priva
 boundary.
 
 Microsoft's .NET evaluation libraries supply quality evaluators and reporting. The
-quality evaluators used by this target return probabilistic model-graded scores; they
+policy quality evaluators used by this target return probabilistic model-graded scores; they
 cannot know product invariants such as zero workflow mutation, current citation
 membership, exact tool isolation, or retired-policy exclusion.
 
@@ -36,33 +36,23 @@ know.
 
 The approved v1 inventory contains:
 
-- 12 router cases for exact route/context selection plus Intent Resolution over the
-  evaluation-only projection defined below;
+- 12 router cases for direct exact route/context selection, without a model judge;
 - 10 Policy Advisor cases for retrieval, groundedness, relevance, citations, and
   current/retired evidence; and
 - four multi-turn conversations for Access -> Policy -> Access, policy continuation,
   route switching, and ambiguous reference restatement.
 
-Exact route checks consume the validated `RouterDecision`. For Intent Resolution only,
-a deterministic evaluation adapter maps that decision one-to-one to exactly one
-`FunctionCallContent` using five evaluation-only `AIFunctionDeclaration` definitions:
-`route_access_request`, `route_policy_guidance`, `route_mixed`, `route_unclear`, and
-`route_unsupported`. The call carries `schemaVersion` and `contextReference`; the
-function descriptions reproduce the approved route semantics. The evaluator receives
-the complete sanitized runtime router envelope: normalized current query, every
-selected route-tagged history message, and the exact minimal active-access context
-(`HasActivePreparation`, clarification target, and safe choice labels), plus those
-definitions. An application-owned evaluation serializer may change representation but
-cannot omit, add, summarize, or infer semantic fields. A capture-based test compares
-the runtime input and evaluator projection field for field. The adapter performs no
-reclassification.
+Exact route checks compare the validated `RouterDecision` directly with the expected
+route and context reference using Microsoft evaluation abstractions/reporting.
+ADR 0015 supersedes the original router model-grading requirement: no synthetic
+evaluation-only function declarations, decision-to-function-call adapters, projection
+equivalence tests, associated compatibility gate, or additional mandatory router
+metric remains. The runtime router's empty tool collection retains its canonical
+capability tests.
 
-The evaluation-only declarations are never runtime tools or provider capabilities.
-Tests must prove the projection is one-to-one and that no declaration reaches the
-runtime router's empty tool collection. Task 2 must stop for an explicit specification
-amendment if its pinned package cannot evaluate the documented
-`AIFunctionDeclaration` input shape; raw `RouterDecision` JSON must not be graded as
-requester-visible prose.
+The 2026-09-07 approved v1 manifest amendment changes only router metric applicability
+to exact checks with no judge. All case IDs, semantic categories, expected route/context
+outcomes, policy metric applicability, and complete multi-turn checks are preserved.
 
 Deterministic automated tests run without live model, Azure Search, or judge
 credentials. Every live router case, every live Policy Advisor case, and every complete
@@ -85,15 +75,17 @@ thresholds. Exact safety/isolation checks remain blocking independently of aggre
 quality scores. A missing, invalid, or evaluator-diagnostic score fails the applicable
 promotion gate rather than being excluded from the denominator.
 
-The metric definitions and 1-5 scale are grounded in Microsoft's official
+The policy metric definitions and 1-5 scale are grounded in Microsoft's official
 [evaluation library inventory](https://learn.microsoft.com/en-us/dotnet/ai/evaluation/libraries)
 and API documentation for
-[Intent Resolution](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.intentresolutionevaluator),
 [Retrieval](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.retrievalevaluator),
 [Groundedness](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.groundednessevaluator),
 and
 [Relevance](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.relevanceevaluator).
-Task 2 must still prove and pin one compatible package set before implementation.
+Task 2 completed the pinned package/reporting and policy-evaluator compatibility
+baseline. Its earlier router-judge probe remains as historical source evidence only;
+Task 12 removes that obsolete probe while preserving applicable policy/reporting
+coverage. It is no longer a target compatibility or promotion gate.
 
 ### Exact product gates
 
@@ -177,10 +169,11 @@ sensitive conversational or retrieval content in normal telemetry.
 
 ## Alternatives considered
 
-### Use only deterministic exact-match tests
+### Use exact-match checks for policy answer quality too
 
-Rejected because exact checks cannot grade semantic intent resolution, retrieval
-ranking, groundedness, or answer relevance.
+Rejected because exact checks cannot grade policy retrieval ranking, groundedness,
+or answer relevance. Direct exact route/context checks are sufficient for the router;
+policy answer quality retains the applicable Microsoft evaluators.
 
 ### Use only model-graded quality metrics
 

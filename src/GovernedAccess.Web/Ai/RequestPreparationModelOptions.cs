@@ -67,7 +67,7 @@ internal sealed class RequestPreparationModelOptions
             FoundryResponses.DeploymentName!);
     }
 
-    private static bool TryGetTrustedFoundryResponsesEndpoint(
+    internal static bool TryGetTrustedFoundryResponsesEndpoint(
         string? value,
         out Uri? endpoint)
     {

@@ -1,9 +1,26 @@
 # Implementation Plan: Router-Led Policy Guidance Evolution
 
-- **Status:** Approved for implementation; Task 1 complete; runtime implementation has not started
-- **Source:** `SPEC-router-policy-evolution.md` (approved target, 2026-09-04)
+- **Status:** Approved for implementation; Tasks 1–2 complete; Task 3 not started; routing is not enabled
+- **Source:** `SPEC-router-policy-evolution.md` (approved 2026-09-04; target amended 2026-09-07)
 - **Task list:** `tasks/todo.md`
-- **Estimated implementation effort:** approximately 33.5 hours, within the specification's 24-34 hour budget
+- **Estimated implementation effort:** approximately 33 hours, within the specification's 24-34 hour budget
+
+## Target-amendment progress (2026-09-07)
+
+The four maintainer-authorized documentation fixes are recorded in
+[amendment 3.2.0](../docs/constitution-amendment-3.2.0.md) and
+[ADR 0015](../docs/adr/0015-refine-router-policy-target-contracts.md): remove the prose
+parser and router judge, specify ordered whole-pair history, and rebuild the fixture
+index without stale IDs. This is verification path 5, documentation-only. Tasks 1-2
+remain complete; Task 3 and later tasks remain unstarted. No runtime promotion occurs.
+
+Revised future estimates: Task 6 3 -> 3.5 hours (durable pair order/overflow), Task 7
+2.5 -> 3 hours (whole-pair contiguous windows), Task 9 3 -> 3.5 hours (exact-set rebuild),
+Task 10 3.5 -> 2.5 hours (no prose parser), and Task 12 3.5 -> 2.5 hours (direct router
+oracle; scoped obsolete probe cleanup). Total 33.5 -> 33 hours; completed-task
+estimates and other tasks are unchanged. The dependency graph remains valid; Task 10
+no longer has an unresolved policy-consistency decision gate, and Task 12 no longer
+depends on router function-projection compatibility.
 
 ## Overview
 
@@ -118,21 +135,31 @@ Every task and checkpoint must preserve the following regression contract:
   compatibility before a switch statement invokes zero or one specialist. Never repair,
   decompose, queue, replay, or fall through to a different route.
 - Store each completed executable turn as one atomic requester/assistant message pair,
-  using a bounded application-owned plain-text projection for card responses, then
-  prune oldest-first to 12 messages. Never store raw Adaptive Card JSON. History is
-  context only and never joins or participates in request authorization.
-- Build router and policy windows deterministically from persisted messages with both
-  count and approximate-token caps. The Access path never receives either window.
+  with explicit persisted pair order per authenticated binding and requester first.
+  Append and whole-pair pruning are atomic, with no read/prune interleaving, to at
+  most six pairs (12 messages). Timestamps/GUIDs are not conversational order. Cards
+  use safe application-owned plain text, never raw JSON. If either message exceeds
+  2,000 characters, omit the whole pair without semantic truncation, valid-input
+  rejection, Access-limit changes, or authoritative rollback/replay. History remains
+  non-authoritative and never participates in request authorization.
+- Build chronological windows from complete pairs: newest contiguous eligible suffix
+  fitting four messages and about 600 router/800 policy tokens. Filter policy first;
+  stop at the first non-fitting pair without skipping older context, and permit empty
+  windows when the newest cannot fit. Access never receives either window.
 - Derive `AccessPolicyReference` from a fresh active preparation and authoritative safe
   display projections only. Exclude justification, client-sensitive details, approval
   evidence, approver identity, provisioning state, and complete payloads.
 - Implement the corpus indexer as an explicit Web command in the existing executable.
-  It is a bounded fixture utility, not a continuously running service or generic upload
-  pipeline.
+  Rebuild only the configured synthetic fixture index from current checked-in corpus;
+  success means exactly its current chunk IDs, with removed/obsolete IDs absent and
+  unsearchable. Failed/partial uploads cannot report success. Keep schema, embeddings,
+  metadata, filters, credentials, cancellation, timeout, and typed failure boundaries;
+  no incremental sync, background ingestion, aliases, multiple indexes, or platform.
 - Reuse the current evaluation command's isolated hosting, provenance, cancellation,
   and zero-side-effect discipline. Preserve the access-intake suite and add Microsoft
-  evaluators/reporting for the routed feature instead of creating a second generic
-  evaluation platform.
+  evaluation/reporting for direct exact router checks and applicable policy Retrieval,
+  Groundedness, and Relevance. Router cases need no judge or additional metric; do not
+  create another generic evaluation platform.
 
 ## Dependency Graph
 
@@ -175,7 +202,7 @@ after deterministic and live evidence describe the actual runtime.
 
 ### Phase 1: Router vertical slice
 
-- [ ] Task 2: Pin the SDK and route-configuration baseline
+- [x] Task 2: Pin the SDK and route-configuration baseline
 - [ ] Task 3: Build the closed structured router boundary
 - [ ] Task 4: Route Teams text while preserving Access Request behavior
 
@@ -196,7 +223,7 @@ after deterministic and live evidence describe the actual runtime.
 ### Checkpoint: Context foundations
 
 - [ ] Policy facts retain current eight-hour, approval-order, immutability, and approver semantics.
-- [ ] History survives restart, prunes deterministically, and is never authoritative workflow evidence.
+- [ ] History preserves explicit pair order across restart, prunes/omits whole pairs, selects contiguous eligible windows, and is never authoritative workflow evidence.
 - [ ] Captured router, access, retrieval, and policy inputs prove the specified non-overlapping context windows.
 - [ ] The corpus produces stable current and retired chunk identities without any Azure dependency in automated tests.
 
@@ -210,7 +237,7 @@ after deterministic and live evidence describe the actual runtime.
 
 - [ ] Access -> Policy -> Access, policy continuation, route switching, ambiguous references, and mixed intents match the specification.
 - [ ] Policy Guidance creates no request/preparation mutation and has no access MCP tools.
-- [ ] Retired evidence, unknown citations, malformed output, retrieval failure, timeout, and provider failure fail closed.
+- [ ] Fixture rebuilds remove stale IDs; retired evidence, unknown citations, malformed output, retrieval failure, timeout, and provider failure fail closed.
 - [ ] Route, retrieval, specialist, history, token, and end-to-end measurements are present without raw content.
 
 ### Phase 4: Evaluation and promotion
@@ -229,16 +256,20 @@ after deterministic and live evidence describe the actual runtime.
 
 ## Approved Implementation Assumptions
 
-1. `SPEC-router-policy-evolution.md` and constitution amendment `3.1.0` were approved
-   in Task 1. Tasks 2-12 are authorized to implement only that bounded target; runtime
-   promotion remains gated on deterministic and retained live evidence.
+1. The specification and amendment `3.1.0` were approved in Task 1; amendment `3.2.0`
+   and ADR 0015 authorize the four 2026-09-07 target refinements. Tasks 2-12 implement
+   only that bounded target; runtime promotion remains gated on deterministic and
+   retained live evidence.
 2. `/new` resets only the access preparation. It bypasses the router and creates no
    routed-history message, but it does not erase prior bounded policy history. A later
    request to wipe conversational context requires an explicit specification and
    history-test change rather than an implementation-time reinterpretation.
 3. A completed executable route persists the normalized requester text and final
    validated application-rendered assistant text as one pair. Card responses use a
-   bounded safe text projection rather than card JSON. If that non-authoritative history
+   safe text projection rather than card JSON. Either message exceeding the 2,000-character
+   storage limit omits the entire pair; safe metadata may indicate omitted continuity
+   without content. The existing 4,000-character Access input limit is unchanged.
+   If that non-authoritative history
    write fails after an access commit, the authoritative access result is not rolled
    back or replayed; continuity is degraded and the failure is recorded safely.
 4. The existing disposable-local-data rule remains: introducing the routed-message
@@ -255,14 +286,16 @@ after deterministic and live evidence describe the actual runtime.
 
 ## Task 1 Decisions and Remaining Gates
 
-- **Resolved — free-form policy consistency:** Keep the fixed result contract. Use a
-  finite versioned runtime contradiction guard for machine-recognized direct claims
-  about the four snapshot fact families, plus structural/citation checks and blocking
-  offline semantic evaluation. This is not represented as complete runtime semantic
-  proof; ADR 0013 records the accepted residual risk and stronger-contract trigger.
+- **Amended — free-form policy consistency:** Keep the small result contract, snapshot
+  precedence, structural/outcome/citation/bounds/rendering checks, and blocking offline
+  Groundedness/Relevance evaluation. No runtime prose parser, replacement model,
+  mandatory structured claims, or templating subsystem. Runtime validation does not
+  prove arbitrary prose correct or consistent with every policy fact; offline
+  evaluation measures risk without guaranteeing each live answer (ADR 0015).
 - **Resolved — promotion thresholds:** The approved target spec records numeric
-  pre-results gates for route exactness and the 1-5 Intent Resolution, Retrieval,
-  Groundedness, and Relevance metrics. Exact side-effect, context-isolation,
+  pre-results gates for direct route/context exactness (95% overall and mandatory exact
+  safety-sensitive outcomes) and policy 1-5 Retrieval, Groundedness, and Relevance.
+  Router v1 IDs/categories/outcomes remain unchanged and require no model judge. Exact side-effect, context-isolation,
   citation-membership, retired-policy, and fail-closed gates remain 100% blocking.
 - **Azure configuration:** The Search endpoint/index name, embedding deployment and
   dimensions, router deployment, policy deployment, and judge deployment must be
@@ -277,12 +310,12 @@ after deterministic and live evidence describe the actual runtime.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Proposed routing/RAG/history conflicts with current governance | High | Block implementation at Task 1; record a scoped amendment and three ADRs before code. |
-| Free-form answer cannot be fully contradiction-checked deterministically | High | Resolve the contract decision before Task 10; never overstate prompt injection or offline grading as runtime proof. |
+| Free-form answer may misstate policy despite valid structure/citations | High | Enforce snapshot precedence and structural boundaries, retain offline semantic evaluation, and explicitly avoid a per-answer correctness guarantee. |
 | MAF/evaluation/Azure SDK version drift breaks existing interpreter behavior | High | Prove a minimal compatible package set in Task 2, pin it, run existing interpreter tests, and avoid unrelated upgrades. |
 | Policy or history leaks into Access Request context | High | Construct separate typed envelopes and capture exact invocation inputs in canonical isolation tests. |
 | Policy route mutates preparation or consequential workflow state | High | Give it read-only ports only and assert zero preparation/request/decision/operation/grant deltas on success and every failure. |
 | Retrieved content contains adversarial instructions or retired policy | High | Apply server-owned active/effective filters before injection, label evidence as untrusted, validate citations, and include adversarial fixtures/tests. |
-| History increases privacy/retention exposure | Medium | Store only bounded normalized requester and final rendered text, cap 12 x 2,000 characters, prune oldest-first, and never log or persist prompts/reasoning/evidence payloads. |
+| History increases privacy/retention exposure | Medium | Persist explicit ordered complete pairs; cap six pairs/2,000 characters per message, omit oversized pairs, prune whole pairs, and never log content or persist prompts/reasoning/evidence payloads. |
 | History persistence and access preparation commits are not atomic | Medium | Treat history as non-authoritative, persist pairs atomically within its own boundary, never roll back/replay access state, and expose a safe degraded-continuity outcome. |
 | Azure Search/embedding is unavailable or nondeterministic | Medium | Keep a provider-neutral port, deterministic adapter tests, explicit deadlines, no fallback answer, and separate live retrieval evidence. |
 | Router adds latency and token cost | Medium | Enforce 8/30/60/70-second caps, measure components separately, and make no improvement claim without evidence. |
@@ -313,25 +346,34 @@ Canonical evidence to add or extend:
   failures, and zero-specialist invocation;
 - deterministic coordinator matrix covering all five routes, original-message
   forwarding, exact `/new`, blank input, and at-most-one specialist;
-- history normalization, atomic pair writes, 12-message/2,000-character bounds,
-  oldest-first pruning, query windows, failure behavior, and restart;
+- history boundary trimming, explicit persisted pair order independent of equal
+  timestamps/GUIDs, requester-first reads, concurrent appends/reads, atomic whole-pair
+  pruning to six pairs, either/both oversized messages and exact storage-limit cases,
+  no authoritative rollback/replay, failure behavior, and restart;
+- complete-pair count/token selection, policy filtering first, first-non-fitting-pair
+  stop without skipping earlier smaller pairs, and an empty newest-pair window;
 - snapshot regression matrix for eight-hour duration, Business -> DevOps order,
   immutable submitted scope, and requester-independent business approver;
-- exact captured envelopes proving router gets four cross-route messages, Policy gets
-  four policy-only messages plus safe projection/evidence, and Access gets neither;
-- corpus chunk/ID determinism and current/retired metadata;
+- exact captured envelopes proving router gets at most four cross-route messages in
+  complete pairs, Policy gets at most four policy-only messages in complete pairs plus
+  safe projection/evidence, and Access gets neither;
+- corpus chunk/ID determinism and current/retired metadata; fixture index -> remove
+  document/chunk -> rebuild -> removed IDs absent and unretrievable, with exact final
+  ID-set success and partial/failed-upload rejection;
 - hybrid query construction, server-owned filters, cancellation/timeout, maximum three
   chunks/about 1,500 tokens, and retired-policy exclusion;
 - Policy Advisor output matrix for answered/insufficient/unsupported, unknown fields,
   answer bounds, current citation membership, safe Markdown rendering, adversarial
-  evidence, and no tools;
+  evidence, snapshot precedence in captured inputs, and no tools (not prose-semantic
+  parser tests);
 - cross-route scenario matrix and negative side-effect assertions for every routing,
   retrieval, and specialist failure;
 - telemetry tests proving required route/component attributes and absence of raw
   prompts, messages, answers, chunks, queries, and tool payloads;
-- Microsoft evaluator/reporting component tests, the one-to-one evaluation-only route
-  projection of the complete captured router envelope with runtime tool-absence proof,
-  exact product and full-conversation checks, immutable manifest
+- Microsoft policy-evaluator/reporting component tests, direct exact route/context
+  result reporting with no router judge, exact product and full-conversation checks,
+  removal of the superseded Task 2 router-judge probe without losing policy/reporting
+  coverage, immutable manifest
   schema/version/hash/applicability checks, the fixed fresh uncached three-repetition
   plan, and a clean retained live run.
 

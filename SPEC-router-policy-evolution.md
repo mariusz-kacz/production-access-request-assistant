@@ -3,14 +3,16 @@
 - **Status:** Approved target feature; not current as-built behavior
 - **Prepared:** 2026-09-04
 - **Approved:** 2026-09-04 by the project maintainer
+- **Target amended:** 2026-09-07 by the project maintainer; only the four refinements in ADR 0015; no runtime promotion
 - **Revision:** Lean router + policy architecture; deterministic dispatch; minimal router context; bounded route-tagged history; Azure AI Search hybrid RAG; Microsoft evaluation stack; submitted-request status deferred
 - **Repository:** `mariusz-kacz/production-access-request-assistant`
 - **Target presentation name:** Governed Production Access Assistant
 - **Delivery limit:** one model-based turn router, the existing Access Request specialist, and one new Policy Advisor
-- **Governance:** [constitution amendment 3.1.0](docs/constitution-amendment-3.1.0.md),
+- **Governance:** [constitution amendment 3.2.0](docs/constitution-amendment-3.2.0.md),
   [ADR 0012](docs/adr/0012-router-and-context-isolation.md),
-  [ADR 0013](docs/adr/0013-policy-grounding.md), and
-  [ADR 0014](docs/adr/0014-routed-evaluation-and-observability.md)
+  [ADR 0013](docs/adr/0013-policy-grounding.md),
+  [ADR 0014](docs/adr/0014-routed-evaluation-and-observability.md), and
+  [ADR 0015](docs/adr/0015-refine-router-policy-target-contracts.md)
 - **Implementation budget:** approximately 24–34 hours
 
 ## 1. Objective
@@ -267,7 +269,10 @@ Do not add lifecycle, missing-field lists, justification, selected-field values,
 
 ### Recent router window
 
-The router receives at most the four most recent stored routed messages across `AccessRequest` and `PolicyGuidance`, subject to an approximate 600-token budget. The current user message is supplied separately.
+The router receives a chronological window of complete requester/assistant pairs across
+`AccessRequest` and `PolicyGuidance`, capped at four messages and approximately 600
+tokens. Select the newest contiguous suffix of eligible pairs using section 11's
+algorithm. The current user message is supplied separately.
 
 The recent window is untrusted conversational context. It helps resolve continuation and topic switching but never replaces canonical access state or deterministic validation.
 
@@ -309,7 +314,7 @@ Canonical preparation remains its authoritative memory.
 Receives:
 
 - normalized current policy question unchanged after boundary trimming;
-- at most four most recent stored `PolicyGuidance` messages, within an approximate 800-token budget;
+- complete `PolicyGuidance` pairs selected after route filtering by section 11's newest-contiguous-suffix rule, in chronological order, capped at four messages and approximately 800 tokens;
 - the current authoritative access-policy snapshot;
 - when `ContextReference == ActiveAccessPreparation`, one safe access-policy projection; and
 - at most three current policy evidence chunks selected before model invocation.
@@ -338,9 +343,9 @@ It excludes requester justification, unnecessary client-sensitive details, appro
 
 ## 11. Bounded route-tagged history
 
-Conversation storage and model-context injection are separate decisions.
-
-Persist only successful conversational messages associated with executable routes:
+Conversation storage and model-context injection are separate decisions. A completed
+executable `AccessRequest` or `PolicyGuidance` turn contributes one requester/assistant
+pair, subject to whole-pair omission for storage overflow below.
 
 ```csharp
 public enum ConversationMessageRole
@@ -352,36 +357,68 @@ public enum ConversationMessageRole
 public sealed record RoutedConversationMessage(
     Guid MessageId,
     PreparationBinding Binding,
+    long PairOrder,
     ConversationMessageRole Role,
     AssistantRoute Route,
     string Content,
     DateTimeOffset CreatedAt);
 ```
 
-Store only:
+Each pair has an explicit persisted order within its exact authenticated conversation
+binding. Both messages share that pair order and route; requester always precedes
+assistant. The store establishes one durable order for successful concurrent appends
+within the binding. Reads return complete pairs in that order and never interleave
+pairs. Timestamps and arbitrary GUID sorting are not the conversational-order contract.
 
-- normalized bounded requester messages; and
-- final validated application-rendered assistant messages
+Append the complete pair and prune the oldest complete pairs in one atomic operation.
+Retain at most six complete pairs, equivalent to the existing 12-message limit.
+Concurrent append/read/prune operations cannot expose a half pair, interleave messages
+from different pairs, lose a successfully appended retained pair, or exceed that cap.
+A failed concurrent write returns a typed safe outcome; restart preserves the order.
 
-for completed `AccessRequest` and `PolicyGuidance` turns.
+Store only requester text normalized by boundary trimming and final validated
+application-rendered assistant text. Card responses use an application-owned safe
+plain-text projection, never raw card JSON. The storage limit remains 2,000 characters
+per message. If either message exceeds it, omit the entire pair from reusable history:
+do not silently truncate semantic content, reject otherwise valid input, change the
+existing Access input limit (4,000 characters), or roll back/replay authoritative
+state. Existing safe metadata may indicate omitted continuity without logging content.
 
-Do not persist router prompts, model reasoning, complete model objects, complete retrieved chunks, complete tool payloads, provider-internal history, `Mixed`, `Unclear`, or `Unsupported` messages as reusable model context.
+Do not persist router prompts, model reasoning, complete model objects, retrieved
+chunks, tool payloads, provider-internal history, or `Mixed`, `Unclear`, `Unsupported`
+and failed turns as reusable context. There is no semantic time-to-live. Enterprise
+retention/deletion policy is a separate concern outside this feature.
 
-History limits per authenticated Teams conversation:
+For each invocation, build windows from eligible complete pairs:
 
-- maximum 12 messages;
-- maximum 2,000 characters per message; and
-- oldest-first pruning when the limit is exceeded.
+1. Router eligibility includes both executable routes. Policy eligibility includes
+   only `PolicyGuidance`; apply this filter before selecting its window.
+2. Starting with the newest eligible pair, include it only if both messages together
+   fit the remaining message and approximate-token budgets.
+3. Continue to the next older eligible pair. Stop as soon as a pair cannot fit either
+   cap; do not skip it to include unrelated older context.
+4. Supply the selected contiguous suffix in chronological pair order, requester then
+   assistant. An empty window is valid when the newest eligible pair cannot fit.
 
-There is no semantic time-to-live. Enterprise retention/deletion policy is a separate concern outside this feature.
+Router caps remain four messages/about 600 tokens; Policy caps remain four
+messages/about 800 tokens. No pair or message is split or semantically truncated to
+fill a window. Access Request receives no general history.
 
-Per invocation:
+Exact `/new` still resets only the active unsubmitted preparation, bypasses routing,
+adds no history entry, and retains prior bounded policy history. A history failure
+after an authoritative access commit cannot roll back or replay that commit. This
+history is non-authoritative context, not semantic memory, summaries, a retention
+workflow, or general conversation orchestration.
 
-- Router receives at most four recent routed messages across both executable routes.
-- Policy Advisor receives at most four recent `PolicyGuidance` messages.
-- Access Request receives no general history.
-
-This bounded history is conversational context only. It is never authoritative workflow state.
+Future verification has two canonical owners: Task 6's persistence matrix covers
+equal timestamps with IDs ordered contrary to pair order, requester-before-assistant
+reads, concurrent appends/reads, atomic whole-pair pruning to six pairs, either/both
+messages over 2,000 characters with no partial storage, and restart preserving order
+and bounds. Tasks 10-11 own coordinator evidence that omission/failure does not reject
+valid input or roll back/replay authoritative access state. Task 7's window matrix covers both caps,
+policy filtering before selection, a middle older pair that cannot fit even though
+an earlier smaller pair could, and an oversized newest pair producing an empty
+window. Boundary cases include messages exactly at the storage limit.
 
 ## 12. Policy Advisor contract
 
@@ -408,68 +445,26 @@ Rules:
 - Every citation ID must belong to evidence supplied for the current invocation.
 - `InsufficientEvidence` and `Unsupported` contain no model-authored visible answer; the application owns the fallback wording.
 - Unknown properties, unknown citation IDs, incompatible payloads, or output beyond configured limits fail the turn.
-- The versioned runtime guard must reject every recognized direct contradiction of a
-  fact represented by the current authoritative policy snapshot; semantics outside
-  its approved finite grammar are not claimed as runtime-proven.
 - Visible answer length is capped at 2,000 characters.
 - The application renders validated output through application-owned Teams/Markdown formatting.
 - The model cannot emit Adaptive Card actions, raw card JSON, raw HTML, executable content, or unvalidated links.
 
-Runtime validation establishes schema correctness, citation membership, bounded
-machine-checkable current-policy consistency, and safe rendering. The fixed free-form
-contract does not make complete semantic consistency deterministically provable.
+Runtime validation establishes closed-schema correctness, answer/outcome
+compatibility, current-invocation citation membership, answer bounds, and safe
+application-owned rendering. It does **not** prove arbitrary prose semantically
+correct or consistent with every policy fact. A valid citation is not proof that the
+answer correctly interprets the cited evidence.
 
-`SnapshotClaimGuard` version 1 must normalize candidate answer text with Unicode NFKC,
-invariant case folding, collapsed whitespace, and sentence boundaries at `.`, `?`,
-`!`, `;`, or a line break, then recognize at least these four English direct-claim
-forms:
+Prompt/context construction gives the authoritative snapshot precedence over
+untrusted retrieved explanatory material. Offline Groundedness and Relevance
+evaluation measures residual semantic risk and remains a blocking promotion gate;
+it does not guarantee each live answer. This limitation is accepted for the bounded
+synthetic read-only feature and does not weaken deterministic access authorization.
 
-- a sentence containing `access` or `grant`, one ASCII integer or English number word
-  from one through twenty-four, and `hour(s)` or `day(s)` is a duration claim; days
-  convert to 24 hours and the value must equal `GrantDuration`;
-- a sentence containing both `business` and `DevOps` plus `before`, `after`, or `then`
-  is an approval-order claim; a sentence containing `approval`, either stage, and
-  `only`, `sole`, or `single` is a stage-completeness claim. Both forms must match the
-  snapshot's complete ordered stages;
-- a sentence containing `submit`, `submitted`, or `submission`, a request/scope term,
-  a `change`, `edit`, `modify`, or `amend` term, and `can`, `may`, `allowed`, `cannot`,
-  `may not`, `must not`, or `not allowed` is a submitted-scope-mutability claim and is
-  evaluated using the explicit inverse relationship below; and
-- a sentence containing `requester` or `user`, `business approver`, a
-  `choose`, `select`, `nominate`, or `pick` term, and one of those explicit modal forms
-  is an approver-choice claim. `Business approver` with `assigned`, `derived`, or
-  `determined` and `client`, `server`, or `selected environment` is the canonical
-  non-requester-choice form. Both must match `RequesterMayChooseBusinessApprover`.
-
-For every recognized sentence, `no`, `not`, `never`, and `neither` are negation tokens.
-A duration or approval-order/stage claim containing any negation token fails closed.
-For mutability and requester-choice claims, `cannot`, `may not`, `must not`, and
-`not allowed` are the supported negative forms; `can`, `may`, and `allowed` are
-positive only when not negated. A sentence containing both polarities, a second
-negation, or negation of `assigned`, `derived`, or `determined` fails closed as
-ambiguous. For submitted-scope claims, the parsed proposition is
-`ScopeIsMutable` and it is accepted only when
-`ScopeIsMutable == !SubmittedScopeIsImmutable`. For requester-choice claims, the
-parsed proposition is `RequesterMayChooseBusinessApprover` and it is accepted only
-when equal to the same-named snapshot value. The guard must not compare only extracted
-nouns or numbers.
-
-The v1 canonical matrix must accept direct statements of eight hours, Business before
-DevOps, immutable submitted scope requiring a new request, and server/client-derived
-business approver selection. It must reject otherwise identical claims for 4, 12, or
-24 hours and one or two days; DevOps before Business or a one-stage approval; editable
-submitted scope; requester-selected/nominated business approvers; and the negated
-forms “access is not eight hours,” “Business is not before DevOps,” and “the approver
-is not determined by the selected environment.” A recognized contradiction or
-ambiguous polarity fails the turn. The guard does not infer, rewrite, or repair
-unrecognized arbitrary prose, and an implementation recognizing none of these
-mandatory forms is non-conforming.
-
-Prompt construction gives the snapshot precedence over untrusted retrieved
-explanation. Answers with no recognized v1 claim remain subject to structural runtime
-validation and blocking offline groundedness/relevance evaluation; that residual
-semantic risk is explicitly accepted for the synthetic read-only feature. ADR 0013
-records this bounded interpretation and its stronger-contract trigger.
+Keep this small free-form `PolicyAdvisorResult`. Do not add a runtime contradiction
+parser, another runtime verification model, mandatory structured claims, or a new
+templating subsystem. [ADR 0015](docs/adr/0015-refine-router-policy-target-contracts.md)
+records the approved refinement of ADR 0013.
 
 ## 13. Authoritative policy snapshot
 
@@ -567,15 +562,32 @@ topicTags
 contentVector
 ```
 
-A small indexing utility must:
+An explicit operator indexing command must rebuild **only the configured synthetic
+fixture index** from the current checked-in corpus:
 
-1. read the checked-in documents;
-2. create stable chunks/IDs;
-3. generate embeddings;
-4. create/update the index schema; and
-5. upload the fixture.
+1. read and validate the checked-in documents and generate stable chunks/IDs;
+2. generate embeddings using the configured embedding schema;
+3. rebuild the configured fixture index using the schema above; and
+4. upload the current fixture and verify successful completion against its exact chunk
+   ID set.
 
-It is not a generic ingestion platform.
+A successful rebuild leaves exactly the current fixture's chunk IDs in that index.
+Removed documents, deleted chunks, and obsolete IDs must be absent and unsearchable;
+uploading current IDs over an existing index without removing stale IDs is insufficient.
+The command must scope all index mutation to the configured synthetic fixture index,
+use `DefaultAzureCredential`, propagate cancellation, enforce explicit timeouts, and
+return safe typed failures. Failed or partial uploads, cancellation, timeout, or an
+unverified final ID set must not be reported as a successful rebuild. No atomic
+availability guarantee is introduced for a failed rebuild.
+
+Preserve the existing schema, embedding, metadata, runtime filtering, authentication,
+and failure boundaries. This remains an operator command, with no incremental
+synchronization, background ingestion, aliases, multiple indexes, or generic ingestion
+platform.
+
+Task 9's focused future verification must index the fixture, remove a document or
+chunk, rebuild, and verify that removed IDs are absent and cannot be retrieved.
+Controlled transport/client tests also cover partial upload and rebuild failure.
 
 The retrieval input is built from:
 
@@ -618,8 +630,8 @@ Initial configurable safety caps:
 
 Initial context guardrails:
 
-- Router: at most four recent routed messages, approximately 600 history tokens.
-- Policy Advisor: at most four recent policy messages, approximately 800 history tokens.
+- Router: complete-pair suffix from section 11, at most four messages/about 600 history tokens.
+- Policy Advisor: policy-filtered complete-pair suffix, at most four messages/about 800 history tokens.
 - Retrieved policy evidence: at most three chunks, approximately 1,500 tokens.
 - Access Request: no new general-history context.
 
@@ -773,34 +785,13 @@ Keep the inventory intentionally small.
 - unsupported domain; and
 - submitted-request status questions as unsupported.
 
-Evaluate with:
-
-- exact expected route/context reference; and
-- Microsoft's intent-resolution evaluator.
-
-The two checks consume different representations. Exact matching reads the validated
-`RouterDecision` directly. For Intent Resolution only, an evaluation adapter maps that
-same validated decision to exactly one `FunctionCallContent` using one of five
-evaluation-only `AIFunctionDeclaration` definitions:
-`route_access_request`, `route_policy_guidance`, `route_mixed`, `route_unclear`, or
-`route_unsupported`. The projected call carries `schemaVersion` and
-`contextReference`; the function descriptions reproduce the approved route semantics.
-The evaluator receives the complete sanitized router input used by the runtime call:
-the normalized current query, every selected route-tagged history message, and the
-exact `HasActivePreparation`, clarification target, and safe clarification-choice
-labels from `ActiveAccessRoutingContext`, plus those five definitions. An
-application-owned serializer may represent that envelope as evaluation messages but
-must not omit, add, summarize, or infer any semantic field. The adapter performs no
-reclassification and cannot change the exact result. A capture-based test must compare
-the runtime router envelope with the evaluator projection field for field.
-
-These declarations are evaluator input, not application capabilities. They must never
-be registered on the runtime router, exposed to a provider invocation, or shared with
-specialist tools. A deterministic test must prove the projection is one-to-one and the
-runtime router tool collection remains empty. If the package pinned in Task 2 cannot
-evaluate this supported `AIFunctionDeclaration` projection, implementation must stop
-and amend this approved evaluation contract rather than silently substitute another
-metric or grade the raw JSON as requester-visible prose.
+Evaluate routing directly by comparing the validated `RouterDecision` route and
+context reference to the case's exact expected values, using Microsoft evaluation
+abstractions and reporting. Router cases require no model judge, synthetic route
+function declarations, decision-to-function-call adapters, projection-equivalence
+tests, or related SDK compatibility gates. Do not introduce another mandatory router
+metric or a replacement generic evaluation framework. Runtime router tools remain
+empty, independently protected by the router's canonical capability tests.
 
 **Policy Advisor dataset:** exactly 10 v1 cases covering:
 
@@ -832,22 +823,25 @@ One scenario is one unique case ID below; cases must not be merged, duplicated, 
 relabelled for threshold calculation. Task 12 may refine wording and expected source
 IDs before any live execution, but it must preserve these IDs, semantic categories,
 route/outcome expectations, and metric-applicability map. Adding, removing, or changing
-an entry requires a new reviewed manifest version and pre-results approval.
+an entry requires a new reviewed manifest version and pre-results approval. The
+maintainer-approved 2026-09-07 amendment changes only router metric applicability to
+exact route/context checks with no model judge; the v1 IDs, semantic categories,
+expected outcomes, policy metrics, and multi-turn checks below are preserved.
 
 | Router case | Required category and expected route | Numeric metric |
 |---|---|---|
-| `ROUTER-01` | Clear new access request -> `AccessRequest/None` | Intent Resolution |
-| `ROUTER-02` | Access continuation with an active preparation -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
-| `ROUTER-03` | Clear direct policy question -> `PolicyGuidance/None` | Intent Resolution |
-| `ROUTER-04` | Policy question about active access -> `PolicyGuidance/ActiveAccessPreparation` | Intent Resolution |
-| `ROUTER-05` | Policy continuation using recent policy history -> `PolicyGuidance/None` | Intent Resolution |
-| `ROUTER-06` | Explicit switch from policy back to access -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
-| `ROUTER-07` | Cross-context relative-reference ambiguity -> `Unclear/None` | Intent Resolution |
-| `ROUTER-08` | Independent access update plus policy question -> `Mixed/None` | Intent Resolution |
-| `ROUTER-09` | Understood out-of-domain request -> `Unsupported/None` | Intent Resolution |
-| `ROUTER-10` | Submitted-request status question -> `Unsupported/None` | Intent Resolution |
-| `ROUTER-11` | Hypothetical access eligibility question -> `PolicyGuidance/None` | Intent Resolution |
-| `ROUTER-12` | Explicit active clarification-choice selection -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
+| `ROUTER-01` | Clear new access request -> `AccessRequest/None` | None; exact route/context only |
+| `ROUTER-02` | Access continuation with an active preparation -> `AccessRequest/ActiveAccessPreparation` | None; exact route/context only |
+| `ROUTER-03` | Clear direct policy question -> `PolicyGuidance/None` | None; exact route/context only |
+| `ROUTER-04` | Policy question about active access -> `PolicyGuidance/ActiveAccessPreparation` | None; exact route/context only |
+| `ROUTER-05` | Policy continuation using recent policy history -> `PolicyGuidance/None` | None; exact route/context only |
+| `ROUTER-06` | Explicit switch from policy back to access -> `AccessRequest/ActiveAccessPreparation` | None; exact route/context only |
+| `ROUTER-07` | Cross-context relative-reference ambiguity -> `Unclear/None` | None; exact route/context only |
+| `ROUTER-08` | Independent access update plus policy question -> `Mixed/None` | None; exact route/context only |
+| `ROUTER-09` | Understood out-of-domain request -> `Unsupported/None` | None; exact route/context only |
+| `ROUTER-10` | Submitted-request status question -> `Unsupported/None` | None; exact route/context only |
+| `ROUTER-11` | Hypothetical access eligibility question -> `PolicyGuidance/None` | None; exact route/context only |
+| `ROUTER-12` | Explicit active clarification-choice selection -> `AccessRequest/ActiveAccessPreparation` | None; exact route/context only |
 
 | Policy case | Required category/outcome | Numeric metrics |
 |---|---|---|
@@ -907,13 +901,12 @@ These checks should participate in the standard Microsoft evaluation/test infras
 - use Microsoft evaluation reporting rather than a custom generic report store;
 - Foundry managed evaluation is optional, not required for feature completion.
 
-Microsoft's official .NET evaluator documentation defines Intent Resolution,
-Retrieval, Groundedness, and Relevance as model-graded numeric metrics on a 1-5 scale,
+Microsoft's official .NET evaluator documentation defines policy Retrieval,
+Groundedness, and Relevance as model-graded numeric metrics on a 1-5 scale,
 where 5 is best. The implementation must verify that the pinned Task 2 package retains
 those semantics before consuming these gates. The source definitions are the
 [evaluation library inventory](https://learn.microsoft.com/en-us/dotnet/ai/evaluation/libraries)
 and the API documentation for
-[Intent Resolution](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.intentresolutionevaluator),
 [Retrieval](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.retrievalevaluator),
 [Groundedness](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.groundednessevaluator),
 and
@@ -930,7 +923,6 @@ The following thresholds are approved before any routed promotion result is obse
 | Gate | Pre-results promotion threshold |
 |---|---|
 | Exact route/context result | At least 95% of all router case-repetitions exactly match both expected route and context reference. In addition, every `Mixed`, `Unclear`, `Unsupported`, submitted-status, and ambiguous-reference repetition must match exactly. |
-| Intent Resolution | Over the evaluation-only route projection for all router cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
 | Retrieval | Across dataset-declared applicable Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
 | Groundedness | Across dataset-declared answered Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
 | Relevance | Across dataset-declared answered Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
@@ -964,7 +956,7 @@ and exact gate together, while all existing access-intake gates remain green. Th
 records source revision, datasets and hashes, evaluator/package/model/deployment
 versions, prompt/schema versions, corpus/index version, repetitions, exact outcomes,
 tokens, and component latency. Any threshold, dataset, metric-applicability map,
-repetition plan, evaluation projection, prompt, evaluator, or judge change after
+repetition plan, exact-check implementation, prompt, evaluator, or judge change after
 observing results requires a separately reviewed version and a new pre-results
 approval; it cannot retroactively promote the observed run.
 
@@ -973,6 +965,10 @@ No arbitrary token/latency improvement target is required.
 ## 20. Required ADRs
 
 Create or supersede only the ADRs needed to explain the main architectural choices:
+
+ADRs 0012-0014 retain the original bounded decisions subject to the four approved
+target refinements in ADR 0015. Carry that supersession forward during implementation;
+this amendment does not create another implementation task.
 
 1. **Router and context isolation** — model classifier + deterministic dispatch; Access Request stays canonical-state based and receives no policy history/RAG; Policy Guidance receives bounded policy history and optional safe access projection.
 2. **Policy grounding** — authoritative typed policy facts + MAF `TextSearchProvider` + Azure AI Search hybrid RAG; Policy Advisor is read-only.
@@ -1002,7 +998,7 @@ Implement:
 
 - authoritative policy snapshot;
 - checked-in fixture corpus;
-- Azure AI Search index + bounded indexing utility;
+- Azure AI Search index + explicit fixture-only rebuild with exact current chunk IDs;
 - embedding generation;
 - MAF `TextSearchProvider` in `BeforeAIInvoke` mode;
 - hybrid retrieval;
@@ -1014,7 +1010,7 @@ Implement:
 
 Implement:
 
-- simple persisted routed-message history;
+- explicitly ordered persisted requester/assistant pairs with atomic append/whole-pair pruning;
 - router recent-window selection;
 - Policy Advisor recent-policy selection;
 - safe `AccessPolicyReference`;
@@ -1052,7 +1048,8 @@ The evolution is complete when:
 - Policy Guidance receives bounded recent policy history, fresh Azure AI Search evidence, and only the safe active-access projection when needed;
 - Policy Advisor answers are schema-valid, citation-valid, application-rendered, and read-only;
 - `Mixed` and `Unclear` do not create pending workflows and require explicit new user input;
-- bounded routed history survives restart and remains non-authoritative;
+- bounded routed history preserves persisted pair order across restart, whole-pair storage omission/pruning, and contiguous-suffix windows, and remains non-authoritative;
+- successful explicit fixture-index rebuilds leave exactly current chunk IDs, with stale IDs absent and unsearchable;
 - one authoritative policy snapshot is shared by Core and Policy Advisor context;
 - Azure AI Search hybrid RAG is integrated through MAF `TextSearchProvider`;
 - route, retrieval, specialist, and end-to-end token/latency evidence is separately observable;

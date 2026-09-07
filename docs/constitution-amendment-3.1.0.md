@@ -12,6 +12,13 @@
   [ADR 0013](adr/0013-policy-grounding.md), and
   [ADR 0014](adr/0014-routed-evaluation-and-observability.md)
 
+## Subsequent target amendment
+
+[Amendment 3.2.0](constitution-amendment-3.2.0.md), approved on 2026-09-07, refines
+prose validation, router evaluation, ordered whole-pair history, and fixture rebuilds.
+It supersedes only those target details; this original authorization and its runtime
+promotion distinction remain historical governance evidence.
+
 ## Motivation
 
 Constitution version 3.0.0 permits bounded model interpretation and an exact governed
@@ -114,8 +121,10 @@ Retrieved policy is untrusted even when Azure AI Search returns it. Server-owned
 active/effective filters, bounded result counts, prompt-injection-resistant context
 labelling, current-invocation citation membership, an authoritative policy snapshot,
 and fail-closed retrieval behavior constrain incorrect or malicious content. Free-form
-semantic consistency is governed by the bounded interpretation recorded in the target
-specification and ADR 0013; it is not represented as a complete runtime proof.
+semantic consistency follows amendment 3.2.0 and the revised target specification:
+runtime structural validation does not prove arbitrary prose correct or consistent
+with every policy fact; offline evaluation measures risk without guaranteeing each
+live answer.
 
 Raw prompts, routed messages, model answers, retrieval queries/chunks, reasoning,
 complete MCP payloads, and provider objects remain excluded from default logs and

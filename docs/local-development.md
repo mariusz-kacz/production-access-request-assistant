@@ -166,6 +166,64 @@ The Teams start script supplies the bot client ID, audience, tenant, secret, and
 origin from ignored local state. The bot credential is stored outside the repository
 and must not be printed or copied into `appsettings*.json`.
 
+### Routed-assistant configuration baseline
+
+`RoutedAssistant` supplies the SDK/configuration foundation for the
+[approved router/policy target](../SPEC-router-policy-evolution.md). Runtime routing,
+retrieval, and policy answers are not enabled by these settings. Each component has
+separate typed options, validated when that component is resolved; an invalid or
+unconfigured component throws a safe configuration error without substituting another
+component or the Access Request client.
+
+| Section under `RoutedAssistant` | Provider coordinates | Checked-in deadline / hard cap | Output bounds |
+|---|---|---|---|
+| `Router` | `Endpoint`, `DeploymentName` | 8 / 8 seconds | `MaximumOutputTokens`: 100 maximum |
+| `PolicyAdvisor` | `Endpoint`, `DeploymentName` | 30 / 30 seconds | `MaximumOutputTokens`: 800 maximum |
+| `Retrieval` | `Endpoint`, `IndexName` | 10 / 30 seconds | `MaximumChunks`: 3; `MaximumApproximateTokens`: 1,500 maximum |
+| `Embedding` | `Endpoint`, `DeploymentName` | 10 / 30 seconds | `Dimensions`: explicitly select 1–3,072 |
+| `Turn` | none | 70 / 70 seconds | none |
+
+All deadlines use the `Timeout` key and positive `TimeSpan` values. Numeric limits are
+positive and may be reduced; missing, malformed, oversized, unknown, or nested settings
+fail validation. Retrieval and embedding use conservative ten-second defaults with
+caps within the policy budget; their eventual callers must also enforce the enclosing
+policy/turn deadlines. The existing `RequestPreparationModel` and
+`RequestPreparationAgent:Limits` settings continue to own Access Request configuration,
+including its current 30-second timeout, 60-second hard cap, and existing proposal
+schema.
+
+Provider coordinates are empty and embedding dimensions are zero in checked-in
+configuration, deliberately leaving those components unavailable until configured.
+Model and embedding endpoints use the existing trusted HTTPS
+`*.services.ai.azure.com/openai/v1` shape. Search requires an HTTPS
+`*.search.windows.net` origin and an index name following
+[Azure Search naming rules](https://learn.microsoft.com/en-us/rest/api/searchservice/naming-rules).
+These sections accept
+no credentials, tool lists, retrieval filters, fallback profiles, or retry policies.
+Deployment/index names are bounded to 128 characters. Supply deployment coordinates
+through local configuration or environment variables; do not add secrets to tracked
+settings.
+
+The compatibility baseline retains MAF 1.15.0, Microsoft.Extensions.AI and its OpenAI
+adapter 10.7.0, and OpenAI 2.11.0. It adds
+[Azure.Search.Documents 11.7.0](https://www.nuget.org/packages/Azure.Search.Documents/11.7.0),
+[Microsoft evaluation Quality 10.7.0](https://www.nuget.org/packages/Microsoft.Extensions.AI.Evaluation.Quality/10.7.0),
+and [Reporting 10.7.0](https://www.nuget.org/packages/Microsoft.Extensions.AI.Evaluation.Reporting/10.7.0).
+Existing packages supply embeddings and MAF OpenTelemetry; no extra MCP, embedding, or
+telemetry package is needed. The credential-free compatibility tests exercise
+pre-invocation `TextSearchProvider` with zero internal recent-message memory,
+policy Retrieval/Groundedness/Relevance on their 1–5 scale, Microsoft JSON reporting,
+and embedding-to-hybrid-query serialization.
+
+The completed Task 2 source also contains an initial declaration-only Intent Resolution
+probe with a method-local experimental `AIEVAL001` opt-in. The
+[2026-09-07 target amendment](adr/0015-refine-router-policy-target-contracts.md)
+supersedes that requirement: router evaluation now requires only direct exact
+route/context checks in Microsoft evaluation/reporting, without a model judge. This
+documentation change does not remove the existing probe or alter runtime behavior;
+Task 12 owns its scoped cleanup while retaining applicable policy/reporting coverage.
+Live model quality and Azure connectivity remain operator gates for later tasks.
+
 ## Local databases
 
 Reference Authority and Workflow Persistence own separate SQLite files, EF Core

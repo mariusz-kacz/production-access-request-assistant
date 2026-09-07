@@ -41,6 +41,18 @@ If guidance conflicts, do not silently choose the most convenient version. Follo
 constitution and current product baseline, confirm the as-built state in source and
 tests, and surface any remaining mismatch before changing behavior.
 
+## Approved router/policy target context
+
+For the unpromoted router/policy evolution, load the
+[target specification](SPEC-router-policy-evolution.md),
+[amendment 3.2.0](docs/constitution-amendment-3.2.0.md),
+[ADR 0015 and its partially superseded target ADRs](docs/adr/0015-refine-router-policy-target-contracts.md),
+[plan](tasks/plan.md), and [task list](tasks/todo.md). The 2026-09-07 approved amendments
+cover only prose-validation limits, direct exact router evaluation, complete-pair
+history ordering/overflow/windows, and fixture-only index rebuilds that remove stale
+IDs. Tasks 1-2 are complete; subsequent runtime implementation is not claimed here.
+The current product boundary below remains as-built, not the approved target.
+
 ## Current product boundary
 
 - This is a bounded, synthetic, production-shaped local implementation. It uses only

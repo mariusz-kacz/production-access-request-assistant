@@ -49,8 +49,15 @@ selection, result bounds, and context construction MUST remain server-owned. Ret
 content and route-tagged conversation history MUST remain untrusted context, MUST NOT
 enter the Access Request specialist's context, and MUST NOT become workflow or
 authorization evidence. Policy answers MUST use a closed result contract, cite only
-evidence from the current invocation, and fail closed when retrieval, validation, or
-current-policy consistency checks fail.
+evidence from the current invocation, and fail closed on retrieval, schema,
+answer/outcome compatibility, citation-membership, output-bound, or safe-rendering
+failure. The authoritative policy snapshot MUST take precedence over retrieved
+explanation. Runtime validation does not prove arbitrary prose semantically correct
+or consistent with every policy fact. Offline groundedness/relevance evaluation MUST
+measure this risk but MUST NOT be represented as a guarantee for each live answer.
+The small free-form result contract remains; no runtime contradiction parser,
+additional verification model, mandatory structured claims, or new templating
+subsystem is required or authorized by this target.
 
 Any model-visible catalog change MUST have an approved specification, architecture
 decision, threat-boundary review, closed contract, negative tests, and synchronized
@@ -123,7 +130,19 @@ proportionate to its single-host scope.
   validated application-rendered assistant text for completed Access Request and
   Policy Guidance turns. It MUST remain non-authoritative, exclude raw prompts,
   reasoning, provider sessions, complete tool/retrieval payloads, and card JSON, and
-  MUST be isolated from Access Request interpretation.
+  MUST be isolated from Access Request interpretation. History MUST use explicit
+  persisted pair order per authenticated binding, requester before assistant, with
+  atomic append and whole-pair pruning to six pairs (12 messages). Reads MUST NOT
+  interleave pairs or use timestamps plus arbitrary GUID sorting as conversational
+  order. If either message exceeds 2,000 characters, the entire pair MUST be omitted
+  without truncating semantic content, rejecting valid input, changing Access input
+  limits, or rolling back/replaying authoritative state. Model windows MUST select
+  the newest contiguous suffix of eligible complete pairs within count/token caps,
+  applying policy filtering first and stopping at the first pair that cannot fit.
+- Fixture indexing MUST remain an explicit operator rebuild of only the configured
+  synthetic fixture index. Success MUST leave exactly current checked-in fixture
+  chunk IDs, with removed/obsolete IDs absent and unsearchable. Failed or partial
+  rebuilds MUST NOT report success; no ingestion platform is authorized.
 - Nullable reference types MUST be enabled, warnings MUST be treated as errors, and
   `CancellationToken` MUST cross asynchronous boundaries.
 - Expected failures MUST use explicit typed outcomes. LLM, MCP, and external context
@@ -150,7 +169,10 @@ proportionate to its single-host scope.
 - Routed-assistant promotion thresholds MUST be recorded before observing promotion
   results. Exact route/context outcomes, context and tool isolation, current-citation
   membership, retired-policy exclusion, and zero consequential side effects MUST be
-  evaluated independently of model-graded quality scores.
+  evaluated independently of model-graded quality scores. Router evaluation MUST
+  compare exact expected route/context directly in Microsoft evaluation/reporting,
+  without a required model judge or additional router metric; applicable policy
+  Retrieval, Groundedness, and Relevance evaluation remains required.
 - A change is complete only when its applicable tests pass, warnings-as-errors builds
   pass, model/MCP cancellation and timeout behavior is preserved, and documentation
   reflects any changed contract, trust boundary, or operational behavior.
@@ -175,4 +197,7 @@ checks MUST verify the applicable principles, required negative tests, and
 synchronization of contracts and runtime guidance. Complexity that violates a
 principle MUST be rejected unless an approved amendment precedes it.
 
-**Version**: 3.1.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-09-04
+The approved target refinements and compatibility record are in
+[amendment 3.2.0](constitution-amendment-3.2.0.md); they do not promote runtime behavior.
+
+**Version**: 3.2.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-09-07

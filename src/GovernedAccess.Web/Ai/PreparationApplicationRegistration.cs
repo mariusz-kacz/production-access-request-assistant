@@ -15,6 +15,7 @@ internal static class PreparationApplicationRegistration
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddRequestPreparationChat(configuration);
+        services.AddRoutedAssistantOptions(configuration);
         services.AddSingleton(AgentExecutionLimits.Load(configuration));
         services.AddSingleton(static serviceProvider =>
         {

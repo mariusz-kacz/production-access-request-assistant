@@ -1,8 +1,36 @@
 # Task List: Router-Led Policy Guidance Evolution
 
 - **Plan:** `tasks/plan.md`
-- **Status:** In progress; Task 1 governance gate complete
-- **Budget:** approximately 33.5 hours
+- **Status:** In progress; Tasks 1–2 complete; Task 3 not started
+- **Budget:** approximately 33 hours
+
+## Target documentation amendment: 2026-09-07
+
+The maintainer authorized only four design refinements, recorded in
+[amendment 3.2.0](../docs/constitution-amendment-3.2.0.md) and
+[ADR 0015](../docs/adr/0015-refine-router-policy-target-contracts.md).
+Verification path 5 applies: documentation/link/consistency validation, no application
+or test changes, no code suites, and no implementation-task advancement.
+Tasks 1-2 remain complete; Task 3 and later tasks remain unstarted.
+
+- [x] Remove mandatory prose parsing while retaining the small result contract and explicit semantic limits.
+- [x] Replace router judge requirements with direct exact route/context checks; preserve v1 outcomes and existing exact gates.
+- [x] Define persisted pair ordering, atomic whole-pair bounds/overflow, and complete-pair window selection.
+- [x] Require explicit fixture-only rebuilds to remove stale chunk IDs.
+- [x] Validate changed relative links, stale references/contradictions, and `git diff --check`.
+
+Validation: all 79 relative links across the 13 changed/new Markdown files resolve;
+stale-reference review leaves removed requirements only as explicitly superseded
+history or future cleanup. The 12 router IDs/categories/expected outcomes, all ten
+policy and four multi-turn manifest rows, retained exact/policy thresholds, and small
+`PolicyAdvisorResult` contract are unchanged. Revised estimates sum to 33 hours.
+`git diff --check` passes. Pre-existing modified/untracked source and test hashes are
+unchanged; no implementation tests or code suites were added or run. No concrete
+unresolved design conflict remains; the historical Task 2 probe is intentionally
+left for Task 12 cleanup, not silently treated as current target behavior.
+
+Future estimates and dependencies below reflect these refinements; completed-task
+evidence and estimates are unchanged. The plan records the 33.5 -> 33 hour adjustment.
 
 ## Shared Verification Gates
 
@@ -32,7 +60,7 @@ the implementation is proven.
 
 - [x] The approved amendment permits exactly the target classifier, read-only Policy Advisor, bounded route history, and bounded Azure Search RAG while retaining one host, synthetic data, human approval, deterministic authorization, and the exact MCP catalog.
 - [x] Three proposed/accepted ADRs record deterministic dispatch, context isolation, ADR 0009's bounded-history impact, policy grounding, evaluation, observability, alternatives, risks, and revisit criteria.
-- [x] The spec records maintainer approval plus pre-results promotion thresholds and the chosen runtime policy-consistency interpretation; no as-built artifact claims the feature is already live.
+- [x] The spec records maintainer approval plus pre-results promotion thresholds and the chosen runtime policy-validation limits; the 2026-09-07 amendment revises those target details without reopening Task 1 or claiming the feature is live.
 
 **Verification:**
 
@@ -56,6 +84,53 @@ the implementation is proven.
 
 ## Task 2: Pin the SDK and route-configuration baseline
 
+**Progress:** Complete (2026-09-07). Verification path 5
+(configuration/dependencies), with test-first evidence for the closed configuration
+boundary and credential-free SDK compatibility probes. Existing registration,
+provider-failure, and execution-limit tests retain ownership of Access Request
+invariants. Runtime routing and policy execution remain for subsequent tasks.
+
+**Implementation and evidence:**
+
+- Added only Azure.Search.Documents 11.7.0 and Microsoft.Extensions.AI.Evaluation
+  Quality/Reporting 10.7.0. Retained MAF 1.15.0, Microsoft.Extensions.AI/OpenAI adapter
+  10.7.0, OpenAI 2.11.0, and all existing MCP packages. Existing dependencies supply
+  embeddings and MAF OpenTelemetry.
+- Added independent immutable router, policy, retrieval, embedding, and turn options,
+  lazy component validation, explicit provider coordinates, closed fields, safe
+  diagnostics, and bounded deadlines/output. Access Request retains its existing
+  profile, configuration owner, schema, and execution limits.
+- Configuration tests own rejection of missing/malformed/excessive limits, unsupported
+  settings, invalid provider coordinates, and fallback prevention. Five unsupported
+  setting cases failed because no rejection occurred before adding the closed-field
+  guard. The positive fixture also reproduced rejection of a valid Azure index name
+  before correcting the validator to support documented underscores.
+- SDK probes uniquely exercise pre-invocation search with zero internal recent-message
+  memory and no tools, safe MAF telemetry, declaration-only Intent Resolution, numeric
+  1–5 semantics for the four evaluators required at Task 2 completion, Microsoft JSON reporting, and
+  embedding-to-hybrid-query serialization through an offline HTTP transport.
+- No pre-existing tests were changed, merged, or removed. The new configuration and
+  SDK compatibility suites pass 67 focused cases; the existing Access registration,
+  provider failure, execution limit, and interpreter regression filter passes 16.
+- Final ordered gate: build passed with zero warnings/errors; 154 unit tests and
+  209 integration tests passed (integration duration eight seconds; no outer deadline
+  shorter than four minutes). Restore, changed-document relative links, and
+  `git diff --check` passed. No frontend contract/behavior changed.
+- No specification or scope deviation at Task 2 completion. Retrieval/embedding use ten-second defaults
+  bounded to 30 seconds; embedding dimensions require an explicit 1–3,072 selection.
+  Intent Resolution is experimental in the required SDK and has a method-scoped
+  `AIEVAL001` opt-in, documented in local development guidance. The debugging workflow
+  resolved evaluator fixture response-format mismatches using the pinned Microsoft
+  source; temporary diagnostic prompt output was removed.
+- Subsequent target amendment (2026-09-07): the Intent Resolution probe and its
+  experimental opt-in are superseded requirements, not evidence that a router judge
+  remains necessary. Source is unchanged in this documentation revision. Task 12
+  removes that obsolete probe/declaration/projection while retaining applicable policy
+  evaluator/reporting coverage. Task 2 remains complete; no new compatibility gate.
+- Remaining gates belong to later tasks: consuming/enforcing these options in routed
+  execution, live Azure connectivity, and model-quality/promotion evidence. No live
+  model or Azure resource was invoked, and no Git commit was created.
+
 **Description:** Prove the smallest compatible MAF, Microsoft evaluation, Azure Search,
 embedding, and OpenTelemetry package set; then add closed server-owned configuration
 for router, policy, retrieval, embedding, per-component output limits, and deadlines.
@@ -63,15 +138,15 @@ Retain the existing Access Request profile and avoid a generic profile hierarchy
 
 **Acceptance criteria:**
 
-- [ ] A restored/compiled compatibility test proves `TextSearchProvider` in `BeforeAIInvoke` mode with zero internal recent-message memory, MAF OpenTelemetry, required Microsoft evaluators/reporting, Azure hybrid/vector queries, and embeddings.
-- [ ] Router, Access Request, Policy Advisor, retrieval, embedding, and overall-turn settings are independently validated, bounded by the spec, and fail closed without silently selecting another route/client.
-- [ ] Existing request-preparation registration and provider-failure behavior remain green; no additional MCP package, tool, endpoint, or deployable project appears.
+- [x] A restored/compiled compatibility test proves `TextSearchProvider` in `BeforeAIInvoke` mode with zero internal recent-message memory, MAF OpenTelemetry, required Microsoft evaluators/reporting, Azure hybrid/vector queries, and embeddings.
+- [x] Router, Access Request, Policy Advisor, retrieval, embedding, and overall-turn settings are independently validated, bounded by the spec, and fail closed without silently selecting another route/client.
+- [x] Existing request-preparation registration and provider-failure behavior remain green; no additional MCP package, tool, endpoint, or deployable project appears.
 
 **Verification:**
 
-- [ ] Run `dotnet restore ProductionAccessRequestAssistant.sln`.
-- [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~RoutedAssistantOptions --no-restore`.
-- [ ] The shared backend gate passes.
+- [x] Run `dotnet restore ProductionAccessRequestAssistant.sln`.
+- [x] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~RoutedAssistantOptions --no-restore`.
+- [x] The shared backend gate passes.
 
 **Dependencies:** Task 1.
 
@@ -188,21 +263,22 @@ Preserve every current rule and public compatibility surface needed by existing 
 ## Task 6: Persist bounded route-tagged history
 
 **Description:** Add provider-neutral routed-message records and a focused Core port,
-then implement them in the workflow SQLite database with one atomic pair append and
-oldest-first pruning. Do not attach messages to request authorization entities or
+then implement them in the workflow SQLite database with explicit persisted pair order
+and one atomic pair append plus oldest-whole-pair pruning. Do not attach messages to request authorization entities or
 store any provider objects/evidence payloads.
 
 **Acceptance criteria:**
 
-- [ ] Only normalized requester and final validated rendered assistant messages for completed `AccessRequest`/`PolicyGuidance` routes can be stored, at no more than 2,000 characters each and 12 messages per exact authenticated binding; card responses use a bounded plain-text projection, never raw card JSON.
-- [ ] Pair append plus pruning is atomic, ordering is stable by timestamp/message ID, concurrent writes have a typed safe outcome, and history survives restart.
+- [ ] Each completed `AccessRequest`/`PolicyGuidance` turn contributes one requester/assistant pair, subject to whole-pair overflow omission. Store only boundary-trimmed requester and final validated rendered assistant text, at most 2,000 characters each and six complete pairs (12 messages) per exact authenticated binding; cards use a safe application-owned plain-text projection, never raw JSON.
+- [ ] If either message exceeds 2,000 characters, omit the whole pair from reusable history without silent semantic truncation, valid-input rejection, changing the existing 4,000-character Access input limit, or authoritative rollback/replay. Existing safe metadata may indicate omitted continuity without content.
+- [ ] Each pair has explicit persisted order per authenticated binding, requester always before assistant. Successful concurrent appends establish durable order; reads/pruning cannot interleave or split pairs. Timestamp plus arbitrary GUID sorting is not conversational order. Pair append and whole-pair pruning are atomic; failed concurrent writes have a typed safe outcome; restart preserves order and bounds.
 - [ ] `Mixed`, `Unclear`, `Unsupported`, router/model failures, prompts, reasoning, complete answers before validation, RAG chunks, MCP payloads, and provider history are absent from the store.
 
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~RoutedConversationPersistence --no-restore`.
 - [ ] Schema/privacy tests are updated to allow only the explicit routed-message table/content while continuing to reject prompt, reasoning, query, proposal, tool-payload, and provider-response storage.
-- [ ] Restart, pruning, malformed-row, unavailable-database, and concurrency scenarios pass; then the shared backend gate passes.
+- [ ] The canonical persistence matrix covers equal timestamps with contrary GUID order, requester-first pair reads, concurrent appends/reads, whole-pair pruning to six pairs, requester-only/assistant-only/both oversized messages, exactly 2,000 characters, restart, malformed rows, and unavailable database. Assert no partial storage; Tasks 10-11 own coordinator input/authoritative-state preservation evidence. Then the shared backend gate passes.
 
 **Dependencies:** Task 1.
 
@@ -217,7 +293,8 @@ store any provider objects/evidence payloads.
 - `src/GovernedAccess.Workflow.Persistence/Persistence/Migrations/<routed-history-migration-set>`
 - `tests/GovernedAccess.IntegrationTests/Persistence/RoutedConversationPersistenceTests.cs`
 
-**Estimated scope:** Medium, approximately 3 hours. The generated EF migration set is
+**Estimated scope:** Medium, approximately 3.5 hours (revised for durable pair ordering
+and whole-pair overflow). The generated EF migration set is
 one mechanical artifact within this single persistence slice.
 
 ## Task 7: Enforce route-specific context isolation
@@ -228,15 +305,16 @@ active-access projection through Core authority ports without changing preparati
 
 **Acceptance criteria:**
 
-- [ ] Router gets current message separately, at most four most-recent cross-route messages/about 600 tokens, and only active-preparation presence plus clarification target/safe choice labels.
-- [ ] Policy gets at most four policy-only messages/about 800 tokens, the current policy snapshot, and an authoritative `AccessPolicyReference` only when requested; excluded fields never appear.
+- [ ] Router gets current message separately, the chronological complete-pair cross-route window capped at four messages/about 600 tokens, and only active-preparation presence plus clarification target/safe choice labels.
+- [ ] Policy-route filtering occurs before window selection. Policy gets at most four messages/about 800 tokens in complete chronological pairs, the current policy snapshot, and an authoritative `AccessPolicyReference` only when requested; excluded fields never appear.
+- [ ] Both windows select the newest contiguous suffix of eligible complete pairs fitting both caps. Stop at the first older non-fitting pair; never skip it for smaller earlier context or split/truncate a pair. Return an empty window when the newest eligible pair cannot fit.
 - [ ] Access Request continues to receive no general history, policy context/answer, RAG evidence, or changed canonical envelope, including after restart and route switching.
 
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.UnitTests/GovernedAccess.UnitTests.csproj --filter FullyQualifiedName~RoutedTurnContext --no-restore`.
 - [ ] Integration capture tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~RouteContextIsolation --no-restore`.
-- [ ] Tests cover count/token truncation, policy-only filtering, ambiguous references, authority failure, no active preparation, and excluded sensitive fields; then the shared backend gate passes.
+- [ ] The canonical window matrix covers message/token cap boundaries, policy filtering before selection, chronological requester/assistant order, a non-fitting older pair before a smaller earlier pair (no skipping), and an oversized newest pair yielding empty context. Integration captures retain ambiguous references, authority failure, no active preparation, excluded fields, restart, and `/new` bypass/no-history-entry with retained policy history; then the shared backend gate passes.
 
 **Dependencies:** Tasks 4, 5, and 6.
 
@@ -248,13 +326,14 @@ active-access projection through Core authority ports without changing preparati
 - `tests/GovernedAccess.UnitTests/RoutedTurnContextServiceTests.cs`
 - `tests/GovernedAccess.IntegrationTests/Ai/RouteContextIsolationTests.cs`
 
-**Estimated scope:** Medium, approximately 2.5 hours.
+**Estimated scope:** Medium, approximately 3 hours (revised for complete-pair contiguous
+window selection).
 
 ## Task 8: Build the reproducible policy fixture
 
 **Description:** Check in a deliberately small synthetic corpus and deterministic
 loader/chunker that produces stable IDs and the exact bounded Azure index projection.
-Expose it through an explicit indexing command seam without yet coupling automated
+Expose it through an explicit fixture-only rebuild command seam without yet coupling automated
 tests to Azure.
 
 **Acceptance criteria:**
@@ -292,19 +371,22 @@ tests to Azure.
 ## Task 9: Implement bounded Azure AI Search hybrid retrieval
 
 **Description:** Add the provider-neutral knowledge-search contract and a Web Azure AI
-Search/embedding adapter. Wire the fixture command to create/update one index and upload
-stable chunks, and wire runtime search to one filtered BM25+vector hybrid query.
+Search/embedding adapter. Wire the explicit operator command to rebuild only the
+configured synthetic fixture index from the current checked-in corpus, and wire runtime
+search to one filtered BM25+vector hybrid query.
 
 **Acceptance criteria:**
 
-- [ ] The index command generates embeddings, creates/updates only the named bounded schema, and uploads the checked-in fixture with `DefaultAzureCredential`, explicit timeout, cancellation, and safe typed failures.
+- [ ] The explicit operator command generates embeddings and rebuilds only the configured synthetic fixture index using the existing bounded schema, stable chunk IDs, metadata, `DefaultAzureCredential`, explicit timeout, cancellation, and safe typed failures.
+- [ ] Successful rebuild leaves exactly the current checked-in fixture's chunk IDs. Removed documents, deleted chunks, and obsolete IDs are absent and unsearchable. Failed/partial uploads or unverified final contents never report success. No incremental synchronization, background ingestion, aliases, multiple indexes, or generic ingestion platform.
 - [ ] Runtime search combines keyword and vector input in one Azure hybrid request, relies on RRF, applies server-owned policy-area/status/effective filters before evidence reaches the model, and returns at most three chunks/about 1,500 tokens.
 - [ ] Retrieval input contains only normalized question, bounded recent policy messages, and bounded server-derived access terms; it excludes justification and unrelated request state and never falls back to retired/unfiltered evidence.
 
 **Verification:**
 
-- [ ] Focused adapter tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~AzurePolicyKnowledgeSearch --no-restore`.
+- [ ] Focused adapter/command tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter "FullyQualifiedName~AzurePolicyKnowledgeSearch|FullyQualifiedName~PolicyIndexCommand" --no-restore`.
 - [ ] Controlled transport/client tests prove query/vector/filter shape, bounds, cancellation, timeout, throttling, retired exclusion, and no sensitive logging without requiring Azure.
+- [ ] The canonical index-command scenario indexes the fixture, removes a document or chunk, rebuilds, and verifies removed IDs are absent and cannot be retrieved, with exactly the current ID set remaining. Controlled failure cases prove partial/failed uploads cannot report rebuild success and mutation is scoped to the configured fixture index.
 - [ ] The shared backend gate passes.
 
 **Dependencies:** Tasks 2 and 8.
@@ -317,8 +399,10 @@ stable chunks, and wire runtime search to one filtered BM25+vector hybrid query.
 - `src/GovernedAccess.Web/Policy/PolicyIndexCommand.cs`
 - `src/GovernedAccess.Web/Policy/PolicyRegistration.cs`
 - `tests/GovernedAccess.IntegrationTests/Policy/AzurePolicyKnowledgeSearchTests.cs`
+- `tests/GovernedAccess.IntegrationTests/Policy/PolicyIndexCommandTests.cs` (canonical rebuild/exact-ID-set owner)
 
-**Estimated scope:** Medium, approximately 3 hours.
+**Estimated scope:** Medium, approximately 3.5 hours (revised for scoped rebuild and
+stale-ID removal verification).
 
 ## Task 10: Deliver validated read-only policy answers
 
@@ -330,17 +414,19 @@ route to the coordinator.
 
 **Acceptance criteria:**
 
-- [ ] `Answered`, `InsufficientEvidence`, and `Unsupported` obey the closed schema, 2,000-character visible limit, answer/null compatibility, current citation membership, unknown-field rejection, and the Task 1 policy-consistency decision.
+- [ ] `Answered`, `InsufficientEvidence`, and `Unsupported` obey the existing small free-form closed contract, 2,000-character visible limit, answer/null compatibility, current-invocation citation membership, unknown-field rejection, and safe application-owned rendering. Snapshot precedence over retrieved explanation is explicit in context/prompt construction.
+- [ ] Runtime validation does not claim arbitrary-prose correctness or consistency with every policy fact; offline Groundedness/Relevance measures risk without guaranteeing live answers. No runtime contradiction parser, replacement verification model/parser, mandatory structured claims, or templating subsystem is introduced.
 - [ ] Policy invocation receives the exact bounded policy history/snapshot/optional access projection/current evidence, uses `BeforeAIInvoke` with `RecentMessageMemoryLimit = 0`, exposes no tools, and performs no second verification/repair model call.
-- [ ] The coordinator replaces the placeholder with validated application-rendered responses; successful Access/Policy turns append history, while non-executable routes and failed turns do not.
+- [ ] The coordinator replaces the placeholder with validated application-rendered responses; completed Access/Policy turns append a complete pair subject to Task 6's whole-pair overflow omission. Non-executable routes and failed turns do not append; history omission/failure cannot reject valid input or roll back/replay authoritative state.
 
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter "FullyQualifiedName~MafPolicyAdvisor|FullyQualifiedName~PolicyAdvisorResult|FullyQualifiedName~PolicyGuidance" --no-restore`.
-- [ ] Tests cover citation forgery, malformed/oversized output, HTML/card/link attempts, adversarial chunks, no tools, insufficient evidence, unsupported questions, zero preparation/request side effects, and the required positive/negative `SnapshotClaimGuard` v1 matrix from the approved spec.
+- [ ] Existing canonical matrices cover citation forgery, malformed/oversized output, HTML/card/link attempts, adversarial chunks, snapshot precedence in captured inputs, no tools, insufficient evidence, unsupported questions, and zero preparation/request side effects. Do not add prose-parser tests or claim deterministic clients prove arbitrary live-answer semantics.
 - [ ] The shared backend gate passes.
 
-**Dependencies:** Tasks 5, 7, and 9, plus resolution of Task 1's policy-consistency decision.
+**Dependencies:** Tasks 5, 7, and 9; the policy-validation target is resolved by the
+2026-09-07 amendment, not an additional approval/implementation gate.
 
 **Files likely touched:**
 
@@ -351,7 +437,8 @@ route to the coordinator.
 - `src/GovernedAccess.Web/Ai/Routing/RoutedTurnCoordinator.cs`
 - `tests/GovernedAccess.IntegrationTests/Ai/MafPolicyAdvisorTests.cs`
 
-**Estimated scope:** Medium, approximately 3.5 hours.
+**Estimated scope:** Medium, approximately 2.5 hours (revised to remove prose-parser
+implementation and its test matrices).
 
 ## Task 11: Harden routed failures and telemetry
 
@@ -369,7 +456,7 @@ across router, retrieval, both specialists, and history persistence.
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter "FullyQualifiedName~RoutedTurnTelemetry|FullyQualifiedName~RoutedTurnFailure" --no-restore`.
-- [ ] Cross-route failure tests assert both safe response and zero unauthorized preparation/request/decision/operation/grant side effects.
+- [ ] Cross-route failure tests assert both safe response and zero unauthorized preparation/request/decision/operation/grant side effects. Coordinator history-omission/write-failure cases assert valid input and committed Access results remain unchanged, with no rollback/replay or content logging; do not duplicate the persistence/window matrices.
 - [ ] The shared backend gate passes.
 
 **Dependencies:** Tasks 4 and 10.
@@ -396,22 +483,27 @@ across router, retrieval, both specialists, and history persistence.
 
 **Description:** Extend the existing isolated evaluation command/hosting with focused
 router, policy, and multi-turn datasets. Use Microsoft evaluation abstractions,
-built-in evaluators, and reporting for semantic metrics; retain only the exact
-product-specific checks that generic evaluators cannot know.
+reporting, and applicable built-in policy evaluators. Compare router route/context
+directly against expected outcomes without a model judge; retain exact product-specific
+checks without introducing a generic evaluation framework or another router metric.
 
 **Acceptance criteria:**
 
 - [ ] Versioned datasets implement the approved immutable v1 manifest: exactly 12 router, 10 policy, and four multi-turn IDs with their fixed semantic categories, route/outcome expectations, metric applicability, exact source/state/isolation expectations, and no duplicate weighting.
-- [ ] The runner uses Intent Resolution over a one-to-one evaluation-only route-function projection of the complete captured router envelope, plus Retrieval, Groundedness, and Relevance as dataset-declared, Microsoft reporting/storage, and custom checks only for exact product invariants; runtime router tools remain empty.
+- [ ] Router cases use direct exact expected route/context checks within Microsoft evaluation/reporting, with no judge, synthetic function declarations, decision-to-call adapter, projection-equivalence tests, related compatibility gate, or extra mandatory router metric. Preserve the existing 95% exact threshold and mandatory exact outcomes for `Mixed`, `Unclear`, `Unsupported`, submitted-status, and ambiguous-reference cases.
+- [ ] Preserve v1 case IDs, semantic categories, and expected outcomes; apply the approved 2026-09-07 router metric-map amendment (exact-only/no judge). Policy Retrieval, Groundedness, and Relevance remain dataset-declared with existing thresholds and Microsoft reporting/storage; exact safety/isolation gates remain 100% blocking.
 - [ ] Normal deterministic tests run once; every live router/policy case and complete multi-turn conversation runs exactly three promotion repetitions with fresh uncached calls only for route/metric-applicable components and no forbidden component call, all 12 complete multi-turn repetitions pass, and reports retain source revision, datasets/hashes, metric applicability, repetition plan, package/evaluator/model/deployment, corpus/index version, tokens, component latency, thresholds, and promotion eligibility.
 
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter FullyQualifiedName~RoutedAssistantEvaluation --no-restore`.
 - [ ] Existing access-intake evaluation tests and historical artifact readers remain green and the default/explicit suite behavior is documented by command tests.
+- [ ] Direct exact route/context reporting and metric applicability are verified without router judge calls. Remove Task 2's now-obsolete Intent Resolution compatibility probe, synthetic declaration/projection, assertion, and local experimental opt-in; preserve its policy Retrieval/Groundedness/Relevance and Microsoft reporting coverage. Runtime tool absence remains owned by the router capability suite, not a projection-equivalence test.
 - [ ] The shared backend gate passes; no automated test calls a live model, Azure Search, or Foundry evaluator.
 
-**Dependencies:** Task 11 and the pre-recorded thresholds from Task 1.
+**Dependencies:** Task 11 and the pre-recorded thresholds as amended on 2026-09-07.
+Task 2's applicable policy/reporting compatibility baseline remains valid; router
+function-projection compatibility is no longer a dependency.
 
 **Files likely touched:**
 
@@ -422,8 +514,11 @@ product-specific checks that generic evaluators cannot know.
 - `src/GovernedAccess.Web/Evaluation/LiveModelEvaluationCommand.cs`
 - `src/GovernedAccess.Web/Evaluation/EvaluationHosting.cs`
 - `tests/GovernedAccess.IntegrationTests/Evaluation/RoutedAssistantEvaluationTests.cs`
+- `tests/GovernedAccess.IntegrationTests/Ai/RoutedAssistantOptionsSdkCompatibilityTests.cs` (remove only superseded router-judge probe)
+- `docs/local-development.md` (reconcile that probe's historical note after removal)
 
-**Estimated scope:** Medium, approximately 3.5 hours. Dataset files are one bounded
+**Estimated scope:** Medium, approximately 2.5 hours (revised for direct exact router
+checks and scoped obsolete-probe cleanup). Dataset files are one bounded
 evaluation inventory, not separate feature slices.
 
 ## Task 13: Reconcile governing and as-built documentation
@@ -454,14 +549,14 @@ access authorization path and exact MCP contract.
 - `docs/security-model.md`
 - `docs/request-intake-orchestration.md`
 - `docs/constitution.md`
-- `docs/adr/README.md` and ADRs 0012-0014
+- `docs/adr/README.md` and ADRs 0012-0015
 - `spec.md`
 
 **Estimated scope:** Medium, approximately 1.5 hours.
 
 ## Task 14: Publish operator guidance and retained promotion evidence
 
-**Description:** Document configuration, fixture indexing, local operation, failure
+**Description:** Document configuration, explicit fixture-only index rebuilds, local operation, failure
 diagnosis, evaluation suites, and reset/rollback. Run one clean-source full routed
 evaluation with required repetitions, review it, and retain only the approved synthetic
 report/result and index entry.
@@ -475,7 +570,7 @@ report/result and index entry.
 **Verification:**
 
 - [ ] Run the full backend gate in the mandated order and explicitly run the existing exact MCP contract tests.
-- [ ] Execute the documented fixture-index command and full routed evaluation from a clean commit with authorized Azure/Foundry credentials; verify exactly three fresh uncached repetitions for every approved live case and 100% complete multi-turn success.
+- [ ] Execute the documented fixture-only rebuild command and full routed evaluation from a clean commit with authorized Azure/Foundry credentials; verify exact current chunk IDs, exactly three fresh uncached repetitions for every approved live case, and 100% complete multi-turn success.
 - [ ] Validate documentation links, retained artifact provenance/hashes, and `git diff --check`; run the frontend suite only if an implementation unexpectedly changed frontend behavior/contracts.
 
 **Dependencies:** Tasks 12 and 13; external Azure Search, embedding, router, policy, and judge deployments plus authorized operator credentials.

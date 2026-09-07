@@ -1,6 +1,6 @@
 # ADR 0012: Use Deterministic Routing and Isolated Specialist Contexts
 
-- **Status**: Accepted
+- **Status**: Accepted; history ordering, windows, and overflow partially superseded by [ADR 0015](0015-refine-router-policy-target-contracts.md) on 2026-09-07
 - **Date**: 2026-09-04
 - **Runtime status**: Target decision; not yet implemented or promoted
 - **Decision owners**: Project maintainer
@@ -26,6 +26,9 @@ context isolation difficult to prove.
 ADR 0009 deliberately rejected complete conversation persistence for request intake.
 The target needs limited continuity for routing and policy follow-ups, but that context
 does not need to become part of the canonical request preparation.
+
+The history sections below summarize the current target after ADR 0015; the original
+2026-09-04 approval and the unchanged routing/isolation decisions remain in force.
 
 ## Decision
 
@@ -62,7 +65,7 @@ Construct distinct typed envelopes rather than one shared conversation:
 
 - **Router:** normalized current message unchanged after boundary trimming; whether an
   active preparation exists; active clarification target and safe choice labels when
-  present; and at most four recent routed messages within approximately 600 tokens. It
+  present; and a complete-pair window capped at four messages/about 600 tokens. It
   receives no complete canonical candidate, requester justification,
   approval/provisioning state, tools, or retrieved policy chunks.
 - **Access Request:** the normalized current message unchanged, canonical preparation,
@@ -70,7 +73,7 @@ Construct distinct typed envelopes rather than one shared conversation:
   history, policy answer, Policy Advisor prompt, safe policy projection, or retrieval
   evidence.
 - **Policy Advisor:** normalized current question unchanged after boundary trimming;
-  at most four recent `PolicyGuidance` messages within approximately 800 tokens; the
+  a policy-filtered complete-pair window capped at four messages/about 800 tokens; the
   authoritative policy snapshot; an optional minimal `AccessPolicyReference`; and
   fresh current evidence. It receives no Access Request MCP tools or workflow mutation
   port.
@@ -87,14 +90,36 @@ the Access Request specialist's only durable memory. General routed history neve
 participates in request validation, authorization, approval, provisioning, or audit
 evidence and never enters Access Request interpretation.
 
-Add a separate application-owned projection containing only normalized requester text
-and final validated application-rendered assistant text for completed
-`AccessRequest` and `PolicyGuidance` turns. Store each completed turn as one atomic
-pair, cap every message at 2,000 characters, retain at most 12 messages per
-authenticated Teams conversation, and prune oldest first. Do not store raw Adaptive
-Card JSON, router prompts, model reasoning, provider sessions, complete model objects,
-complete tool/retrieval payloads, or `Mixed`, `Unclear`, `Unsupported`, and failed
-turns as reusable context.
+Add a separate application-owned projection containing only requester text normalized
+by boundary trimming and final validated application-rendered assistant text for
+completed `AccessRequest` and `PolicyGuidance` turns. Each turn contributes one pair,
+subject to the overflow rule below. Persist explicit pair order per exact authenticated
+conversation binding, with requester always before assistant. Successful concurrent
+appends establish one durable order; timestamp plus arbitrary GUID sorting is not the
+conversation-order contract. Reads and pruning cannot interleave or split pairs.
+
+Append and oldest-whole-pair pruning are atomic. Retain at most six complete pairs
+(12 messages), each message at most 2,000 characters. If either message exceeds that
+storage limit, omit the entire pair from reusable history. Do not silently truncate
+semantic content, reject otherwise valid input, change Access's existing
+4,000-character input limit, or roll back/replay authoritative state. Safe metadata
+may indicate omitted continuity without logging content. Cards use safe application
+plain-text projections, never raw JSON. Exclude prompts, reasoning, provider sessions,
+complete model/tool/retrieval objects, and non-executable or failed turns.
+
+Build windows from complete pairs, in chronological persisted order. Router eligibility
+includes both executable routes; apply policy-route filtering before selecting Policy
+Advisor's window. Select the newest contiguous suffix of eligible pairs fitting both
+the four-message and respective 600/800 approximate-token caps. Starting newest, stop
+at the first older pair that cannot fit; never skip it to include smaller unrelated
+older context. An empty window is valid when the newest eligible pair cannot fit.
+
+Task 6's canonical persistence matrix must cover equal timestamps and GUIDs contrary
+to pair order, requester-first reads, concurrent appends/reads, atomic whole-pair
+pruning, either/both messages oversized, exact-limit messages, and restart. Task 7
+owns count/token selection and policy-filter-before-window cases, including a
+non-fitting older pair before a smaller earlier pair and an empty newest-pair window.
+Do not add semantic memory, summaries, retention workflows, or general orchestration.
 
 Exact `/new` resets only the active unsubmitted access preparation. It bypasses the
 router, creates no routed-history entry, and does not erase prior bounded policy
@@ -141,8 +166,8 @@ memory or creating a transcript platform.
   responsibility.
 - Access results and non-authoritative history cannot share one transaction without
   coupling route history to the authoritative workflow boundary.
-- Four-message context windows intentionally lose older conversational nuance and may
-  require the requester to restate intent.
+- Whole-pair omission and four-message/token-capped windows intentionally lose
+  conversational nuance and may require the requester to restate intent.
 
 ## Alternatives considered
 
