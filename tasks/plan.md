@@ -1,7 +1,7 @@
 # Implementation Plan: Router-Led Policy Guidance Evolution
 
-- **Status:** Proposed for maintainer review; no implementation has started
-- **Source:** `SPEC-router-policy-evolution.md` (proposed target, 2026-09-04)
+- **Status:** Approved for implementation; Task 1 complete; runtime implementation has not started
+- **Source:** `SPEC-router-policy-evolution.md` (approved target, 2026-09-04)
 - **Task list:** `tasks/todo.md`
 - **Estimated implementation effort:** approximately 33.5 hours, within the specification's 24-34 hour budget
 
@@ -79,7 +79,8 @@ Every task and checkpoint must preserve the following regression contract:
   and MCP, and only resets the active unsubmitted preparation.
 - Blank Teams text remains a deterministic application response with no semantic or
   persisted side effect.
-- Access Request receives the original latest requester message, canonical preparation,
+- Access Request receives the normalized latest requester message unchanged after
+  boundary trimming, canonical preparation,
   lifecycle, and active bounded clarification choices; it receives no routed history,
   policy answer, Policy Advisor prompt, or RAG evidence.
 - Access Request still returns only an untrusted closed sparse proposal. Core reloads
@@ -170,7 +171,7 @@ after deterministic and live evidence describe the actual runtime.
 
 ### Phase 0: Governance gate
 
-- [ ] Task 1: Authorize the bounded routed-assistant architecture
+- [x] Task 1: Authorize the bounded routed-assistant architecture
 
 ### Phase 1: Router vertical slice
 
@@ -222,19 +223,19 @@ after deterministic and live evidence describe the actual runtime.
 
 - [ ] The credential-free build/unit/integration sequence passes in the mandated order.
 - [ ] The exact four-tool MCP contract tests and all existing access workflow evidence remain green.
-- [ ] A clean-source, full-inventory routed live run meets pre-recorded thresholds with at least three repetitions for important cases.
+- [ ] A clean-source, full-inventory routed live run meets pre-recorded thresholds with exactly three fresh uncached repetitions for every approved v1 case and 100% complete multi-turn success.
 - [ ] Documentation, ADR statuses, datasets, package/model/corpus versions, and retained reports agree with the implementation.
 - [ ] A human has reviewed the feature and its evidence before merge or deployment.
 
-## Assumptions Requiring Review
+## Approved Implementation Assumptions
 
-1. `SPEC-router-policy-evolution.md` will be explicitly approved and the constitution
-   amended before Task 2. Until then, implementation is not authorized by current
-   repository governance.
+1. `SPEC-router-policy-evolution.md` and constitution amendment `3.1.0` were approved
+   in Task 1. Tasks 2-12 are authorized to implement only that bounded target; runtime
+   promotion remains gated on deterministic and retained live evidence.
 2. `/new` resets only the access preparation. It bypasses the router and creates no
-   routed-history message, but it does not erase prior bounded policy history. If `/new`
-   is intended to wipe conversational context too, the target spec and history tests
-   must say so before Task 6.
+   routed-history message, but it does not erase prior bounded policy history. A later
+   request to wipe conversational context requires an explicit specification and
+   history-test change rather than an implementation-time reinterpretation.
 3. A completed executable route persists the normalized requester text and final
    validated application-rendered assistant text as one pair. Card responses use a
    bounded safe text projection rather than card JSON. If that non-authoritative history
@@ -252,19 +253,17 @@ after deterministic and live evidence describe the actual runtime.
 7. No frontend contract changes are needed. Teams text/Markdown remains the only new
    presentation surface.
 
-## Open Questions and Decision Gates
+## Task 1 Decisions and Remaining Gates
 
-- **Free-form policy consistency:** The fixed `PolicyAdvisorResult` contains an answer
-  and citation IDs but no structured policy claims. Deterministic code cannot generally
-  prove that arbitrary prose does not semantically contradict the snapshot without
-  becoming another language model. Before Task 10, approve one bounded interpretation:
-  exact machine-checkable guards for represented facts plus offline semantic evaluation
-  (recommended for the fixed contract), or amend the contract to return structured
-  claims/application-owned templates for a stronger runtime guarantee.
-- **Promotion thresholds:** Route exactness, intent resolution, retrieval quality,
-  groundedness, and relevance thresholds are not numeric in the target spec. Task 1
-  must record them before live results are observed. Exact side-effect, context-isolation,
-  citation-membership, and retired-policy gates remain 100% regardless of score thresholds.
+- **Resolved — free-form policy consistency:** Keep the fixed result contract. Use a
+  finite versioned runtime contradiction guard for machine-recognized direct claims
+  about the four snapshot fact families, plus structural/citation checks and blocking
+  offline semantic evaluation. This is not represented as complete runtime semantic
+  proof; ADR 0013 records the accepted residual risk and stronger-contract trigger.
+- **Resolved — promotion thresholds:** The approved target spec records numeric
+  pre-results gates for route exactness and the 1-5 Intent Resolution, Retrieval,
+  Groundedness, and Relevance metrics. Exact side-effect, context-isolation,
+  citation-membership, retired-policy, and fail-closed gates remain 100% blocking.
 - **Azure configuration:** The Search endpoint/index name, embedding deployment and
   dimensions, router deployment, policy deployment, and judge deployment must be
   supplied for Task 14. Implementation can finish its credential-free gates without
@@ -330,8 +329,11 @@ Canonical evidence to add or extend:
   retrieval, and specialist failure;
 - telemetry tests proving required route/component attributes and absence of raw
   prompts, messages, answers, chunks, queries, and tool payloads;
-- Microsoft evaluator/reporting component tests plus exact product checks, dataset
-  schema/version/hash checks, repetition metadata, and a clean retained live run.
+- Microsoft evaluator/reporting component tests, the one-to-one evaluation-only route
+  projection of the complete captured router envelope with runtime tool-absence proof,
+  exact product and full-conversation checks, immutable manifest
+  schema/version/hash/applicability checks, the fixed fresh uncached three-repetition
+  plan, and a clean retained live run.
 
 Documentation-only tasks validate relative links and run `git diff --check`. Final
 promotion also reruns the full backend sequence and the existing exact MCP contract

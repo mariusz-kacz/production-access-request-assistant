@@ -1,11 +1,16 @@
 # Router-Led Policy Guidance Evolution Specification
 
-- **Status:** Proposed target feature; not current as-built behavior
+- **Status:** Approved target feature; not current as-built behavior
 - **Prepared:** 2026-09-04
+- **Approved:** 2026-09-04 by the project maintainer
 - **Revision:** Lean router + policy architecture; deterministic dispatch; minimal router context; bounded route-tagged history; Azure AI Search hybrid RAG; Microsoft evaluation stack; submitted-request status deferred
 - **Repository:** `mariusz-kacz/production-access-request-assistant`
 - **Target presentation name:** Governed Production Access Assistant
 - **Delivery limit:** one model-based turn router, the existing Access Request specialist, and one new Policy Advisor
+- **Governance:** [constitution amendment 3.1.0](docs/constitution-amendment-3.1.0.md),
+  [ADR 0012](docs/adr/0012-router-and-context-isolation.md),
+  [ADR 0013](docs/adr/0013-policy-grounding.md), and
+  [ADR 0014](docs/adr/0014-routed-evaluation-and-observability.md)
 - **Implementation budget:** approximately 24–34 hours
 
 ## 1. Objective
@@ -142,7 +147,11 @@ Every ordinary text turn performs:
 4. deterministic dispatch; and
 5. zero or one specialist invocation.
 
-The router never invokes a specialist directly and never paraphrases the current user message for specialist execution.
+The router never invokes a specialist directly and never paraphrases the current user
+message for specialist execution. In this specification, the normalized current
+message is the authenticated Teams text after trimming surrounding whitespace only.
+References to the “original” message mean that normalized text unchanged: no
+route-produced rewrite, summary, translation, or semantic normalization is forwarded.
 
 ## 6. Router contract
 
@@ -182,7 +191,7 @@ An invalid combination fails the turn and invokes no specialist.
 
 | Route | Meaning | Result |
 |---|---|---|
-| `AccessRequest` | Start, update, discuss, or resume access preparation. | Invoke the existing Access Request specialist with the original user message. |
+| `AccessRequest` | Start, update, discuss, or resume access preparation. | Invoke the existing Access Request specialist with the normalized current message unchanged. |
 | `PolicyGuidance` | Explain production-access policy, role meaning, approval rules, lifecycle rules, or related governance. | Invoke the Policy Advisor with bounded policy context and fresh RAG evidence. |
 | `Mixed` | Independent access-update and policy-question intents occur in one message. | Invoke no specialist; ask the requester to send one complete task as a new message. |
 | `Unclear` | The route or referent cannot be selected safely. | Invoke no specialist; ask the requester to restate the message more explicitly. |
@@ -285,7 +294,7 @@ Prompt versions, model deployment names, hard timeouts, and output limits are se
 
 Receives only:
 
-- original current requester message;
+- normalized current requester message unchanged after boundary trimming;
 - canonical access preparation;
 - preparation lifecycle;
 - active bounded clarification choices; and
@@ -299,7 +308,7 @@ Canonical preparation remains its authoritative memory.
 
 Receives:
 
-- original current policy question;
+- normalized current policy question unchanged after boundary trimming;
 - at most four most recent stored `PolicyGuidance` messages, within an approximate 800-token budget;
 - the current authoritative access-policy snapshot;
 - when `ContextReference == ActiveAccessPreparation`, one safe access-policy projection; and
@@ -399,12 +408,68 @@ Rules:
 - Every citation ID must belong to evidence supplied for the current invocation.
 - `InsufficientEvidence` and `Unsupported` contain no model-authored visible answer; the application owns the fallback wording.
 - Unknown properties, unknown citation IDs, incompatible payloads, or output beyond configured limits fail the turn.
-- The answer must not contradict the current authoritative policy snapshot for rules represented by that snapshot.
+- The versioned runtime guard must reject every recognized direct contradiction of a
+  fact represented by the current authoritative policy snapshot; semantics outside
+  its approved finite grammar are not claimed as runtime-proven.
 - Visible answer length is capped at 2,000 characters.
 - The application renders validated output through application-owned Teams/Markdown formatting.
 - The model cannot emit Adaptive Card actions, raw card JSON, raw HTML, executable content, or unvalidated links.
 
-Runtime validation establishes schema correctness, citation membership, current-policy consistency, and safe rendering. Semantic groundedness/relevance are evaluated offline using Microsoft's evaluation stack rather than through a second runtime verification agent.
+Runtime validation establishes schema correctness, citation membership, bounded
+machine-checkable current-policy consistency, and safe rendering. The fixed free-form
+contract does not make complete semantic consistency deterministically provable.
+
+`SnapshotClaimGuard` version 1 must normalize candidate answer text with Unicode NFKC,
+invariant case folding, collapsed whitespace, and sentence boundaries at `.`, `?`,
+`!`, `;`, or a line break, then recognize at least these four English direct-claim
+forms:
+
+- a sentence containing `access` or `grant`, one ASCII integer or English number word
+  from one through twenty-four, and `hour(s)` or `day(s)` is a duration claim; days
+  convert to 24 hours and the value must equal `GrantDuration`;
+- a sentence containing both `business` and `DevOps` plus `before`, `after`, or `then`
+  is an approval-order claim; a sentence containing `approval`, either stage, and
+  `only`, `sole`, or `single` is a stage-completeness claim. Both forms must match the
+  snapshot's complete ordered stages;
+- a sentence containing `submit`, `submitted`, or `submission`, a request/scope term,
+  a `change`, `edit`, `modify`, or `amend` term, and `can`, `may`, `allowed`, `cannot`,
+  `may not`, `must not`, or `not allowed` is a submitted-scope-mutability claim and is
+  evaluated using the explicit inverse relationship below; and
+- a sentence containing `requester` or `user`, `business approver`, a
+  `choose`, `select`, `nominate`, or `pick` term, and one of those explicit modal forms
+  is an approver-choice claim. `Business approver` with `assigned`, `derived`, or
+  `determined` and `client`, `server`, or `selected environment` is the canonical
+  non-requester-choice form. Both must match `RequesterMayChooseBusinessApprover`.
+
+For every recognized sentence, `no`, `not`, `never`, and `neither` are negation tokens.
+A duration or approval-order/stage claim containing any negation token fails closed.
+For mutability and requester-choice claims, `cannot`, `may not`, `must not`, and
+`not allowed` are the supported negative forms; `can`, `may`, and `allowed` are
+positive only when not negated. A sentence containing both polarities, a second
+negation, or negation of `assigned`, `derived`, or `determined` fails closed as
+ambiguous. For submitted-scope claims, the parsed proposition is
+`ScopeIsMutable` and it is accepted only when
+`ScopeIsMutable == !SubmittedScopeIsImmutable`. For requester-choice claims, the
+parsed proposition is `RequesterMayChooseBusinessApprover` and it is accepted only
+when equal to the same-named snapshot value. The guard must not compare only extracted
+nouns or numbers.
+
+The v1 canonical matrix must accept direct statements of eight hours, Business before
+DevOps, immutable submitted scope requiring a new request, and server/client-derived
+business approver selection. It must reject otherwise identical claims for 4, 12, or
+24 hours and one or two days; DevOps before Business or a one-stage approval; editable
+submitted scope; requester-selected/nominated business approvers; and the negated
+forms “access is not eight hours,” “Business is not before DevOps,” and “the approver
+is not determined by the selected environment.” A recognized contradiction or
+ambiguous polarity fails the turn. The guard does not infer, rewrite, or repair
+unrecognized arbitrary prose, and an implementation recognizing none of these
+mandatory forms is non-conforming.
+
+Prompt construction gives the snapshot precedence over untrusted retrieved
+explanation. Answers with no recognized v1 claim remain subject to structural runtime
+validation and blocking offline groundedness/relevance evaluation; that residual
+semantic risk is explicitly accepted for the synthetic read-only feature. ADR 0013
+records this bounded interpretation and its stronger-contract trigger.
 
 ## 13. Authoritative policy snapshot
 
@@ -696,7 +761,7 @@ The project may have a thin runner that:
 
 Keep the inventory intentionally small.
 
-**Router dataset:** approximately 12 representative cases covering:
+**Router dataset:** exactly 12 v1 cases covering:
 
 - clear Access Request;
 - clear Policy Guidance;
@@ -713,7 +778,31 @@ Evaluate with:
 - exact expected route/context reference; and
 - Microsoft's intent-resolution evaluator.
 
-**Policy Advisor dataset:** approximately 8–10 questions covering:
+The two checks consume different representations. Exact matching reads the validated
+`RouterDecision` directly. For Intent Resolution only, an evaluation adapter maps that
+same validated decision to exactly one `FunctionCallContent` using one of five
+evaluation-only `AIFunctionDeclaration` definitions:
+`route_access_request`, `route_policy_guidance`, `route_mixed`, `route_unclear`, or
+`route_unsupported`. The projected call carries `schemaVersion` and
+`contextReference`; the function descriptions reproduce the approved route semantics.
+The evaluator receives the complete sanitized router input used by the runtime call:
+the normalized current query, every selected route-tagged history message, and the
+exact `HasActivePreparation`, clarification target, and safe clarification-choice
+labels from `ActiveAccessRoutingContext`, plus those five definitions. An
+application-owned serializer may represent that envelope as evaluation messages but
+must not omit, add, summarize, or infer any semantic field. The adapter performs no
+reclassification and cannot change the exact result. A capture-based test must compare
+the runtime router envelope with the evaluator projection field for field.
+
+These declarations are evaluator input, not application capabilities. They must never
+be registered on the runtime router, exposed to a provider invocation, or shared with
+specialist tools. A deterministic test must prove the projection is one-to-one and the
+runtime router tool collection remains empty. If the package pinned in Task 2 cannot
+evaluate this supported `AIFunctionDeclaration` projection, implementation must stop
+and amend this approved evaluation contract rather than silently substitute another
+metric or grade the raw JSON as requester-visible prose.
+
+**Policy Advisor dataset:** exactly 10 v1 cases covering:
 
 - direct policy questions;
 - paraphrased/semantic retrieval;
@@ -730,12 +819,61 @@ Evaluate with:
 - groundedness; and
 - relevance.
 
-**Multi-turn dataset:** 3–4 conversations covering:
+**Multi-turn dataset:** exactly four v1 conversations covering:
 
 - Access -> Policy -> Access;
 - policy continuation;
 - route switching; and
 - ambiguous reference requiring explicit restatement.
+
+### Approved v1 case and metric manifest
+
+One scenario is one unique case ID below; cases must not be merged, duplicated, or
+relabelled for threshold calculation. Task 12 may refine wording and expected source
+IDs before any live execution, but it must preserve these IDs, semantic categories,
+route/outcome expectations, and metric-applicability map. Adding, removing, or changing
+an entry requires a new reviewed manifest version and pre-results approval.
+
+| Router case | Required category and expected route | Numeric metric |
+|---|---|---|
+| `ROUTER-01` | Clear new access request -> `AccessRequest/None` | Intent Resolution |
+| `ROUTER-02` | Access continuation with an active preparation -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
+| `ROUTER-03` | Clear direct policy question -> `PolicyGuidance/None` | Intent Resolution |
+| `ROUTER-04` | Policy question about active access -> `PolicyGuidance/ActiveAccessPreparation` | Intent Resolution |
+| `ROUTER-05` | Policy continuation using recent policy history -> `PolicyGuidance/None` | Intent Resolution |
+| `ROUTER-06` | Explicit switch from policy back to access -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
+| `ROUTER-07` | Cross-context relative-reference ambiguity -> `Unclear/None` | Intent Resolution |
+| `ROUTER-08` | Independent access update plus policy question -> `Mixed/None` | Intent Resolution |
+| `ROUTER-09` | Understood out-of-domain request -> `Unsupported/None` | Intent Resolution |
+| `ROUTER-10` | Submitted-request status question -> `Unsupported/None` | Intent Resolution |
+| `ROUTER-11` | Hypothetical access eligibility question -> `PolicyGuidance/None` | Intent Resolution |
+| `ROUTER-12` | Explicit active clarification-choice selection -> `AccessRequest/ActiveAccessPreparation` | Intent Resolution |
+
+| Policy case | Required category/outcome | Numeric metrics |
+|---|---|---|
+| `POLICY-01` | Direct approval-policy answer | Retrieval, Groundedness, Relevance |
+| `POLICY-02` | Paraphrased/semantic duration answer | Retrieval, Groundedness, Relevance |
+| `POLICY-03` | Role explanation using active-access projection | Retrieval, Groundedness, Relevance |
+| `POLICY-04` | Policy continuation using bounded policy history | Retrieval, Groundedness, Relevance |
+| `POLICY-05` | Missing current evidence -> `InsufficientEvidence` | Exact outcome/source checks only |
+| `POLICY-06` | Understood non-policy question -> `Unsupported` | Exact outcome/source checks only |
+| `POLICY-07` | Current answer with retired version excluded | Retrieval, Groundedness, Relevance |
+| `POLICY-08` | Adversarial/instruction-like retrieved content | Retrieval, Groundedness, Relevance |
+| `POLICY-09` | Submitted-scope immutability answer | Retrieval, Groundedness, Relevance |
+| `POLICY-10` | Business-approver selection answer | Retrieval, Groundedness, Relevance |
+
+| Multi-turn case | Required complete conversation | Numeric metrics |
+|---|---|---|
+| `MULTI-01` | Access -> Policy -> Access with unchanged canonical preparation across the policy detour | Exact per-turn and final-state checks only |
+| `MULTI-02` | Policy question -> policy continuation with fresh evidence | Exact per-turn and final-state checks only |
+| `MULTI-03` | Hypothetical policy -> explicit actual access request | Exact per-turn and final-state checks only |
+| `MULTI-04` | Ambiguous reference -> `Unclear` -> explicit restatement succeeds without replay | Exact per-turn and final-state checks only |
+
+Every multi-turn repetition is one gate. Each turn must match its expected route and
+context reference, the expected requester-visible outcome must occur, the final
+canonical/history state must match the case, and every zero-side-effect/isolation rule
+must pass. One failed turn or final-state assertion fails the complete repetition;
+all 12 multi-turn repetitions (four cases times three) must pass for promotion.
 
 ### Product-specific deterministic checks
 
@@ -753,19 +891,82 @@ These checks should participate in the standard Microsoft evaluation/test infras
 ### Repetitions and promotion
 
 - normal deterministic tests run once;
-- important live router and Policy Advisor cases run with at least three repetitions for retained promotion evidence;
+- every live router case, every live Policy Advisor case, and every complete live
+  multi-turn conversation runs exactly three independent repetitions for retained
+  promotion evidence;
+- each versioned dataset declares metric applicability per case before execution, so
+  repetitions cannot change case weighting or metric denominators;
+- each repetition performs fresh uncached calls only to components applicable to that
+  case's expected path: router for every router/multi-turn text turn, Access Request
+  only for `AccessRequest`, retrieval and Policy Advisor only for `PolicyGuidance`, and
+  each evaluator only where the manifest declares its metric. A repetition must not
+  invoke a component forbidden by its route. Cached system-under-test responses,
+  cached retrieval results, cached judge scores, or replayed conversation state cannot
+  satisfy an applicable promotion call;
 - evaluator/model/package versions needed for comparison are recorded;
 - use Microsoft evaluation reporting rather than a custom generic report store;
 - Foundry managed evaluation is optional, not required for feature completion.
 
-Promotion requires:
+Microsoft's official .NET evaluator documentation defines Intent Resolution,
+Retrieval, Groundedness, and Relevance as model-graded numeric metrics on a 1-5 scale,
+where 5 is best. The implementation must verify that the pinned Task 2 package retains
+those semantics before consuming these gates. The source definitions are the
+[evaluation library inventory](https://learn.microsoft.com/en-us/dotnet/ai/evaluation/libraries)
+and the API documentation for
+[Intent Resolution](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.intentresolutionevaluator),
+[Retrieval](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.retrievalevaluator),
+[Groundedness](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.groundednessevaluator),
+and
+[Relevance](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.ai.evaluation.quality.relevanceevaluator).
 
-- existing access-intake gates remain green;
-- route exactness meets the project-defined threshold;
-- router intent-resolution quality meets the recorded threshold;
-- policy retrieval, groundedness, and relevance meet recorded thresholds;
-- product-specific zero-side-effect/context-isolation checks pass; and
-- a clean retained run records source revision, datasets, model deployments, corpus/index version, tokens, and component latency.
+For threshold math, each approved case ID is one scenario and contributes exactly
+three scores for every applicable numeric metric. The overall mean is the arithmetic
+mean of all applicable individual scores; the scenario mean is the arithmetic mean of
+that case's three scores. Exact duplicates and cases outside the approved v1 manifest
+do not enter a v1 denominator.
+
+The following thresholds are approved before any routed promotion result is observed:
+
+| Gate | Pre-results promotion threshold |
+|---|---|
+| Exact route/context result | At least 95% of all router case-repetitions exactly match both expected route and context reference. In addition, every `Mixed`, `Unclear`, `Unsupported`, submitted-status, and ambiguous-reference repetition must match exactly. |
+| Intent Resolution | Over the evaluation-only route projection for all router cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
+| Retrieval | Across dataset-declared applicable Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
+| Groundedness | Across dataset-declared answered Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
+| Relevance | Across dataset-declared answered Policy Advisor cases, overall arithmetic mean at least 4.0; every scenario mean at least 3.0; and at least 90% of individual scores at least 3. |
+| Complete multi-turn behavior | All 12 repetitions across `MULTI-01` through `MULTI-04` pass every exact per-turn, final-state, isolation, and zero-side-effect expectation. |
+
+Do not round a measured value up to meet a threshold. A missing, invalid, or
+evaluator-diagnostic score fails the applicable gate and remains in retained evidence;
+it is not removed from the denominator. A scenario is applicable only when its
+versioned dataset definition declares that metric; `InsufficientEvidence` and
+`Unsupported` cases are not silently graded as answered cases.
+
+The following exact gates remain 100% blocking and cannot be offset by a model-graded
+average:
+
+- zero unauthorized preparation, request, approval, provisioning-operation, grant,
+  or external-provider side effects;
+- router has no tools, Policy Advisor has no Access Request tools or mutation ports,
+  and each ordinary turn invokes at most one specialist;
+- Access Request receives no routed history, policy answer, or retrieval evidence;
+- every citation belongs to current-invocation evidence and retired policy is excluded
+  before model invocation;
+- route/context schema compatibility and closed Policy Advisor output validation pass;
+  and
+- routing, retrieval, provider, timeout, and malformed-output failures do not fall
+  through to another route; and
+- every complete multi-turn repetition passes the approved manifest's per-turn and
+  final-state contract.
+
+Promotion requires one clean-source full-inventory retained run to meet every numeric
+and exact gate together, while all existing access-intake gates remain green. The run
+records source revision, datasets and hashes, evaluator/package/model/deployment
+versions, prompt/schema versions, corpus/index version, repetitions, exact outcomes,
+tokens, and component latency. Any threshold, dataset, metric-applicability map,
+repetition plan, evaluation projection, prompt, evaluator, or judge change after
+observing results requires a separately reviewed version and a new pre-results
+approval; it cannot retroactively promote the observed run.
 
 No arbitrary token/latency improvement target is required.
 

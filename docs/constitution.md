@@ -4,7 +4,11 @@
 
 ### I. Human Approval, Deterministic Authorization
 
-AI MAY interpret requester intent, prepare a typed draft, and gather approved context.
+AI MAY classify one conversational turn, interpret requester intent, prepare a typed
+draft, gather approved context, and explain grounded production-access policy. A
+model-generated route is untrusted advice: deterministic application code MUST
+validate it and MUST dispatch to at most one preconfigured specialist. AI routing or
+policy prose MUST NOT become authorization, approval, or workflow evidence.
 Authenticated humans MUST record business and DevOps decisions as explicit structured
 actions. Deterministic application services MUST authorize every state change and MUST
 execute provisioning. Model output, conversation text, tool visibility, and
@@ -38,6 +42,15 @@ observed it. Deterministic application code MUST independently reproduce applica
 search policy or exact-reload the selected entity and MUST validate every proposed
 environment, client, role, and incident relationship. Model-visible tool results aid
 interpretation only and are never authorization evidence.
+
+One read-only production-access Policy Advisor MAY receive bounded policy evidence
+selected before invocation. Retrieval configuration, filters, effective-version
+selection, result bounds, and context construction MUST remain server-owned. Retrieved
+content and route-tagged conversation history MUST remain untrusted context, MUST NOT
+enter the Access Request specialist's context, and MUST NOT become workflow or
+authorization evidence. Policy answers MUST use a closed result contract, cite only
+evidence from the current invocation, and fail closed when retrieval, validation, or
+current-policy consistency checks fail.
 
 Any model-visible catalog change MUST have an approved specification, architecture
 decision, threat-boundary review, closed contract, negative tests, and synchronized
@@ -76,12 +89,23 @@ the caller's claims.
 The solution MUST remain one executable modular ASP.NET Core host with a thin React UI
 served by that host, local synthetic identity and data, and no real production access.
 Domain and application rules MUST remain independent of React, persistence,
-AI-provider, and MCP SDK details. The project MUST NOT add a generic workflow engine,
-multi-agent design, large RAG subsystem, separate deployable services, or
-distributed-system infrastructure without an approved baseline amendment and a
-documented concrete need. New projects, modules, and abstractions MUST solve a current
-boundary or testability requirement. This keeps the bounded local implementation
-understandable and proportionate to its single-host scope.
+AI-provider, and MCP SDK details.
+
+Within that host, the approved routed-assistant target MAY contain exactly one
+schema-bound turn classifier, the existing Access Request specialist, and one
+read-only Policy Advisor. Dispatch MUST remain deterministic, each ordinary turn MUST
+invoke at most one specialist, route history MUST be application-owned and bounded,
+and policy retrieval MUST be a bounded Azure AI Search integration behind a
+provider-neutral port. This permission does not authorize autonomous delegation,
+planners, supervisors, dynamic handoffs, group chat, parallel specialist execution,
+generic multi-agent design, generic enterprise search, or a large RAG subsystem.
+
+The project MUST NOT add a generic workflow engine, any broader agent or retrieval
+architecture, separate deployable services, or distributed-system infrastructure
+without another approved baseline amendment and a documented concrete need. New
+projects, modules, and abstractions MUST solve a current boundary or testability
+requirement. This keeps the bounded local implementation understandable and
+proportionate to its single-host scope.
 
 ## Product and Technical Constraints
 
@@ -92,6 +116,14 @@ understandable and proportionate to its single-host scope.
   tools in the active machine-readable contract and no additional model-visible
   capability. Inputs and outputs MUST use explicit closed schemas, and authoritative
   results MUST use stable identifiers.
+- The bounded router MUST expose no tools. The Policy Advisor MUST expose neither the
+  MCP catalog nor a model-visible retrieval tool. Only the existing Access Request
+  specialist MAY receive the active exact four-tool MCP catalog.
+- Route-tagged history MAY retain only bounded normalized requester text and final
+  validated application-rendered assistant text for completed Access Request and
+  Policy Guidance turns. It MUST remain non-authoritative, exclude raw prompts,
+  reasoning, provider sessions, complete tool/retrieval payloads, and card JSON, and
+  MUST be isolated from Access Request interpretation.
 - Nullable reference types MUST be enabled, warnings MUST be treated as errors, and
   `CancellationToken` MUST cross asynchronous boundaries.
 - Expected failures MUST use explicit typed outcomes. LLM, MCP, and external context
@@ -115,6 +147,10 @@ understandable and proportionate to its single-host scope.
 - Authorization, client isolation, immutable scope, invalid transitions, persisted
   provisioning evidence, idempotency, malformed model output, and MCP/source failure
   or timeout MUST have negative-path coverage where affected.
+- Routed-assistant promotion thresholds MUST be recorded before observing promotion
+  results. Exact route/context outcomes, context and tool isolation, current-citation
+  membership, retired-policy exclusion, and zero consequential side effects MUST be
+  evaluated independently of model-graded quality scores.
 - A change is complete only when its applicable tests pass, warnings-as-errors builds
   pass, model/MCP cancellation and timeout behavior is preserved, and documentation
   reflects any changed contract, trust boundary, or operational behavior.
@@ -139,4 +175,4 @@ checks MUST verify the applicable principles, required negative tests, and
 synchronization of contracts and runtime guidance. Complexity that violates a
 principle MUST be rejected unless an approved amendment precedes it.
 
-**Version**: 3.0.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-08-22
+**Version**: 3.1.0 | **Ratified**: 2026-07-27 | **Last Amended**: 2026-09-04

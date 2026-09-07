@@ -1,7 +1,7 @@
 # Task List: Router-Led Policy Guidance Evolution
 
 - **Plan:** `tasks/plan.md`
-- **Status:** Awaiting maintainer review
+- **Status:** In progress; Task 1 governance gate complete
 - **Budget:** approximately 33.5 hours
 
 ## Shared Verification Gates
@@ -30,15 +30,15 @@ the implementation is proven.
 
 **Acceptance criteria:**
 
-- [ ] The approved amendment permits exactly the target classifier, read-only Policy Advisor, bounded route history, and bounded Azure Search RAG while retaining one host, synthetic data, human approval, deterministic authorization, and the exact MCP catalog.
-- [ ] Three proposed/accepted ADRs record deterministic dispatch, context isolation, ADR 0009's bounded-history impact, policy grounding, evaluation, observability, alternatives, risks, and revisit criteria.
-- [ ] The spec records maintainer approval plus pre-results promotion thresholds and the chosen runtime policy-consistency interpretation; no as-built artifact claims the feature is already live.
+- [x] The approved amendment permits exactly the target classifier, read-only Policy Advisor, bounded route history, and bounded Azure Search RAG while retaining one host, synthetic data, human approval, deterministic authorization, and the exact MCP catalog.
+- [x] Three proposed/accepted ADRs record deterministic dispatch, context isolation, ADR 0009's bounded-history impact, policy grounding, evaluation, observability, alternatives, risks, and revisit criteria.
+- [x] The spec records maintainer approval plus pre-results promotion thresholds and the chosen runtime policy-consistency interpretation; no as-built artifact claims the feature is already live.
 
 **Verification:**
 
-- [ ] Every changed relative documentation link resolves.
-- [ ] `git diff --check` passes.
-- [ ] Maintainer approval is recorded before Task 2 begins.
+- [x] Every changed relative documentation link resolves.
+- [x] `git diff --check` passes.
+- [x] Maintainer approval is recorded before Task 2 begins.
 
 **Dependencies:** None.
 
@@ -87,8 +87,8 @@ Retain the existing Access Request profile and avoid a generic profile hierarchy
 
 ## Task 3: Build the closed structured router boundary
 
-**Description:** Add one fresh model-based router invocation over the original current
-message and a provider-neutral compact snapshot. Parse only the fixed schema, validate
+**Description:** Add one fresh model-based router invocation over the normalized current
+message unchanged after boundary trimming and a provider-neutral compact snapshot. Parse only the fixed schema, validate
 route/context compatibility, and expose typed outcomes to deterministic dispatch.
 
 **Acceptance criteria:**
@@ -337,7 +337,7 @@ route to the coordinator.
 **Verification:**
 
 - [ ] Focused tests pass: `dotnet test tests/GovernedAccess.IntegrationTests/GovernedAccess.IntegrationTests.csproj --filter "FullyQualifiedName~MafPolicyAdvisor|FullyQualifiedName~PolicyAdvisorResult|FullyQualifiedName~PolicyGuidance" --no-restore`.
-- [ ] Tests cover citation forgery, malformed/oversized output, HTML/card/link attempts, adversarial chunks, no tools, insufficient evidence, unsupported questions, and zero preparation/request side effects.
+- [ ] Tests cover citation forgery, malformed/oversized output, HTML/card/link attempts, adversarial chunks, no tools, insufficient evidence, unsupported questions, zero preparation/request side effects, and the required positive/negative `SnapshotClaimGuard` v1 matrix from the approved spec.
 - [ ] The shared backend gate passes.
 
 **Dependencies:** Tasks 5, 7, and 9, plus resolution of Task 1's policy-consistency decision.
@@ -401,9 +401,9 @@ product-specific checks that generic evaluators cannot know.
 
 **Acceptance criteria:**
 
-- [ ] Versioned datasets contain approximately 12 router cases, 8-10 policy cases, and 3-4 multi-turn conversations with exact route/context, source, and safety expectations.
-- [ ] The runner uses Intent Resolution, Retrieval, Groundedness, and Relevance evaluators as applicable, Microsoft reporting/storage, and custom checks only for context/tool isolation, current citations, retired exclusion, and zero side effects.
-- [ ] Normal deterministic tests run once; configured promotion cases run at least three independent repetitions and reports retain source revision, dataset/package/evaluator/model/deployment, corpus/index version, tokens, component latency, thresholds, and promotion eligibility.
+- [ ] Versioned datasets implement the approved immutable v1 manifest: exactly 12 router, 10 policy, and four multi-turn IDs with their fixed semantic categories, route/outcome expectations, metric applicability, exact source/state/isolation expectations, and no duplicate weighting.
+- [ ] The runner uses Intent Resolution over a one-to-one evaluation-only route-function projection of the complete captured router envelope, plus Retrieval, Groundedness, and Relevance as dataset-declared, Microsoft reporting/storage, and custom checks only for exact product invariants; runtime router tools remain empty.
+- [ ] Normal deterministic tests run once; every live router/policy case and complete multi-turn conversation runs exactly three promotion repetitions with fresh uncached calls only for route/metric-applicable components and no forbidden component call, all 12 complete multi-turn repetitions pass, and reports retain source revision, datasets/hashes, metric applicability, repetition plan, package/evaluator/model/deployment, corpus/index version, tokens, component latency, thresholds, and promotion eligibility.
 
 **Verification:**
 
@@ -475,7 +475,7 @@ report/result and index entry.
 **Verification:**
 
 - [ ] Run the full backend gate in the mandated order and explicitly run the existing exact MCP contract tests.
-- [ ] Execute the documented fixture-index command and full routed evaluation from a clean commit with authorized Azure/Foundry credentials; verify at least three repetitions for important cases.
+- [ ] Execute the documented fixture-index command and full routed evaluation from a clean commit with authorized Azure/Foundry credentials; verify exactly three fresh uncached repetitions for every approved live case and 100% complete multi-turn success.
 - [ ] Validate documentation links, retained artifact provenance/hashes, and `git diff --check`; run the frontend suite only if an implementation unexpectedly changed frontend behavior/contracts.
 
 **Dependencies:** Tasks 12 and 13; external Azure Search, embedding, router, policy, and judge deployments plus authorized operator credentials.
